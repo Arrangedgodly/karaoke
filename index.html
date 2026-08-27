@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Node-Based Web Audio Chain Builder</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <!--
+    ================================================================
+    UI-1 — real top bar, per docs/ultron/design/px1-layout-spec.md and
+    the approved visual reference docs/ultron/design/px1-mockup.html.
+
+    Replaces the old temporary #ae1-test-harness section (AE-1/AE-3).
+    Structure/CSS classes (.topbar/.app-title/.status/.dot/.control)
+    are adapted directly from the mockup so this matches the approved
+    top-bar region. Start button and device <select> keep their
+    original ids (#start-button / #input-device-select) so the
+    existing wiring in src/main.js needs no id changes.
+    ================================================================
+  -->
+  <header class="topbar">
+    <h1 class="app-title">Node-Based Web Audio Chain Builder</h1>
+
+    <span class="status" id="status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">Stopped</span>
+    </span>
+
+    <button id="start-button" class="control" type="button">Start</button>
+
+    <label for="input-device-select" class="sr-only">Input device:</label>
+    <select id="input-device-select" class="control" disabled>
+      <option value="">-- click Start to list devices --</option>
+    </select>
+
+    <!--
+      UI-2 — the emergency Bypass control. Audio routing/toggle logic is
+      AE-3's (window.AudioBypass.toggle()/isEngaged(), src/audio-bypass.js);
+      this task only adds the visually-dominant "emergency" treatment per
+      docs/ultron/design/px1-layout-spec.md and reuses .bypass-btn /
+      .bypass-btn.engaged from docs/ultron/design/px1-mockup.html verbatim
+      (see styles/main.css). The `engaged` class is toggled in src/main.js
+      in lockstep with the "Bypass: ON/OFF" text, both driven by the same
+      AudioBypass.isEngaged() call. Disabled until AudioEngine.start()
+      succeeds, since bypass needs a live source node — also gates the
+      spacebar shortcut (see src/main.js).
+    -->
+    <button id="bypass-toggle-button" class="bypass-btn" type="button" disabled>Bypass: OFF</button>
+  </header>
+
+  <!--
+    ================================================================
+    UI-3 — real palette + chain canvas, per
+    docs/ultron/design/px1-layout-spec.md and the approved visual reference
+    docs/ultron/design/px1-mockup.html (its .palette/.canvas/.node-card/
+    .anchor classes are the styling source of truth — see styles/main.css).
+
+    Replaces the old temporary #ae5-test-harness section (AE-5) — this is
+    the real, permanent way to add/reorder/remove node instances, wired up
+    by src/canvas.js (SortableJS-based drag-and-drop, per the committed
+    RQ-2 research decision). The palette list is populated at load time
+    from NodeTypes.getAllTypes() — never a hardcoded type list here; today
+    that's just "gain", and it will grow automatically as AE-6 through
+    AE-10 each register a new type the same way src/node-gain.js already
+    does. The presets column from the PX-1 mockup's 3-column layout was
+    UI-3's deliberate scope cut — added for real below by PS-3.
+
+    The whole region starts visually gated (`engine-not-started` class,
+    see styles/main.css) until AudioEngine.start() succeeds — mirrors the
+    same disabled-until-started pattern already used for the Bypass button
+    and the old test button. src/canvas.js's own onEngineStarted() (called
+    from src/main.js's Start success handler) removes this class; its
+    onSort/remove handlers separately guard on window.AudioEngine.isStarted
+    before ever calling AudioGraph.buildGraph(), so no drag completed before
+    Start can throw an uncaught error either way.
+    ================================================================
+  -->
+  <div class="layout engine-not-started" id="chain-layout">
+    <div class="panel palette">
+      <h2>Palette</h2>
+      <div class="palette-list" id="palette-list"></div>
+    </div>
+
+    <div class="panel canvas-panel">
+      <div class="canvas" id="chain-canvas">
+        <div class="anchor">MIC IN</div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="chain-list" id="chain-list"></div>
+        <div class="empty-hint" id="empty-hint">Drag an effect here to start building your chain</div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="anchor">OUT</div>
+      </div>
+    </div>
+
+    <!--
+      PS-3 — real, third Presets column, per the approved PX-1 mockup's
+      3-column layout (docs/ultron/design/px1-mockup.html's .presets/
+      .preset-name/.unsaved-dot classes are the styling source of truth —
+      see styles/main.css). Wired up by src/presets-ui.js to
+      window.PresetStore (src/preset-store.js, N named saved presets) and
+      window.ChainCanvas (loadModel()/getCurrentModel()). Sibling of
+      .palette/.canvas-panel above, so it's gated by the same
+      `engine-not-started` class on #chain-layout — no extra JS wiring
+      needed for that (see styles/main.css's `.layout.engine-not-started`
+      rule, extended to include `.presets`).
+    -->
+    <div class="panel presets">
+      <h2>Presets</h2>
+      <div class="preset-current">
+        <span id="current-preset-name" class="preset-name">Unsaved chain</span>
+        <span id="unsaved-indicator" class="unsaved-dot" style="display:none;">• unsaved changes</span>
+      </div>
+      <button id="save-preset-btn" class="control" type="button">Save As…</button>
+      <label for="preset-select" class="sr-only">Saved presets</label>
+      <select id="preset-select" class="control"><option value="">-- no presets --</option></select>
+      <div class="preset-actions">
+        <button id="load-preset-btn" class="control" type="button">Load</button>
+        <button id="delete-preset-btn" class="control" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/audio-engine.js"></script>
+  <script src="src/audio-graph.js"></script>
+  <script src="src/audio-bypass.js"></script>
+  <script src="src/node-types.js"></script>
+  <script src="src/node-gain.js"></script>
+  <script src="src/node-compressor.js"></script>
+  <script src="src/node-eq.js"></script>
+  <script src="src/node-delay.js"></script>
+  <script src="src/node-reverb.js"></script>
+  <script src="src/node-limiter.js"></script>
+  <script src="src/param-controls.js"></script>
+  <script src="src/preset-schema.js"></script>
+  <script src="src/default-preset.js"></script>
+  <script src="src/preset-store.js"></script>
+  <!--
+    DEL-2: vendored locally (vendor/sortable.min.js, SortableJS 1.15.7, MIT)
+    instead of loaded from a CDN — this app is meant to run at
+    locally-hosted events with no internet dependency assumed (see DEL-1's
+    own acceptance criteria), and a CDN script tag would silently break
+    drag-and-drop at any venue without a live internet connection.
+  -->
+  <script src="vendor/sortable.min.js"></script>
+  <script src="src/canvas.js"></script>
+  <script src="src/persistence.js"></script>
+  <script src="src/presets-ui.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>

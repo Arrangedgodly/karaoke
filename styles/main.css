@@ -1,0 +1,444 @@
+/* Minimal starter reset — real visual design owned by later Product/UX tasks */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 1rem;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  color: #1a1a1a;
+  background: #ffffff;
+}
+
+/* ===========================================================================
+   Top bar (UI-1) — adapted from the approved visual reference at
+   docs/ultron/design/px1-mockup.html. Variable names match that mockup so
+   later tasks (UI-2 Bypass polish, UI-3 canvas, PS-3 presets) can reuse the
+   same palette instead of inventing a second one.
+   =========================================================================== */
+
+:root {
+  --panel: #ffffff;
+  --border: #e0e2e6;
+  --muted: #6b7280;
+  --live: #16a34a;
+  --stopped: #9ca3af;
+  --bypass-off-bg: #fff1f1;
+  --bypass-off-border: #dc2626;
+  --bypass-on-bg: #dc2626;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.75rem 1.25rem;
+  /* Bleed out of body's 1rem padding so the bar spans the full viewport
+     width and sits flush against the top, per the mockup's persistent,
+     full-width top bar. */
+  margin: -1rem -1rem 1.5rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-title {
+  margin: 0;
+  margin-right: auto;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--stopped);
+  flex: none;
+}
+
+.status.live .dot {
+  background: var(--live);
+}
+
+button.control,
+select.control {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 0.9rem;
+  color: #1a1a1a;
+}
+
+button.control {
+  cursor: pointer;
+}
+
+button.control:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+select.control {
+  padding: 0.5rem;
+}
+
+/* ===========================================================================
+   Bypass button (UI-2) — the single most safety-critical control in the app
+   (per docs/ultron/design/px1-layout-spec.md's visual prominence hierarchy:
+   "Largest, highest-contrast element on screen"). Rules below are lifted
+   directly from the approved reference's .bypass-btn / .bypass-btn.engaged
+   (docs/ultron/design/px1-mockup.html) — same selectors, same values — so
+   this is the exact styling source of truth, not a reinterpretation.
+   =========================================================================== */
+
+.bypass-btn {
+  margin-left: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-radius: 8px;
+  border: 2px solid var(--bypass-off-border);
+  background: var(--bypass-off-bg);
+  color: var(--bypass-off-border);
+  cursor: pointer;
+}
+
+.bypass-btn.engaged {
+  background: var(--bypass-on-bg);
+  border-color: var(--bypass-on-bg);
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.2);
+}
+
+.bypass-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+/* ===========================================================================
+   Parameter controls (UI-4) — generic slider rows rendered by
+   src/param-controls.js for any node type registered with
+   src/node-types.js. No visual treatment for this was specified by PX-1
+   (see docs/ultron/design/px1-layout-spec.md's own note that this is UI-4's
+   scope) — kept intentionally simple/neutral here, reusing the same
+   --panel/--border/--muted tokens as the top bar rather than inventing a
+   second palette.
+   =========================================================================== */
+
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+}
+
+.param-label {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.param-slider {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.param-value {
+  flex: 0 0 auto;
+  min-width: 3.5rem;
+  text-align: right;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: #1a1a1a;
+}
+
+/* ===========================================================================
+   Palette + chain canvas (UI-3) — adapted from the approved visual
+   reference at docs/ultron/design/px1-mockup.html (.palette/.canvas/
+   .node-card/.anchor/.node-chip). This was originally laid out as a
+   two-column subset of that mockup's three-column layout — the presets
+   column was UI-3's deliberate scope cut, added for real by PS-3 below.
+   Reuses the same --panel/--border/--muted tokens as the top bar rather
+   than inventing a second palette, per this file's own established
+   convention (see the UI-1 comment above).
+   =========================================================================== */
+
+.layout {
+  display: grid;
+  grid-template-columns: 200px 1fr 220px;
+  gap: 0;
+  min-height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Gated until AudioEngine.start() succeeds (mirrors the Bypass button /
+   old test button's disabled-until-started pattern) — dragging/adding
+   nodes before the engine is running has nothing to build against.
+   src/canvas.js's onSort/remove handlers ALSO guard on
+   window.AudioEngine.isStarted directly, so this is a visual/UX affordance
+   on top of a real functional guard, not the only thing preventing a
+   pre-Start drop from throwing. Includes .presets (PS-3) too — the whole
+   3-column layout stays dimmed/inert together until Start succeeds. */
+.layout.engine-not-started .palette,
+.layout.engine-not-started .canvas-panel,
+.layout.engine-not-started .presets {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.panel {
+  padding: 1rem;
+}
+
+.palette {
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.palette h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.node-chip {
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafafa;
+  font-size: 0.85rem;
+  cursor: grab;
+  user-select: none;
+}
+
+.canvas-panel {
+  padding: 0;
+  background: var(--panel);
+}
+
+.canvas {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  min-height: 100%;
+  overflow-x: auto;
+}
+
+.anchor {
+  flex: none;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #eef2f7;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px dashed var(--border);
+}
+
+.arrow {
+  flex: none;
+  color: var(--muted);
+}
+
+.chain-list {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 64px;
+}
+
+.empty-hint {
+  flex: 1 1 auto;
+  padding: 1.25rem 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.node-card {
+  flex: none;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  min-width: 190px;
+}
+
+.node-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.node-drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: grab;
+  min-width: 0;
+  user-select: none;
+}
+
+.node-drag-icon {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  letter-spacing: -0.1em;
+}
+
+.node-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-remove-btn {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.node-remove-btn:hover {
+  color: var(--bypass-off-border);
+  border-color: var(--bypass-off-border);
+}
+
+.node-params {
+  min-width: 170px;
+}
+
+/* SortableJS auto-applies these during a drag (forceFallback:true mode) —
+   per px1-layout-spec.md's "Mid-drag" state row: the dragged card lifts
+   slightly (shadow/opacity change), and the placeholder left behind marks
+   the target insertion position. */
+.node-card.sortable-chosen {
+  cursor: grabbing;
+}
+
+.node-card.sortable-drag {
+  opacity: 0.85;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.node-card.sortable-ghost {
+  opacity: 0.35;
+  border-style: dashed;
+}
+
+/* ===========================================================================
+   Presets panel (PS-3) — the third column of the PX-1 mockup's 3-column
+   layout (docs/ultron/design/px1-mockup.html's .presets/.preset-name/
+   .unsaved-dot classes, the styling source of truth for this section —
+   reused verbatim below), wired up for the first time by
+   src/presets-ui.js. Reuses .control for the buttons/select (consistent
+   with how the top bar already uses that class) rather than the mockup's
+   plain `.presets button` rule, and the same --panel/--border/--muted
+   tokens as every other panel, per this file's established convention.
+   =========================================================================== */
+
+.presets {
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.presets h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.preset-current {
+  margin-bottom: 0.75rem;
+}
+
+.preset-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.unsaved-dot {
+  color: #d97706;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Direct children only — Save As… and the <select> stack full-width in the
+   column; the Load/Delete pair below is laid out separately via
+   .preset-actions so they can sit side by side instead. */
+.presets > .control {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.preset-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.preset-actions .control {
+  flex: 1 1 0;
+  margin-top: 0;
+  min-width: 0;
+}
+
+/* Visually hide (but keep accessible to assistive tech) the device-select
+   label — the mockup shows no separate label text, relying on context. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

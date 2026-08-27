@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PX-1 Layout Mockup (design reference only — not the real app)</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --border: #e0e2e6;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --live: #16a34a;
+    --stopped: #9ca3af;
+    --bypass-off-bg: #fff1f1;
+    --bypass-off-border: #dc2626;
+    --bypass-on-bg: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .app-title { font-weight: 600; font-size: 0.95rem; color: var(--muted); margin-right: auto; }
+  .status { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--stopped); }
+  .status.live .dot { background: var(--live); }
+  button.control {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  select.control { padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); }
+  .bypass-btn {
+    margin-left: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    border-radius: 8px;
+    border: 2px solid var(--bypass-off-border);
+    background: var(--bypass-off-bg);
+    color: var(--bypass-off-border);
+    cursor: pointer;
+  }
+  .bypass-btn.engaged {
+    background: var(--bypass-on-bg);
+    border-color: var(--bypass-on-bg);
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(220,38,38,0.2);
+  }
+  .banner {
+    display: none;
+    padding: 0.6rem 1.25rem;
+    background: #fff7ed;
+    border-bottom: 1px solid #fdba74;
+    color: #9a3412;
+    font-size: 0.85rem;
+  }
+  .banner.show { display: block; }
+  .layout {
+    display: grid;
+    grid-template-columns: 180px 1fr 220px;
+    min-height: 70vh;
+  }
+  .layout.bypassed .canvas { opacity: 0.45; filter: saturate(0.5); }
+  .panel { padding: 1rem; }
+  .palette { border-right: 1px solid var(--border); background: var(--panel); }
+  .palette h2, .presets h2 { font-size: 0.75rem; text-transform: uppercase; color: var(--muted); margin: 0 0 0.75rem; }
+  .node-chip {
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fafafa;
+    font-size: 0.85rem;
+    cursor: grab;
+  }
+  .canvas {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    overflow-x: auto;
+    transition: opacity 0.2s, filter 0.2s;
+  }
+  .anchor {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    background: #eef2f7;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px dashed var(--border);
+  }
+  .arrow { color: var(--muted); }
+  .node-card {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    min-width: 110px;
+  }
+  .node-card .label { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; }
+  .node-card .slider-row { display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; color: var(--muted); }
+  .node-card.dragging { opacity: 0.6; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+  .insertion-line { width: 2px; height: 44px; background: var(--accent); border-radius: 2px; }
+  .empty-hint {
+    padding: 1.25rem 1.5rem;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .presets { border-left: 1px solid var(--border); background: var(--panel); }
+  .preset-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; }
+  .unsaved-dot { color: #d97706; font-weight: 600; font-size: 0.75rem; }
+  .presets button { margin-top: 0.75rem; width: 100%; }
+  .toggles {
+    padding: 0.75rem 1.25rem;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 0.8rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .toggles button {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid #374151;
+    background: #1f2937;
+    color: #e5e7eb;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="toggles">
+  <strong>Design-reference toggles (not part of the real app):</strong>
+  <button id="btn-toggle-live">Toggle Live/Stopped</button>
+  <button id="btn-toggle-chain">Toggle Empty/Populated chain</button>
+  <button id="btn-toggle-bypass">Toggle Bypass</button>
+  <button id="btn-toggle-banner">Toggle Device-disconnect banner</button>
+  <button id="btn-toggle-unsaved">Toggle Unsaved-changes indicator</button>
+</div>
+
+<div class="topbar">
+  <span class="app-title">Node-Based Web Audio Chain Builder</span>
+  <span class="status" id="status"><span class="dot"></span><span id="status-text">Stopped</span></span>
+  <button class="control">Start</button>
+  <select class="control"><option>Built-in Microphone</option><option>USB Audio Interface</option></select>
+  <button class="bypass-btn" id="bypass-btn">BYPASS</button>
+</div>
+
+<div class="banner" id="banner">⚠ Input device disconnected — reconnect and click to resume.</div>
+
+<div class="layout" id="layout">
+  <div class="panel palette">
+    <h2>Palette</h2>
+    <div class="node-chip">Gain</div>
+    <div class="node-chip">Compressor</div>
+    <div class="node-chip">EQ</div>
+    <div class="node-chip">Delay</div>
+    <div class="node-chip">Reverb</div>
+    <div class="node-chip">Limiter</div>
+  </div>
+
+  <div class="panel" style="padding:0; display:flex; flex-direction:column;">
+    <div class="canvas populated-view">
+      <div class="anchor">MIC IN</div>
+      <span class="arrow">→</span>
+      <div class="node-card"><div class="label">Compressor</div><div class="slider-row">Ratio ▬▬▬●▬</div></div>
+      <span class="arrow">→</span>
+      <div class="node-card dragging"><div class="label">EQ</div><div class="slider-row">Mid ▬●▬▬▬</div></div>
+      <div class="insertion-line"></div>
+      <div class="node-card"><div class="label">Reverb</div><div class="slider-row">Mix ▬▬●▬▬</div></div>
+      <span class="arrow">→</span>
+      <div class="node-card"><div class="label">Limiter</div><div class="slider-row">Ceiling ▬▬▬▬●</div></div>
+      <span class="arrow">→</span>
+      <div class="anchor">OUT</div>
+    </div>
+    <div class="canvas empty-view" style="display:none;">
+      <div class="anchor">MIC IN</div>
+      <span class="arrow">→</span>
+      <div class="empty-hint">Drag an effect here to start building your chain</div>
+      <span class="arrow">→</span>
+      <div class="anchor">OUT</div>
+    </div>
+  </div>
+
+  <div class="panel presets">
+    <h2>Presets</h2>
+    <div class="preset-name">Classic Karaoke</div>
+    <div class="unsaved-dot" id="preset-status" style="display:none;">• unsaved changes</div>
+    <button class="control">Save As…</button>
+    <button class="control">Load Preset ▾</button>
+  </div>
+</div>
+
+<script>
+  document.getElementById('btn-toggle-live').addEventListener('click', () => {
+    const live = document.body.classList.toggle('running');
+    document.getElementById('status').classList.toggle('live', live);
+    document.getElementById('status-text').textContent = live ? 'Live' : 'Stopped';
+  });
+
+  document.getElementById('btn-toggle-chain').addEventListener('click', () => {
+    const empty = document.getElementById('layout').classList.toggle('empty');
+    document.querySelector('.populated-view').style.display = empty ? 'none' : 'flex';
+    document.querySelector('.empty-view').style.display = empty ? 'flex' : 'none';
+  });
+
+  document.getElementById('btn-toggle-bypass').addEventListener('click', () => {
+    document.getElementById('bypass-btn').classList.toggle('engaged');
+    document.getElementById('layout').classList.toggle('bypassed');
+  });
+
+  document.getElementById('btn-toggle-banner').addEventListener('click', () => {
+    document.getElementById('banner').classList.toggle('show');
+  });
+
+  document.getElementById('btn-toggle-unsaved').addEventListener('click', () => {
+    const el = document.getElementById('preset-status');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  });
+</script>
+</body>
+</html>
