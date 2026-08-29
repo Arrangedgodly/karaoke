@@ -28,6 +28,13 @@
 //     silencing whatever the chain is doing however broken it currently is,
 //     while ramping bypassGain up to 1 in the same breath — so the room
 //     hears a clean mic signal near-instantly, regardless of chain health.
+//   - Issue #3: while FEW-3's watchdog latch (src/meter-taps.js) holds,
+//     DISENGAGING bypass does NOT ramp the chain gate back up — the
+//     watchdog's mute outranks bypass's own gate target, and only the
+//     human "Restore output" button may reopen output after a trip. The
+//     dry path itself is never touched by the watchdog, so engaging
+//     bypass while latched still hands the room the clean mic signal:
+//     bypass remains the operator's escape exactly as designed.
 (function () {
   'use strict';
 
@@ -122,6 +129,17 @@
    * gate and the bypass gain in opposite directions in the same call so
    * they cross over together.
    *
+   * Issue #3 exception: while FEW-3's watchdog latch holds, the chain
+   * gate stays at its mute level in BOTH directions. Disengage's normal
+   * job includes ramping the gate back up to 1 — that would reopen
+   * output the safety system just muted, so it is suppressed (only the
+   * human "Restore output" button in src/meter-taps.js may ramp the gate
+   * up after a trip). The dry bypassGain ramp is untouched: that path is
+   * wholly Bypass's own and the watchdog never touches it, so engage
+   * still opens the dry path while latched, and disengage still closes
+   * it. Engage's gate target (0) already matches the mute, so only the
+   * disengage direction needs the guard.
+   *
    * @param {boolean} nextEngaged
    */
   function setEngaged(nextEngaged) {
@@ -137,7 +155,17 @@
     var chainGate = window.AudioGraph.getChainGate();
     var now = audioContext.currentTime;
 
-    rampTo(chainGate.gain, nextEngaged ? 0 : 1, now);
+    var gateTarget = nextEngaged ? 0 : 1;
+    if (
+      gateTarget > 0 &&
+      window.MeterTaps &&
+      typeof window.MeterTaps.isTripped === 'function' &&
+      window.MeterTaps.isTripped()
+    ) {
+      gateTarget = 0;
+    }
+
+    rampTo(chainGate.gain, gateTarget, now);
     rampTo(gain.gain, nextEngaged ? 1 : 0, now);
 
     engaged = nextEngaged;
@@ -148,7 +176,9 @@
     setEngaged(true);
   }
 
-  /** Disengage bypass: chain gate -> 1, bypass gain -> 0. */
+  /** Disengage bypass: bypass gain -> 0; chain gate -> 1 EXCEPT while the
+   *  watchdog latch holds (issue #3 — held at the mute level instead; see
+   *  setEngaged). */
   function disengage() {
     setEngaged(false);
   }

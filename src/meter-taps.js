@@ -9,7 +9,8 @@
 // "Restore output" button below).
 //
 // =====================================================================
-// FEW-3 WIRING DIAGRAM (rq4-meters.md topology, all side-taps)
+// FEW-3 WIRING DIAGRAM (rq4-meters.md topology, all side-taps; issue #3
+// moved the OUT tap to the final-output point)
 // =====================================================================
 //
 //   AudioEngine.sourceNode ──┬──────────────────────────────► [chain
@@ -18,19 +19,23 @@
 //                            ▼                                        ▼
 //                     analyserIn (fftSize 2048)              AudioGraph.chainGate ─►
 //                            │        ▲                       (persistent; survives   outputAttenuator
-//                            │        │                        every buildGraph())        │
-//                            │        └── created ONCE per              ▲                ▼
-//                            │            session, OUTSIDE                │         destination
-//                            │            buildGraph()                    │
-//                            ▼                                       │
+//                            │        │                        every buildGraph())    (MC-4; persistent,
+//                            │        └── created ONCE per              ▲              fixed -6 dBFS)
+//                            │            session, OUTSIDE                │                 │
+//                            │            buildGraph()                    │                 ▼
+//                            ▼                                           │           destination
 //                     analyserOut (fftSize 2048) ◄───────────────────────┘
 //                            │        ▲
-//                            │        └── connected EXACTLY ONCE; the
-//                            │            chainGate is never disconnected
-//                            │            by buildGraph()'s teardown, so
-//                            │            this edge persists across every
-//                            │            chain rebuild by design (rq4,
-//                            │            verified against the teardown
+//                            │        └── FINAL-OUTPUT tap, connected EXACTLY ONCE
+//                            │            (issue #3): analyserOut hangs off the
+//                            │            OUTPUT ATTENUATOR's own output — AFTER
+//                            │            the fixed -6 dBFS attenuation, one node
+//                            │            before destination — never off the
+//                            │            pre-attenuation chainGate. The
+//                            │            attenuator is never disconnected by
+//                            │            buildGraph()'s teardown, so this edge
+//                            │            persists across every chain rebuild by
+//                            │            design (verified against the teardown
 //                            │            code in src/audio-graph.js).
 //                            ▼
 //                     (analyser outputs connect NOWHERE — AnalyserNode is
@@ -44,6 +49,17 @@
 //   ballistics at the same moment (the two re-tap moments in rq4's
 //   design: device switch and context recreation).
 //
+//   Issue #3 — why the OUT tap is AFTER the attenuator: BOTH consumers
+//   of analyserOut (the OUT meter painted from time-domain data and the
+//   watchdog's howl/peak detectors below) must reason about what the
+//   LISTENER hears, i.e. the final output. The watchdog's trip threshold
+//   is derived from AudioGraph.OUTPUT_CEILING_DBFS, which describes the
+//   FINAL output; tapping upstream of the -6 dBFS attenuator had it
+//   comparing a pre-attenuation signal against a final-output ceiling —
+//   perfectly valid limiter-ceiling program sat ~6 dB "over" the
+//   threshold and got muted. One tap serves both consumers, so the meter
+//   and the detector are guaranteed to observe the same (this) point.
+//
 // =====================================================================
 // LIFECYCLE (called from src/main.js — additive hook calls only)
 // =====================================================================
@@ -54,9 +70,9 @@
 //     chainGate exists too). Creates the two taps lazily on first call
 //     (idempotent on later calls: analyserIn is (re)connected only when
 //     the live sourceNode differs from the one it's attached to;
-//     analyserOut's chainGate connection is made exactly once per
-//     session), flips Meters.setEngineState(true), and starts the ONE
-//     shared rAF loop.
+//     analyserOut's output-attenuator connection is made exactly once
+//     per session), flips Meters.setEngineState(true), and starts the
+//     ONE shared rAF loop.
 //   MeterTaps.onEngineStopped()
 //     Cancels the loop and Meters.setEngineState(false). (main.js has no
 //     stop path today — the app runs until close — but the hook exists
@@ -101,9 +117,13 @@
 // =====================================================================
 //
 //   ACTIVE only while the engine is running (the loop only runs then).
-//   ALL thresholds are DERIVED from AudioGraph.OUTPUT_CEILING_DBFS —
-//   read LIVE every frame, never re-typed as a literal (change the
-//   constant and the watchdog follows):
+//   Samples the FINAL OUTPUT — analyserOut hangs off the output
+//   attenuator, the same tap the OUT meter paints (see the wiring
+//   diagram), so the threshold math below finally compares like with
+//   like: final output vs final-output ceiling. ALL thresholds are
+//   DERIVED from AudioGraph.OUTPUT_CEILING_DBFS — read LIVE every
+//   frame, never re-typed as a literal (change the constant and the
+//   watchdog follows):
 //
 //     Peak rule: OUT peakDb > (OUTPUT_CEILING_DBFS + PEAK_OVERHEAD_DB)
 //     continuously for > PEAK_SUSTAIN_MS (250) ms → trip.
@@ -131,9 +151,12 @@
 //     - AgentUI.reportMutation({source:'watchdog', summary:'Watchdog
 //       tripped — output muted (<reason>)', errorText: <threshold +
 //       duration>, nodeIds: []}) so agents/events observe the mute.
-//     - While latched, the loop DEFENDS the mute: buildGraph()'s
-//       un-duck and AudioBypass's disengage both ramp chainGate back up;
-//       if the observed gain.value RISES while tripped, the 0-ramp is
+//     - While latched, the loop DEFENDS the mute as a BACKSTOP (issue
+//       #3): buildGraph()'s un-duck and AudioBypass's disengage are
+//       themselves latch-aware — they consult MeterTaps.isTripped() and
+//       leave the gate at the mute level instead of ramping up — but any
+//       foreign writer that still climbs the gate is caught here: if the
+//       observed gain.value RISES while tripped, the 0-ramp is
 //       re-applied. No rebuild or tool call can out-wait the latch.
 //
 //   RESTORE (human-only — the button click is the ONLY path; no agent
@@ -200,9 +223,9 @@
   // ---------------------------------------------------------------------
 
   var analyserIn = null; // tap off AudioEngine.sourceNode
-  var analyserOut = null; // tap off AudioGraph.getChainGate()
+  var analyserOut = null; // FINAL-OUTPUT tap off AudioGraph.getOutputAttenuator() (issue #3)
   var currentSourceNode = null; // source analyserIn is connected to
-  var outConnected = false; // chainGate -> analyserOut made exactly once
+  var outConnected = false; // attenuator -> analyserOut made exactly once
 
   // REUSED read buffers (single allocations for the whole session).
   var floatBuf = null; // Float32Array(FFT_SIZE)
@@ -667,15 +690,26 @@
     }
     connectInTap(window.AudioEngine.sourceNode);
     if (!outConnected) {
-      // chainGate is persistent and never disconnected by buildGraph()'s
-      // teardown, so this single connection survives every rebuild.
-      window.AudioGraph.getChainGate().connect(analyserOut);
+      // Issue #3: the OUT tap belongs at the FINAL OUTPUT — the output
+      // attenuator's own output, AFTER the fixed -6 dBFS attenuation, so
+      // the meters and the watchdog below observe exactly what the
+      // listener hears and the ceiling-derived threshold compares final
+      // output against final-output ceiling. The attenuator is
+      // persistent (like the chainGate, it is deliberately not in
+      // buildGraph()'s teardown set), so this single connection survives
+      // every rebuild exactly the way the old chainGate edge did. This
+      // runs on the FIRST engine start of a session, which also covers
+      // an engine already started on an older build: the taps are
+      // created lazily here, never carried over from a previous page
+      // load, so there is no stale gate-fed analyser to clean up.
+      window.AudioGraph.getOutputAttenuator().connect(analyserOut);
       outConnected = true;
     }
   }
 
   // ---------------------------------------------------------------------
-  // Public API — the three lifecycle hooks main.js calls.
+  // Public API — the three lifecycle hooks main.js calls, plus the
+  // read-only watchdog-latch probe (issue #3).
   // ---------------------------------------------------------------------
 
   /** main.js Start-success hook: taps live, meters live, loop running. */
@@ -724,9 +758,23 @@
     });
   }
 
+  /** Issue #3: read-only latch probe. TRUE while the watchdog mute is
+   *  latched (from trip() until the human Restore button's restore()).
+   *  Consumers: AudioGraph's deferred un-duck and AudioBypass's
+   *  disengage both consult this to suppress any upward chain-gate ramp
+   *  while latched (the defend-the-mute loop remains the backstop).
+   *  Read-only by construction — the latch itself (`tripped`) is closed
+   *  over in this IIFE; nothing outside can write it, and overwriting
+   *  this property only blinds the caller's own reference, never the
+   *  latch or the loop. */
+  function isTripped() {
+    return tripped;
+  }
+
   window.MeterTaps = {
     onEngineStarted: onEngineStarted,
     onEngineStopped: onEngineStopped,
     onDeviceSwitched: onDeviceSwitched,
+    isTripped: isTripped,
   };
 })();

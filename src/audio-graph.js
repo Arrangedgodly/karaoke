@@ -729,14 +729,29 @@
         return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params || {}) };
       });
 
-      // Un-duck — but NOT unconditionally to 1.0. If AudioBypass is
-      // currently engaged, the chain gate's correct steady state is 0
-      // (muted), not 1 — naively restoring to 1.0 here would silently
-      // DISENGAGE Bypass as a side effect of an unrelated chain edit, which
-      // would be a real safety bug (Bypass must stay engaged independent of
-      // chain edits, per its own AE-3 design). Ramp to whatever the
-      // currently-correct target actually is.
-      var target = (window.AudioBypass && window.AudioBypass.isEngaged()) ? 0 : 1.0;
+      // Un-duck — but NOT unconditionally to 1.0. Two states besides
+      // "audible" can own the gate's correct steady state:
+      //   - If AudioBypass is currently engaged, the chain gate's
+      //     correct steady state is 0 (muted), not 1 — naively restoring
+      //     to 1.0 here would silently DISENGAGE Bypass as a side effect
+      //     of an unrelated chain edit, which would be a real safety bug
+      //     (Bypass must stay engaged independent of chain edits, per
+      //     its own AE-3 design).
+      //   - If FEW-3's watchdog is latched (issue #3), the gate belongs
+      //     at the watchdog's mute level WHATEVER Bypass's state is: a
+      //     rebuild racing a live trip must never schedule an upward
+      //     ramp that reopens tripped output. Only the human "Restore
+      //     output" button (src/meter-taps.js) may lift the latch;
+      //     MeterTaps' defend-the-mute loop is the backstop if anything
+      //     else tries. The typeof guard keeps this safe in harnesses
+      //     that load audio-graph.js without meter-taps.js.
+      var watchdogLatched =
+        window.MeterTaps &&
+        typeof window.MeterTaps.isTripped === 'function' &&
+        window.MeterTaps.isTripped();
+      var target = watchdogLatched
+        ? 0
+        : (window.AudioBypass && window.AudioBypass.isEngaged()) ? 0 : 1.0;
       rampGateTo(gate, target, audioContext);
     }, FADE_S * 1000 + 5);
   }
