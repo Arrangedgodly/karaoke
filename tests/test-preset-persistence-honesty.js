@@ -295,6 +295,7 @@ function createEnv() {
   [
     'src/audio-graph.js',
     'src/node-types.js',
+    'src/audio-param-ramp.js', // issue #5: the ramp helper the node applyParam handlers call
     'src/node-gain.js',
     'src/node-compressor.js',
     'src/node-eq.js',

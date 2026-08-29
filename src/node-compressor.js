@@ -71,6 +71,15 @@
   // no-conversion AudioParam writes for live slider updates, called by
   // param-controls.js on every `input` event — never routed through
   // AudioGraph.buildGraph(), per that file's own comment on why).
+  //
+  // Issue #5: each write is SCHEDULED over ~15 ms via
+  // AudioParamRamp.schedule() (src/audio-param-ramp.js) instead of bare
+  // `.value =` assignments — the click-safe form the 'host-param-ramps'
+  // capability promise describes. (The factory's `.value =` writes above
+  // stay direct on purpose: they are a brand-new node's INITIAL values,
+  // applied at creation before the node is wired into the live graph —
+  // there is no in-audition signal to protect and no prior value to ramp
+  // from.)
   window.NodeTypes.register('compressor', {
     label: 'Compressor',
     paramSpec: [
@@ -80,10 +89,10 @@
       { id: 'release', label: 'Release', min: 0, max: 1, default: 0.25, step: 0.01, unit: 's' }
     ],
     applyParam: function (node, paramId, value) {
-      if (paramId === 'threshold') node.threshold.value = value;
-      else if (paramId === 'ratio') node.ratio.value = value;
-      else if (paramId === 'attack') node.attack.value = value;
-      else if (paramId === 'release') node.release.value = value;
+      if (paramId === 'threshold') window.AudioParamRamp.schedule(node.threshold, value);
+      else if (paramId === 'ratio') window.AudioParamRamp.schedule(node.ratio, value);
+      else if (paramId === 'attack') window.AudioParamRamp.schedule(node.attack, value);
+      else if (paramId === 'release') window.AudioParamRamp.schedule(node.release, value);
     }
   });
 })();

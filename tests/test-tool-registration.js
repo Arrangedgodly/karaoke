@@ -283,6 +283,7 @@ async function main() {
   loadSrc(sandbox, 'src/mcp-server.js');
   loadSrc(sandbox, 'src/audio-graph.js');
   loadSrc(sandbox, 'src/node-types.js');
+  loadSrc(sandbox, 'src/audio-param-ramp.js'); // issue #5: the ramp helper the node applyParam handlers call
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-compressor.js');
   loadSrc(sandbox, 'src/node-eq.js');

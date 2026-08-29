@@ -17,7 +17,8 @@ node tests/run.js        # zero-dependency regression gate (issue #9)
 | `tests/test-node-reuse-type-match.js` | a same-ID type change creates the correct physical AudioNode |
 | `tests/test-safety-refusals.js` | limiter removal / a node after the limiter / an unsafe ceiling are refused, with nothing applied |
 | `tests/test-mutation-undo.js` | one valid mutation applies, then Undo restores model + physical graph exactly |
-| `tests/test-*.js` (future) | **DEFERRED — `save_preset` storage-failure truthfulness arrives with issue #8**; when its test file lands, the runner auto-discovers it |
+| `tests/test-preset-persistence-honesty.js` | `save_preset` reports storage failures truthfully (issue #8) |
+| `tests/test-param-only-mutation.js` | `set_param` rides the parameter-only path (no rebuild, no gate duck) and every AudioParam write is a scheduled 10–20 ms ramp (issue #5) |
 
 Everything below is walked BY A HUMAN, with the actual equipment, before a
 live event (and after any DSP-touching change). Print it, date it, keep the
@@ -67,13 +68,20 @@ PA. Start from the factory **Classic Karaoke** preset.
       stays up front.
 - [ ] **Limiter**: with the ceiling at −3 dB the loudest notes stay clean
       (no crunch), and the OUT meter never exceeds the ceiling.
-- [ ] **Large-jump click check (issue #5 — pending)**: the published
-      policy (`get_capabilities` → `host-param-ramps`) promises every
-      param change ramps over 10–20 ms with no instantaneous jump. Until
-      issue #5's ramps ship, verify the CURRENT behavior honestly: drag a
-      slider from min to max in one gesture and listen for a click/zipper;
-      record what you hear. When #5 lands, this line becomes a hard FAIL
-      on any audible click.
+- [ ] **Large-jump click check (issue #5 — ramps shipped, physical listen
+      still required)**: the published policy (`get_capabilities` →
+      `host-param-ramps`) promises every param change ramps over 10–20 ms
+      with no instantaneous jump. The ramps ARE in the build now (every
+      live AudioParam write in the six node handlers is a scheduled 15 ms
+      ramp via `src/audio-param-ramp.js`, and `set_param` applies in place
+      with no card rebuild and no chain-gate duck — both proven
+      headlessly by `tests/test-param-only-mutation.js`, including a
+      math-level discontinuity probe). What automation CANNOT prove is
+      the sound in the room. Walk it with LARGE jumps at event volume:
+      `set_param` gain −24 → +12 dB, reverb mix 0 → 100, delay time
+      300 → 750 ms, compressor threshold −8 → −40 — plus one full
+      min→max slider drag per effect — listening for any click, pop, or
+      zipper. **Any audible click on this line is a hard FAIL.**
 - [ ] Reordering/removing nodes mid-signal: no pop, no dropped audio.
 - [ ] Date / operator / result: ____________
 

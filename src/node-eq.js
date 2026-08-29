@@ -105,6 +105,12 @@
   // original, possibly-composite value — see that function's own comment),
   // so this reaches straight into whichever internal filter a given paramId
   // targets.
+  //
+  // Issue #5: each band write is SCHEDULED over ~15 ms via
+  // AudioParamRamp.schedule() (src/audio-param-ramp.js) instead of a bare
+  // `.value =` — the click-safe form the 'host-param-ramps' capability
+  // promise describes (the factory's creation-time `.value =` writes above
+  // stay direct: a new node has no live signal to protect yet).
   window.NodeTypes.register('eq', {
     label: 'EQ',
     paramSpec: [
@@ -113,9 +119,9 @@
       { id: 'highGain', label: 'High', min: -12, max: 12, default: 0, step: 0.5, unit: 'dB' }
     ],
     applyParam: function (nodeInstance, paramId, value) {
-      if (paramId === 'lowGain') nodeInstance.low.gain.value = value;
-      else if (paramId === 'midGain') nodeInstance.mid.gain.value = value;
-      else if (paramId === 'highGain') nodeInstance.high.gain.value = value;
+      if (paramId === 'lowGain') window.AudioParamRamp.schedule(nodeInstance.low.gain, value);
+      else if (paramId === 'midGain') window.AudioParamRamp.schedule(nodeInstance.mid.gain, value);
+      else if (paramId === 'highGain') window.AudioParamRamp.schedule(nodeInstance.high.gain, value);
     }
   });
 })();

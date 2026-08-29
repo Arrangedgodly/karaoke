@@ -10,7 +10,9 @@
 // loaded earlier) for authoritative chain-shape validation;
 // window.ChainCanvas (src/canvas.js) for model access — getCurrentModel
 // (read-only; the same source the UI itself uses) and, since MC-4,
-// loadModel as THE single write path every mutation applies through;
+// loadModel as THE single write path every mutation applies through
+// (since issue #5, plus updateNodeParam for the parameter-only set_param
+// fast path — see applyParamOnlyViaUi below);
 // window.PresetStore (src/preset-store.js: listNames/load read-only since
 // MC-3; save/remove since MC-5 — the same single persistence path the
 // UI's Save As/Delete buttons use); window.FactoryPresets
@@ -2009,6 +2011,179 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Issue #5 — the PARAMETER-ONLY fast path (set_param).
+  //
+  // applyCandidateViaUi() above is the full write path: loadModel
+  // recomputes the canvas model, REPLACES every chain card, rebuilds the
+  // audio graph (ducking the chain gate to near-silence around the
+  // surgery), and re-baselines the autosave. That is the right hammer for
+  // a structural change and the WRONG one for a param tweak: the human
+  // slider path already updates the visible control, the model, the
+  // autosave, and the LIVE AudioParam on the existing node without ever
+  // touching buildGraph(). A set_param candidate is param-only by
+  // definition — same ids, same types, same order, exactly one param
+  // value changed (the #1 guard already ensured type match for the
+  // catch-up) — so it can ride the human path's exact primitives instead:
+  //
+  //   AudioGraph.updateNodeParams + NodeTypes.applyParam  (the half the
+  //     param-controls input handler owns — model bookkeeping + the
+  //     click-safe ramped live write), then
+  //   ChainCanvas.updateNodeParam  (the half the canvas onParamsChanged
+  //     callback owns — card slider/span in place with NO card re-render,
+  //     canvas model bookkeeping, Persistence autosave, markModified).
+  //
+  // Net effect on a valid param edit: no loadModel, no buildGraph, no
+  // chain-gate duck, no card replacement — and the param moves through
+  // the same 10-20 ms ramp a human slider move uses (host-param-ramps).
+  // Safety over elegance: ANY miss (absent dependency, a candidate that
+  // is not exactly one param change, a live instance whose id+type does
+  // not match the graph's model — issue #1's guard — or a mid-apply
+  // throw) makes applyParamOnlyViaUi() return false and the caller falls
+  // back to applyCandidateViaUi(), which reconciles everything by
+  // construction. Undo restores keep using the full path unchanged.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Decide whether a candidate differs from the live model by EXACTLY ONE
+   * param value on one node, with no structural difference of any kind
+   * (same length, same order, same ids, same types). That is the shape
+   * planSetParam produces — and the only shape entitled to the fast path.
+   *
+   * @param {Array<Object>} liveModel - the post-drag-settle read the plan
+   *   was computed against.
+   * @param {Array<Object>} candidate - the planned model.
+   * @returns {{id: string, type: string, param: string, value: number,
+   *   params: Object}|null} the single change, or null when the candidate
+   *   is structural, multi-param, or not a finite numeric change.
+   */
+  function paramOnlyChange(liveModel, candidate) {
+    if (!Array.isArray(liveModel) || !Array.isArray(candidate)) {
+      return null;
+    }
+    if (liveModel.length !== candidate.length || candidate.length === 0) {
+      return null;
+    }
+    var change = null;
+    for (var i = 0; i < candidate.length; i++) {
+      var live = liveModel[i];
+      var next = candidate[i];
+      if (!live || !next || live.id !== next.id || live.type !== next.type) {
+        return null; // added/removed/moved/retyped — structural.
+      }
+      var liveParams = live.params || {};
+      var nextParams = next.params || {};
+      var keys = Object.keys(liveParams).concat(Object.keys(nextParams));
+      var seen = {};
+      for (var k = 0; k < keys.length; k++) {
+        var key = keys[k];
+        if (seen[key]) {
+          continue;
+        }
+        seen[key] = true;
+        if (liveParams[key] === nextParams[key]) {
+          continue;
+        }
+        if (change) {
+          return null; // More than one param value differs.
+        }
+        if (typeof nextParams[key] !== 'number' || !isFinite(nextParams[key])) {
+          return null; // A deletion or non-numeric write — not this path.
+        }
+        change = {
+          id: next.id,
+          type: next.type,
+          param: key,
+          value: nextParams[key],
+          params: nextParams
+        };
+      }
+    }
+    return change;
+  }
+
+  /**
+   * Apply a param-only candidate through the human slider path's own
+   * primitives — NO ChainCanvas.loadModel (so no card replacement), NO
+   * AudioGraph.buildGraph (so no chain-gate duck and no graph surgery),
+   * and NO loadModel autosave re-baseline (Persistence runs exactly as a
+   * human edit instead, via ChainCanvas.updateNodeParam).
+   *
+   * @param {Array<Object>} liveModel - the model read the plan was
+   *   computed against (the diff base).
+   * @param {Array<Object>} candidate - the planned model.
+   * @returns {boolean} true when the fast path applied the change; false
+   *   when anything is missing/mismatched or the apply threw — the caller
+   *   then uses applyCandidateViaUi() (the full write path), which
+   *   reconciles model, cards, graph and persistence by construction.
+   */
+  function applyParamOnlyViaUi(liveModel, candidate) {
+    if (!(
+      window.ChainCanvas &&
+      typeof window.ChainCanvas.updateNodeParam === 'function' &&
+      window.AudioGraph &&
+      typeof window.AudioGraph.getModel === 'function' &&
+      typeof window.AudioGraph.getNodeInstance === 'function' &&
+      typeof window.AudioGraph.updateNodeParams === 'function' &&
+      window.NodeTypes &&
+      typeof window.NodeTypes.applyParam === 'function'
+    )) {
+      return false; // A bare/damaged harness — the full path's guards apply.
+    }
+    var change = paramOnlyChange(liveModel, candidate);
+    if (!change) {
+      return false;
+    }
+    // Issue #1's id-AND-type guard, mirrored from applyCandidateViaUi(): a
+    // live instance is a legitimate write target only when the model the
+    // live graph was actually built from still types this id as this type.
+    // A mismatch means the rebuild the full path performs is REQUIRED
+    // (fresh factory-built replacement) — never write onto the stale node.
+    var liveType;
+    try {
+      window.AudioGraph.getModel().forEach(function (entry) {
+        if (entry.id === change.id) {
+          liveType = entry.type;
+        }
+      });
+    } catch (err) {
+      return false;
+    }
+    if (liveType !== change.type) {
+      return false;
+    }
+    var instance = null;
+    try {
+      instance = window.AudioGraph.getNodeInstance(change.id);
+    } catch (err) {
+      return false;
+    }
+    if (!instance) {
+      return false; // Nothing live to update in place — rebuild instead.
+    }
+    try {
+      // (1) AudioGraph's model bookkeeping — the same call the human
+      // path's input handler makes (src/param-controls.js). Copies
+      // internally, so handing it the candidate's params object is safe.
+      window.AudioGraph.updateNodeParams(change.id, change.params);
+      // (2) The LIVE write — the same click-safe ramped applyParam the
+      // human path uses (scheduled over ~15 ms by
+      // window.AudioParamRamp, per the host-param-ramps disclosure).
+      window.NodeTypes.applyParam(change.type, instance, change.param, change.value);
+      // (3) The canvas half — card slider/value-span in place (no card
+      // re-render), canvas model bookkeeping, Persistence autosave and
+      // markModified exactly as a human slider move. A `false` return
+      // (stale id, mid-flight card change) falls back to the full path,
+      // which reconciles everything.
+      if (window.ChainCanvas.updateNodeParam(change.id, change.param, change.value) !== true) {
+        return false;
+      }
+    } catch (err) {
+      return false; // Safety > elegance — the full path reconciles.
+    }
+    return true;
+  }
+
   /**
    * Success disclosure (FEW-1 contract): one-line summary + affected node
    * ids + clamped param names. Guarded — agent feedback can never fail a
@@ -3225,7 +3400,17 @@
           // never a stale pre-drag one) and BEFORE the write, from the
           // same post-settle model read the plan was computed against.
           var snapshot = captureUndoSnapshot(model);
-          applyCandidateViaUi(plan.candidate);
+          // Issue #5: a candidate that is exactly ONE param change on one
+          // existing same-id same-type node (a set_param by definition;
+          // a structurally identical set_chain qualifies too) rides the
+          // parameter-only fast path — no card replacement, no graph
+          // rebuild, no chain-gate duck, the same click-safe ramp and the
+          // same autosave a human slider move produces. Anything else —
+          // or any miss inside the fast path — falls back to the full
+          // single write path below.
+          if (!applyParamOnlyViaUi(model, plan.candidate)) {
+            applyCandidateViaUi(plan.candidate);
+          }
           // Pushed only once the apply SUCCEEDED: a thrown write path
           // resolves SCHEMA_LAYER_FAULT below with nothing to undo.
           pushUndoEntry(plan.label, makeSnapshotRestore(snapshot));

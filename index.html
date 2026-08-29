@@ -188,6 +188,17 @@
   <script src="src/audio-graph.js"></script>
   <script src="src/audio-bypass.js"></script>
   <script src="src/node-types.js"></script>
+  <!--
+    Issue #5 — shared click-safe AudioParam scheduling
+    (window.AudioParamRamp, src/audio-param-ramp.js): the ONE ramp every
+    live AudioParam write by the node handlers below funnels through
+    (cancel + setValueAtTime + linearRampToValueAtTime over 15 ms — the
+    house pattern audio-graph.js's rampGateTo() established), making the
+    'host-param-ramps' capability promise true. Loads BEFORE the six
+    node-*.js files whose applyParam handlers call
+    AudioParamRamp.schedule(); needs nothing itself at parse time.
+  -->
+  <script src="src/audio-param-ramp.js"></script>
   <script src="src/node-gain.js"></script>
   <script src="src/node-compressor.js"></script>
   <script src="src/node-eq.js"></script>

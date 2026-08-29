@@ -257,6 +257,12 @@
   // original, possibly-composite value — see that function's own comment),
   // so this reaches straight into whichever internal piece the (single)
   // `mix` param targets.
+  //
+  // Issue #5: both crossfade sides are SCHEDULED over ~15 ms via
+  // AudioParamRamp.schedule() (src/audio-param-ramp.js) instead of bare
+  // `.value =` assignments — the click-safe form the 'host-param-ramps'
+  // capability promise describes (the factory's creation-time writes stay
+  // direct: a new node has no live signal to protect yet).
   window.NodeTypes.register('reverb', {
     label: 'Reverb',
     paramSpec: [
@@ -265,8 +271,8 @@
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'mix') {
         var m = value / 100;
-        nodeInstance.dryGain.gain.value = Math.cos(m * Math.PI / 2);
-        nodeInstance.wetGain.gain.value = Math.sin(m * Math.PI / 2);
+        window.AudioParamRamp.schedule(nodeInstance.dryGain.gain, Math.cos(m * Math.PI / 2));
+        window.AudioParamRamp.schedule(nodeInstance.wetGain.gain, Math.sin(m * Math.PI / 2));
       }
     }
   });

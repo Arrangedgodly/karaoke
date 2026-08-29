@@ -59,6 +59,12 @@
   // dB->linear mapping for live slider updates, called by param-controls.js
   // on every `input` event — never routed through AudioGraph.buildGraph(),
   // per that file's own comment on why).
+  //
+  // Issue #5: the write itself is SCHEDULED over ~15 ms via
+  // AudioParamRamp.schedule() (src/audio-param-ramp.js) instead of a bare
+  // `.value =` — the click-safe form the 'host-param-ramps' capability
+  // promise describes (a large dB jump applied instantaneously would
+  // discontinuously rescale the waveform and pop).
   window.NodeTypes.register('gain', {
     label: 'Gain',
     paramSpec: [
@@ -66,7 +72,7 @@
     ],
     applyParam: function (node, paramId, value) {
       if (paramId === 'gainDb') {
-        node.gain.value = Math.pow(10, value / 20);
+        window.AudioParamRamp.schedule(node.gain, Math.pow(10, value / 20));
       }
     }
   });

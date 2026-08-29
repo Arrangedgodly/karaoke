@@ -55,6 +55,57 @@
 (function () {
   'use strict';
 
+  // ---------------------------------------------------------------------
+  // Issue #5 — rendered-row registry (for updateControl below).
+  //
+  // render() keeps each row's <input> and value <span> in closure scope,
+  // which is exactly right for the human drag path but leaves no way for
+  // an OUTSIDE writer (the agent set_param fast path, via
+  // ChainCanvas.updateNodeParam) to move the visible control without
+  // re-rendering the whole card. This map is the minimal bridge: render()
+  // registers, per model-entry id, one "apply an externally-set value"
+  // closure per param row (it updates the slider position, the mono value
+  // span, AND this render's workingParams copy — see the input-handler
+  // comment below for why that last one matters). Keyed by id and reset at
+  // the top of every render() for that id, so a rebuilt card can never
+  // leave stale rows behind for its own id.
+  // ---------------------------------------------------------------------
+  var renderedControls = {};
+
+  /**
+   * Move ONE already-rendered param row's visible control to a new value —
+   * the slider position and the mono value span, never a re-render. Used
+   * by ChainCanvas.updateNodeParam (src/canvas.js) so an agent set_param
+   * applied through the parameter-only fast path (issue #5,
+   * src/mcp-tools.js) shows up on the card exactly like a human slider
+   * move would, without rebuilding any card.
+   *
+   * Purely presentational + bookkeeping on this render's working copy; it
+   * deliberately does NOT touch AudioGraph or any live AudioNode (the
+   * caller owns the live write, same division of labor as the input
+   * handler below).
+   *
+   * @param {string} modelEntryId - the id the card was rendered for.
+   * @param {string} paramId - the param row to move.
+   * @param {number} value - the new value, in the param's own unit.
+   * @returns {boolean} true when a rendered row was found and updated;
+   *   false when this id/param has no rendered row (unknown node, param
+   *   added after the card was rendered, or no card at all — e.g. a bare
+   *   harness).
+   */
+  function updateControl(modelEntryId, paramId, value) {
+    var perNode = renderedControls[modelEntryId];
+    if (!perNode) {
+      return false;
+    }
+    var row = perNode[paramId];
+    if (!row) {
+      return false;
+    }
+    row.apply(value);
+    return true;
+  }
+
   /**
    * Refinement entry 2: the plain-language help map — one line per param,
    * keyed `type -> paramId -> line`, in the README's operator voice. No
@@ -159,6 +210,11 @@
       return;
     }
 
+    // Issue #5: fresh row registry for this id (a re-render replaces every
+    // row, so the previous render's entries for this id are stale by
+    // definition — see renderedControls above).
+    renderedControls[modelEntry.id] = {};
+
     // Working copy of this entry's params — shallow-copied once up front,
     // then updated in place (one field at a time) as sliders move, so each
     // row's `input` handler always builds its updatedParams object from the
@@ -195,6 +251,22 @@
       valueDisplay.className = 'param-value';
       valueDisplay.textContent = formatValue(initialValue, spec.unit);
 
+      // Issue #5: register this row's external-value applier (see
+      // renderedControls above). Closes over `input`, `valueDisplay` and
+      // this render's `workingParams` so an agent param write surfaced
+      // through updateControl() keeps the slider, the mono span, AND the
+      // working copy a later human slider move builds from all in agreement
+      // — without it, the next `input` event on a sibling row would build
+      // its updatedParams from a stale copy and silently REVERT the agent's
+      // value in the model.
+      renderedControls[modelEntry.id][spec.id] = {
+        apply: function (externalValue) {
+          input.value = externalValue;
+          valueDisplay.textContent = formatValue(externalValue, spec.unit);
+          workingParams[spec.id] = externalValue;
+        }
+      };
+
       // Fires continuously while dragging (not just on release) — that's
       // exactly the point: a host tuning by ear expects to hear the change
       // live as the slider moves, not only once they let go.
@@ -203,13 +275,22 @@
 
         valueDisplay.textContent = formatValue(newValue, spec.unit);
 
+        // Issue #5: re-sync the working copy from the model entry FIRST,
+        // overlaid on this render's defaults, before applying this row's
+        // change. modelEntry is the canvas's live nodeState object (the
+        // same reference ChainCanvas keeps current, including via
+        // updateNodeParam's agent writes), so this makes an agent-written
+        // sibling param immune to being reverted by the next human move —
+        // belt-and-suspenders alongside the workingParams update inside
+        // updateControl's apply() closure above.
+        workingParams = Object.assign({}, workingParams, modelEntry.params || {});
         workingParams[spec.id] = newValue;
         var updatedParams = Object.assign({}, workingParams);
 
         // Model bookkeeping only — no live-graph/buildGraph() involvement.
         window.AudioGraph.updateNodeParams(modelEntry.id, updatedParams);
 
-        // Live audio side effect — a direct write (or short ramp) onto the
+        // Live audio side effect — a click-safe scheduled ramp onto the
         // real node, via the type's own registered applyParam. Deliberately
         // NOT routed through AudioGraph.buildGraph() — see file-level
         // comment above.
@@ -254,5 +335,8 @@
 
   window.ParamControls = {
     render: renderParamControls,
+    // Issue #5: move ONE rendered row's visible control to a new value
+    // without re-rendering (see updateControl above).
+    updateControl: updateControl,
   };
 })();

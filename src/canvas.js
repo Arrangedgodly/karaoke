@@ -621,6 +621,85 @@
   }
 
   /**
+   * Issue #5: apply ONE parameter change to an existing node WITHOUT the
+   * loadModel() rebuild — the parameter-only write path. This is the
+   * canvas-side half of exactly what a human slider move does, split the
+   * same way the human path splits it:
+   *
+   *   human slider move:
+   *     src/param-controls.js input handler  -> AudioGraph.updateNodeParams
+   *                                            + NodeTypes.applyParam
+   *                                            (the live-graph half)
+   *     this file's onParamsChanged callback -> nodeState.params
+   *                                            + Persistence autosave
+   *                                            + PresetsUI.markModified
+   *                                            (the canvas half)
+   *   agent set_param (parameter-only candidate, src/mcp-tools.js):
+   *     the fast path plays the input-handler role (the same
+   *     AudioGraph.updateNodeParams + NodeTypes.applyParam calls), then
+   *     calls THIS function for the canvas half.
+   *
+   * What this function owns: the canvas model bookkeeping (nodeState.params
+   * — the object getCurrentModel()/recomputeModelFromDom() read), the
+   * VISIBLE control (the card's slider position + mono value span via
+   * ParamControls.updateControl — the card is never re-rendered, never
+   * replaced), the autosave (Persistence.saveCurrentChain — the same call
+   * a human param tweak makes, so agent param edits persist identically),
+   * and the unsaved dot (PresetsUI.markModified). It deliberately does NOT
+   * call buildGraph() (nothing structural changed) and does NOT touch any
+   * AudioNode (the caller owns the live write, exactly as param-controls
+   * owns it on the human path).
+   *
+   * @param {string} nodeId - the node whose param changes.
+   * @param {string} paramId - the param's registered id.
+   * @param {number} value - the new value, already policy-applied.
+   * @returns {boolean} true when the node was found and updated; false
+   *   when no such node exists in this canvas (the caller falls back to
+   *   the full loadModel() write path — safety over elegance).
+   */
+  function updateNodeParam(nodeId, paramId, value) {
+    if (typeof nodeId !== 'string') {
+      return false;
+    }
+    var nodeState = nodesById[nodeId];
+    if (!nodeState) {
+      return false;
+    }
+    var updated = Object.assign({}, nodeState.params);
+    updated[paramId] = value;
+    // nodeState is the SAME object reference chainModel holds for this id
+    // (file-level model-bookkeeping comment), so this assignment is already
+    // reflected in chainModel for the persistence read below — no
+    // recomputeModelFromDom() needed, same as the human onParamsChanged
+    // path.
+    nodeState.params = updated;
+
+    // Visible control: move the rendered slider + value span in place.
+    // Guarded: a bare harness (or a card-less node) simply skips the
+    // display update — the model bookkeeping above is still correct.
+    try {
+      if (window.ParamControls && typeof window.ParamControls.updateControl === 'function') {
+        window.ParamControls.updateControl(nodeId, paramId, value);
+      }
+    } catch (err) {
+      // Display-only — never fail the param write for it.
+    }
+
+    // PS-2 (same call the human param tweak makes): persist so the
+    // autosave slot reflects the tuned value, not the last structural
+    // state. chainModel is synchronously current (see above).
+    if (window.Persistence) {
+      window.Persistence.saveCurrentChain(chainModel);
+    }
+    // PS-3: an agent param edit is an EDIT of whatever preset was
+    // displayed — the same markModified() a human slider move fires.
+    if (window.PresetsUI) {
+      window.PresetsUI.markModified();
+    }
+    return true;
+  }
+
+  /**
    * PS-3: a defensive copy of the current `chainModel` — each entry's
    * `params` object is copied too, so a caller can't mutate this file's own
    * internal bookkeeping by mutating the returned array/objects. Used by
@@ -812,5 +891,7 @@
     loadModel: loadModel,
     getCurrentModel: getCurrentModel,
     isDragActive: isDragActive,
+    // Issue #5: the parameter-only write path (see updateNodeParam above).
+    updateNodeParam: updateNodeParam,
   };
 })();

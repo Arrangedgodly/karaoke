@@ -102,6 +102,12 @@
   // slider updates, called by param-controls.js on every `input` event —
   // never routed through AudioGraph.buildGraph(), per that file's own
   // comment on why).
+  //
+  // Issue #5: the writes are SCHEDULED over ~15 ms via
+  // AudioParamRamp.schedule() (src/audio-param-ramp.js) instead of bare
+  // `.value =` assignments — the click-safe form the 'host-param-ramps'
+  // capability promise describes (the factory's creation-time writes stay
+  // direct: a new node has no live signal to protect yet).
   window.NodeTypes.register('limiter', {
     label: 'Limiter',
     paramSpec: [
@@ -109,8 +115,11 @@
       { id: 'release', label: 'Release', min: 10, max: 500, default: 50, step: 10, unit: 'ms' }
     ],
     applyParam: function (node, paramId, value) {
-      if (paramId === 'ceiling') node.threshold.value = value;
-      else if (paramId === 'release') node.release.value = value / 1000; // ms -> s
+      if (paramId === 'ceiling') {
+        window.AudioParamRamp.schedule(node.threshold, value);
+      } else if (paramId === 'release') {
+        window.AudioParamRamp.schedule(node.release, value / 1000); // ms -> s
+      }
     }
   });
 })();

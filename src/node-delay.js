@@ -176,6 +176,14 @@
   // (AudioGraph.getNodeInstance(id) always returns the original,
   // possibly-composite value — see that function's own comment), so this
   // reaches straight into whichever internal piece a given paramId targets.
+  //
+  // Issue #5: every write is SCHEDULED over ~15 ms via
+  // AudioParamRamp.schedule() (src/audio-param-ramp.js) instead of bare
+  // `.value =` assignments — the click-safe form the 'host-param-ramps'
+  // capability promise describes. delayTime included: an instantaneous
+  // delay-length change re-reads the circular buffer at a new offset (the
+  // classic delay "zipper"/pitch-blip); a short ramp slides the read point
+  // instead. mix ramps BOTH crossfade sides in one schedule pair.
   window.NodeTypes.register('delay', {
     label: 'Delay',
     paramSpec: [
@@ -185,16 +193,19 @@
     ],
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'timeMs') {
-        nodeInstance.delayNode.delayTime.value = value / 1000;
+        window.AudioParamRamp.schedule(nodeInstance.delayNode.delayTime, value / 1000);
       } else if (paramId === 'feedback') {
         // Same defensive clamp as the factory above — see file-level
         // comment for why this must hold unconditionally, not just via the
         // UI slider's max="90".
-        nodeInstance.feedbackGain.gain.value = Math.min(value, 90) / 100;
+        window.AudioParamRamp.schedule(
+          nodeInstance.feedbackGain.gain,
+          Math.min(value, 90) / 100
+        );
       } else if (paramId === 'mix') {
         var m = value / 100;
-        nodeInstance.dryGain.gain.value = Math.cos(m * Math.PI / 2);
-        nodeInstance.wetGain.gain.value = Math.sin(m * Math.PI / 2);
+        window.AudioParamRamp.schedule(nodeInstance.dryGain.gain, Math.cos(m * Math.PI / 2));
+        window.AudioParamRamp.schedule(nodeInstance.wetGain.gain, Math.sin(m * Math.PI / 2));
       }
     }
   });
