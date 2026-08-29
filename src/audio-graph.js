@@ -584,15 +584,48 @@
 
     // ---- Phase 1 (SYNCHRONOUS, happens immediately, before any ducking) ----
     // Resolve every model entry to an AudioNode object RIGHT NOW: reuse the
-    // existing instance if this id already exists, or call its registered
-    // factory to create a fresh one if the id is new. Creating a node
-    // object does NOT touch the live audio graph (no .connect() happens
-    // here) so this is safe to do before any muting, and it means a bad
-    // model (unknown type) throws SYNCHRONOUSLY, right here, with the old
-    // chain completely untouched — exactly like callers could already rely
-    // on before this task.
+    // existing instance if this id already exists AS THE SAME TYPE, or call
+    // its registered factory to create a fresh one if the id is new — or
+    // has changed type. Creating a node object does NOT touch the live
+    // audio graph (no .connect() happens here) so this is safe to do
+    // before any muting, and it means a bad model (unknown type) throws
+    // SYNCHRONOUSLY, right here, with the old chain completely untouched —
+    // exactly like callers could already rely on before this task.
+
+    // id -> type, from the model the CURRENT live instances were built
+    // from. currentModel and nodeInstances are only ever swapped together,
+    // in the same deferred Phase 2 commit below (and nodeInstances' keys
+    // are exactly currentModel's ids — both are derived from the same
+    // model in the same synchronous block), so this is always precisely
+    // the type each live instance was factoried for, never a stale guess.
+    // If the two ever drifted anyway, a missing entry here yields
+    // undefined, which equals no model entry's type string and falls
+    // through to the factory — the safe direction, never a wrong reuse.
+    var oldModelTypes = {};
+    currentModel.forEach(function (entry) {
+      oldModelTypes[entry.id] = entry.type;
+    });
+
     var resolvedNodes = model.map(function (entry) {
-      if (Object.prototype.hasOwnProperty.call(oldNodeInstances, entry.id)) {
+      // Issue #1 (P0): reuse demands an id AND TYPE match against the
+      // model the live instances were built from. Id alone is not
+      // identity — a live instance is a concrete GainNode or
+      // DynamicsCompressorNode, not a label, so "reusing" it for an entry
+      // whose type changed would RELABEL a physically wrong node: worst
+      // case a GainNode left standing in for the required terminal
+      // limiter while the model and every tool result claim a limiter is
+      // present. A type-changed id therefore falls through to the factory
+      // path below (fresh instance, entry params applied at creation),
+      // and Phase 2's teardown then treats its old instance exactly like
+      // any dropped node — disconnected, never carried into the new
+      // nodeInstances map. Same id + same type remains a genuine reuse:
+      // the SAME object is returned, preserving internal DSP state (e.g.
+      // a compressor's envelope, a delay's buffer contents) across a pure
+      // reorder or param-only change.
+      if (
+        Object.prototype.hasOwnProperty.call(oldNodeInstances, entry.id) &&
+        oldModelTypes[entry.id] === entry.type
+      ) {
         return oldNodeInstances[entry.id];
       }
       var factory = nodeFactories[entry.type];

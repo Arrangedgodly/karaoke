@@ -1904,11 +1904,13 @@
    * autosave.
    *
    * Reuse catch-up: AudioGraph.buildGraph() reuses live node instances by
-   * id and deliberately does NOT re-apply params to reused instances, so
-   * params that changed on a surviving node are pushed to the live node
-   * the same way the UI's own slider path does it (NodeTypes.applyParam
-   * direct writes, per src/param-controls.js). New nodes get their params
-   * from the factory at creation.
+   * id AND TYPE (issue #1 — never on id alone) and deliberately does NOT
+   * re-apply params to reused instances, so params that changed on a
+   * surviving node are pushed to the live node the same way the UI's own
+   * slider path does it (NodeTypes.applyParam direct writes, per
+   * src/param-controls.js). New nodes — including ids whose TYPE changed,
+   * which get a fresh factory-built replacement — have their params from
+   * the factory at creation.
    *
    * @param {Array<Object>} candidate - fully-validated model entries.
    */
@@ -1916,8 +1918,37 @@
     if (!window.ChainCanvas || typeof window.ChainCanvas.loadModel !== 'function') {
       throw new Error('McpTools: ChainCanvas.loadModel is not available — no write path to the chain model.');
     }
+    // Issue #1 (P0): a live instance is a legitimate catch-up target only
+    // when it satisfies the SAME id-AND-type guard buildGraph() applies
+    // when deciding what to reuse — i.e. when the model the live graph was
+    // actually built from still types this entry's id as entry.type.
+    // AudioGraph.getModel() is read BEFORE loadModel here on purpose: the
+    // graph's model and its instance map commit together on buildGraph()'s
+    // deferred rewire (~20ms later), so this pre-apply snapshot types
+    // EXACTLY the instances getNodeInstance() hands back below, making
+    // this decision mirror the reuse decision the rebuild is about to
+    // make. For an id whose type changed, the rebuild factories a fresh
+    // instance with the entry's params applied at creation, so pushing
+    // params at the old, wrong-typed instance would at best die inside
+    // applyParam's per-write try/catch and at worst scribble onto a node
+    // the rewire is about to disconnect for good — skip it, exactly like
+    // buildGraph skips it.
+    var liveTypes = {};
+    try {
+      if (window.AudioGraph && typeof window.AudioGraph.getModel === 'function') {
+        window.AudioGraph.getModel().forEach(function (entry) {
+          liveTypes[entry.id] = entry.type;
+        });
+      }
+    } catch (err) {
+      // Same best-effort contract as instance capture below: a miss just
+      // means no live catch-up.
+    }
     var reusable = {};
     candidate.forEach(function (entry) {
+      if (liveTypes[entry.id] !== entry.type) {
+        return; // New id, or an id whose type changed — fresh instance, no catch-up.
+      }
       try {
         var inst =
           window.AudioGraph && typeof window.AudioGraph.getNodeInstance === 'function'
