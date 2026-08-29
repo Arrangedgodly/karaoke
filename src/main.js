@@ -285,11 +285,17 @@ console.log('App scaffold loaded');
   }
 
   // Derives Live/Stopped from the same underlying state the rest of the
-  // app already relies on: AudioEngine.isStarted and the AudioContext's
-  // own .state. Not a separate piece of UI state to keep in sync.
+  // app already relies on: AudioEngine.isStarted, the AudioContext's own
+  // .state, and (issue #4) the live track itself — a track that ended, or
+  // a session torn down after device removal, is NOT live no matter what
+  // the context says. Not a separate piece of UI state to keep in sync.
   function isEngineLive() {
-    var audioContext = window.AudioEngine.audioContext;
-    return window.AudioEngine.isStarted && !!audioContext && audioContext.state === 'running';
+    var engine = window.AudioEngine;
+    var audioContext = engine.audioContext;
+    // (isTrackLive is a GETTER on AudioEngine; a value of undefined —
+    // e.g. an older engine — falls back to the pre-#4 meaning of started.)
+    var trackLive = engine.isTrackLive !== false;
+    return engine.isStarted && trackLive && !!audioContext && audioContext.state === 'running';
   }
 
   function populateDeviceList(selectedDeviceId) {
@@ -305,18 +311,183 @@ console.log('App scaffold loaded');
         return;
       }
 
+      var anySelected = false;
       devices.forEach(function (device, index) {
         var opt = document.createElement('option');
         opt.value = device.deviceId;
         opt.textContent = device.label || ('Input device ' + (index + 1));
         if (device.deviceId === selectedDeviceId) {
           opt.selected = true;
+          anySelected = true;
         }
         deviceSelect.appendChild(opt);
       });
 
+      // Issue #4: the selector must reflect the stream that is actually
+      // active — write .value too (not just the option's .selected), so a
+      // rebuild after a loss/device removal moves it off a dead device.
+      if (!anySelected && devices.length) {
+        deviceSelect.children[0].selected = true;
+      }
+      var selOpt = null;
+      deviceSelect.children.forEach(function (o) {
+        if (o.selected) {
+          selOpt = o;
+        }
+      });
+      deviceSelect.value = selOpt ? selOpt.value : '';
+
       deviceSelect.disabled = false;
     });
+  }
+
+  // ---------------------------------------------------------------------
+  // Issue #4 — audio lifecycle loss detection + recovery. The engine
+  // (src/audio-engine.js) watches AudioContext.statechange, the active
+  // track's ended/mute/unmute, and mediaDevices.devicechange, and
+  // forwards them via AudioEngine.onLifecycle(). Everything below only
+  // decides what the OPERATOR sees, reusing entry 3's exact vocabulary
+  // (setErrorStatus for the strip, setStartHint for the recovery NEXT
+  // ACTION — the hint is CSS-keyed to Start's disabled state, so
+  // re-enabling Start below is what surfaces the instruction; no new UI).
+  //
+  // Every loss path ends with the strip provably NOT reading Live: the
+  // .live class comes off (setErrorStatus's isLive argument is false) and
+  // the .error register goes on. Meters/watchdog stop via the EXISTING
+  // MeterTaps.onEngineStopped() hook — which preserves the #3 latch by
+  // design (a latched trip survives and only the human Restore button
+  // clears it).
+  // ---------------------------------------------------------------------
+
+  // Recovery copy in the entry-3 operator voice: WHAT HAPPENED on the
+  // strip, NEXT ACTION in the start-hint (visible exactly because Start
+  // is re-enabled).
+  var LOSS_COPY = {
+    ended: {
+      line: 'Mic was unplugged.',
+      action: 'Pick another mic from the dropdown, then press Start.',
+    },
+    device: {
+      line: 'Mic was unplugged.',
+      action: 'Pick another mic from the dropdown, then press Start.',
+    },
+    context: {
+      line: 'Audio engine paused.',
+      action: 'Press Start to resume audio.',
+    },
+  };
+
+  // True between a context-suspend loss and its recovery — keeps a
+  // resumed context from "recovering" a session that lost its track in
+  // the meantime.
+  var contextLost = false;
+
+  function surfaceLoss(copy) {
+    setErrorStatus(copy.line, null, false);
+    setStartHint(copy.action);
+    // The gating recovery action: with Start re-enabled, the hint above
+    // is visible and pressing Start is the one-click retry (start()
+    // rebuilds the session fresh — see its recovery path in
+    // audio-engine.js).
+    startButton.disabled = false;
+    if (bypassButton) {
+      bypassButton.disabled = true; // no live source to bypass anymore
+    }
+    if (window.MeterTaps) {
+      window.MeterTaps.onEngineStopped(); // stops the loop; KEEPS the #3 latch
+    }
+  }
+
+  function recoverFromLoss() {
+    // The dual of surfaceLoss: a live engine again — re-gate Start (which
+    // re-hides the hint) and restart the meters/watchdog loop (latch-aware
+    // by design; a latched trip keeps defending its mute).
+    startButton.disabled = true;
+    if (bypassButton) {
+      bypassButton.disabled = false;
+    }
+    if (window.MeterTaps) {
+      window.MeterTaps.onEngineStarted();
+    }
+    setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+  }
+
+  function handleContextState(state) {
+    if (state === 'running') {
+      if (contextLost) {
+        contextLost = false;
+        if (isEngineLive()) {
+          // The stream survived the suspension (OS interruption, tab
+          // throttle): recover in place — no operator action needed.
+          recoverFromLoss();
+        }
+        // else: the track was lost while suspended — the track-lost loss
+        // state below already owns the strip and Start; leave it.
+      }
+      return;
+    }
+    if (state !== 'suspended' && state !== 'interrupted' && state !== 'closed') {
+      return;
+    }
+    // Only a session that WOULD otherwise read Live is a visible loss; a
+    // suspended context before the first start (or after a track loss)
+    // must not stomp the existing status.
+    if (window.AudioEngine.isStarted && !contextLost) {
+      contextLost = true;
+      surfaceLoss(LOSS_COPY.context);
+    }
+  }
+
+  function handleDeviceChange() {
+    // Re-enumerate; if the ACTIVE device is gone while live, that IS a
+    // track loss (the engine tears the stream down and emits track-lost —
+    // the handler below surfaces it), and the dropdown must stop offering
+    // the dead device either way.
+    window.AudioEngine.listInputDevices().then(function (devices) {
+      var activeId = window.AudioEngine.currentDeviceId;
+      var activeGone =
+        !!activeId &&
+        window.AudioEngine.isStarted &&
+        !devices.some(function (d) { return d.deviceId === activeId; });
+      if (activeGone) {
+        window.AudioEngine.forceStreamLoss('device'); // emits track-lost
+      }
+      var selectId = activeGone ? (devices.length ? devices[0].deviceId : null) : activeId;
+      return populateDeviceList(selectId);
+    });
+  }
+
+  if (typeof window.AudioEngine.onLifecycle === 'function') {
+    window.AudioEngine.onLifecycle(function (evt) {
+      if (!evt) {
+        return;
+      }
+      if (evt.type === 'context-state') {
+        handleContextState(evt.state);
+      } else if (evt.type === 'track-lost') {
+        contextLost = false; // a dead track supersedes any suspend state
+        surfaceLoss(LOSS_COPY[evt.reason] || LOSS_COPY.ended);
+      } else if (evt.type === 'track-muted') {
+        // Transient note only — the track is still live, so the dot stays
+        // truthful via isEngineLive().
+        setStatus('Mic muted.', isEngineLive());
+      } else if (evt.type === 'track-unmuted') {
+        setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+      } else if (evt.type === 'device-change') {
+        handleDeviceChange();
+      }
+    });
+  }
+
+  /** Issue #4: snap the dropdown to the stream that is ACTUALLY active
+   *  (AudioEngine.currentDeviceId) — the selector's truth source after a
+   *  switch completes (fresh or stale) or fails, so a stale completion can
+   *  never leave the UI showing a device whose stream is not live. */
+  function reconcileSelector() {
+    var activeId = window.AudioEngine.currentDeviceId;
+    if (activeId && deviceSelect.value !== activeId) {
+      deviceSelect.value = activeId;
+    }
   }
 
   startButton.addEventListener('click', function () {
@@ -395,6 +566,7 @@ console.log('App scaffold loaded');
         }
 
         setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+        contextLost = false; // issue #4: a fresh start clears any suspend state
 
         return populateDeviceList(window.AudioEngine.currentDeviceId);
       })
@@ -443,8 +615,20 @@ console.log('App scaffold loaded');
         }
 
         setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+        // Issue #4: the selector reflects the ACTIVE stream's device, not
+        // merely whatever was last picked.
+        reconcileSelector();
       })
       .catch(function (err) {
+        // Issue #4: a STALE completion (a newer switch/Start superseded
+        // this one — the engine already stopped and discarded its stream)
+        // is not an operator-visible failure: the newer request owns the
+        // outcome. Only re-anchor the selector to the actually-active
+        // device so the strip and dropdown tell one story.
+        if (err && err.stale) {
+          reconcileSelector();
+          return;
+        }
         console.error('Failed to switch input device:', err);
         // The old stream/source node is untouched until the new one is
         // successfully obtained (see switchInputDevice() in
@@ -455,6 +639,9 @@ console.log('App scaffold loaded');
         // action; the lamp stays truthful via isEngineLive().
         var copy = micErrorCopy(err, true);
         setErrorStatus(copy.line, copy.footnote, isEngineLive());
+        // Issue #4: the failed pick is not the active device — snap the
+        // selector back to the stream that is actually live.
+        reconcileSelector();
       });
   });
 })();
