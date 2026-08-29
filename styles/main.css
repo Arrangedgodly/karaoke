@@ -722,6 +722,17 @@ select.control {
    ghost geometry is unaffected. Keyboard focus: the global
    :focus-visible ring above covers these items exactly as before. */
 .node-chip {
+  /* R2-2 button-semantics normalization (visual no-op): the chip is now a
+     real <button>, so the three UA button defaults the old <div> never
+     had are reset to what the div rendered — full-width block (buttons
+     shrink to content), the page font (buttons fall back to the UA face),
+     and left-aligned flex content (buttons center text). cursor: grab
+     below survives the conversion; the global :focus-visible ring covers
+     keyboard focus, and the real `disabled` attribute (pre-Start gating,
+     src/canvas.js) removes the chip from the tab order honestly. */
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1377,6 +1388,90 @@ select.control {
   flex: 1 1 0;
   margin-top: 0;
   min-width: 0;
+}
+
+/* R2-3 — the inline Save As naming row: the same control vocabulary as
+   the rest of the panel, so naming a preset mid-show stays in-panel (no
+   browser prompt()). Hidden by default; src/presets-ui.js shows it on
+   Save As… and hides it again on Save/Cancel (display:none also removes
+   the input from the tab order — no dead stops). The input is a text
+   .control: card ground, line-strong bezel, native-dark via the root
+   color-scheme. Layout is measured to the 220px flank: the input takes
+   the full row (flex-basis 100%), and Save (ink-on-amber primary, the
+   Start/Undo pairing) + Cancel sit beneath it sharing a second line
+   exactly like the Load/Delete pair — side-by-side input+buttons cannot
+   fit 220px without shrinking the input to unreadability. */
+.preset-name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+input.preset-name-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-card);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+/* The Save/Cancel sub-row — the Load/Delete pairing, verbatim. */
+.preset-name-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.preset-name-actions .control {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+input.preset-name-input:focus-visible {
+  /* The global ring already covers it — this block exists to keep the
+     vocabulary explicit next to the row it belongs to. */
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.preset-name-row .control-primary {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.preset-name-row .control-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.preset-name-row .control-primary:focus-visible {
+  outline-color: var(--focus-ring-on-accent);
+  outline-offset: -2px; /* ink ring on the amber fill, same as Start */
+}
+
+.preset-name-row .control:not(.control-primary) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* R2-3 — the armed second step of Delete: the safety-red EDGE role as
+   the bezel (tokens only; red FILL stays Bypass-only), plus the
+   "DELETE?" relabel from src/presets-ui.js. Edge + copy carry the
+   state together — neither alone. */
+#delete-preset-btn.danger-arm {
+  border-color: var(--red-edge);
+  color: var(--text-primary);
+}
+
+#delete-preset-btn.danger-arm:not(:disabled):hover {
+  border-color: var(--red-edge);
 }
 
 /* PS-4 — factory/user dropdown groups. The <optgroup> labels read as

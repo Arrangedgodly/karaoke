@@ -117,9 +117,10 @@ function makeElement(tag) {
   el.addEventListener = function (type, fn) {
     (el.__listeners[type] = el.__listeners[type] || []).push(fn);
   };
-  el.__fire = function (type) {
+  el.__fire = function (type, ev) {
+    var event = ev || { preventDefault: function () {}, stopPropagation: function () {} };
     (el.__listeners[type] || []).forEach(function (fn) {
-      fn();
+      fn(event);
     });
   };
   Object.defineProperty(el, 'innerHTML', {
@@ -152,6 +153,22 @@ function makeElement(tag) {
     }
   });
   return el;
+}
+
+// Depth-first id search over an element's subtree — lets
+// document.getElementById find the elements src/presets-ui.js creates
+// dynamically (the R2-3 inline naming row's input/buttons).
+function findByIdIn(node, id) {
+  if (node.id === id) {
+    return node;
+  }
+  for (var i = 0; i < node.children.length; i++) {
+    var hit = findByIdIn(node.children[i], id);
+    if (hit) {
+      return hit;
+    }
+  }
+  return null;
 }
 
 // ----------------------------------------------------------------------
@@ -241,6 +258,7 @@ function createEnv() {
     promptCalls: [],
     promptResponse: '',
     confirmResponse: true,
+    confirmCalls: 0,
     consoleErrors: 0
   };
   var sandbox = {
@@ -265,7 +283,7 @@ function createEnv() {
     },
     document: {
       getElementById: function (id) {
-        return panel.byId[id] || null;
+        return panel.byId[id] || findByIdIn(panel.container, id) || null;
       },
       createElement: function (tag) {
         return makeElement(tag);
@@ -282,6 +300,7 @@ function createEnv() {
       return env.promptResponse;
     },
     confirm: function () {
+      env.confirmCalls += 1; // R2-3: must stay 0 — Delete is two-step in-panel
       return env.confirmResponse;
     },
     alert: function () {},
@@ -517,19 +536,29 @@ function assertMcpFailure(env, caseLabel, name, isOverwrite) {
   });
 }
 
+function prefix0(caseLabel) {
+  return caseLabel + ' human:';
+}
+
 function assertHumanSaveAsFailure(env, caseLabel, name, isOverwrite) {
   var sandbox = env.sandbox;
   var before = snapshot(env);
 
-  env.promptResponse = name;
-  env.panel.byId['save-preset-btn'].__fire('click'); // the real Save As handler
+  // R2-3: drive the real Save As handler through the INLINE naming row —
+  // Save As… opens it, the name goes into #preset-name-input, the row's
+  // Save button commits. No prompt() anywhere.
+  env.panel.byId['save-preset-btn'].__fire('click');
+  var input = env.sandbox.document.getElementById('preset-name-input');
+  check(!!input, prefix0(caseLabel) + ' the inline naming row opened (input present)');
+  input.value = name;
+  env.sandbox.document.getElementById('preset-name-confirm').__fire('click');
   var after = snapshot(env);
   var note = noteElement(env);
   var prefix = caseLabel + ' human:';
 
   check(
-    env.promptCalls.length > 0,
-    prefix + ' the Save As… prompt actually ran (the real click handler executed)'
+    env.promptCalls.length === 0,
+    prefix + ' window.prompt was NEVER called (R2-3: naming is in-panel)'
   );
   check(
     !!note && note.style.display !== 'none' &&
@@ -845,7 +874,16 @@ async function main() {
     env.storage.fault.setItemError = namedError('QuotaExceededError', 'The quota has been exceeded.');
 
     env.confirmResponse = true;
-    env.panel.byId['delete-preset-btn'].__fire('click'); // selection is 'Baseline'
+    // R2-3: two-step in-panel Delete — first click ARMS (relabel to
+    // "DELETE?"), second click confirms. No confirm() anywhere.
+    env.panel.byId['delete-preset-btn'].__fire('click'); // arm
+    var deleteBtnEl = env.panel.byId['delete-preset-btn'];
+    check(
+      deleteBtnEl.textContent === 'DELETE?',
+      'I1: the first Delete click ARMS the button (relabelled "DELETE?")'
+    );
+    env.panel.byId['delete-preset-btn'].__fire('click'); // confirm
+    check(env.confirmCalls === 0, 'I1: window.confirm was NEVER called (two-step in-panel)');
     var note = noteElement(env);
     check(
       !!note && note.style.display !== 'none' &&
@@ -867,11 +905,72 @@ async function main() {
     // selection ('Classic Karaoke').
     env.storage.fault.setItemError = null;
     sandbox.PresetsUI.refreshPresetSelect('Baseline');
-    env.panel.byId['delete-preset-btn'].__fire('click');
+    env.panel.byId['delete-preset-btn'].__fire('click'); // arm
+    env.panel.byId['delete-preset-btn'].__fire('click'); // confirm
     check(
       optionValues(env).indexOf('Baseline') === -1 &&
         storedNames(env).indexOf('Baseline') === -1,
       'I2: with storage healthy again, Delete really removes the preset'
+    );
+  }
+
+  // ------------------------------------------------------------------
+  console.log('J. R2-3 inline naming row — in-panel Save As semantics');
+  // ------------------------------------------------------------------
+  {
+    var env = freshSeededEnv();
+    var sandbox = env.sandbox;
+    var doc = sandbox.document;
+
+    // Empty name: quiet refusal, row stays open for the retry.
+    env.panel.byId['save-preset-btn'].__fire('click');
+    var input = doc.getElementById('preset-name-input');
+    check(!!input, 'J1: Save As… opens the inline naming row (input present)');
+    var row = input.parentNode;
+    check(row.style.display !== 'none', 'J1: the naming row is VISIBLE while open');
+    input.value = '   ';
+    doc.getElementById('preset-name-confirm').__fire('click');
+    var note = noteElement(env);
+    check(
+      !!note && note.style.display !== 'none' &&
+        note.textContent.indexOf('Give the preset a name first.') !== -1,
+      'J1: an empty (all-whitespace) name is refused quietly via .preset-note'
+    );
+    check(row.style.display !== 'none', 'J1: the row STAYS OPEN after the refusal');
+
+    // Escape cancels cleanly — row hidden (out of the tab order).
+    input.__fire('keydown', { key: 'Escape', preventDefault: function () {}, stopPropagation: function () {} });
+    check(row.style.display === 'none', 'J2: Escape collapses the naming row');
+
+    // Enter commits: same observable outcomes as the old prompt flow.
+    env.panel.byId['save-preset-btn'].__fire('click');
+    input = doc.getElementById('preset-name-input');
+    input.value = 'Typed Name';
+    input.__fire('keydown', { key: 'Enter', preventDefault: function () {}, stopPropagation: function () {} });
+    check(
+      optionValues(env).indexOf('Typed Name') !== -1 &&
+        env.panel.byId['current-preset-name'].textContent === 'Typed Name' &&
+        env.panel.byId['unsaved-indicator'].style.display === 'none',
+      'J3: Enter saves — preset listed+selected semantics, display renamed, dot cleared'
+    );
+    check(
+      input.parentNode.style.display === 'none',
+      'J3: the naming row collapses after a successful save'
+    );
+    check(
+      env.promptCalls.length === 0 && env.confirmCalls === 0,
+      'J3: prompt()/confirm() were NEVER called by the whole flow'
+    );
+
+    // Collision keeps the dialog-era semantics: silent overwrite.
+    env.panel.byId['save-preset-btn'].__fire('click');
+    input = doc.getElementById('preset-name-input');
+    input.value = 'Typed Name';
+    doc.getElementById('preset-name-confirm').__fire('click');
+    check(
+      sandbox.PresetStore.load('Typed Name') !== null &&
+        optionValues(env).filter(function (v) { return v === 'Typed Name'; }).length === 1,
+      'J4: saving under an EXISTING name overwrites silently (prompt-era semantics kept)'
     );
   }
 

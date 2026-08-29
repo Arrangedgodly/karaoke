@@ -463,7 +463,7 @@ mode, one entry at a time, per-entry user gate.
 |---|---------|-------------------------------|--------|
 | R2-1 | `$impeccable layout` | **[P2]** OUT meter below the fold in the default expanded live state — output health depends on scroll position (occlusion is fixed; visibility is not). Fix: persistent OUT presence in the always-visible region — pinned compact readout at the canvas panel's foot, independent of scroll/collapse. | **done** (user-approved 2026-08-29) |
 | R2-2 | `$impeccable adapt` | **[P2]** Node addition unreachable by keyboard/screen reader — palette chips are non-focusable divs. Fix: button semantics + add-to-chain activation. | **done** (approved by progression 2026-08-29) |
-| R2-3 | `$impeccable clarify` | **[P2]** Native prompt()/confirm() break the console vocabulary mid-show (Save-As naming, Delete confirmation). Fix: in-panel inline naming + two-step Delete, no browser dialogs. | in-progress |
+| R2-3 | `$impeccable clarify` | **[P2]** Native prompt()/confirm() break the console vocabulary mid-show (Save-As naming, Delete confirmation). Fix: in-panel inline naming + two-step Delete, no browser dialogs. | **done-pending-approval** (2026-08-29) |
 
 ## Round 2 entry log
 
@@ -616,5 +616,93 @@ vertical synthetic drag commits on both trees); (3) the main.js
 spacebar-guard extension changes focused-button Space from
 "toggles bypass" to "activates the button" app-wide — strictly the
 native contract, but a behavior change beyond the palette worth naming.
+
+### R2-3 — `$impeccable clarify` (in-panel Save As naming + two-step Delete) — **done-pending-approval** (2026-08-29)
+
+**Finding** (closing critique P2 #3): the presets panel's two remaining
+browser dialogs broke the console vocabulary mid-show — Save As… named
+through a blocking `prompt()`, Delete confirmed through a blocking
+`confirm()`. **Fix direction was user-ratified**: in-panel inline naming
++ two-step Delete, no browser dialogs, no modals/overlays/new toasts
+(the `.preset-note` line stays the quiet-refusal home). Human paths
+only — the MCP `save_preset` tool and its refusal vocabulary are
+untouched.
+
+**Save As — inline naming** (`src/presets-ui.js`): Save As… now opens a
+lazily built `#preset-name-row` beneath the preset `<select>` — a
+full-width text `#preset-name-input` (text-`.control` vocabulary: card
+ground `--bg-card`, line-strong bezel, native-dark via the root
+color-scheme, sr-only "Preset name" label) over a Save/Cancel sub-row
+(`.preset-name-actions`, the Load/Delete pairing; Save is ink-on-amber
+primary in the Start/Undo family — computed `#F0A83C`/`#241A08` verified
+in-browser). **States/focus**: open → focus moves INTO the input
+(pre-filled with the current preset's name, selected — the old prompt's
+re-save suggestion preserved); Enter commits, Escape cancels (with a
+scoped `stopPropagation` so no document-level Escape reacts), blur
+deliberately does NOT commit or collapse (mid-show attention may
+wander; explicit action only); collapse hides the row, removing the
+input from the tab order, and focus returns to Save As…. **Validation**
+mirrors `save_preset`'s bound: `maxLength 40` on the input + a commit
+re-check of trim/1-40; empty → quiet note "Give the preset a name
+first." with the row left open for retry; >40 (defensive, paste paths)
+→ "Preset names are 1-40 characters." **Collision semantics kept from
+the prompt era**: silent overwrite — a user preset under a factory name
+still writes the USER store beside it. **#8 unchanged**: a StorageError
+on save changes nothing downstream (no dropdown entry, no rename, no
+dot clear) and surfaces the same "Could not save … nothing was written"
+note; the row stays open for a retry.
+
+**Delete — two-step in-panel**: first click ARMS — the button relabels
+to "DELETE?" (silkscreen register, `aria-live=polite` so the relabel is
+announced) and takes the safety-red EDGE bezel (`--red-edge` computed
+`#E5484D`; red FILL stays Bypass-only, tokens throughout); a second
+click within **5 s** deletes, the window expiring, a pointer press
+anywhere else, or Escape disarms back to the plain label. The #8
+failure path is byte-identical: a StorageError on remove keeps the
+preset listed (dropdown reconciled from the store) and says so through
+the quiet note.
+
+**Geometry** (measured, 1280×800, flank panel exactly 220.0px): the
+naming row STACKS — full-width input (187px) over the two-button
+sub-row — because input + two buttons side-by-side cannot fit 220px
+without squeezing the input unreadable (the first flex-wrap attempt
+measured the input at 46px and was replaced). No page horizontal
+overflow in either state (doc 1280/1280), the panel does not scroll-x,
+the row fits its own box.
+
+**Evidence** (headless Chrome via playwright-core + system Chrome,
+fake-mic flags, real Start, `window.prompt`/`window.confirm` stubbed to
+THROW — both flows ran end-to-end without either being called): 33/33
+checks — (a) row opens, focus in input; (b) type + Enter saves with
+the old flow's observables (preset listed + selected, display renamed,
+dot cleared); (c) Escape cancels with focus returning to Save As, empty
+name → quiet note + row stays open, 41-char input clamped to 40
+(maxLength + commit re-check, mirroring `save_preset`'s 1-40-trimmed
+rule), collision → silent overwrite (exactly one entry), blur leaves
+the row open; (d) arm relabel + red-edge class, disarm on
+Escape/elsewhere-click/5 s expiry, second click deletes, and the
+injected-quota `StorageError` path keeps the preset listed with the
+"Could not delete … it is still saved" note; (e) tab order input →
+Save → Cancel, and after collapse the hidden input is not a tab stop;
+(f) geometry above. **Suite**: `node tests/run.js` — 14/14 files,
+788/788 checks green. `tests/test-preset-persistence-honesty.js`
+(count 144→154) now drives the real handlers through the inline flow
+(every #8 assertion intact and equivalently strong, plus a new section
+J covering empty-refusal, Escape, Enter, collapse, prompt/confirm
+never-called, and collision-overwrite); `tests/test-undo-conflict-safety.js`
+drivers updated to the arm+confirm and inline-naming flows with all
+undo-conflict assertions unchanged (73 checks). **Detector**:
+regex-mode note (same parser-deps degradation as entries 1–6) — `[]`,
+no new findings.
+
+**Residuals (disclosed)**: (1) the armed Delete's elsewhere-disarm uses
+`pointerdown`, so a touch-scroll that begins on the button does not
+disarm (the 5 s window still does); (2) the naming row's Save/Cancel do
+not carry their own Escape handling (Escape works while focus is in the
+input — the documented focus model); (3) `index.html`'s presets markup
+is unchanged — the row is JS-built like the `.preset-note` before it,
+so a JS-off render simply shows the old dialog-free panel minus inline
+naming (Save As… then opens nothing; the button is inert, matching the
+panel's existing no-JS degradation).
 
 (Workers append outcome + evidence here; the master records gate outcomes.)

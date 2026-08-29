@@ -361,6 +361,13 @@ function makeElement(tag) {
   return el;
 }
 
+// Depth-first id search (R2-3 — for the dynamically created naming row).
+function findByIdIn(el, id) {
+  return findIn(el, function (node) {
+    return node.id === id;
+  });
+}
+
 // Depth-first search over an element's subtree.
 function findIn(el, predicate) {
   if (predicate(el)) {
@@ -433,7 +440,9 @@ function createEnv() {
     },
     document: {
       getElementById: function (id) {
-        return Object.prototype.hasOwnProperty.call(byId, id) ? byId[id] : null;
+        // R2-3: fall back to a subtree search so the dynamically created
+        // inline naming row (appended to the select's host) is findable.
+        return Object.prototype.hasOwnProperty.call(byId, id) ? byId[id] : findByIdIn(presetHost, id);
       },
       createElement: function (tag) {
         return makeElement(tag);
@@ -859,9 +868,13 @@ async function main() {
         caseLabel + ' seed: agent save_preset overwrote "Stage"'
       );
 
-      // The HUMAN overwrites the same preset through the real Save As.
-      env.promptResponse = 'Stage';
+      // The HUMAN overwrites the same preset through the real Save As —
+      // R2-3: the inline naming row (Save As… opens it, the row's Save
+      // commits), no browser prompt().
       env.byId['save-preset-btn'].__fire('click');
+      var nameInput = sandbox.document.getElementById('preset-name-input');
+      nameInput.value = 'Stage';
+      sandbox.document.getElementById('preset-name-confirm').__fire('click');
       var humanStored = sandbox.PresetStore.load('Stage');
       var humanMix = humanStored.nodes.filter(function (n) { return n.id === 'n5'; })[0].params.mix;
       return { env: env, sandbox: sandbox, humanMix: humanMix, withConfirm: withConfirm };
@@ -945,6 +958,8 @@ async function main() {
         opt.selected = opt.value === 'Del Target';
       });
       env.confirmResponse = true;
+      // R2-3: two-step Delete — arm, then confirm. No browser confirm().
+      env.byId['delete-preset-btn'].__fire('click');
       env.byId['delete-preset-btn'].__fire('click');
       return { env: env, sandbox: sandbox };
     };

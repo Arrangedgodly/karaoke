@@ -39,6 +39,16 @@
 // keeps the preset listed; both surface the failure through the same
 // quiet inline .preset-note line PS-4 introduced (showPresetNote).
 //
+// R2-3 scope: the panel's two remaining browser dialogs are gone —
+// Save As… names IN-PANEL through a lazily built inline naming row
+// (#preset-name-row: input + Save + Cancel; Enter confirms, Escape
+// cancels, blur never auto-commits; 1-40-char name bound mirroring
+// save_preset's), and Delete is TWO-STEP in-panel (first click arms the
+// button to "DELETE?" with the safety-edge bezel; a second click within
+// 5 s deletes; expiry, an elsewhere press, or Escape disarms). The
+// #8 failure consequences, the .preset-note quiet refusals, and the
+// overwrite-on-collision semantics are unchanged from the dialog era.
+//
 // This file owns two independent bits of state, both purely DOM-display
 // concerns — neither is persisted anywhere, and both reset to their
 // initial "nothing loaded/saved yet" values on every page load:
@@ -90,6 +100,259 @@
   // see showPresetNote) and the timer hiding it again.
   var presetNoteEl = null;
   var presetNoteTimer = null;
+
+  // R2-3: the inline Save As naming row (lazily created on first use —
+  // see openNamingRow) and its pieces. `namingRowOpen` mirrors the row's
+  // display state so the Enter/Escape keydown handler only ever acts
+  // while the row is actually showing.
+  var namingRowEl = null;
+  var namingInputEl = null;
+  var namingConfirmBtnEl = null;
+  var namingCancelBtnEl = null;
+  var namingRowOpen = false;
+
+  // R2-3: the two-step Delete arm state — the armed flag, the relabelled
+  // button text, and the 5 s window that disarms it again.
+  var DELETE_ARM_LABEL = 'DELETE?';
+  var DELETE_ARM_WINDOW_MS = 5000;
+  var deleteArmed = false;
+  var deleteArmTimer = null;
+
+  /**
+   * R2-3: lazily build the inline Save As naming row and append it to
+   * the panel (the select's parent — the .presets column). The panel's
+   * mid-show vocabulary is in-panel: no browser prompt() dialogs, so
+   * naming happens in a text input right where Save As… sits, in the
+   * shared .control vocabulary. The row starts hidden; openNamingRow()
+   * shows it, collapseNamingRow() hides it (display:none removes the
+   * input from the tab order — no dead tab stops after collapse).
+   *
+   * Best-effort by construction, same as showPresetNote: with no parent
+   * to anchor to (a bare harness DOM) openNamingRow() is a no-op.
+   */
+  function ensureNamingRow() {
+    if (namingRowEl) {
+      return;
+    }
+    var host = presetSelectEl.parentNode;
+    if (!host || typeof host.appendChild !== 'function') {
+      return;
+    }
+    namingRowEl = document.createElement('div');
+    namingRowEl.id = 'preset-name-row';
+    namingRowEl.className = 'preset-name-row';
+    namingRowEl.style.display = 'none';
+
+    var label = document.createElement('label');
+    label.className = 'sr-only';
+    label.textContent = 'Preset name';
+    if (typeof label.setAttribute === 'function') {
+      label.setAttribute('for', 'preset-name-input');
+    }
+    namingRowEl.appendChild(label);
+
+    namingInputEl = document.createElement('input');
+    namingInputEl.type = 'text';
+    namingInputEl.id = 'preset-name-input';
+    namingInputEl.className = 'control preset-name-input';
+    // The same 1-40-character bound save_preset enforces (mcp-tools.js
+    // validates names as 1-40 after trimming) — maxlength stops typing
+    // past it; commitNamingRow() still re-checks defensively.
+    namingInputEl.maxLength = 40;
+    if (typeof namingInputEl.setAttribute === 'function') {
+      namingInputEl.setAttribute('autocomplete', 'off');
+    }
+    namingInputEl.addEventListener('keydown', function (event) {
+      if (!namingRowOpen) {
+        return;
+      }
+      if (event.key === 'Enter') {
+        if (event.preventDefault) {
+          event.preventDefault();
+        }
+        commitNamingRow();
+      } else if (event.key === 'Escape') {
+        // Scoped: stop the Escape here so no document-level listener
+        // (e.g. a toast's) reacts to a keypress that only closed the
+        // naming row.
+        if (event.stopPropagation) {
+          event.stopPropagation();
+        }
+        if (event.preventDefault) {
+          event.preventDefault();
+        }
+        collapseNamingRow();
+      }
+    });
+    namingRowEl.appendChild(namingInputEl);
+
+    // Save + Cancel share their own sub-row beneath the input (the
+    // Load/Delete pairing) — a measured fit at the 220px flank, where
+    // input + two buttons side by side cannot fit without squeezing the
+    // input unreadable.
+    var actionsEl = document.createElement('div');
+    actionsEl.className = 'preset-name-actions';
+
+    namingConfirmBtnEl = document.createElement('button');
+    namingConfirmBtnEl.type = 'button';
+    namingConfirmBtnEl.id = 'preset-name-confirm';
+    namingConfirmBtnEl.className = 'control control-primary';
+    namingConfirmBtnEl.textContent = 'Save';
+    namingConfirmBtnEl.addEventListener('click', function () {
+      commitNamingRow();
+    });
+    actionsEl.appendChild(namingConfirmBtnEl);
+
+    namingCancelBtnEl = document.createElement('button');
+    namingCancelBtnEl.type = 'button';
+    namingCancelBtnEl.id = 'preset-name-cancel';
+    namingCancelBtnEl.className = 'control';
+    namingCancelBtnEl.textContent = 'Cancel';
+    namingCancelBtnEl.addEventListener('click', function () {
+      collapseNamingRow();
+    });
+    actionsEl.appendChild(namingCancelBtnEl);
+    namingRowEl.appendChild(actionsEl);
+
+    host.appendChild(namingRowEl);
+  }
+
+  /**
+   * R2-3: open the inline naming row, pre-filled with the current
+   * preset's name (the old prompt()'s suggestion, same re-save affordance)
+   * and focused. Blur deliberately does NOT commit or collapse — the
+   * operator's mid-show attention may wander; only an explicit Save,
+   * Enter, Cancel, or Escape closes the row.
+   */
+  function openNamingRow() {
+    ensureNamingRow();
+    if (!namingRowEl) {
+      return;
+    }
+    namingInputEl.value = currentPresetName || '';
+    namingRowEl.style.display = '';
+    namingRowOpen = true;
+    if (typeof namingInputEl.focus === 'function') {
+      namingInputEl.focus();
+    }
+    if (typeof namingInputEl.select === 'function') {
+      namingInputEl.select();
+    }
+  }
+
+  /**
+   * R2-3: hide the naming row and hand focus back to Save As… — the row
+   * (and its input) leaves the tab order with it.
+   */
+  function collapseNamingRow() {
+    if (!namingRowEl) {
+      return;
+    }
+    namingRowEl.style.display = 'none';
+    namingRowOpen = false;
+    if (typeof saveBtn.focus === 'function') {
+      saveBtn.focus();
+    }
+  }
+
+  /**
+   * R2-3: the Save As commit — the old prompt()-path body, unchanged in
+   * its semantics, driven by the inline input instead. Validation mirrors
+   * save_preset's bound: trim, 1-40 characters. Empty refuses quietly
+   * through the .preset-note line and keeps the row open (retry is the
+   * point of an inline row); a collision keeps today's overwrite
+   * semantics — save() overwrites silently, exactly as the prompt path
+   * did. On a StorageError the row also stays open (nothing downstream
+   * changed — same #8 consequences as before) so the operator can retry;
+   * on success the row collapses.
+   */
+  function commitNamingRow() {
+    if (!namingRowOpen) {
+      return;
+    }
+    var trimmed = (namingInputEl.value || '').trim();
+    if (trimmed.length === 0) {
+      showPresetNote('Give the preset a name first.');
+      return;
+    }
+    if (trimmed.length > 40) {
+      // Defensive — the input's maxLength stops typing past 40; a paste
+      // path that somehow bypasses it still meets the same bound here.
+      showPresetNote('Preset names are 1-40 characters.');
+      return;
+    }
+
+    // PS-4 note: this ALWAYS writes the USER store (PresetStore.save),
+    // even when `trimmed` collides with a factory name — namespaces are
+    // separate, so a user "Warm Ballad" simply appears beside the factory
+    // one, and refreshPresetSelect(trimmed) selects the USER option.
+    //
+    // Issue #8: on failure NOTHING downstream may run — no dropdown
+    // refresh, no current-preset display change, no clearModified() —
+    // and the failure is surfaced through the panel's quiet inline note.
+    try {
+      window.PresetStore.save(trimmed, window.ChainCanvas.getCurrentModel());
+    } catch (err) {
+      console.error('Presets panel: Save As "' + trimmed + '" failed — nothing was written', err);
+      showPresetNote('Could not save "' + trimmed + '" — nothing was written (storage failure)');
+      return;
+    }
+    refreshPresetSelect(trimmed);
+    setCurrentPreset(trimmed);
+    clearModified();
+    // Issue #6: a HUMAN save/overwrite — bump the state revision so a
+    // stale agent save_preset Undo entry can no longer auto-apply over
+    // the human's newer stored content.
+    if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+      window.AgentUI.noteHumanEdit();
+    }
+    collapseNamingRow();
+  }
+
+  /**
+   * R2-3: disarm the two-step Delete — restore the plain label and
+   * bezel, cancel the expiry window. Idempotent.
+   */
+  function disarmDelete() {
+    if (!deleteArmed) {
+      return;
+    }
+    deleteArmed = false;
+    if (deleteArmTimer) {
+      window.clearTimeout(deleteArmTimer);
+      deleteArmTimer = null;
+    }
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.className = 'control';
+    if (typeof deleteBtn.setAttribute === 'function') {
+      deleteBtn.setAttribute('aria-live', 'off');
+    }
+  }
+
+  /**
+   * R2-3: arm the two-step Delete — the button relabels to DELETE? with
+   * the safety-edge-red bezel (an EDGE, never the Bypass-only red fill),
+   * and a 5 s window holds the armed state. Anything else — the window
+   * expiring, a press elsewhere, Escape — disarms (see the document
+   * listeners wired once below).
+   */
+  function armDelete() {
+    deleteArmed = true;
+    deleteBtn.textContent = DELETE_ARM_LABEL;
+    deleteBtn.className = 'control danger-arm';
+    if (typeof deleteBtn.setAttribute === 'function') {
+      // The relabel is the whole signal — announce it, since styling
+      // never carries the meaning alone.
+      deleteBtn.setAttribute('aria-live', 'polite');
+    }
+    if (deleteArmTimer) {
+      window.clearTimeout(deleteArmTimer);
+    }
+    deleteArmTimer = window.setTimeout(function () {
+      deleteArmTimer = null;
+      disarmDelete();
+    }, DELETE_ARM_WINDOW_MS);
+  }
 
   /**
    * PS-4: read the factory library, guarded. An absent or damaged
@@ -300,49 +563,12 @@
     }
   }
 
+  // R2-3: Save As… opens the inline naming row (openNamingRow /
+  // commitNamingRow above) — no browser prompt(). The commit body and
+  // its #8/PS-4/#6 consequences live in commitNamingRow, verbatim from
+  // the old prompt path.
   saveBtn.addEventListener('click', function () {
-    var defaultName = currentPresetName || '';
-    var name = window.prompt('Save chain as:', defaultName);
-    if (name === null) {
-      // User cancelled the prompt.
-      return;
-    }
-    var trimmed = name.trim();
-    if (trimmed.length === 0) {
-      return;
-    }
-
-    // PS-4 note: this ALWAYS writes the USER store (PresetStore.save),
-    // even when `trimmed` collides with a factory name or the suggestion
-    // came from a loaded factory preset — namespaces are separate, so a
-    // user "Warm Ballad" simply appears beside the factory one (different
-    // optgroup, different option value) and the factory library is never
-    // touched. refreshPresetSelect(trimmed) selects the USER option on
-    // such a collision (user options match plain names; factory options
-    // only match their 'factory:'-prefixed form).
-    //
-    // Issue #8: the store now throws its typed StorageError when the
-    // write did not persist (verified by read-back). On failure NOTHING
-    // downstream may run — no dropdown refresh (the preset was not
-    // saved, so it must not appear), no current-preset display change,
-    // no clearModified() (the chain is still unsaved) — and the failure
-    // is surfaced through the panel's quiet inline note, never a modal.
-    try {
-      window.PresetStore.save(trimmed, window.ChainCanvas.getCurrentModel());
-    } catch (err) {
-      console.error('Presets panel: Save As "' + trimmed + '" failed — nothing was written', err);
-      showPresetNote('Could not save "' + trimmed + '" — nothing was written (storage failure)');
-      return;
-    }
-    refreshPresetSelect(trimmed);
-    setCurrentPreset(trimmed);
-    clearModified();
-    // Issue #6: a HUMAN save/overwrite — bump the state revision so a
-    // stale agent save_preset Undo entry can no longer auto-apply over
-    // the human's newer stored content.
-    if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-      window.AgentUI.noteHumanEdit();
-    }
+    openNamingRow();
   });
 
   loadBtn.addEventListener('click', function () {
@@ -389,6 +615,11 @@
     noteHumanEditGuarded();
   });
 
+  // R2-3: Delete is two-step in-panel — no browser confirm(). The first
+  // click arms the button (relabel + safety-edge bezel + a 5 s window,
+  // see armDelete/disarmDelete); the second click inside the window
+  // deletes. Everything from the name check onward is the old
+  // confirm()-path body, unchanged in its #8/PS-4/#6 consequences.
   deleteBtn.addEventListener('click', function () {
     var value = presetSelectEl.value;
     if (!value) {
@@ -396,17 +627,20 @@
     }
 
     // PS-4: factory entries are load-only shipped content, not user data —
-    // a quiet inline refusal (no confirm modal, no store.remove, the
-    // dropdown selection left exactly as it was).
+    // a quiet inline refusal (no store.remove, the dropdown selection
+    // left exactly as it was).
     if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
       showPresetNote("Factory presets can't be deleted");
       return;
     }
 
-    var name = value;
-    if (!window.confirm('Delete preset "' + name + '"?')) {
+    if (!deleteArmed) {
+      armDelete();
       return;
     }
+    disarmDelete();
+
+    var name = value;
 
     // Issue #8: a delete that could not be persisted throws the typed
     // StorageError — the preset is STILL stored, so it must not vanish
@@ -435,6 +669,32 @@
     // store state.
     noteHumanEditGuarded();
   });
+
+  // R2-3: the disarm observers for the two-step Delete — a press
+  // anywhere that is not the Delete button itself, or an Escape, folds
+  // the arm back to the plain label. Guarded so a page (or bare test
+  // sandbox) without document-level listeners simply keeps the 5 s
+  // window as the disarm path.
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('pointerdown', function (event) {
+      if (!deleteArmed) {
+        return;
+      }
+      var node = event.target;
+      while (node) {
+        if (node === deleteBtn) {
+          return; // the confirming click itself — not an "elsewhere" press
+        }
+        node = node.parentNode;
+      }
+      disarmDelete();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (deleteArmed && event.key === 'Escape') {
+        disarmDelete();
+      }
+    });
+  }
 
   // Populate the dropdown once at script-init time. On a fresh profile
   // this shows the factory library only — PresetStore.listNames() is a
