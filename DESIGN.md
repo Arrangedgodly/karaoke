@@ -214,10 +214,16 @@ order — BYPASS never leaves the visible top.
 The canvas flows top-down by default (VIS-7): MIC IN anchor with its meter →
 stacked channel-strip modules → OUT, inside a bounded panel
 (`max-height: calc(100vh - 7.5rem)`) that scrolls internally so a long chain
-never grows the page. A FLOW toggle flips to the horizontal legacy reading
-(left→right chain, page-owned scroll), persisted per user. Cards collapse to
-slim header-only rows (~39px) via chevron — presentation only. Spacing rhythm
-is console-tight: 4/8/12/16px steps, panel padding 1rem, card padding
+never grows the page. A pinned footer row inside the panel (beneath the
+scrolling canvas, above the FLOW toggle) carries a second view of the OUT
+meter — output ground truth is always visible without scrolling. A FLOW
+toggle flips to the horizontal legacy reading (left→right chain, page-owned
+scroll), persisted per user. Cards collapse to slim header-only rows (~39px)
+via chevron — presentation only. While Bypass is engaged the chain region
+(cards + flow toggle) dims to the gated-state 0.55 with a silkscreen
+BYPASSED line; anchors, meters, the pinned footer, and both flanks never
+dim — output truth stays readable on the dry path. Spacing rhythm is
+console-tight: 4/8/12/16px steps, panel padding 1rem, card padding
 6px/12px after the ~90% density pass.
 
 ## Elevation & Depth
@@ -259,7 +265,7 @@ Tactile and confident: controls read as physical objects that answer within
 - **BYPASS:** the loudest control on the strip — lg radius (8px), 3rem min-height, 1.05rem/700 type, 2px Safety Edge Red ring. Engaged: Safety Fill Red ground, white text. Nothing on the strip outranks it.
 
 ### Chips
-- **Palette chip:** Module Card ground, hairline seam at rest, md radius; 20px family legend square + silkscreen label (muted → primary on hover). Hover raises the bezel and adds a 2px family top edge (inset, no layout shift) + 1px lift (motion-guarded). Active/drag-origin: amber bezel.
+- **Palette chip:** a real `<button>` (aria-label "Add X to chain"; disabled until Start) — Module Card ground, hairline seam at rest, md radius; 20px family legend square + silkscreen label (muted → primary on hover). Hover raises the bezel and adds a 2px family top edge (inset, no layout shift) + 1px lift (motion-guarded). Active/drag-origin: amber bezel. Keyboard: Enter/Space adds the node (appended before the terminal limiter); drag unchanged; grab cursor survives the button semantics.
 - **Agent chip:** a strip-native reporter, never a control — card-ground pill, silkscreen legend type; tools-ready/acting lift to Bezel Line border, amber label, 8px amber status square; acting adds one 1.2s opacity breath (the single slow-animation exception, guarded). Unavailable is the quietest state on the strip.
 
 ### Cards / Containers
@@ -268,6 +274,8 @@ Tactile and confident: controls read as physical objects that answer within
 
 ### Inputs / Fields
 - **Select (device, presets):** `.control` vocabulary — card ground, Bezel Line bezel, native dark rendering via root `color-scheme: dark`; optgroup labels read as silkscreen micro-legends. Long labels ellipsize against a max width.
+- **Inline preset naming (Save As):** no browser dialogs — the naming row opens under the select: text input in the `.control` vocabulary (sr-only label) over an ink-on-amber Save + plain Cancel. Enter commits, Escape cancels (scoped), blur never commits; focus returns to Save As… on close. Empty names answer with the quiet `.preset-note` line.
+- **Armed Delete:** two-step in-panel — first click relabels to "DELETE?" (announced) and raises a Safety Edge Red bezel (edge, never fill — fill red is BYPASS-only); a second click within 5s deletes; expiry, click-elsewhere, or Escape disarms.
 - **Faders (param sliders):** one native `input[type=range]` per param, re-skinned: 8px track (sm radius) painted as hairline slot + 1px detent ticks every 12px + 2px Bezel Line center-unity notch; 12×18px amber cap with Bezel Line bezel and a 2px Lamp Ink position line. Values read in the mono register right-aligned above.
 
 ### Navigation
@@ -275,6 +283,7 @@ Tactile and confident: controls read as physical objects that answer within
 
 ### Meters
 - **MIC IN / OUT units:** 96×26px canvas lamp bar (unlit glass = hairline; green → amber → clip stops; peak tick + clip dot) over a mono dB readout (tabular, muted; CLIP latch text renders primary while the canvas carries the red). Ballistics are per-frame canvas draws — functional motion that stays live under reduced-motion by construction.
+- **Pinned OUT footer:** a second VIEW of the OUT unit (one feed, one ballistics, shared scene drawer) pinned in the canvas panel's always-visible region — the operator's output ground truth never depends on scroll or collapse; never dimmed, including while bypassed. The footer canvas is presentation-only (aria-hidden); the anchor meter keeps announcements.
 
 ### Toasts (agent change summaries)
 - Module Card ground, Bezel Line border (a floating card earns the meaningful outline), lg radius, lifted shadow, ≤340px, bottom-right stack (3 max, 6s auto-dismiss, hover-pause). Summary in body register; clamped/error/undone footnotes in muted mono under a hairline seam. Refusals carry a 2px Safety Edge Red bezel on all sides — the bezel is the refusal signal, never red text. Undo is the one action: ink-on-amber fill. Undone toasts recede to 0.75 opacity.

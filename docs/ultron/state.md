@@ -7,7 +7,7 @@ approved 2026-08-27; its production-log, QA, research, and design references
 remain valid there).
 
 ## Current Phase
-`impeccable` (POL-1 closer, ultron-impeccable) — **production complete
+`impeccable` — **COMPLETE 2026-08-29, awaiting cycle acceptance.** Was POL-1 closer (ultron-impeccable) — **production complete
 2026-08-28**: all 22 plan tasks done (QA-3 5/5 PASS, user-judged; QA-1/2/4
 user-PASSed; PS-4/VIS-7/VIS-7b committed in 8be184c). `$impeccable document`
 ran 2026-08-28: DESIGN.md + .impeccable/design.json generated (scan mode,
@@ -19,12 +19,17 @@ bypass cue. Executing the refinement checklist one entry at a time, pausing
 for user approval after each.
 
 ## Active Task
-**Round 2 of the refinement loop (R2-1..R2-3)** — see [refinement.md](refinement.md):
-`$impeccable layout` (P1 occlusion: OUT anchor/meter + safe-output note
-buried by overflowing cards in the default vertical-flow state) → then
-clarify → harden → typeset → polish (canvas bypass cue). After all entries:
-closing critique → (document refresh if built reality changed) → cycle
-acceptance.
+**Cycle acceptance (user's final gate).** The impeccable phase is complete:
+round 1 (5 entries: occlusion, plain-language params, error recovery, 11px
+floor, bypass indication) + round 2 (3 entries: pinned OUT footer, keyboard
+node addition, inline preset dialogs) all landed and user-approved (E5, R2-2
+approved by progression). Critique trend 27 → 33 → **35/40 (Good)**, all
+Priority Issues resolved, no regressions (snapshots in .impeccable/critique/).
+Standing finding recorded as deliberate design: manual +24 dB gain /
+limiter removal mid-show is human sovereignty (the human outranks the policy
+that binds the agent) — backlog P3s in the closing snapshot. Final document
+refresh done (DESIGN.md + sidecar + README operator sections). Ledger:
+[refinement.md](refinement.md).
 
 ## Open Decisions (owners set in town-hall.md § Open questions)
 - OQ-1 WebMCP localhost enable mechanics + API signature — deep-research, **blocks Track-A**

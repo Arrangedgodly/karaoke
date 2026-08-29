@@ -4,52 +4,449 @@
   "title": "Design System: Karaoke Chain Builder",
   "extensions": {
     "colorMeta": {
-      "bg-body": { "role": "neutral", "displayName": "Chassis Charcoal", "canonical": "#1B1917", "tonalRamp": ["#292623", "#49433e", "#686159", "#887e74", "#a39b93", "#beb8b2", "#d8d5d2", "#f3f2f1"] },
-      "bg-panel": { "role": "neutral", "displayName": "Faceplate Umber", "canonical": "#292623", "tonalRamp": ["#292623", "#49433e", "#686159", "#887e74", "#a39b93", "#beb8b2", "#d8d5d2", "#f3f2f1"] },
-      "bg-card": { "role": "neutral", "displayName": "Module Card", "canonical": "#322E29", "tonalRamp": ["#2a2722", "#4a443d", "#6a6257", "#8a7f71", "#a59c91", "#bfb9b1", "#d9d6d1", "#f4f2f1"] },
-      "hairline": { "role": "neutral", "displayName": "Seam Hairline", "canonical": "#4C463E", "tonalRamp": ["#2a2722", "#4a443d", "#6a6257", "#8a8071", "#a59c91", "#bfb9b1", "#d9d6d1", "#f4f2f1"] },
-      "line-strong": { "role": "neutral", "displayName": "Bezel Line", "canonical": "#857C6E", "tonalRamp": ["#2a2723", "#4a453d", "#6a6357", "#8a8072", "#a49d91", "#bfb9b1", "#d9d6d1", "#f3f3f1"] },
-      "text-primary": { "role": "neutral", "displayName": "Warm Chalk", "canonical": "#EDE8DE", "tonalRamp": ["#322a1b", "#574a30", "#7d6a44", "#a38a59", "#b8a57d", "#cdbfa3", "#e1d9c9", "#f6f3ef"] },
-      "text-muted": { "role": "neutral", "displayName": "Muted Silkscreen", "canonical": "#A79F92", "tonalRamp": ["#2a2722", "#4b453c", "#6b6356", "#8b8170", "#a69d90", "#c0bab0", "#dad6d1", "#f4f3f1"] },
-      "accent": { "role": "primary", "displayName": "Signal Amber", "canonical": "#F0A83C", "tonalRamp": ["#472d05", "#7d4f0a", "#b3710e", "#e99312", "#f1ac45", "#f5c47b", "#f9dcb1", "#fdf4e7"] },
-      "accent-hover": { "role": "primary", "displayName": "Lamp Amber", "canonical": "#FFC06B", "tonalRamp": ["#492b04", "#804c07", "#b76d0a", "#ef8e0d", "#f5a841", "#f8c178", "#fbdbaf", "#fef4e7"] },
-      "accent-active": { "role": "primary", "displayName": "Pressed Amber", "canonical": "#D18A20", "tonalRamp": ["#422c0a", "#754d12", "#a76f1a", "#da9021", "#e4a951", "#ecc284", "#f4dbb6", "#fcf4e9"] },
-      "on-accent": { "role": "primary", "displayName": "Lamp Ink", "canonical": "#241A08", "tonalRamp": ["#3f2d0e", "#6e5019", "#9e7223", "#ce952e", "#dbad5b", "#e5c58b", "#f0ddba", "#faf5ea"] },
-      "red-edge": { "role": "secondary", "displayName": "Safety Edge Red", "canonical": "#E5484D", "tonalRamp": ["#430a0b", "#761114", "#a9181d", "#dc1f25", "#e65054", "#ed8386", "#f5b6b8", "#fce9e9"] },
-      "red-fill": { "role": "secondary", "displayName": "Safety Fill Red", "canonical": "#C93A32", "tonalRamp": ["#3d120f", "#6c1f1b", "#9b2d26", "#c93a32", "#d7655f", "#e3928d", "#eebfbc", "#faebeb"] },
-      "focus-ring": { "role": "primary", "displayName": "Focus Amber Ring", "canonical": "#FFB640", "tonalRamp": ["#492e04", "#805207", "#b7750a", "#ef980d", "#f5b041", "#f8c778", "#fbdeaf", "#fef5e7"] },
-      "focus-ring-on-accent": { "role": "primary", "displayName": "Lamp Ink (ring on amber)", "canonical": "#241A08" },
-      "family-gain": { "role": "tertiary", "displayName": "Gain Edge", "canonical": "#D9C37A", "tonalRamp": ["#3c3211", "#69571e", "#967d2b", "#c4a338", "#d2b963", "#dfcd91", "#ece2be", "#f9f6eb"] },
-      "family-compressor": { "role": "tertiary", "displayName": "Compressor Edge", "canonical": "#8CC079", "tonalRamp": ["#203418", "#385c2b", "#50833e", "#69ab50", "#8abf77", "#acd29e", "#cee4c6", "#f0f7ee"] },
-      "family-eq": { "role": "tertiary", "displayName": "EQ Edge", "canonical": "#82A9DE", "tonalRamp": ["#10233d", "#1c3d6b", "#285899", "#3473c7", "#6092d5", "#8fb2e1", "#bdd1ee", "#ebf1fa"] },
-      "family-delay": { "role": "tertiary", "displayName": "Delay Edge", "canonical": "#B18FDE", "tonalRamp": ["#23113b", "#3e1f68", "#592c95", "#7439c2", "#9364d1", "#b391df", "#d2beec", "#f1ebf9"] },
-      "family-reverb": { "role": "tertiary", "displayName": "Reverb Edge", "canonical": "#6FC2C8", "tonalRamp": ["#153537", "#255d62", "#35868c", "#45aeb6", "#6ec2c8", "#98d3d8", "#c2e5e8", "#edf7f8"] },
-      "family-limiter": { "role": "tertiary", "displayName": "Limiter Edge", "canonical": "#DE8FB0", "tonalRamp": ["#3b1123", "#681f3d", "#952c58", "#c23972", "#d16492", "#df91b2", "#ecbed1", "#f9ebf1"] },
-      "status-live": { "role": "tertiary", "displayName": "Live Green", "canonical": "#7BD389", "tonalRamp": ["#133919", "#22652c", "#309140", "#3fbd53", "#69cd79", "#94dba0", "#c0eac7", "#ecf9ee"] },
-      "status-error": { "role": "tertiary", "displayName": "Error Coral", "canonical": "#FF806E", "tonalRamp": ["#490c04", "#801607", "#b71f0a", "#ef290d", "#f55741", "#f88878", "#fbb9af", "#feeae7"] },
-      "meter-low": { "role": "tertiary", "displayName": "Meter Green", "canonical": "#5CC06E", "tonalRamp": ["#15371b", "#266130", "#368b45", "#46b55a", "#6ec77e", "#99d7a4", "#c3e8c9", "#edf8ef"] },
-      "meter-mid": { "role": "tertiary", "displayName": "Meter Amber", "canonical": "#F0A83C", "tonalRamp": ["#472d05", "#7d4f0a", "#b3710e", "#e99312", "#f1ac45", "#f5c47b", "#f9dcb1", "#fdf4e7"] },
-      "meter-clip": { "role": "tertiary", "displayName": "Meter Clip", "canonical": "#F05A45", "tonalRamp": ["#470e06", "#7d180a", "#b3230e", "#e92d13", "#f05b46", "#f48a7c", "#f9bab1", "#fdeae7"] }
+      "bg-body": {
+        "role": "neutral",
+        "displayName": "Chassis Charcoal",
+        "canonical": "#1B1917",
+        "tonalRamp": [
+          "#292623",
+          "#49433e",
+          "#686159",
+          "#887e74",
+          "#a39b93",
+          "#beb8b2",
+          "#d8d5d2",
+          "#f3f2f1"
+        ]
+      },
+      "bg-panel": {
+        "role": "neutral",
+        "displayName": "Faceplate Umber",
+        "canonical": "#292623",
+        "tonalRamp": [
+          "#292623",
+          "#49433e",
+          "#686159",
+          "#887e74",
+          "#a39b93",
+          "#beb8b2",
+          "#d8d5d2",
+          "#f3f2f1"
+        ]
+      },
+      "bg-card": {
+        "role": "neutral",
+        "displayName": "Module Card",
+        "canonical": "#322E29",
+        "tonalRamp": [
+          "#2a2722",
+          "#4a443d",
+          "#6a6257",
+          "#8a7f71",
+          "#a59c91",
+          "#bfb9b1",
+          "#d9d6d1",
+          "#f4f2f1"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Seam Hairline",
+        "canonical": "#4C463E",
+        "tonalRamp": [
+          "#2a2722",
+          "#4a443d",
+          "#6a6257",
+          "#8a8071",
+          "#a59c91",
+          "#bfb9b1",
+          "#d9d6d1",
+          "#f4f2f1"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Bezel Line",
+        "canonical": "#857C6E",
+        "tonalRamp": [
+          "#2a2723",
+          "#4a453d",
+          "#6a6357",
+          "#8a8072",
+          "#a49d91",
+          "#bfb9b1",
+          "#d9d6d1",
+          "#f3f3f1"
+        ]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Warm Chalk",
+        "canonical": "#EDE8DE",
+        "tonalRamp": [
+          "#322a1b",
+          "#574a30",
+          "#7d6a44",
+          "#a38a59",
+          "#b8a57d",
+          "#cdbfa3",
+          "#e1d9c9",
+          "#f6f3ef"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Silkscreen",
+        "canonical": "#A79F92",
+        "tonalRamp": [
+          "#2a2722",
+          "#4b453c",
+          "#6b6356",
+          "#8b8170",
+          "#a69d90",
+          "#c0bab0",
+          "#dad6d1",
+          "#f4f3f1"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Signal Amber",
+        "canonical": "#F0A83C",
+        "tonalRamp": [
+          "#472d05",
+          "#7d4f0a",
+          "#b3710e",
+          "#e99312",
+          "#f1ac45",
+          "#f5c47b",
+          "#f9dcb1",
+          "#fdf4e7"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Lamp Amber",
+        "canonical": "#FFC06B",
+        "tonalRamp": [
+          "#492b04",
+          "#804c07",
+          "#b76d0a",
+          "#ef8e0d",
+          "#f5a841",
+          "#f8c178",
+          "#fbdbaf",
+          "#fef4e7"
+        ]
+      },
+      "accent-active": {
+        "role": "primary",
+        "displayName": "Pressed Amber",
+        "canonical": "#D18A20",
+        "tonalRamp": [
+          "#422c0a",
+          "#754d12",
+          "#a76f1a",
+          "#da9021",
+          "#e4a951",
+          "#ecc284",
+          "#f4dbb6",
+          "#fcf4e9"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "Lamp Ink",
+        "canonical": "#241A08",
+        "tonalRamp": [
+          "#3f2d0e",
+          "#6e5019",
+          "#9e7223",
+          "#ce952e",
+          "#dbad5b",
+          "#e5c58b",
+          "#f0ddba",
+          "#faf5ea"
+        ]
+      },
+      "red-edge": {
+        "role": "secondary",
+        "displayName": "Safety Edge Red",
+        "canonical": "#E5484D",
+        "tonalRamp": [
+          "#430a0b",
+          "#761114",
+          "#a9181d",
+          "#dc1f25",
+          "#e65054",
+          "#ed8386",
+          "#f5b6b8",
+          "#fce9e9"
+        ]
+      },
+      "red-fill": {
+        "role": "secondary",
+        "displayName": "Safety Fill Red",
+        "canonical": "#C93A32",
+        "tonalRamp": [
+          "#3d120f",
+          "#6c1f1b",
+          "#9b2d26",
+          "#c93a32",
+          "#d7655f",
+          "#e3928d",
+          "#eebfbc",
+          "#faebeb"
+        ]
+      },
+      "focus-ring": {
+        "role": "primary",
+        "displayName": "Focus Amber Ring",
+        "canonical": "#FFB640",
+        "tonalRamp": [
+          "#492e04",
+          "#805207",
+          "#b7750a",
+          "#ef980d",
+          "#f5b041",
+          "#f8c778",
+          "#fbdeaf",
+          "#fef5e7"
+        ]
+      },
+      "focus-ring-on-accent": {
+        "role": "primary",
+        "displayName": "Lamp Ink (ring on amber)",
+        "canonical": "#241A08"
+      },
+      "family-gain": {
+        "role": "tertiary",
+        "displayName": "Gain Edge",
+        "canonical": "#D9C37A",
+        "tonalRamp": [
+          "#3c3211",
+          "#69571e",
+          "#967d2b",
+          "#c4a338",
+          "#d2b963",
+          "#dfcd91",
+          "#ece2be",
+          "#f9f6eb"
+        ]
+      },
+      "family-compressor": {
+        "role": "tertiary",
+        "displayName": "Compressor Edge",
+        "canonical": "#8CC079",
+        "tonalRamp": [
+          "#203418",
+          "#385c2b",
+          "#50833e",
+          "#69ab50",
+          "#8abf77",
+          "#acd29e",
+          "#cee4c6",
+          "#f0f7ee"
+        ]
+      },
+      "family-eq": {
+        "role": "tertiary",
+        "displayName": "EQ Edge",
+        "canonical": "#82A9DE",
+        "tonalRamp": [
+          "#10233d",
+          "#1c3d6b",
+          "#285899",
+          "#3473c7",
+          "#6092d5",
+          "#8fb2e1",
+          "#bdd1ee",
+          "#ebf1fa"
+        ]
+      },
+      "family-delay": {
+        "role": "tertiary",
+        "displayName": "Delay Edge",
+        "canonical": "#B18FDE",
+        "tonalRamp": [
+          "#23113b",
+          "#3e1f68",
+          "#592c95",
+          "#7439c2",
+          "#9364d1",
+          "#b391df",
+          "#d2beec",
+          "#f1ebf9"
+        ]
+      },
+      "family-reverb": {
+        "role": "tertiary",
+        "displayName": "Reverb Edge",
+        "canonical": "#6FC2C8",
+        "tonalRamp": [
+          "#153537",
+          "#255d62",
+          "#35868c",
+          "#45aeb6",
+          "#6ec2c8",
+          "#98d3d8",
+          "#c2e5e8",
+          "#edf7f8"
+        ]
+      },
+      "family-limiter": {
+        "role": "tertiary",
+        "displayName": "Limiter Edge",
+        "canonical": "#DE8FB0",
+        "tonalRamp": [
+          "#3b1123",
+          "#681f3d",
+          "#952c58",
+          "#c23972",
+          "#d16492",
+          "#df91b2",
+          "#ecbed1",
+          "#f9ebf1"
+        ]
+      },
+      "status-live": {
+        "role": "tertiary",
+        "displayName": "Live Green",
+        "canonical": "#7BD389",
+        "tonalRamp": [
+          "#133919",
+          "#22652c",
+          "#309140",
+          "#3fbd53",
+          "#69cd79",
+          "#94dba0",
+          "#c0eac7",
+          "#ecf9ee"
+        ]
+      },
+      "status-error": {
+        "role": "tertiary",
+        "displayName": "Error Coral",
+        "canonical": "#FF806E",
+        "tonalRamp": [
+          "#490c04",
+          "#801607",
+          "#b71f0a",
+          "#ef290d",
+          "#f55741",
+          "#f88878",
+          "#fbb9af",
+          "#feeae7"
+        ]
+      },
+      "meter-low": {
+        "role": "tertiary",
+        "displayName": "Meter Green",
+        "canonical": "#5CC06E",
+        "tonalRamp": [
+          "#15371b",
+          "#266130",
+          "#368b45",
+          "#46b55a",
+          "#6ec77e",
+          "#99d7a4",
+          "#c3e8c9",
+          "#edf8ef"
+        ]
+      },
+      "meter-mid": {
+        "role": "tertiary",
+        "displayName": "Meter Amber",
+        "canonical": "#F0A83C",
+        "tonalRamp": [
+          "#472d05",
+          "#7d4f0a",
+          "#b3710e",
+          "#e99312",
+          "#f1ac45",
+          "#f5c47b",
+          "#f9dcb1",
+          "#fdf4e7"
+        ]
+      },
+      "meter-clip": {
+        "role": "tertiary",
+        "displayName": "Meter Clip",
+        "canonical": "#F05A45",
+        "tonalRamp": [
+          "#470e06",
+          "#7d180a",
+          "#b3230e",
+          "#e92d13",
+          "#f05b46",
+          "#f48a7c",
+          "#f9bab1",
+          "#fdeae7"
+        ]
+      }
     },
     "typographyMeta": {
-      "title": { "displayName": "Identity Legend", "purpose": "The working title's silkscreen legend on the status strip." },
-      "body": { "displayName": "Body", "purpose": "Prose values, button labels, toast summaries." },
-      "label": { "displayName": "Silkscreen Legend", "purpose": "Panel headers, param labels, readout labels, optgroup legends — the surface-wide micro-label." },
-      "readout": { "displayName": "Machine Readout", "purpose": "Every machine value: sample rate, latency, meters, preset names, param values. Mono + tabular numerals." }
+      "title": {
+        "displayName": "Identity Legend",
+        "purpose": "The working title's silkscreen legend on the status strip."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose values, button labels, toast summaries."
+      },
+      "label": {
+        "displayName": "Silkscreen Legend",
+        "purpose": "Panel headers, param labels, readout labels, optgroup legends — the surface-wide micro-label."
+      },
+      "readout": {
+        "displayName": "Machine Readout",
+        "purpose": "Every machine value: sample rate, latency, meters, preset names, param values. Mono + tabular numerals."
+      }
     },
     "shadows": [
-      { "name": "card-rest", "value": "0 1px 2px rgba(0, 0, 0, 0.3)", "purpose": "The faint module seat — cards are inserted, not floating." },
-      { "name": "lifted", "value": "0 4px 10px rgba(0, 0, 0, 0.45)", "purpose": "Dragged clones and floating toasts — things held above the faceplate." },
-      { "name": "highest-lift", "value": "0 8px 20px rgba(0, 0, 0, 0.55)", "purpose": "The actively dragged node card." }
+      {
+        "name": "card-rest",
+        "value": "0 1px 2px rgba(0, 0, 0, 0.3)",
+        "purpose": "The faint module seat — cards are inserted, not floating."
+      },
+      {
+        "name": "lifted",
+        "value": "0 4px 10px rgba(0, 0, 0, 0.45)",
+        "purpose": "Dragged clones and floating toasts — things held above the faceplate."
+      },
+      {
+        "name": "highest-lift",
+        "value": "0 8px 20px rgba(0, 0, 0, 0.55)",
+        "purpose": "The actively dragged node card."
+      }
     ],
     "motion": [
-      { "name": "state-answer", "value": "150ms ease", "purpose": "Default state transition for colors/borders — every control answers within it." },
-      { "name": "toast-in", "value": "180ms ease-out (transform/opacity only)", "purpose": "Toast entrance; no exit animation by construction. Guarded by prefers-reduced-motion." },
-      { "name": "collapse", "value": "180ms ease (grid-template-rows)", "purpose": "Node-card chevron collapse/expand. Guarded." },
-      { "name": "agent-breath", "value": "1.2s ease-in-out infinite (opacity 1→0.7→1)", "purpose": "The agent-acting status lamp — the single slow-animation exception. Guarded; copy carries the state either way." }
+      {
+        "name": "state-answer",
+        "value": "150ms ease",
+        "purpose": "Default state transition for colors/borders — every control answers within it."
+      },
+      {
+        "name": "toast-in",
+        "value": "180ms ease-out (transform/opacity only)",
+        "purpose": "Toast entrance; no exit animation by construction. Guarded by prefers-reduced-motion."
+      },
+      {
+        "name": "collapse",
+        "value": "180ms ease (grid-template-rows)",
+        "purpose": "Node-card chevron collapse/expand. Guarded."
+      },
+      {
+        "name": "agent-breath",
+        "value": "1.2s ease-in-out infinite (opacity 1→0.7→1)",
+        "purpose": "The agent-acting status lamp — the single slow-animation exception. Guarded; copy carries the state either way."
+      }
     ],
     "breakpoints": [
-      { "name": "narrow-strip", "value": "900px" }
+      {
+        "name": "narrow-strip",
+        "value": "900px"
+      }
     ]
   },
   "components": [
@@ -81,9 +478,9 @@
       "name": "Palette Chip",
       "kind": "chip",
       "refersTo": "chip-palette",
-      "description": "A draggable module source: family legend square + silkscreen label; hover raises the bezel and a family top edge.",
-      "html": "<div class=\"ds-chip\" data-family=\"reverb\" data-initials=\"RV\">REVERB</div>",
-      "css": ".ds-chip { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border: 1px solid var(--hairline); border-radius: 6px; background: var(--bg-card); color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; cursor: grab; transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease; } .ds-chip::before { content: attr(data-initials); flex: none; display: flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border-radius: 3px; background: var(--family-reverb); color: var(--on-accent); font-size: 0.6875rem; font-weight: 700; } .ds-chip:hover { border-color: var(--line-strong); color: var(--text-primary); box-shadow: inset 0 2px 0 var(--family-reverb); } .ds-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
+      "description": "A draggable module source AND a real button (keyboard add, aria-label \"Add X to chain\", disabled until Start): family legend square + silkscreen label; hover raises the bezel and a family top edge.",
+      "html": "<button type=\"button\" class=\"ds-chip\" data-family=\"reverb\" data-initials=\"RV\" aria-label=\"Add Reverb to chain\">REVERB</button>",
+      "css": ".ds-chip { width: 100%; font-family: inherit; text-align: left; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border: 1px solid var(--hairline); border-radius: 6px; background: var(--bg-card); color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; cursor: grab; transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease; } .ds-chip::before { content: attr(data-initials); flex: none; display: flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border-radius: 3px; background: var(--family-reverb); color: var(--on-accent); font-size: 0.6875rem; font-weight: 700; } .ds-chip:hover { border-color: var(--line-strong); color: var(--text-primary); box-shadow: inset 0 2px 0 var(--family-reverb); } .ds-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
     },
     {
       "name": "Agent Chip",
@@ -128,15 +525,41 @@
       "Family color as edge marking (never fill) with always-present text labels — redundant encoding everywhere.",
       "Split-role safety red: the Bypass control outranks everything on the strip.",
       "150–250 ms state transitions only; meter ballistics and the agent breath are functional, not decorative; prefers-reduced-motion respected throughout.",
-      "Console-grade density: 11 px text floor, tracked uppercase micro-labels, tabular numerals in every readout."
+      "Console-grade density: 11 px text floor, tracked uppercase micro-labels, tabular numerals in every readout.",
+      "Pinned OUT footer: output ground truth is always visible without scrolling, never dimmed — including while bypassed.",
+      "No native browser dialogs anywhere: inline naming row, armed two-step delete, quiet refusal notes."
     ],
     "rules": [
-      { "name": "The Split-Role Red Rule", "body": "Edge red is for rings and bezels; fill red is for solid fills with white text. Never swap them: white on edge red fails (3.91), fill red as an edge fails (2.65).", "section": "colors" },
-      { "name": "The Amber Voice Rule", "body": "Amber speaks for action and machine attention only — never as decoration, never as large-area fill. Its rarity on the dark chassis is what makes it readable at distance.", "section": "colors" },
-      { "name": "The Seam Rule", "body": "Hairlines are seams, not outlines. Anything meaningful (interactive bezels, floating-card boundaries, family identity) uses the Bezel Line token; anything merely decorative uses the hairline.", "section": "colors" },
-      { "name": "The Register Rule", "body": "If a value is machine state, it renders in the mono readout register with tabular numerals; if it is a human label, it renders as a silkscreen legend. Nothing in between.", "section": "typography" },
-      { "name": "The 11px Floor Rule", "body": "No text renders below 11px anywhere (0.6875rem initials and 0.7rem labels are the floor after the density pass) — distance legibility is a product requirement.", "section": "typography" },
-      { "name": "The Rest-Flat Rule", "body": "Surfaces are flat at rest; a shadow means physical lift (drag, float). No ambient glow, no hover shadows.", "section": "elevation" }
+      {
+        "name": "The Split-Role Red Rule",
+        "body": "Edge red is for rings and bezels; fill red is for solid fills with white text. Never swap them: white on edge red fails (3.91), fill red as an edge fails (2.65).",
+        "section": "colors"
+      },
+      {
+        "name": "The Amber Voice Rule",
+        "body": "Amber speaks for action and machine attention only — never as decoration, never as large-area fill. Its rarity on the dark chassis is what makes it readable at distance.",
+        "section": "colors"
+      },
+      {
+        "name": "The Seam Rule",
+        "body": "Hairlines are seams, not outlines. Anything meaningful (interactive bezels, floating-card boundaries, family identity) uses the Bezel Line token; anything merely decorative uses the hairline.",
+        "section": "colors"
+      },
+      {
+        "name": "The Register Rule",
+        "body": "If a value is machine state, it renders in the mono readout register with tabular numerals; if it is a human label, it renders as a silkscreen legend. Nothing in between.",
+        "section": "typography"
+      },
+      {
+        "name": "The 11px Floor Rule",
+        "body": "No text renders below 11px anywhere (0.6875rem initials and 0.7rem labels are the floor after the density pass) — distance legibility is a product requirement.",
+        "section": "typography"
+      },
+      {
+        "name": "The Rest-Flat Rule",
+        "body": "Surfaces are flat at rest; a shadow means physical lift (drag, float). No ambient glow, no hover shadows.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do extend the token set — introduce no raw hex values; new colors enter as :root tokens in the rq5-verified vocabulary.",

@@ -103,15 +103,15 @@ Across the top, the status strip shows whether the engine is **Stopped** or **Li
 
 ### Building your sound
 
-- The left panel has your effects (Gain, Compressor, EQ, Delay, Reverb, Limiter). **Drag one into the middle column** to add it to the chain — the chain flows top to bottom by default, mic in at the top and sound out at the bottom. Prefer the old left-to-right view? The **FLOW** button under the chain flips it back, and it remembers your choice.
-- The meters on the **MIC IN** and **OUT** bars show your incoming and outgoing levels at a glance.
+- The left panel has your effects (Gain, Compressor, EQ, Delay, Reverb, Limiter). **Drag one into the middle column** to add it to the chain — or just click it (Tab to it and press Enter works too; new effects are added just before the limiter so it stays last). The chain flows top to bottom by default, mic in at the top and sound out at the bottom. Prefer the old left-to-right view? The **FLOW** button under the chain flips it back, and it remembers your choice.
+- The meters on the **MIC IN** and **OUT** bars show your incoming and outgoing levels at a glance, and the small **OUT** readout pinned at the bottom of the chain area shows your output level even when the chain is too long to fit on screen.
 - **Drag to reorder** — grab a card by its `⋮⋮` handle and drop it where you want.
 - Click the **×** on a card to remove it.
 - Use the sliders under each effect to tune it. Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
 
 ### Saving your setup
 
-The right panel is **Presets**, and it ships with a built-in factory library — Classic Karaoke, Warm Ballad, Rock Night, Phone Call Gag, Big Room, and Clean Speech — load-only starting points grouped above your own saved presets, so a fresh install has good sounds before you save anything. Once you've got a sound you like, hit **Save As…**, give it a name, and it's saved for next time. Use the dropdown + **Load** to bring one back, or **Delete** to remove one you don't need anymore. Your chain also auto-saves as you go, so if you close the app by accident, reopening it picks up right where you left off.
+The right panel is **Presets**, and it ships with a built-in factory library — Classic Karaoke, Warm Ballad, Rock Night, Phone Call Gag, Big Room, and Clean Speech — load-only starting points grouped above your own saved presets, so a fresh install has good sounds before you save anything. Once you've got a sound you like, hit **Save As…**, type a name right there in the panel, and press **Save** — it's stored for next time. Use the dropdown + **Load** to bring one back, or **Delete** to remove one you don't need anymore (click it twice — the first click just asks "DELETE?" and backs off if you change your mind). Your chain also auto-saves as you go, so if you close the app by accident, reopening it picks up right where you left off.
 
 ### 🤖 Agent control (optional, experimental)
 
