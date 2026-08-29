@@ -13,7 +13,9 @@
 //
 // Content provenance — COPY VERBATIM, do not re-derive:
 //   - 'Classic Karaoke' is window.DEFAULT_PRESET's chain verbatim
-//     (src/default-preset.js — PX-3's committed default, ids 'n1'..'n6').
+//     (src/default-preset.js — PX-3's committed default, ids 'n1'..'n6',
+//     including that file's issue-#2 policy amendment of n2's threshold
+//     and n6's ceiling — amended in both copies in the same edit).
 //   - The other five are the QA-3 live-agent acceptance chains verbatim
 //     (docs/ultron/qa/qa3-driver.js CHAINS 1-5 — all five rated 5/5
 //     "usable without edits" 2026-08-28, zero policy rejections in the
@@ -49,15 +51,22 @@
 
   var FACTORY_PRESETS = [
     {
-      // Verbatim from src/default-preset.js (window.DEFAULT_PRESET).
+      // Verbatim from src/default-preset.js (window.DEFAULT_PRESET) —
+      // including its issue-#2 policy amendment, applied to both copies in
+      // the same edit so they stay byte-identical: n2 threshold -16 dB
+      // (was -24) and n6 ceiling -3 dB (was -1) are the loudest/closest
+      // legal pair, with gain budget 0 + 0.57*|-16| + 0.57*|-3| = 10.83 dB
+      // <= +12 dB (margin 1.17 dB) and the ceiling inside the published
+      // [-12, -3] dB limiter range. Every other param is the original PX-3
+      // value.
       name: 'Classic Karaoke',
       nodes: [
         { id: 'n1', type: 'gain',       params: { gainDb: 0 } },
-        { id: 'n2', type: 'compressor', params: { threshold: -24, ratio: 4, attack: 0.01, release: 0.25 } },
+        { id: 'n2', type: 'compressor', params: { threshold: -16, ratio: 4, attack: 0.01, release: 0.25 } },
         { id: 'n3', type: 'eq',         params: { lowGain: 0, midGain: 0, highGain: 0 } },
         { id: 'n4', type: 'delay',      params: { timeMs: 300, feedback: 25, mix: 25 } },
         { id: 'n5', type: 'reverb',     params: { mix: 20 } },
-        { id: 'n6', type: 'limiter',    params: { ceiling: -1, release: 50 } }
+        { id: 'n6', type: 'limiter',    params: { ceiling: -3, release: 50 } }
       ]
     },
     {
