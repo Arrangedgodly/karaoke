@@ -1731,6 +1731,30 @@
   }
 
   /**
+   * Issue #10: the stable result for a mutation cancelled via its
+   * AbortSignal — pre-abort, aborted mid-queue, or aborted between the
+   * settle and the apply. Same refusal vocabulary as BUSY (error:true,
+   * code, applied:null) but deliberately NOT routed through
+   * reportAgentRejection: a cancelled call is not an agent-visible
+   * refusal, so no toast, no mutation event — nothing changed, nothing
+   * disclosed.
+   *
+   * @param {string} toolName - the tool's registered name.
+   * @returns {Object} the ABORTED refusal result.
+   */
+  function abortedResult(toolName) {
+    return {
+      error: true,
+      code: 'ABORTED',
+      tool: toolName,
+      applied: null,
+      retry: true,
+      reason: 'The call was cancelled through its AbortSignal before the mutation was applied.',
+      suggestion: 'Nothing was changed; re-issue the call if the edit is still wanted.'
+    };
+  }
+
+  /**
    * Apply the rq3 per-param policy to every PROVIDED param of a candidate
    * node list (omitted params keep the type defaults — a default can never
    * be an agent "request", which is also what keeps get_chain's output
@@ -1882,27 +1906,71 @@
   }
 
   /**
+   * @param {*} signal - an AbortSignal (or signal-shaped stub) from the
+   *   call's execution options, or null/undefined when the caller passed
+   *   none. Tolerant of any shape: only `aborted === true` and the
+   *   standard add/removeEventListener('abort') surface are used.
+   * @returns {boolean} true when the signal says the call was cancelled.
+   */
+  function signalAborted(signal) {
+    return !!(signal && signal.aborted === true);
+  }
+
+  /**
    * Queue a mutation behind an in-progress user drag, bounded. The plan is
    * computed AFTER the settle (never from a stale pre-drag model), so a
    * drop that commits mid-queue is always respected.
    *
-   * @returns {Promise<boolean>} true = canvas idle (proceed); false =
-   *   timed out (resolve BUSY).
+   * Issue #10: an optional AbortSignal cancels the wait. Every completion
+   * path — settle, timeout, abort — clears the polling interval and
+   * removes the abort listener exactly once (the `done` flag), so a
+   * cancelled call leaks no timer and no dangling listener, and a drag
+   * settling later cannot resurrect it.
+   *
+   * @param {*} signal - see signalAborted(); optional.
+   * @returns {Promise<boolean|string>} true = canvas idle (proceed);
+   *   false = timed out (resolve BUSY); 'aborted' = cancelled.
    */
-  function waitForDragSettle() {
+  function waitForDragSettle(signal) {
     return new Promise(function (resolve) {
       if (!isDragActiveNow()) {
         resolve(true);
         return;
       }
+      var done = false;
+      var timer = null;
+      var onAbort = null;
+      function finish(value) {
+        if (done) {
+          return;
+        }
+        done = true;
+        if (timer !== null) {
+          clearInterval(timer);
+        }
+        if (onAbort && signal && typeof signal.removeEventListener === 'function') {
+          signal.removeEventListener('abort', onAbort);
+        }
+        resolve(value);
+      }
+      if (signal) {
+        if (signal.aborted) {
+          finish('aborted');
+          return;
+        }
+        if (typeof signal.addEventListener === 'function') {
+          onAbort = function () {
+            finish('aborted');
+          };
+          signal.addEventListener('abort', onAbort);
+        }
+      }
       var deadline = Date.now() + DRAG_QUEUE_TIMEOUT_MS;
-      var timer = setInterval(function () {
+      timer = setInterval(function () {
         if (!isDragActiveNow()) {
-          clearInterval(timer);
-          resolve(true);
+          finish(true);
         } else if (Date.now() >= deadline) {
-          clearInterval(timer);
-          resolve(false);
+          finish(false);
         }
       }, DRAG_POLL_MS);
     });
@@ -3362,9 +3430,22 @@
    * @param {Function} planner - (input, liveModel) => {error} |
    *   {candidate, changes, clamped, nodeIds, summary, label, note?}.
    * @returns {Function} execute(input, options) -> Promise<Object>.
+   *   Issue #10: execution options are accepted; options.signal (an
+   *   AbortSignal) cancels the mutation — before the queue, while queued
+   *   behind a drag, and in the last instant between the settle and the
+   *   apply (the TOCTOU recheck) — always as the one stable ABORTED
+   *   refusal, with nothing applied, disclosed, persisted or pushed to
+   *   Undo. Options are optional: callers that pass none (the ?dev
+   *   harness) get today's behavior byte-for-byte.
    */
   function mutationExecute(name, validator, planner) {
-    return function (input) {
+    return function (input, options) {
+      var signal = options ? options.signal : null;
+      // Pre-abort: a call arriving already cancelled never queues, never
+      // waits, and never reaches validation or a toast.
+      if (signalAborted(signal)) {
+        return Promise.resolve(abortedResult(name));
+      }
       var problems = [];
       try {
         validator(input, problems);
@@ -3378,11 +3459,21 @@
         reportAgentRejection(name, invalid);
         return Promise.resolve(invalid);
       }
-      return waitForDragSettle().then(function (settled) {
+      return waitForDragSettle(signal).then(function (settled) {
+        if (settled === 'aborted') {
+          return abortedResult(name);
+        }
         if (!settled) {
           var busy = busyResult(name);
           reportAgentRejection(name, busy);
           return busy;
+        }
+        // TOCTOU recheck: the signal may have aborted in the same tick the
+        // settle resolved (or even between the poll's drag check and this
+        // line). Re-verify immediately before anything is planned, written
+        // or disclosed — the apply below must never follow a cancellation.
+        if (signalAborted(signal)) {
+          return abortedResult(name);
         }
         try {
           var model = readCurrentModel(); // fresh, post-drag, read-only copy
