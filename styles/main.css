@@ -2122,6 +2122,60 @@ select.control {
 }
 
 /* ===========================================================================
+   R2-1 ($impeccable layout, 2026-08-29) — PINNED OUT FOOTER. Created from
+   JS by src/meters.js (buildFooterMirror) as a child of the canvas PANEL,
+   immediately after the scrolling .canvas: in the bounded vertical canvas
+   the panel is the fixed frame and .canvas owns the scrolling, so this
+   row is the always-visible region — output level readable from across
+   the room regardless of scroll position or card collapse (the closing
+   critique's P2: the OUT anchor/meter sits below the fold with the
+   default preset expanded). One compact row, fixed height (the 96×26
+   meter footprint is the tallest item — no layout pumping): silkscreen
+   OUT legend left, the SAME lamp-bar canvas scene + mono dB readout
+   (the mirror of the OUT unit's own state — one feed, one ballistics,
+   two views) right.
+
+   Family rules it inherits by construction: same 96×26 CSS lockstep as
+   .meter-canvas above (no size variant); tokens only; no transitions or
+   keyframes (functional metering stays live under reduced motion);
+   NEVER de-emphasized while bypassed (the entry-5 dim is scoped to
+   .chain-list + .flow-toggle — this footer is the operator's output
+   ground truth in that state too, same family as the anchors/meters);
+   outside .canvas entirely, so it covers nothing and the round-1
+   occlusion guard's zero-overlap invariant is untouched. In horizontal
+   flow mode the panel un-bounds (the page owns the scroll) and the
+   footer scrolls away WITH the panel — the pinned guarantee is the
+   vertical default's; it still renders there as part of the panel.
+   =========================================================================== */
+
+.canvas-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.4rem 1rem;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Silkscreen legend — the same register as the BYPASSED state line and
+   the flow toggle's label (mono, 0.7rem floor, tracked caps). */
+.canvas-footer-legend {
+  font-family: var(--font-readout);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* The mirrored unit reuses .meter-unit/.meter-canvas/.meter-readout
+   verbatim above; this override only enforces the single-row compact
+   register (column stack inherited as-is — canvas over readout). */
+.canvas-footer .meter-unit {
+  width: 96px;
+}
+
+/* ===========================================================================
    VIS-7b (2026-08-28 user direction) — FLOW-DIRECTION TOGGLE. Vertical
    top-down is the default (VIS-7 above); src/canvas.js flips .flow-horizontal
    on the canvas panel from the .flow-toggle button and persists the choice

@@ -44,6 +44,24 @@
 //   "compact stack under the MIC IN / OUT label" the design calls for —
 //   with zero restructuring of any existing DOM.
 //
+//   R2-1 (2026-08-29, pinned OUT readout): the OUT unit ALSO builds a
+//   FOOTER MIRROR — one compact row appended to the canvas PANEL (the
+//   .canvas-panel element, between the scrolling .canvas and the flow
+//   toggle; NOT inside .canvas, so it never enters the anchor → arrow →
+//   chain-list rhythm or any insertion point). The panel is the bounded
+//   flex column whose INNER .canvas owns the scrolling, so the footer
+//   stays visible in the default vertical mode regardless of scroll
+//   position or card collapse — the operator's one-glance OUT ground
+//   truth. It renders the SAME unit state as the anchor meter (one feed,
+//   one ballistics, two views): same 96 x 26 canvas scene + same mono
+//   dB readout under a silkscreen "OUT" legend. Its canvas is
+//   aria-hidden (a decorative duplicate — the anchor meter's role=meter
+//   carries the announcements). Skipped silently when no .canvas-panel
+//   exists (bare-harness safety). In horizontal flow mode the panel
+//   un-bounds and the footer scrolls away WITH the panel — the pinned
+//   guarantee is the vertical default's; it still renders there as part
+//   of the panel.
+//
 // Meters.feed(side, stats)          <- THE FEW-3 CALL CONTRACT
 //   side:  'in' | 'out'.
 //   stats: { peakDb:  number,   // dBFS peak of this frame's analyser
@@ -99,6 +117,10 @@
 //   - 96 x 26 CSS px logical canvas (bar strip 96 x 10 + 4 px clip-dot
 //     row above + 9 px scale label row beneath); backing store is
 //     logical x devicePixelRatio (clamped 1..3) for crisp 2x rendering.
+//     ONE logical size serves BOTH views of a unit (the anchor canvas
+//     and the R2-1 footer mirror canvas) — there is no size variant, so
+//     the CSS lockstep contract in styles/main.css (.meter-canvas
+//     width/height) stays a single 96 x 26 pair.
 //   - 19 lamp segments (4 px segment + 1 px gap): unlit segments in
 //     --hairline (the visible-at-rest dark scale), lit segments in the
 //     rq5 meter stops by zone — green --meter-low (-60..-20), amber
@@ -417,20 +439,7 @@
   // Rendering.
   // ---------------------------------------------------------------------
 
-  function paint(u) {
-    u.lastPaint = {
-      peak: u.peak,
-      rms: u.rms,
-      hold: u.hold,
-      clip: u.clip,
-      started: engineStarted,
-    };
-
-    var ctx = u.ctx;
-    if (!ctx) {
-      return; // no 2d context (e.g. stripped embed) — state stays correct
-    }
-
+  function drawScene(ctx, u) {
     ctx.setTransform(u.dpr, 0, 0, u.dpr, 0, 0);
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -492,10 +501,35 @@
     }
   }
 
+  /** Paint the unit's scene onto EVERY view — the anchor canvas plus the
+   *  R2-1 footer mirror's canvas (same 96 x 26 scene; one state, two
+   *  views). Views without a 2d context are skipped (state stays
+   *  correct, per the stripped-embed note above). */
+  function paint(u) {
+    u.lastPaint = {
+      peak: u.peak,
+      rms: u.rms,
+      hold: u.hold,
+      clip: u.clip,
+      started: engineStarted,
+    };
+
+    if (u.ctx) {
+      drawScene(u.ctx, u);
+    }
+    for (var v = 0; v < u.views.length; v++) {
+      if (u.views[v].ctx) {
+        drawScene(u.views[v].ctx, u);
+      }
+    }
+  }
+
   /** DOM-facing outputs: the mono readout (updated whenever its text
    *  actually changes; the data-clip flag lets styles/main.css render the
-   *  latched 'CLIP' in the --meter-clip stop) and the ~4 Hz throttled
-   *  aria attributes. */
+   *  latched 'CLIP' in the --meter-clip stop) — written to the anchor
+   *  readout AND every mirror view's readout (R2-1 footer) — and the
+   *  ~4 Hz throttled aria attributes (anchor canvas only; the footer's
+   *  canvas is aria-hidden). */
   function updateOutputs(u, t) {
     var txt = readoutText(u);
     if (txt !== u.readoutText) {
@@ -503,6 +537,12 @@
       if (u.readoutEl) {
         u.readoutEl.textContent = txt;
         u.readoutEl.setAttribute('data-clip', u.clip ? 'true' : 'false');
+      }
+      for (var v = 0; v < u.views.length; v++) {
+        if (u.views[v].readoutEl) {
+          u.views[v].readoutEl.textContent = txt;
+          u.views[v].readoutEl.setAttribute('data-clip', u.clip ? 'true' : 'false');
+        }
       }
     }
     var ariaTxt = ariaValueText(u);
@@ -598,6 +638,7 @@
       readoutEl: readout,
       ctx: ctx,
       dpr: dpr,
+      views: [], // mirror views (R2-1: the OUT footer's canvas + readout)
       lastT: null,
       feed: null, // last fed {peakDb, rmsDb, clipRun, at}
       peak: SILENT_DB,
@@ -611,6 +652,79 @@
       lastAriaT: 0,
       lastAriaText: 'silence',
     };
+
+    if (side === SIDE_OUT) {
+      buildFooterMirror(units[side], anchorEl);
+    }
+  }
+
+  /** R2-1 — the pinned OUT footer: one compact row (silkscreen "OUT"
+   *  legend + the SAME 96 x 26 canvas scene + the SAME mono dB readout)
+   *  appended to the canvas PANEL immediately after the scrolling
+   *  .canvas, so output level stays inside the always-visible region of
+   *  the bounded vertical canvas no matter where .canvas is scrolled or
+   *  how cards collapse. Renders the OUT unit's own state — one feed,
+   *  one ballistics, two views (paint()/updateOutputs() fan out to
+   *  u.views). Its canvas is aria-hidden (the anchor meter's role=meter
+   *  already carries announcements; a duplicate announcer would only
+   *  double-talk). Silently skipped when the panel or the .canvas
+   *  element cannot be found (bare-harness safety), and when a footer
+   *  already exists (idempotence). */
+  function buildFooterMirror(u, anchorEl) {
+    if (!anchorEl.closest || typeof document.createElement !== 'function') {
+      return;
+    }
+    var panel = anchorEl.closest('.canvas-panel');
+    var canvasEl = anchorEl.closest('.canvas');
+    if (!panel || !canvasEl || !panel.insertBefore) {
+      return;
+    }
+    if (panel.querySelector('.canvas-footer')) {
+      return;
+    }
+
+    var footer = document.createElement('div');
+    footer.className = 'canvas-footer';
+    footer.setAttribute('data-meter-footer', SIDE_OUT);
+
+    var legend = document.createElement('span');
+    legend.className = 'canvas-footer-legend';
+    legend.textContent = 'OUT';
+
+    var unit = document.createElement('div');
+    unit.className = 'meter-unit canvas-footer-unit';
+
+    var canvas = document.createElement('canvas');
+    canvas.className = 'meter-canvas';
+    // Same logical size as the anchor canvas (see the contract block:
+    // ONE 96 x 26 size serves both views — no size variant exists).
+    canvas.width = CANVAS_W * u.dpr;
+    canvas.height = CANVAS_H * u.dpr;
+    canvas.setAttribute('aria-hidden', 'true');
+
+    var readout = document.createElement('div');
+    readout.className = 'meter-readout';
+    readout.textContent = u.readoutText;
+
+    unit.appendChild(canvas);
+    unit.appendChild(readout);
+    footer.appendChild(legend);
+    footer.appendChild(unit);
+    // Between the scrolling .canvas and the flow toggle — a PANEL child,
+    // never a .canvas child (no flex-rhythm or insertion-point impact).
+    panel.insertBefore(footer, canvasEl.nextSibling);
+
+    var fctx = null;
+    try {
+      fctx = canvas.getContext ? canvas.getContext('2d') : null;
+    } catch (err) {
+      fctx = null;
+    }
+    u.views.push({ ctx: fctx, readoutEl: readout });
+    // No immediate paint here: colors are not resolved until init()'s
+    // post-build resolveColors() (and a buildUnit-time paint would read
+    // a null palette). init()'s immediate considerPaint pass repaints
+    // every unit — footer views included — once tokens are live.
   }
 
   /** Clear all ballistics + input on one unit (reset() and the

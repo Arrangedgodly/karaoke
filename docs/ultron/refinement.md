@@ -461,10 +461,75 @@ mode, one entry at a time, per-entry user gate.
 
 | # | Command | Critique finding it addresses | Status |
 |---|---------|-------------------------------|--------|
-| R2-1 | `$impeccable layout` | **[P2]** OUT meter below the fold in the default expanded live state — output health depends on scroll position (occlusion is fixed; visibility is not). Fix: persistent OUT presence in the always-visible region — pinned compact readout at the canvas panel's foot, independent of scroll/collapse. | queued |
-| R2-2 | `$impeccable adapt` | **[P2]** Node addition unreachable by keyboard/screen reader — palette chips are non-focusable divs. Fix: button semantics + add-to-chain activation. | queued |
-| R2-3 | `$impeccable clarify` | **[P2]** Native prompt()/confirm() break the console vocabulary mid-show (Save-As naming, Delete confirmation). Fix: in-panel inline naming + two-step Delete, no browser dialogs. | queued |
+| R2-1 | `$impeccable layout` | **[P2]** OUT meter below the fold in the default expanded live state — output health depends on scroll position (occlusion is fixed; visibility is not). Fix: persistent OUT presence in the always-visible region — pinned compact readout at the canvas panel's foot, independent of scroll/collapse. | done-pending-approval |
+| R2-2 | `$impeccable adapt` | **[P2]** Node addition unreachable by keyboard/screen reader — palette chips are non-focusable divs. Fix: button semantics + add-to-chain activation. | **done** (user-approved 2026-08-29) |
+| R2-3 | `$impeccable clarify` | **[P2]** Native prompt()/confirm() break the console vocabulary mid-show (Save-As naming, Delete confirmation). Fix: in-panel inline naming + two-step Delete, no browser dialogs. | **done** (user-approved 2026-08-29) |
 
 ## Round 2 entry log
+
+### R2-1 — `$impeccable layout` (pinned OUT footer) — done-pending-approval
+
+**Finding** (closing critique P2 #1): with the default preset expanded in
+the bounded vertical canvas, the OUT anchor/meter sat below the fold —
+output health depended on scroll position. **Fix direction was
+user-ratified**: a pinned compact OUT readout in the always-visible
+region, independent of scroll and card collapse.
+
+**Design**: a `.canvas-footer` row created by `src/meters.js`
+(`buildFooterMirror`) as a child of the **canvas panel** (between the
+scrolling `.canvas` and the flow toggle — never inside `.canvas`, so no
+flex-rhythm or insertion-point impact). One compact fixed-height row:
+silkscreen "OUT" legend + the SAME 96×26 lamp-bar canvas scene + the
+SAME mono dB readout. **Data plumbing**: it is a second *view* of the
+OUT unit's own state — one `Meters.feed('out', …)` from the same
+`analyserOut` tap, one ballistics, two views; `paint()`/`updateOutputs()`
+fan out to `u.views`. No size variant exists, so the CSS/CANVAS_W/H
+lockstep contract in `styles/main.css` stays a single 96×26 pair (both
+contract comments updated to say so). Footer canvas is `aria-hidden`
+(the anchor meter's `role=meter` carries announcements; no
+double-talk). Skipped silently without a `.canvas-panel` (harness
+safety), idempotent.
+
+**Family rules held**: tokens only, 11px floor, no keyframes/transitions
+(functional metering live under reduced motion by construction); never
+de-emphasized while bypassed (the entry-5 dim stays scoped to
+`.chain-list`/`.flow-toggle`; footer is anchors/meters family); outside
+`.canvas` entirely so the round-1 occlusion invariant is untouched;
+horizontal mode still renders it (panel child) while the panel un-bounds
+— the pinned guarantee is the vertical default's.
+
+**Evidence** (headless Chrome, fake mic, real Start, 18/18 checks):
+(a) 1440×900 and 1280×800 default expanded live state — footer bbox
+fully inside the viewport (y 763–816 / 663–716) with NO scroll, while
+the OUT anchor sits below the fold (bottom y≈1308 vs vh 900/800) and
+the canvas genuinely overflows (scroll 1260 vs client 673/573);
+(b) fake mic carries a tone, so live lockstep is directly observable —
+anchor and footer readouts identical at every sample and moving
+frame-to-frame (−8.9 → −9.3 on both); (c) 8 nodes added via
+`add_node` — footer still pinned/fully visible; (d) all-collapsed —
+footer visible (in-flow OUT above fold too — no redundancy problem);
+(e) horizontal mode — footer renders, panel `max-height:none`, no
+regression; (f) bypassed — footer opacity 1, chain-list 0.55, BYPASSED
+::after intact, footer readout live (−12.1); (g) overlap sweep
+(visible-region-clipped) — zero intersections between the footer and
+cards/anchors/notes/alerts. Screenshot evidence:
+`/tmp/r2-1-1440x900.png`, `/tmp/r2-1-1280x800.png`,
+`/tmp/r2-1-horizontal.png`.
+
+**Suite**: `node tests/run.js` — 14/14 files, 770/770 checks, green
+(no test extension needed; no existing meter test file exists and the
+change adds no new behavior a current file asserts). **Detector**:
+regex-mode note (parser deps outside repo, same degradation as entries
+1–4) — `[]`, no new findings.
+
+**Residuals (disclosed)**: (1) the footer inherits the OUT meter's
+honest bypass limitation (it reads the muted chain ≈−∞ while bypassed,
+not the dry path — the R1 residual, unchanged and out of scope here);
+(2) the footer consumes ~53px of the panel's fixed budget, narrowing
+the scrolling canvas by the same amount in vertical mode — measured
+inside the bounded panel with all states still fitting; (3) the footer
+is a compact full 96×26 meter, not a slimmer mini-bar — a smaller
+variant would have broken the single-size lockstep contract, so the
+row reads slightly taller than a bare legend+digit strip would.
 
 (Workers append outcome + evidence here; the master records gate outcomes.)
