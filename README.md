@@ -71,6 +71,10 @@ The big red **Bypass** button (top right) instantly cuts every effect and sends 
 - **"Python not found" message:** see the Python note above.
 - **Still stuck:** hit Bypass so the show can go on with a clean mic, then sort it out at the break.
 
+## Tests
+
+Run the whole suite with **`node tests/run.js`** — it needs only Node (zero dependencies, no install, no build) and works from a clean clone. It discovers every `tests/test-*.js` file, runs each in its own process, and covers the safety contract (refusals and physical-graph fidelity), WebMCP tool registration, and the earlier issue regressions — exit code 0 means green. Run one file with a filter, e.g. `node tests/run.js safety-refusals`. Physical checks a machine can't prove — real mic through the PA, audible DSP, hidden-tab behavior, the live site — live in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+
 ## License & credits
 
 This project is open source under the MIT License — see [LICENSE](LICENSE).
