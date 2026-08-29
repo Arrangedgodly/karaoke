@@ -26,8 +26,13 @@
 //   C. the INTENDED per-tool specifics, read off the real registration
 //      code: readOnlyHint true on the three read tools (get_capabilities,
 //      get_chain, list_presets) and false on the five mutation tools;
-//      untrustedContentHint false everywhere; the published required
-//      fields per tool; add_node's type enum mirroring the live registry.
+//      untrustedContentHint TRUE on the tools whose results return or
+//      echo stored/user-/agent-authored content (get_chain's node ids and
+//      name, list_presets' user-saved names, save_preset's echoed name)
+//      and FALSE on get_capabilities (fully host-authored static text)
+//      and the structural mutation tools (issue #11); the published
+//      required fields per tool; add_node's type enum mirroring the live
+//      registry.
 //   D. the registered execute functions are wired to the REAL tools
 //      through the shim's wrapper (a plain result object resolves, never
 //      a synchronous throw — RQ-1's no-error-channel contract).
@@ -120,17 +125,23 @@ var EXPECTED_ORDER = [
 
 // The INTENDED annotations, transcribed from the make*Tool() registration
 // code in src/mcp-tools.js: the three read tools publish a read-only
-// hint, the five mutation tools do not, and no tool consumes untrusted
-// content.
+// hint, the five mutation tools do not. untrustedContentHint is true for
+// the tools whose results carry stored or user-/agent-authored content
+// (issue #11): get_chain (the model incl. agent-assigned node ids and the
+// stored chain name), list_presets (user-saved preset names), and
+// save_preset (its success echoes the caller-provided name). It is false
+// for get_capabilities (fully host-authored static text) and the four
+// structural mutation tools, whose results carry only host-authored
+// diagnostics and host-assigned ids.
 var EXPECTED_ANNOTATIONS = {
   get_capabilities: { readOnlyHint: true, untrustedContentHint: false },
-  get_chain: { readOnlyHint: true, untrustedContentHint: false },
-  list_presets: { readOnlyHint: true, untrustedContentHint: false },
+  get_chain: { readOnlyHint: true, untrustedContentHint: true },
+  list_presets: { readOnlyHint: true, untrustedContentHint: true },
   set_chain: { readOnlyHint: false, untrustedContentHint: false },
   add_node: { readOnlyHint: false, untrustedContentHint: false },
   remove_node: { readOnlyHint: false, untrustedContentHint: false },
   set_param: { readOnlyHint: false, untrustedContentHint: false },
-  save_preset: { readOnlyHint: false, untrustedContentHint: false }
+  save_preset: { readOnlyHint: false, untrustedContentHint: true }
 };
 
 // ----------------------------------------------------------------------
@@ -382,6 +393,21 @@ async function main() {
     check(
       !!tool && tool.annotations.readOnlyHint === true,
       'C1: ' + name + ' publishes readOnlyHint: true (a read tool)'
+    );
+  });
+
+  // Issue #11's explicit matrix: untrusted-content hint TRUE exactly on
+  // the tools that return/echo stored or user-/agent-authored content.
+  ['get_chain', 'list_presets', 'save_preset'].forEach(function (name) {
+    check(
+      byName(apiRegisterCalls, name).annotations.untrustedContentHint === true,
+      'C1: ' + name + ' publishes untrustedContentHint: true (returns/echoes user- or agent-authored content)'
+    );
+  });
+  ['get_capabilities', 'set_chain', 'add_node', 'remove_node', 'set_param'].forEach(function (name) {
+    check(
+      byName(apiRegisterCalls, name).annotations.untrustedContentHint === false,
+      'C1: ' + name + ' publishes untrustedContentHint: false (host-authored result content)'
     );
   });
 

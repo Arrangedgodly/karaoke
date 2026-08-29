@@ -629,9 +629,12 @@ async function main() {
       'A1: a SILENTLY DROPPED write fails the read-back verification (operation "verify")'
     );
 
-    // listNames never throws, even when its seed write fails (issue #11's
-    // seeding policy stays best-effort — not worsened here).
+    // listNames never throws, even on a broken store — and since issue
+    // #11 it is a PURE READ: a corrupt store degrades to [] with zero
+    // writes (the PS-3-era seeding was removed; fresh-profile listing
+    // is the factory library's job, src/factory-presets.js).
     env.storage.__box[STORAGE_KEY] = 'not json at all';
+    var setItemBefore = env.storage.__setItemCalls;
     var listed = null;
     try {
       listed = sandbox.PresetStore.listNames();
@@ -639,8 +642,12 @@ async function main() {
       listed = err;
     }
     check(
-      Array.isArray(listed) && listed.indexOf('Classic Karaoke') !== -1,
-      'A1: listNames() still never throws on a broken store (seeding stays best-effort)'
+      Array.isArray(listed) && listed.length === 0,
+      'A1: listNames() still never throws on a broken store (issue #11: pure read, corrupt -> [])'
+    );
+    check(
+      env.storage.__setItemCalls === setItemBefore,
+      'A1: listNames() performed ZERO storage writes on the broken store (issue #11 purity)'
     );
   }
 

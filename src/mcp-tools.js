@@ -1082,10 +1082,9 @@
   /**
    * list_presets' payload: PresetStore.listNames() is the store's whole
    * list API (names ARE the keys); nodeCount comes from its read-only
-   * load() and is null when an entry fails validation. Note:
-   * listNames() seeds a fresh/empty store with the default preset —
-   * that is the store's own documented behavior, and the UI's dropdown
-   * relies on it, so this tool gets it too.
+   * load() and is null when an entry fails validation. Since issue #11
+   * listNames() is a PURE read (no fresh-profile seeding), so this tool
+   * never writes storage either.
    *
    * PS-4: the result additionally carries `factory` — the shipped
    * factory library (window.FactoryPresets, read-only) grouped
@@ -3473,7 +3472,10 @@
         properties: {},
         required: []
       },
-      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      // Issue #11: the returned node ids and name are stored/user- or
+      // agent-authored content (set_chain assigns the ids), not
+      // host-authored text — the untrusted-content hint is true.
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute: readExecute('get_chain', validateNoArgs, buildGetChainResult)
     };
   }
@@ -3659,7 +3661,12 @@
         properties: {},
         required: []
       },
-      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      // Issue #11: the listed user names are user-/agent-authored strings
+      // (save_preset writes whatever name it was given); the untrusted-
+      // content hint is true. The factory group's names are static
+      // host-authored text, but they share the result, so the whole
+      // result is honestly marked untrusted.
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute: readExecute('list_presets', validateNoArgs, buildListPresetsResult)
     };
   }
@@ -3891,7 +3898,11 @@
         },
         required: ['name']
       },
-      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      // Issue #11: save_preset is a mutation (readOnlyHint false), but its
+      // results echo the caller-authored name (saved, the toast summary,
+      // failure reasons) — marked untrusted for the same reason the two
+      // read tools are.
+      annotations: { readOnlyHint: false, untrustedContentHint: true },
       execute: savePresetExecute
     };
   }

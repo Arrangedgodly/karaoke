@@ -48,9 +48,15 @@
 //     reporting success — a storage layer that silently truncates or
 //     drops the write (quota edge behavior) is reported as a failure,
 //     not a success.
-//   - listNames() itself still never throws: its default-preset seeding
-//     stays best-effort (a failed seed write is logged and the names are
-//     still returned — the seeding policy is issue #11's scope).
+//   - listNames() itself still never throws. Since issue #11 it is a
+//     PURE READ: it returns exactly what is stored and never writes. The
+//     PS-3-era default-preset seeding was REMOVED — with PS-4's runtime
+//     factory library (src/factory-presets.js) the seeded user copy had
+//     become a DUPLICATE of the factory entry on fresh profiles, and a
+//     read must not mutate storage anyway. Existing profiles that already
+//     carry the seeded copy keep it (stored data is never migrated or
+//     deleted); a fresh profile simply has an empty user namespace until
+//     the first explicit save.
 (function () {
   'use strict';
 
@@ -222,32 +228,20 @@
   }
 
   /**
-   * List every saved preset's name. If the store is completely empty —
-   * either a genuinely fresh profile, or corrupt data that readStore()
-   * above already reset to {} — seeds it with window.DEFAULT_PRESET under
-   * its own name ("Classic Karaoke") before returning, so the Load list is
-   * never empty even before a user has explicitly saved anything.
+   * List every saved preset's name. A PURE READ since issue #11: returns
+   * exactly the stored keys — a completely empty store (a genuinely fresh
+   * profile, or corrupt data readStore() above already reset to {})
+   * yields [], with ZERO writes to localStorage. The PS-3-era seeding of
+   * window.DEFAULT_PRESET was removed here: a read must not mutate
+   * storage, and since PS-4's runtime factory library the seeded user
+   * copy duplicated the factory "Classic Karaoke" entry on fresh
+   * profiles. Stored data on existing profiles is untouched — an old
+   * seeded copy, if present, is listed like any other user preset.
    *
    * @returns {Array<string>}
    */
   function listNames() {
-    var store = readStore();
-    var names = Object.keys(store);
-    if (names.length === 0) {
-      var seeded = window.PresetSchema.serialize(window.DEFAULT_PRESET.name, window.DEFAULT_PRESET.nodes);
-      store[window.DEFAULT_PRESET.name] = seeded;
-      // Best-effort seed (issue #8 contract keeps listNames itself
-      // non-throwing — the seeding POLICY is issue #11's scope): a failed
-      // seed write is logged and the names are still returned, exactly
-      // the pre-issue-#8 behavior.
-      try {
-        writeStore(store);
-      } catch (err) {
-        console.error('PresetStore: failed to seed the default preset into localStorage', err);
-      }
-      names = Object.keys(store);
-    }
-    return names;
+    return Object.keys(readStore());
   }
 
   /**

@@ -171,11 +171,13 @@
   /**
    * Rebuild #preset-select's <option> list: PS-4's two groups — a
    * "Factory" <optgroup> (window.FactoryPresets' library, first) and a
-   * "Yours" <optgroup> (PresetStore.listNames()' user presets).
-   * PresetStore.listNames() itself guarantees the user list is never
-   * empty (it seeds the default preset on a completely fresh/empty
-   * store) — the "-- no presets --" placeholder below is defensive only,
-   * in case that invariant is ever changed.
+   * "Yours" <optgroup> (PresetStore.listNames()' user presets). Since
+   * issue #11 listNames() is a pure read (the PS-3-era fresh-profile
+   * seeding was removed — it duplicated the factory Classic Karaoke),
+   * so a fresh profile shows ONLY the factory group until the first
+   * explicit save; the "-- no presets --" placeholder below now covers
+   * the genuinely empty-store case (reachable only when the factory
+   * library is also absent).
    *
    * Degrade path: when the factory library is empty/absent (script failed
    * to load, or a bare test sandbox), the dropdown renders PS-3's flat
@@ -434,10 +436,10 @@
     noteHumanEditGuarded();
   });
 
-  // Populate the dropdown once at script-init time — this is also the very
-  // first call to PresetStore.listNames() on a fresh profile, which seeds
-  // the store with the default preset (see src/preset-store.js), so the
-  // list is never empty even before Start has been clicked.
+  // Populate the dropdown once at script-init time. On a fresh profile
+  // this shows the factory library only — PresetStore.listNames() is a
+  // pure read since issue #11 (no fresh-profile seeding; the user
+  // "Yours" group fills with the first explicit Save As).
   refreshPresetSelect();
 
   // VIS-3: the full preset-display write path is exported, not just
