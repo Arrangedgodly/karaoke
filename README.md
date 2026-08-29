@@ -16,16 +16,47 @@ This turns your laptop into a live vocal effects box for karaoke: mic in, effect
 3. Click the **Start** button in the top left. Your browser will ask for microphone permission — click **Allow**.
 4. If you've got more than one mic plugged in, pick the right one from the dropdown next to Start.
 
+Across the top, the status strip shows whether the engine is **Stopped** or **Live**, along with small readouts for sample rate, latency, and how many effects are in your chain.
+
 ## Building your sound
 
-- The left panel has your effects (Gain, Compressor, EQ, Delay, Reverb, Limiter). **Drag one into the middle column** to add it to the chain.
+- The left panel has your effects (Gain, Compressor, EQ, Delay, Reverb, Limiter). **Drag one into the middle column** to add it to the chain — the chain flows top to bottom by default, mic in at the top and sound out at the bottom. Prefer the old left-to-right view? The **FLOW** button under the chain flips it back, and it remembers your choice.
+- The meters on the **MIC IN** and **OUT** bars show your incoming and outgoing levels at a glance.
 - **Drag to reorder** — grab a card by its `⋮⋮` handle and drop it where you want.
 - Click the **×** on a card to remove it.
-- Use the sliders under each effect to tune it.
+- Use the sliders under each effect to tune it. Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
 
 ## Saving your setup
 
-The right panel is **Presets**. Once you've got a sound you like, hit **Save As…**, give it a name, and it's saved for next time. Use the dropdown + **Load** to bring one back, or **Delete** to remove one you don't need anymore. Your chain also auto-saves as you go, so if you close the app by accident, reopening it picks up right where you left off.
+The right panel is **Presets**, and it ships with a built-in factory library — Classic Karaoke, Warm Ballad, Rock Night, Phone Call Gag, Big Room, and Clean Speech — load-only starting points grouped above your own saved presets, so a fresh install has good sounds before you save anything. Once you've got a sound you like, hit **Save As…**, give it a name, and it's saved for next time. Use the dropdown + **Load** to bring one back, or **Delete** to remove one you don't need anymore. Your chain also auto-saves as you go, so if you close the app by accident, reopening it picks up right where you left off.
+
+## 🤖 Agent control (optional, experimental)
+
+The app can expose its chain-building controls as tools for an AI agent in your browser (via WebMCP, a new web standard). So you can ask in plain language — "give me a warm ballad vocal with light hall reverb" — and watch the chain build itself, with a plain summary of every change and one-click **Undo**. This is entirely optional, and manual control always remains the primary way to work the app — especially for live events.
+
+**An agent can:**
+- Read your current chain, your presets, and what the app is capable of.
+- Add, remove, and reorder effects, and set parameters — within safety limits. Loud values are refused or toned down; every chain keeps its limiter; a hard output ceiling is always on; and a watchdog mutes the output if something starts to howl — bringing it back is a human-only job.
+
+**An agent cannot:**
+- Touch **Bypass**, start or stop the engine, or pick the mic device. Safety is always yours.
+
+**Turning it on (Chrome):**
+
+1. Go to `chrome://flags/#enable-webmcp-testing`, set it to **Enabled**, and restart Chrome.
+2. Open the app as usual.
+3. Open DevTools (**F12**) → **Application** → **WebMCP** — you should see the app's 8 tools listed there, and you can run any of them by hand.
+4. To chat with a natural-language agent today: install the **Model Context Tool Inspector** Chrome extension (it's separate from Gemini) and prompt it there.
+
+**Honest status:** Gemini in Chrome does not yet talk to WebMCP tools (as of late August 2026 — Google says it's coming). Everything above works today with the DevTools pane and the Inspector extension; when Gemini support ships, the same steps apply. Worth re-checking [developer.chrome.com/docs/ai/webmcp](https://developer.chrome.com/docs/ai/webmcp) now and then.
+
+**Try it without any agent:** open `http://localhost:8000/?dev` — an **Agent Harness** panel appears where you can run any tool with example inputs, and watch change summaries, refusals, and Undo live.
+
+- Run **get_capabilities** — see everything the app offers an agent.
+- Run **set_chain** (it comes prefilled with a valid example) — watch the chain rebuild and a summary toast appear.
+- Hit **Undo** — the chain snaps back to exactly what you had.
+
+Every agent change shows a toast with an **Undo** button (or press **Ctrl/Cmd+Z** while a toast is still visible). Refused requests get a toast too, showing what was asked versus what's allowed.
 
 ## ⚠️ If something sounds wrong — Emergency Bypass
 

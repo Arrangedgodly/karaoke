@@ -1,0 +1,149 @@
+// PS-4's FACTORY PRESET LIBRARY — static, shipped-with-the-app starting
+// points for non-technical hosts (2026-08-28 user-directed amendment 3 at
+// the QA-3 gate: "ship a small library of factory presets before initial
+// release"; the QA-3 five volunteered as content).
+//
+// Loaded as a plain (non-module) <script>, immediately after
+// src/default-preset.js per index.html's script order. IIFE-wrapped with a
+// single `window.FactoryPresets` export — unlike default-preset.js's bare
+// static literal, because the export is a FUNCTION: list() must hand every
+// caller fresh, deep-copied nodes (ChainCanvas.loadModel takes ownership
+// of the array it is handed, so handing out the shared literal would let
+// app state silently edit the "library").
+//
+// Content provenance — COPY VERBATIM, do not re-derive:
+//   - 'Classic Karaoke' is window.DEFAULT_PRESET's chain verbatim
+//     (src/default-preset.js — PX-3's committed default, ids 'n1'..'n6').
+//   - The other five are the QA-3 live-agent acceptance chains verbatim
+//     (docs/ultron/qa/qa3-driver.js CHAINS 1-5 — all five rated 5/5
+//     "usable without edits" 2026-08-28, zero policy rejections in the
+//     run). Only each chain's `name` differs from the driver ('QA3 warm
+//     ballad' -> 'Warm Ballad', 'QA3 rock shout' -> 'Rock Night', 'QA3
+//     phone call' -> 'Phone Call Gag', 'QA3 big room' -> 'Big Room',
+//     'QA3 clean speech' -> 'Clean Speech'); node ids ('qa-*'), param
+//     values, order, and key order are byte-identical to the driver.
+//
+// Registry-driven honesty note: unlike the palette (populated at runtime
+// from NodeTypes.getAllTypes()), this library is NOT type-registry-driven
+// — it is fixed, QA-verified CONTENT, not a generated set. The registry
+// governs which node types/params EXIST and validates these chains at
+// load time (every factory Load applies through the same
+// ChainCanvas.loadModel path user presets use), but nothing here is
+// derived from the registry at runtime. If a node type or param ever
+// changes incompatibly, these literals must be re-mirrored BY HAND — same
+// discipline as NODE_REGISTRY_SNAPSHOT in src/mcp-tools.js.
+//
+// Consumed by:
+//   - src/presets-ui.js — the preset dropdown's "Factory" <optgroup>, the
+//     Load button's factory path (load-only: Delete refuses, Save As…
+//     always writes the USER store — separate namespaces, no shadowing).
+//   - src/mcp-tools.js — list_presets' factory group and
+//     get_capabilities' factory-library disclosure.
+//
+// Factory presets are NEVER persisted: the library is merged into the
+// dropdown at RUNTIME, so a fresh profile sees all six with zero
+// localStorage seeding, and PresetStore's 'karaoke-presets-v1' store stays
+// exclusively the USER's namespace (PS-3 semantics untouched).
+(function () {
+  'use strict';
+
+  var FACTORY_PRESETS = [
+    {
+      // Verbatim from src/default-preset.js (window.DEFAULT_PRESET).
+      name: 'Classic Karaoke',
+      nodes: [
+        { id: 'n1', type: 'gain',       params: { gainDb: 0 } },
+        { id: 'n2', type: 'compressor', params: { threshold: -24, ratio: 4, attack: 0.01, release: 0.25 } },
+        { id: 'n3', type: 'eq',         params: { lowGain: 0, midGain: 0, highGain: 0 } },
+        { id: 'n4', type: 'delay',      params: { timeMs: 300, feedback: 25, mix: 25 } },
+        { id: 'n5', type: 'reverb',     params: { mix: 20 } },
+        { id: 'n6', type: 'limiter',    params: { ceiling: -1, release: 50 } }
+      ]
+    },
+    {
+      // QA-3 CHAINS[1] verbatim (name adjusted to the library's friendly
+      // name). Warm ballad: gentle compression, low warmth, light hall.
+      name: 'Warm Ballad',
+      nodes: [
+        { id: 'qa-g1', type: 'gain', params: { gainDb: 1 } },
+        { id: 'qa-e1', type: 'eq', params: { lowGain: 1, midGain: 0, highGain: 0.5 } },
+        { id: 'qa-c1', type: 'compressor', params: { threshold: -10, ratio: 2.5, attack: 0.02, release: 0.3 } },
+        { id: 'qa-r1', type: 'reverb', params: { mix: 35 } },
+        { id: 'qa-l1', type: 'limiter', params: { ceiling: -6, release: 150 } }
+      ]
+    },
+    {
+      // QA-3 CHAINS[2] verbatim. Rock shout: stronger compression,
+      // top-end bite, short slap, dry.
+      name: 'Rock Night',
+      nodes: [
+        { id: 'qa-g2', type: 'gain', params: { gainDb: 0 } },
+        { id: 'qa-e2', type: 'eq', params: { lowGain: -1, midGain: 0, highGain: 2 } },
+        { id: 'qa-c2', type: 'compressor', params: { threshold: -11, ratio: 4, attack: 0.004, release: 0.18 } },
+        { id: 'qa-d2', type: 'delay', params: { timeMs: 110, feedback: 15, mix: 18 } },
+        { id: 'qa-l2', type: 'limiter', params: { ceiling: -6, release: 100 } }
+      ]
+    },
+    {
+      // QA-3 CHAINS[3] verbatim. Phone-filter gag: band-limited, slightly
+      // crushed, intelligible.
+      name: 'Phone Call Gag',
+      nodes: [
+        { id: 'qa-e3', type: 'eq', params: { lowGain: -10, midGain: 2, highGain: -8 } },
+        { id: 'qa-c3', type: 'compressor', params: { threshold: -10, ratio: 8, attack: 0.002, release: 0.12 } },
+        { id: 'qa-l3', type: 'limiter', params: { ceiling: -6, release: 80 } }
+      ]
+    },
+    {
+      // QA-3 CHAINS[4] verbatim. Big-room epic: long reverb, wide delay,
+      // vocal up front.
+      name: 'Big Room',
+      nodes: [
+        { id: 'qa-g4', type: 'gain', params: { gainDb: 1 } },
+        { id: 'qa-e4', type: 'eq', params: { lowGain: 0.5, midGain: 0, highGain: 1 } },
+        { id: 'qa-c4', type: 'compressor', params: { threshold: -8, ratio: 2.5, attack: 0.015, release: 0.35 } },
+        { id: 'qa-d4', type: 'delay', params: { timeMs: 320, feedback: 30, mix: 22 } },
+        { id: 'qa-r4', type: 'reverb', params: { mix: 50 } },
+        { id: 'qa-l4', type: 'limiter', params: { ceiling: -6, release: 180 } }
+      ]
+    },
+    {
+      // QA-3 CHAINS[5] verbatim. Clean speech: light leveling, no audible
+      // effects.
+      name: 'Clean Speech',
+      nodes: [
+        { id: 'qa-e5', type: 'eq', params: { lowGain: -1, midGain: 0, highGain: -1 } },
+        { id: 'qa-c5', type: 'compressor', params: { threshold: -10, ratio: 2, attack: 0.005, release: 0.2 } },
+        { id: 'qa-l5', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    }
+  ];
+
+  /**
+   * List the factory library, in display order (Classic Karaoke first,
+   * then the QA-3 five in prompt order). Every call returns FRESH objects
+   * with freshly copied params — callers may take ownership of the nodes
+   * (ChainCanvas.loadModel does) without any risk of mutating the library
+   * itself.
+   *
+   * @returns {Array<{name: string, nodes: Array<{id: string, type: string, params: Object}>}>}
+   */
+  function list() {
+    return FACTORY_PRESETS.map(function (preset) {
+      return {
+        name: preset.name,
+        nodes: preset.nodes.map(function (entry) {
+          return {
+            id: entry.id,
+            type: entry.type,
+            params: Object.assign({}, entry.params)
+          };
+        })
+      };
+    });
+  }
+
+  window.FactoryPresets = {
+    list: list
+  };
+})();

@@ -69,6 +69,17 @@
   var chainModel = [];
   var nodeIdCounter = 0;
 
+  // MC-4 (OQ-7 serialization rule): true while a SortableJS drag is in
+  // progress on EITHER list (a palette drag targets the chain list too, so
+  // both sortables maintain the same single flag — only one drag can be
+  // active at a time anyway, since they share the 'chain-group' group).
+  // Maintained purely from SortableJS's own onStart/onEnd events below and
+  // read via the exported isDragActive() so src/mcp-tools.js can QUEUE
+  // agent mutations behind an in-progress user drag instead of racing the
+  // drop's onSort commit. Purely additive: nothing in this file branches
+  // on it, so drag behavior is bit-for-bit unchanged.
+  var dragActive = false;
+
   function nextNodeId() {
     nodeIdCounter += 1;
     return 'node-' + nodeIdCounter;
@@ -133,6 +144,40 @@
   // AE-5's src/node-gain.js already uses), this loop picks them up
   // automatically the next time the page loads.
   // ---------------------------------------------------------------------
+
+  // VIS-3 silkscreen initials (rq5 redundant encoding): every family chip
+  // carries its 2-letter code alongside the family color, so color is
+  // never the only signal. A lookup (not a type list — the palette loop
+  // below still iterates whatever the registry holds): a future
+  // as-yet-unmapped type falls back to the first two letters of its own
+  // type name, uppercased. VIS-4: familyInitials() makes this map the
+  // single shared source for BOTH surfaces — palette chips (VIS-3) and
+  // node cards (VIS-4) render their legend squares from the same lookup,
+  // so the two can never drift apart.
+  var FAMILY_INITIALS = {
+    gain: 'GN',
+    compressor: 'CP',
+    eq: 'EQ',
+    delay: 'DL',
+    reverb: 'RV',
+    limiter: 'LM'
+  };
+
+  /**
+   * VIS-4: the one shared family-initials lookup (single source:
+   * FAMILY_INITIALS directly above — never duplicated elsewhere). Used by
+   * renderPalette() for palette chips and createNodeCard() for node
+   * cards. An as-yet-unmapped future type falls back to the first two
+   * letters of its own type name, uppercased — same no-hardcoded-type-
+   * list discipline as renderPalette()'s registry-driven loop.
+   *
+   * @param {string} type
+   * @returns {string} 2-letter silkscreen initials
+   */
+  function familyInitials(type) {
+    return FAMILY_INITIALS[type] || type.slice(0, 2).toUpperCase();
+  }
+
   function renderPalette() {
     paletteListEl.innerHTML = '';
     var types = window.NodeTypes.getAllTypes();
@@ -140,6 +185,12 @@
       var chip = document.createElement('div');
       chip.className = 'node-chip';
       chip.setAttribute('data-node-type', type);
+      // VIS-3: family edge-coding hooks — data-family maps the chip's
+      // legend square to its --family-* token in styles/main.css;
+      // data-initials is that square's silkscreen text (rendered via CSS
+      // attr(data-initials), never a second copy in the DOM text).
+      chip.setAttribute('data-family', type);
+      chip.setAttribute('data-initials', familyInitials(type));
       chip.textContent = window.NodeTypes.getLabel(type);
       paletteListEl.appendChild(chip);
     });
@@ -153,19 +204,41 @@
    * Build a real, stateful node-card element for one chain entry.
    *
    * Structure (see styles/main.css for the visual rules):
-   *   .node-card[data-node-id]
+   *   .node-card[data-node-id][data-family][data-initials]
    *     .node-card-header
    *       .node-drag-handle          <- ONLY this drives SortableJS's
    *                                     `handle: '.node-drag-handle'` on the
-   *                                     chain list, so grabbing the slider
-   *                                     or the remove button can never
-   *                                     start a card drag.
+   *                                     chain list, so grabbing the slider,
+   *                                     the collapse chevron or the remove
+   *                                     button can never start a card drag.
    *         .node-drag-icon
    *         .node-label
+   *       .node-collapse             <- VIS-7: real <button> toggling
+   *                                     .node-card.collapsed + its own
+   *                                     aria-expanded. Sibling of the
+   *                                     handle, NOT nested inside it — same
+   *                                     press-mistake reasoning as the
+   *                                     remove button below.
    *       .node-remove-btn           <- sibling of the handle, NOT nested
    *                                     inside it — clicking it can't be
    *                                     mistaken for a handle-area press.
-   *     .node-params                 <- ParamControls.render() target.
+   *     .node-params                 <- ParamControls.render() target
+   *                                     (still the render container — the
+   *                                     ParamControls contract is
+   *                                     untouched).
+   *       .node-params-inner         <- VIS-7 wrap-AFTER-render: the rows
+   *                                     ParamControls rendered into
+   *                                     .node-params are moved into this
+   *                                     inner wrapper in one pass, so
+   *                                     src/param-controls.js stays
+   *                                     byte-identical while CSS gets an
+   *                                     animatable 0fr-collapse boundary.
+   *
+   * VIS-7 collapse state is SESSION-ONLY and never persisted: a collapsed
+   * card re-expands whenever the card element is rebuilt — agent/preset
+   * loads through loadModel() replace every card, and a structural
+   * drag/remove only touches other cards. Default is EXPANDED; reset-on-
+   * rebuild is the accepted v1 behavior (per the 2026-08-28 amendment).
    *
    * @param {string} type
    * @param {Object} initialParams
@@ -183,6 +256,17 @@
     var card = document.createElement('div');
     card.className = 'node-card';
     card.setAttribute('data-node-id', id);
+    // VIS-4 channel-strip legend hooks, mirroring the palette chips'
+    // data-family/data-initials pair one column to the left: data-family
+    // maps the card's 3px family top edge + header legend square to its
+    // --family-* token in styles/main.css; data-initials is that square's
+    // silkscreen text (rendered via CSS attr(data-initials) — never a
+    // second copy in the DOM text). Both come from the same
+    // familyInitials() lookup the palette uses, so card and palette
+    // legends share one vocabulary and can never drift. Additive only —
+    // no element, class, or text changes here.
+    card.setAttribute('data-family', type);
+    card.setAttribute('data-initials', familyInitials(type));
 
     var header = document.createElement('div');
     header.className = 'node-card-header';
@@ -203,6 +287,18 @@
     handle.appendChild(gripIcon);
     handle.appendChild(label);
 
+    // VIS-7: the collapse chevron — a real button (keyboard-operable for
+    // free, announced by its aria-label) between the handle and the remove
+    // button. aria-expanded is the toggle's OWN state mirror; the visual
+    // state lives on the card (.collapsed), which is the only thing CSS
+    // needs. Session-only: nothing here persists (see the doc block above).
+    var collapseBtn = document.createElement('button');
+    collapseBtn.type = 'button';
+    collapseBtn.className = 'node-collapse';
+    collapseBtn.setAttribute('aria-expanded', 'true');
+    collapseBtn.setAttribute('aria-label', 'Toggle parameters for ' + window.NodeTypes.getLabel(type));
+    collapseBtn.textContent = '▾'; // chevron, points down at the visible params
+
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'node-remove-btn';
@@ -210,6 +306,7 @@
     removeBtn.textContent = '×'; // ×
 
     header.appendChild(handle);
+    header.appendChild(collapseBtn);
     header.appendChild(removeBtn);
 
     var paramsContainer = document.createElement('div');
@@ -254,6 +351,38 @@
       }
     });
 
+    // VIS-7 wrap-AFTER-render (see the doc block above): ParamControls has
+    // by now placed its .param-row children directly inside
+    // paramsContainer; move them verbatim into one .node-params-inner
+    // wrapper. DOM nodes are MOVED, not rebuilt, so every listener
+    // ParamControls attached to its sliders survives untouched. This is the
+    // ONLY place .node-params ever gains an inner wrapper, and it runs once
+    // per card — ParamControls.render() (which clears its container) is
+    // never called again on a live card.
+    var paramsInner = document.createElement('div');
+    paramsInner.className = 'node-params-inner';
+    var renderedRows = Array.prototype.slice.call(paramsContainer.children);
+    renderedRows.forEach(function (row) {
+      paramsInner.appendChild(row);
+    });
+    paramsContainer.appendChild(paramsInner);
+
+    // VIS-7: chevron toggle. Flips the card's .collapsed class and mirrors
+    // the state into the button's own aria-expanded — everything CSS or an
+    // assistive tech needs, nothing more. stopPropagation for the same
+    // defensive reason as the remove button (the button is a header sibling
+    // of the SortableJS handle, so it can never start a drag anyway).
+    // Presentation-ONLY: no model, no graph, no persistence — collapsing a
+    // card changes nothing but how much of it is visible.
+    collapseBtn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      card.classList.toggle('collapsed');
+      // Read the class back rather than trusting toggle()'s return value —
+      // some minimal DOM stubs return undefined from toggle().
+      var collapsed = card.classList.contains('collapsed');
+      collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
+
     removeBtn.addEventListener('click', function (event) {
       // Stop the click from bubbling to anything that might reinterpret it
       // (defensive; the button lives outside .node-drag-handle so
@@ -292,22 +421,34 @@
   // Palette list: source-only. `pull: 'clone'` leaves the original chip in
   // place and drags out a clone; `put: false` means nothing can ever be
   // dropped INTO the palette; `sort: false` means the palette's own item
-  // order never changes via drag.
+  // order never changes via drag. onStart/onEnd maintain the MC-4 drag flag
+  // (see `dragActive` above) — a palette drag is heading for the chain
+  // list, so agent mutations must queue behind it too.
   var paletteSortable = new window.Sortable(paletteListEl, {
     group: { name: 'chain-group', pull: 'clone', put: false },
     sort: false,
     forceFallback: true,
     animation: 150,
+    onStart: function () { dragActive = true; },
+    onEnd: function () { dragActive = false; },
   });
 
   // Chain list: the real signal chain. `handle` restricts drag-initiation
   // to each card's .node-drag-handle (Part C) so the slider and remove
-  // button never trigger a reorder.
+  // button never trigger a reorder. onStart/onEnd maintain the MC-4 drag
+  // flag (see `dragActive` above). onEnd is SortableJS's canonical
+  // drag-finished event (it fires after the drop's onAdd/onSort commit
+  // handlers, on drop anywhere including a cancelled-outside drop), so the
+  // flag going false means both the DOM and `chainModel` are already final
+  // — a mutation that was queued behind the drag can safely read/replace
+  // the model at that point.
   var chainSortable = new window.Sortable(chainListEl, {
     group: { name: 'chain-group', pull: true, put: true },
     handle: '.node-drag-handle',
     forceFallback: true,
     animation: 150,
+    onStart: function () { dragActive = true; },
+    onEnd: function () { dragActive = false; },
 
     // A palette item was dropped in. Replace the cloned palette DOM node
     // with a real, stateful node-card (Part C) — NOT a model
@@ -455,6 +596,18 @@
   }
 
   /**
+   * MC-4: is a user drag (palette or chain list) currently in progress?
+   * Maintained exclusively by the SortableJS onStart/onEnd handlers above;
+   * read by src/mcp-tools.js to serialize agent mutations behind user
+   * drags (OQ-7). Pure read — never mutates anything.
+   *
+   * @returns {boolean}
+   */
+  function isDragActive() {
+    return dragActive;
+  }
+
+  /**
    * PS-3: a defensive copy of the current `chainModel` — each entry's
    * `params` object is copied too, so a caller can't mutate this file's own
    * internal bookkeeping by mutating the returned array/objects. Used by
@@ -483,9 +636,168 @@
   renderPalette();
   updateEmptyHint();
 
+  // ---------------------------------------------------------------------
+  // VIS-6 (A) — agent mutation pulse wiring. Purely additive: this block
+  // only ever adds/removes the .agent-pulse class VIS-4's (already
+  // shipped, reduced-motion-guarded) rule animates; no DOM restructuring,
+  // no inline styles, so SortableJS's drag machinery on these same cards
+  // is untouched.
+  //
+  // FEW-1's contract fires 'agentui:mutation' on document after each
+  // reportMutation(), with the caller's exact detail object. Rules here:
+  //   - detail.rejected === true → NO work at all (nothing was applied,
+  //     so no card should answer; the toast carries the refusal);
+  //   - nodeIds are matched by scanning .node-card once and comparing
+  //     data-node-id — equivalent to querying
+  //     .node-card[data-node-id="<id>"] per id, but immune to selector
+  //     metacharacters in an id, deduping a repeated id in one event to
+  //     a single pulse (each card is visited exactly once), and never
+  //     throwing on unknown ids (they simply match nothing);
+  //   - the class comes off on animationend (once), with a 600 ms
+  //     fallback timeout in case animation events are suppressed —
+  //     REQUIRED under prefers-reduced-motion, where the guarded
+  //     keyframe never runs and animationend therefore never fires;
+  //     without the fallback the class would stick forever (harmless
+  //     there, since no unguarded rule styles it, but untidy).
+  //
+  // The double-init guard lives as an expando on `document` (not in this
+  // IIFE's scope) so re-evaluating this file against the same document
+  // can never attach a second listener. Nothing is added to the public
+  // window.ChainCanvas surface.
+  // ---------------------------------------------------------------------
+  function onAgentMutation(event) {
+    var detail = event && event.detail;
+    if (!detail || detail.rejected) {
+      return;
+    }
+    var nodeIds = detail.nodeIds;
+    if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+      return;
+    }
+
+    var wanted = {};
+    nodeIds.forEach(function (id) {
+      if (typeof id === 'string') {
+        wanted[id] = true;
+      }
+    });
+
+    var cardEls = chainListEl.querySelectorAll('.node-card');
+    Array.prototype.forEach.call(cardEls, function (card) {
+      if (wanted[card.getAttribute('data-node-id')]) {
+        pulseNodeCard(card);
+      }
+    });
+  }
+
+  function pulseNodeCard(card) {
+    card.classList.add('agent-pulse');
+    var settled = false;
+
+    function settle() {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      card.removeEventListener('animationend', onPulseEnd);
+      card.classList.remove('agent-pulse');
+    }
+
+    function onPulseEnd(event) {
+      // Only the pulse animation owns the removal; an animationend from
+      // any other animation (or bubbling up from a child) is ignored.
+      // Events without an animationName (minimal stubs) are accepted.
+      if (event && typeof event.animationName === 'string' &&
+          event.animationName !== 'node-card-agent-pulse') {
+        return;
+      }
+      settle();
+    }
+
+    card.addEventListener('animationend', onPulseEnd);
+    window.setTimeout(settle, 600);
+  }
+
+  if (typeof document.addEventListener === 'function' &&
+      !document.__chainCanvasAgentPulseWired) {
+    document.__chainCanvasAgentPulseWired = true;
+    document.addEventListener('agentui:mutation', onAgentMutation);
+  }
+
+  // ---------------------------------------------------------------------
+  // VIS-7b (2026-08-28 user direction) — flow-direction toggle. The chain
+  // canvas ships TOP-DOWN (VIS-7) with LEFT→RIGHT kept one click away:
+  // a class flip on the canvas panel (all orientation styling is scoped
+  // under .flow-horizontal in main.css) plus a persisted preference under
+  // this app's own localStorage key (karaoke-*-v1 naming, same try/catch
+  // discipline as preset-store/persistence). SortableJS needs no config
+  // change in either mode — its detectDirection reads the container's
+  // computed flex-direction, exactly the property the class flip changes.
+  // ---------------------------------------------------------------------
+  var FLOW_KEY = 'karaoke-flow-orientation-v1';
+  var flowPanel = null;
+  var flowButton = null;
+
+  function readFlowPreference() {
+    var stored = null;
+    try {
+      stored = window.localStorage.getItem(FLOW_KEY);
+    } catch (e) {
+      /* private mode / storage disabled — default below, one-time warn on write */
+    }
+    return stored === 'horizontal' ? 'horizontal' : 'vertical';
+  }
+
+  function writeFlowPreference(mode) {
+    try {
+      window.localStorage.setItem(FLOW_KEY, mode);
+    } catch (e) {
+      console.warn('ChainCanvas: could not persist flow orientation (storage unavailable)');
+    }
+  }
+
+  function applyFlow(mode) {
+    if (flowPanel) {
+      if (mode === 'horizontal') {
+        flowPanel.classList.add('flow-horizontal');
+      } else {
+        flowPanel.classList.remove('flow-horizontal');
+      }
+    }
+    if (flowButton) {
+      flowButton.textContent = mode === 'horizontal' ? 'FLOW: HORIZONTAL' : 'FLOW: VERTICAL';
+      flowButton.setAttribute('aria-pressed', mode === 'vertical' ? 'true' : 'false');
+    }
+  }
+
+  function initFlowToggle() {
+    if (typeof document.querySelector !== 'function' ||
+        typeof document.createElement !== 'function') {
+      return;
+    }
+    flowPanel = document.querySelector('.canvas-panel');
+    if (!flowPanel) {
+      return;
+    }
+    flowButton = document.createElement('button');
+    flowButton.type = 'button';
+    flowButton.className = 'control flow-toggle';
+    flowButton.setAttribute('aria-label', 'Toggle chain flow direction');
+    flowButton.addEventListener('click', function () {
+      var next = flowPanel.classList.contains('flow-horizontal') ? 'vertical' : 'horizontal';
+      writeFlowPreference(next);
+      applyFlow(next);
+    });
+    flowPanel.appendChild(flowButton);
+    applyFlow(readFlowPreference());
+  }
+
+  initFlowToggle();
+
   window.ChainCanvas = {
     onEngineStarted: onEngineStarted,
     loadModel: loadModel,
     getCurrentModel: getCurrentModel,
+    isDragActive: isDragActive,
   };
 })();

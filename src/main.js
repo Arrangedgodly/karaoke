@@ -204,6 +204,32 @@ console.log('App scaffold loaded');
           window.ChainCanvas.onEngineStarted();
         }
 
+        // FEW-3: meter side-taps + runtime watchdog. Now that
+        // audioContext/sourceNode exist AND the first buildGraph() has
+        // run (loadModel above), create/reconnect the two AnalyserNode
+        // taps (IN off AudioEngine.sourceNode, OUT off the persistent
+        // chainGate — docs/ultron/research/rq4-meters.md), flip
+        // window.Meters live (setEngineState(true)), and start the one
+        // shared rAF loop that feeds both meters and the rq3 watchdog
+        // every frame. See src/meter-taps.js.
+        if (window.MeterTaps) {
+          window.MeterTaps.onEngineStarted();
+        }
+
+        // FEW-2: fill the VIS-2 status-LCD readouts with real engine
+        // values — RATE from context.sampleRate, LATENCY from
+        // baseLatency+outputLatency (the context-REPORTED estimate —
+        // a different figure from cycle-1 QA-4's slow-mo measured
+        // ~12 ms, not a replacement for it), and NODES, refreshed at
+        // 1 Hz off ChainCanvas's live model. window.AudioEngine's
+        // audioContext GETTER is the real access path here (same one
+        // isEngineLive() above reads) — never the Start result object,
+        // which could go stale if the context is ever recreated. See
+        // src/status-readouts.js.
+        if (window.StatusReadouts) {
+          window.StatusReadouts.onEngineStarted(window.AudioEngine.audioContext);
+        }
+
         setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
 
         return populateDeviceList(window.AudioEngine.currentDeviceId);
@@ -235,6 +261,16 @@ console.log('App scaffold loaded');
         // above. See the comment on AudioBypass.reconnectSource() in
         // src/audio-bypass.js.
         window.AudioBypass.reconnectSource();
+
+        // FEW-3: the meter IN tap must follow the new sourceNode too —
+        // the old one is dead (switchInputDevice() above stopped its
+        // stream and blanket-disconnected it). The OUT tap's chainGate
+        // connection survives every rebuild by design, so only the IN
+        // side is re-tapped; Meters.reset() clears the visual ballistics
+        // for the new input. See src/meter-taps.js.
+        if (window.MeterTaps) {
+          window.MeterTaps.onDeviceSwitched(window.AudioEngine.sourceNode);
+        }
 
         setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
       })

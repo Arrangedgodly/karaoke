@@ -1,4 +1,9 @@
-/* Minimal starter reset — real visual design owned by later Product/UX tasks */
+/* VIS-1 — dark pro-audio console theme foundation (rq5 palette).
+   Every color below flows from the :root token set adopted verbatim from
+   docs/ultron/research/rq5-palette.md (WCAG-AA verified) — introduce no raw
+   hex values; extend tokens, not literals. Component redesign (faders,
+   status strip, card anatomy) is VIS-2..6's scope, deliberately not
+   attempted here. */
 
 *,
 *::before,
@@ -6,181 +11,548 @@
   box-sizing: border-box;
 }
 
+/* ===========================================================================
+   VIS-1 token set — rq5-palette.md verbatim (SOURCE OF TRUTH).
+   Warm charcoal neutrals (bg-body chassis ground / bg-panel faceplate inset /
+   bg-card module cards); hairline = decorative seams ONLY (sub-3:1 by
+   design); line-strong = meaningful outlines/bezels (3:1 vs all grounds);
+   amber accent set with dark on-accent ink; split-role safety red (red-edge
+   for rings/halos, red-fill for solid fills with white text — never
+   swapped); amber-safe focus tokens; 6 family edges; status + meter stops.
+   Tokens not yet referenced below (family edges, meter stops, status-error,
+   accent-hover/active, focus-ring-on-accent, --font-readout) are the
+   pre-verified vocabulary VIS-2..VIS-6 code against. --font-readout exists
+   because the plan rules out webfonts (system mono stack only).
+   =========================================================================== */
+
+:root {
+  /* Native surfaces (form-control popups, scrollbars) follow the dark
+     scheme — a light <select> dropdown would break the dark render. */
+  color-scheme: dark;
+
+  /* Neutrals — warm charcoal brushed steel */
+  --bg-body: #1B1917;
+  --bg-panel: #292623;
+  --bg-card: #322E29;
+  --hairline: #4C463E;
+  --line-strong: #857C6E;
+
+  /* Text */
+  --text-primary: #EDE8DE;
+  --text-muted: #A79F92;
+
+  /* Amber signal accent */
+  --accent: #F0A83C;
+  --accent-hover: #FFC06B;
+  --accent-active: #D18A20;
+  --on-accent: #241A08;
+
+  /* Safety red — split role (never swap edge/fill) */
+  --red-edge: #E5484D;
+  --red-fill: #C93A32;
+
+  /* Focus */
+  --focus-ring: #FFB640;
+  --focus-ring-on-accent: #241A08;
+
+  /* Family edges */
+  --family-gain: #D9C37A;
+  --family-compressor: #8CC079;
+  --family-eq: #82A9DE;
+  --family-delay: #B18FDE;
+  --family-reverb: #6FC2C8;
+  --family-limiter: #DE8FB0;
+
+  /* Status + meter stops */
+  --status-live: #7BD389;
+  --status-error: #FF806E;
+  --meter-low: #5CC06E;
+  --meter-mid: #F0A83C;
+  --meter-clip: #F05A45;
+
+  /* Mono readout stack for VIS-2+ status/level numerals (no webfonts) */
+  --font-readout: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 body {
   margin: 0;
   padding: 1rem;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
-  color: #1a1a1a;
-  background: #ffffff;
+  color: var(--text-primary);
+  background: var(--bg-body);
+}
+
+/* Browser surfaces — cheap signal (VIS-1): selected text reads as the amber
+   accent (verified on-accent-ink pairing), and one global focus ring makes
+   every focusable control — including the native range inputs — visible
+   against all three neutral grounds (7.71–10.03 per rq5). */
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 /* ===========================================================================
-   Top bar (UI-1) — adapted from the approved visual reference at
-   docs/ultron/design/px1-mockup.html. Variable names match that mockup so
-   later tasks (UI-2 Bypass polish, UI-3 canvas, PS-3 presets) can reuse the
-   same palette instead of inventing a second one.
+   Topbar — the console's STATUS LCD STRIP (UI-1 restructured by VIS-2,
+   per .impeccable/surfaces/index-html.md: the topbar reads as broadcast
+   rack gear's dense status display, not a web page header). One
+   persistent full-width panel row: silkscreen identity legend ·
+   engine-state lamp · machine readout group (mono --font-readout; ids
+   reserved for FEW-2) · Start/device controls · BYPASS at the far right.
+   All UI-1 ids/classes survive verbatim — src/main.js and src/agent-ui.js
+   (chip inserts before #bypass-toggle-button inside .topbar) are
+   untouched; the .topbar-section/.readout wrappers are pure additions.
    =========================================================================== */
-
-:root {
-  --panel: #ffffff;
-  --border: #e0e2e6;
-  --muted: #6b7280;
-  --live: #16a34a;
-  --stopped: #9ca3af;
-  --bypass-off-bg: #fff1f1;
-  --bypass-off-border: #dc2626;
-  --bypass-on-bg: #dc2626;
-}
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1.25rem;
-  padding: 0.75rem 1.25rem;
-  /* Bleed out of body's 1rem padding so the bar spans the full viewport
-     width and sits flush against the top, per the mockup's persistent,
-     full-width top bar. */
+  column-gap: 0.9rem;
+  row-gap: 0.5rem;
+  /* One-row vertical rhythm: 1rem total padding + the 3rem (48px) Bypass
+     target = a 4rem (64px) strip; taller content grows the bar in size,
+     never overflows it. */
+  min-height: 4rem;
+  padding: 0.5rem 1.25rem;
+  /* Bleed out of body's 1rem padding so the strip spans the full viewport
+     width and sits flush against the top — the persistent, full-width
+     status strip. */
   margin: -1rem -1rem 1.5rem;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--hairline);
   position: sticky;
   top: 0;
+  /* Agent toasts (z-index 20) and the dev harness (15) stay above the
+     sticky strip. */
   z-index: 10;
 }
 
-.app-title {
-  margin: 0;
-  margin-right: auto;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--muted);
+.topbar-section {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
 }
 
+/* Identity absorbs the strip's slack: the legend ellipsizes first, so
+   the controls and BYPASS keep their place on the row as long as the
+   viewport allows (see the <900px rule below for the narrow fallback). */
+.topbar-identity {
+  flex: 1 1 auto;
+}
+
+/* App title as a SILKSCREENED LEGEND — the same micro-style as the panel
+   headers: uppercase, tracked, muted (5.74 on panel). A legend, not a
+   headline: nothing here may out-shout the Bypass control. */
+.app-title {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.topbar-status {
+  /* Shrinkable (not rigid): a transient long error label ellipsizes like
+     a real LCD strip instead of pumping the strip's width. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Engine-state lamp: silkscreen label + dot, one vocabulary with the
+   readout micro-labels. */
 .status {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--text-muted);
+  min-width: 0;
 }
 
+/* Error strings ("Failed to start (…)") truncate, never reflow the strip. */
+#status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Stopped dot: muted-neutral, still ≥3:1 vs the panel (5.74) as a state
+   indicator. */
 .dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--stopped);
+  background: var(--text-muted);
   flex: none;
+  transition: background-color 150ms ease;
 }
 
+/* LIVE belongs to the amber accent per rq5 (green status-live stays
+   reserved for success/ready semantics in later tasks); the label lifts
+   from muted to primary while the lamp carries the amber. */
 .status.live .dot {
-  background: var(--live);
+  background: var(--accent);
 }
 
+.status.live {
+  color: var(--text-primary);
+}
+
+/* Machine readout group — the strip's LCD register (VIS-2, wired by
+   FEW-2): silkscreen micro-label above a mono value, slots separated by
+   decorative hairline seams, the whole cluster bounded by hairlines
+   against the state lamp and the controls. */
+.readout-group {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0 1rem;
+  border-left: 1px solid var(--hairline);
+  border-right: 1px solid var(--hairline);
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.readout-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.readout-value {
+  font-family: var(--font-readout);
+  font-size: 0.95rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+/* Fixed value slots: mono + tabular numerals + a per-slot min-width, so
+   '—' becoming '48.0 kHz' changes glyphs, never the strip's geometry. */
+#readout-sample-rate {
+  min-width: 7ch;
+}
+
+#readout-latency {
+  min-width: 6ch;
+}
+
+#readout-node-count {
+  min-width: 3ch;
+}
+
+/* Controls pinned to the strip's right end; Bypass remains the last
+   item after them (and the agent chip lands between the two). */
+.topbar-controls {
+  flex: none;
+  margin-left: auto;
+}
+
+/* Long device labels (Chrome's "Default - … (Built-in)") must not pump
+   the strip's width — cap the select, it ellipsizes natively. */
+#input-device-select {
+  max-width: 15rem;
+}
+
+/* Controls (Start, device select, preset buttons, toast Undo) — dark
+   defaults: module-card ground, line-strong bezel (3:1 meaningful outline),
+   primary text (11.04 on card). Hover leans the bezel toward the accent.
+   Start overrides this to the amber primary fill below (VIS-2); the
+   device select keeps the bezel style. */
 button.control,
 select.control {
   padding: 0.5rem 1rem;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: #fff;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-card);
   font-size: 0.9rem;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 
 button.control {
   cursor: pointer;
 }
 
-button.control:disabled {
+button.control:not(:disabled):hover,
+select.control:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+/* Pressed (VIS-3, completing the shared control vocabulary's state
+   coverage for the presets panel buttons): ink-on-amber fill per rq5's
+   pressed-state guidance (accent-active's 4.73 text margin is thin —
+   prefer ink-on-fill). While amber-filled, the dark focus-ring variant
+   keeps the global :focus-visible ring visible (amber-on-amber is
+   1.16, unusable — the exact case --focus-ring-on-accent exists for). */
+button.control:not(:disabled):active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+button.control:not(:disabled):active:focus-visible {
+  outline-color: var(--focus-ring-on-accent);
+  /* QA-4 V2: the ink ring only scores on amber — pull it INSIDE the fill
+     (global offset 1px would paint it on the neutral ground at ~1.1:1). */
+  outline-offset: -2px;
+}
+
+/* Disabled: reduced emphasis — hairline seam instead of a bezel, muted
+   text, lowered opacity (blends to ≈3:1, within the 3:1 allowance for
+   disabled controls). */
+button.control:disabled,
+select.control:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+  border-color: var(--hairline);
+  color: var(--text-muted);
 }
 
 select.control {
   padding: 0.5rem;
 }
 
+/* Start — the strip's ONE primary action while the engine is not yet
+   running (VIS-2): ink-on-amber fill per rq5 (on-accent ink 8.46–10.60
+   on every amber fill; accent-active's own 4.73 text margin is thin, so
+   pressed keeps ink-on-fill too), the amber-safe DARK focus-ring variant
+   (amber-on-amber 1.16 is unusable), hover to accent-hover, pressed to
+   accent-active. Once the engine starts, src/main.js disables the
+   button and it recedes to the shared disabled treatment — post-engine
+   the strip belongs to the state lamp and BYPASS. Id specificity beats
+   every shared .control rule above without touching them. */
+#start-button:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+#start-button:not(:disabled):hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+#start-button:not(:disabled):active {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+  color: var(--on-accent);
+}
+
+#start-button:not(:disabled):focus-visible,
+#start-button:not(:disabled):active:focus-visible {
+  outline-color: var(--focus-ring-on-accent);
+  /* QA-4 V2: ink ring must sit on the amber fill (8.46), not the panel
+     ground outside it (1.14) — negative offset draws it inside. */
+  outline-offset: -2px;
+}
+
 /* ===========================================================================
-   Bypass button (UI-2) — the single most safety-critical control in the app
-   (per docs/ultron/design/px1-layout-spec.md's visual prominence hierarchy:
-   "Largest, highest-contrast element on screen"). Rules below are lifted
-   directly from the approved reference's .bypass-btn / .bypass-btn.engaged
-   (docs/ultron/design/px1-mockup.html) — same selectors, same values — so
-   this is the exact styling source of truth, not a reinterpretation.
+   Bypass button (UI-2 + VIS-2) — the single most safety-critical control
+   in the app, and the strip's LOUDEST element: largest target (3rem /
+   48px min-height), heaviest type on the bar (1.05rem / 700 / tracked —
+   the title legend is 0.75rem silkscreen and readout values 0.95rem
+   mono, so nothing exceeds this weight), and the only red-ringed thing
+   on the strip. rq5 split-role safety red, applied in its verified
+   pairing:
+     OFF  — panel ground + primary text + 2px red-edge ring (the halo role;
+            red-edge is an EDGE here, never a text or fill color);
+     ON   — red-fill ground + #FFFFFF text (5.08 PASS) + red-edge ring.
+   Never white text on red-edge (3.91 fails); never red-fill as an edge
+   (2.65 fails).
    =========================================================================== */
 
 .bypass-btn {
-  margin-left: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
+  flex: none;
+  min-height: 3rem;
+  padding: 0.65rem 1.6rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   border-radius: 8px;
-  border: 2px solid var(--bypass-off-border);
-  background: var(--bypass-off-bg);
-  color: var(--bypass-off-border);
+  border: 2px solid var(--red-edge);
+  background: var(--bg-panel);
+  color: var(--text-primary);
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
 }
 
 .bypass-btn.engaged {
-  background: var(--bypass-on-bg);
-  border-color: var(--bypass-on-bg);
-  color: #fff;
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.2);
+  background: var(--red-fill);
+  border-color: var(--red-edge);
+  color: #FFFFFF;
 }
 
 .bypass-btn:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-  box-shadow: none;
+}
+
+/* Narrow strip (<900px): the machine cluster (state lamp + readouts)
+   wraps to a second row via order — the identity legend, Start/device
+   controls, agent chip, and BYPASS keep the first row, so the emergency
+   control never leaves the visible top of the screen. DOM order (and
+   with it tab order and the chip's insertion point) is untouched —
+   this is presentation-only reordering. */
+@media (max-width: 900px) {
+  .topbar-status {
+    order: 9;
+  }
+
+  .readout-group {
+    order: 10;
+  }
 }
 
 /* ===========================================================================
-   Parameter controls (UI-4) — generic slider rows rendered by
-   src/param-controls.js for any node type registered with
-   src/node-types.js. No visual treatment for this was specified by PX-1
-   (see docs/ultron/design/px1-layout-spec.md's own note that this is UI-4's
-   scope) — kept intentionally simple/neutral here, reusing the same
-   --panel/--border/--muted tokens as the top bar rather than inventing a
-   second palette.
+   Parameter controls (UI-4 + VIS-4) — generic slider rows rendered by
+   src/param-controls.js for any node type, restyled as console FADERS.
+   Pure CSS over the existing markup: the value <span> already carries
+   .param-value, so param-controls.js needed NO change (input semantics,
+   step values, event wiring, keyboard behavior all exactly as before —
+   still one native <input type="range"> per param). Each row re-stacks
+   via order + flex-wrap into a label+value readout line with the
+   full-width fader beneath — flex/block only, no layout-system change.
+   Track: hairline base with detent ticks (a repeating-linear-gradient of
+   1px hairline marks — the measuring-tool markings of the committed
+   pro-audio world, decorative like every hairline use) plus a slightly
+   stronger line-strong center detent (the one meaningful 3:1 marking).
+   Thumb: amber fader cap (~14×22 vertical bar, accent 6.65 vs card
+   non-text) with a line-strong bezel and an on-accent ink position line
+   down its center — physical fader caps carry exactly that — via the
+   same appearance:none pattern VIS-1 established. Values are machine
+   state: --font-readout mono (the LCD/VFD register); labels share the
+   palette chips' silkscreen micro-style, one vocabulary surface-wide.
    =========================================================================== */
 
+/* VIS-7 density pass (~90% card scale): tighter row rhythm and slightly
+   narrower mono readouts; text floors hold — labels stay 0.7rem (11.2px),
+   nothing on the card renders below 11px. */
 .param-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.35rem 0;
+  gap: 0.2rem 0.6rem;
+  padding: 0.25rem 0;
 }
 
+/* Readout line: silkscreen label left, mono value right. */
 .param-label {
-  flex: 0 0 auto;
-  min-width: 5.5rem;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.param-slider {
+  order: 1;
   flex: 1 1 auto;
   min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
 .param-value {
+  order: 2;
   flex: 0 0 auto;
-  min-width: 3.5rem;
+  min-width: 3.25rem;
   text-align: right;
-  font-size: 0.85rem;
+  font-family: var(--font-readout);
+  font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
-  color: #1a1a1a;
+  color: var(--text-primary);
+}
+
+/* Fader beneath: order 3 + 100% flex-basis wraps it onto its own
+   full-width line under the label+value row (order-only restack — DOM
+   order label/input/value and the label[for] pairing are untouched). */
+.param-slider {
+  order: 3;
+  flex: 1 1 100%;
+  min-width: 0;
+  height: 1.25rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+/* Fader track: hairline slot + detent ticks + stronger center detent,
+   painted as three stacked gradients (top layer first):
+     1. center detent — 2px line-strong notch at 50%, the unity mark;
+     2. detent ticks — 1px hairline marks every 12px (subtle scale);
+     3. base — 2px hairline center line tying the scale together. */
+.param-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg,
+      transparent calc(50% - 1px), var(--line-strong) calc(50% - 1px),
+      var(--line-strong) calc(50% + 1px), transparent calc(50% + 1px)),
+    repeating-linear-gradient(90deg,
+      var(--hairline) 0, var(--hairline) 1px,
+      transparent 1px, transparent 12px),
+    linear-gradient(90deg,
+      transparent calc(50% - 1px), var(--hairline) calc(50% - 1px),
+      var(--hairline) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+/* Fader cap: accent fill with line-strong bezel, ~12×18 vertical bar
+   (VIS-7 density: 22→18px tall — pinned at the 18px thumb-height floor;
+   18px keeps the cap comfortably taller than the 8px track).
+   margin-top centers the 18px cap on the 8px track: -(18-8)/2 = -5px. */
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 18px;
+  margin-top: -5px;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  background-color: var(--accent);
+  /* The cap's 2px position line in on-accent ink (8.46+ on every amber
+     fill per rq5) — reads as the physical cap's indicator groove. */
+  background-image: linear-gradient(90deg,
+    transparent calc(50% - 1px), var(--on-accent) calc(50% - 1px),
+    var(--on-accent) calc(50% + 1px), transparent calc(50% + 1px));
+  transition: background-color 150ms ease;
+}
+
+.param-slider:hover::-webkit-slider-thumb {
+  background-color: var(--accent-hover);
 }
 
 /* ===========================================================================
-   Palette + chain canvas (UI-3) — adapted from the approved visual
-   reference at docs/ultron/design/px1-mockup.html (.palette/.canvas/
-   .node-card/.anchor/.node-chip). This was originally laid out as a
-   two-column subset of that mockup's three-column layout — the presets
-   column was UI-3's deliberate scope cut, added for real by PS-3 below.
-   Reuses the same --panel/--border/--muted tokens as the top bar rather
-   than inventing a second palette, per this file's own established
-   convention (see the UI-1 comment above).
+   Palette + chain canvas (UI-3). Layout unchanged from the approved PX-1
+   mockup; colors from the VIS-1 tokens — panel faceplates separated by
+   hairline seams, module-card items (palette chips, anchors, node cards)
+   with meaningful line-strong outlines only where interactive.
    =========================================================================== */
 
 .layout {
@@ -188,7 +560,7 @@ select.control {
   grid-template-columns: 200px 1fr 220px;
   gap: 0;
   min-height: 60vh;
-  border: 1px solid var(--border);
+  border: 1px solid var(--hairline);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -200,7 +572,9 @@ select.control {
    window.AudioEngine.isStarted directly, so this is a visual/UX affordance
    on top of a real functional guard, not the only thing preventing a
    pre-Start drop from throwing. Includes .presets (PS-3) too — the whole
-   3-column layout stays dimmed/inert together until Start succeeds. */
+   3-column layout stays dimmed/inert together until Start succeeds.
+   Dark-theme note: 0.55 opacity still blends labels to ≈3:1 — legible
+   enough to read WHAT is gated while clearly reading as inert. */
 .layout.engine-not-started .palette,
 .layout.engine-not-started .canvas-panel,
 .layout.engine-not-started .presets {
@@ -213,189 +587,623 @@ select.control {
 }
 
 .palette {
-  border-right: 1px solid var(--border);
-  background: var(--panel);
+  border-right: 1px solid var(--hairline);
+  background: var(--bg-panel);
 }
 
+/* Panel header — silkscreened legend (VIS-3): uppercase tracked muted
+   label over a hairline rule, with more space above (the panel's 1rem
+   padding) than below (0.6rem), per the craft floor. Same treatment on
+   the Presets header keeps the two flanks one vocabulary. */
 .palette h2 {
-  margin: 0 0 0.75rem;
-  font-size: 0.75rem;
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 0.7rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
+/* VIS-3 — palette items as console modules. Anatomy: a 20px family
+   legend square (the ONLY fill — color lives on the chip + a 2px top
+   edge on hover/active, never on the item) beside the module's name as
+   a silkscreened legend label (12px uppercase tracked, muted at rest
+   5.14 on card, primary on hover). Rest seam is hairline; hover raises
+   it to the line-strong bezel (4.26 vs card); active/drag-origin goes
+   amber. Sizes stay close to the pre-VIS-3 chips so SortableJS's drag
+   ghost geometry is unaffected. Keyboard focus: the global
+   :focus-visible ring above covers these items exactly as before. */
 .node-chip {
-  padding: 0.6rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
   margin-bottom: 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--hairline);
   border-radius: 6px;
-  background: #fafafa;
-  font-size: 0.85rem;
+  background: var(--bg-card);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
   cursor: grab;
   user-select: none;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+/* The family legend square: family token fill (mapped below from the
+   data-family attribute src/canvas.js writes) with the 2-letter
+   silkscreen initials from data-initials in on-accent ink (7.06–9.82 on
+   every family fill — rq5's redundant encoding, so color is never the
+   only signal). An as-yet-unmapped future type falls back to a
+   line-strong square so the module never loses its chip while awaiting
+   a family token. */
+.node-chip::before {
+  content: attr(data-initials);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  background: var(--chip-family, var(--line-strong));
+  color: var(--on-accent);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.node-chip[data-family='gain'] {
+  --chip-family: var(--family-gain);
+}
+
+.node-chip[data-family='compressor'] {
+  --chip-family: var(--family-compressor);
+}
+
+.node-chip[data-family='eq'] {
+  --chip-family: var(--family-eq);
+}
+
+.node-chip[data-family='delay'] {
+  --chip-family: var(--family-delay);
+}
+
+.node-chip[data-family='reverb'] {
+  --chip-family: var(--family-reverb);
+}
+
+.node-chip[data-family='limiter'] {
+  --chip-family: var(--family-limiter);
+}
+
+/* Hover: the module answers — line-strong bezel, label to primary, a
+   1px lift, and the family color appears as a 2px top EDGE (inset
+   shadow: no layout shift, no glow — edge marking, not edge light). */
+.node-chip:hover {
+  border-color: var(--line-strong);
+  color: var(--text-primary);
+  box-shadow: inset 0 2px 0 var(--chip-family, var(--line-strong));
+}
+
+/* QA-4 V3: the 1px hover lift is motion — guarded per the reduced-motion
+   discipline (the bezel/color answer above still applies under reduce). */
+@media (prefers-reduced-motion: no-preference) {
+  .node-chip:hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* Active / drag-origin (SortableJS applies chosenClass for the whole
+   drag): amber bezel — the module is being pulled into the signal path.
+   The 2px family top edge rides along; the label stays primary. */
+.node-chip:active,
+.node-chip.sortable-chosen {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  box-shadow: inset 0 2px 0 var(--chip-family, var(--accent));
+  cursor: grabbing;
+}
+
+/* SortableJS drag states (forceFallback), mirroring the node-card
+   treatment below: the live clone lifts; the dashed translucent ghost
+   marks the insertion slot in the chain list. */
+.node-chip.sortable-drag {
+  opacity: 0.85;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.node-chip.sortable-ghost {
+  opacity: 0.35;
+  border-style: dashed;
+  transform: none;
 }
 
 .canvas-panel {
   padding: 0;
-  background: var(--panel);
+  background: var(--bg-panel);
+  /* VIS-7: a bounded flex column so the vertical canvas below can own its
+     scrolling — the page must never grow unbounded with a long chain. The
+     max-height leaves room for the sticky status strip (4rem) + its 1.5rem
+     drop + the body's 1rem padding top and bottom + slack. */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 7.5rem);
+  min-height: 0;
 }
 
+/* VIS-7 (2026-08-28 amendment, presentation-only): the signal path flows
+   TOP-DOWN — MIC IN anchor (top, meter at its right) → ↓ → stacked
+   full-width effect rows → ↓ → OUT anchor (bottom, meter + the MC-4
+   safe-output note beneath it). index.html's DOM order already encodes
+   exactly this sequence (anchor → arrow → chain-list → empty-hint → arrow
+   → anchor), so the reorientation is a flex-direction change ONLY — no
+   markup, id, or copy change. */
 .canvas {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  min-height: 100%;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
+/* Canvas anchors (MIC IN / OUT) — card ground + meaningful dashed outline
+   (line-strong, 3:1) + muted labels (5.14). VIS-7: full-width horizontal
+   bars at the flow's endpoints — silkscreen label left, the VIS-5 meter
+   unit (created INSIDE the anchor by src/meters.js) pinned right, so IN/OUT
+   levels read at the top and bottom of the stack. */
 .anchor {
   flex: none;
-  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  background: #eef2f7;
-  color: var(--muted);
+  background: var(--bg-card);
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-weight: 600;
   white-space: nowrap;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--line-strong);
 }
 
+/* Signal-flow arrows — the SAME aria-hidden decorative spans index.html
+   always carried, rotated to point down the vertical flow. CSS rotation
+   (not a glyph swap) keeps the markup byte-identical; the glyph stays a
+   decoration, never copy. */
 .arrow {
   flex: none;
-  color: var(--muted);
+  align-self: center;
+  color: var(--text-muted);
+  transform: rotate(90deg);
 }
 
 .chain-list {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.5rem;
   flex: 1 1 auto;
-  min-height: 64px;
+  /* Keeps a droppable slot between the arrows while the chain is empty
+     (SortableJS drops land on the list element itself; the visible dashed
+     target next to it is the empty-hint below). */
+  min-height: 1.5rem;
 }
 
+/* Taught empty state (VIS-4): copy verbatim from cycle 1, styled as an
+   inset dashed TARGET ZONE — card-ground inset with a line-strong dashed
+   boundary (this is an interactive drop target, so it earns the
+   meaningful-outline token, not a hairline seam). VIS-7: in the vertical
+   flow it reads as a horizontal dashed slot between the two arrows — it
+   shares the canvas's vertical slack with the (empty) chain list exactly
+   as the two shared the horizontal slack before. */
 .empty-hint {
   flex: 1 1 auto;
-  padding: 1.25rem 1.5rem;
-  border: 1px dashed var(--border);
+  padding: 1.25rem 1rem;
+  border: 1px dashed var(--line-strong);
   border-radius: 8px;
-  color: var(--muted);
+  background: var(--bg-card);
+  color: var(--text-muted);
   font-size: 0.85rem;
+  text-align: center;
 }
 
+/* ===========================================================================
+   Node cards (UI-3 + VIS-4 + VIS-7) — CHANNEL-STRIP MODULES on the
+   faceplate. src/canvas.js writes data-family + data-initials alongside
+   data-node-id (same pair the palette chips carry), so the card's family
+   identity is edge-coded exactly as the brief pins it: a 3px family-color
+   top edge — color as edge marking, never fill; the label (and the
+   2-letter initials) always present so color is never the only signal.
+   The header legend mirrors the palette chips' vocabulary (VIS-7 density:
+   an 18px family square instead of the palette's 20px), the module label
+   in the same silkscreen micro-style, then the physical grip, the VIS-7
+   collapse chevron, and the remove ×. The params region beneath collapses
+   to nothing on chevron toggle (see .node-collapse / .node-params below)
+   — presentation-only, no per-node audio bypass. All card styles dim
+   coherently with the pre-existing .layout.engine-not-started opacity
+   rule (nothing below fights it).
+   =========================================================================== */
+
 .node-card {
+  position: relative; /* anchor for the ::before legend square */
   flex: none;
-  padding: 0.75rem 1rem;
+  /* VIS-7 density pass (~90%): 12→6px vertical, 16→12px horizontal.
+     Collapsed, the card is the header-only slim row: 3px family edge +
+     6px + 24px header + 6px ≈ 39px — inside the ~34–40px band. */
+  padding: 0.375rem 0.75rem;
   border-radius: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--bg-card);
+  border: 1px solid var(--hairline);
+  /* THE card encoding: 3px family top edge on the card surface — retained
+     verbatim in both expanded and collapsed states. An as-yet-unmapped
+     future type falls back to line-strong, same as the palette square
+     below. */
+  border-top: 3px solid var(--card-family, var(--line-strong));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   min-width: 190px;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+/* Family edge mapping — same six tokens, same data-family strings the
+   palette chips use; one vocabulary across cards and palette. */
+.node-card[data-family='gain'] {
+  --card-family: var(--family-gain);
+}
+
+.node-card[data-family='compressor'] {
+  --card-family: var(--family-compressor);
+}
+
+.node-card[data-family='eq'] {
+  --card-family: var(--family-eq);
+}
+
+.node-card[data-family='delay'] {
+  --card-family: var(--family-delay);
+}
+
+.node-card[data-family='reverb'] {
+  --card-family: var(--family-reverb);
+}
+
+.node-card[data-family='limiter'] {
+  --card-family: var(--family-limiter);
+}
+
+/* The header's legend square — the palette chip's ::before vocabulary at
+   the VIS-7 density scale: 18px instead of the palette's 20px (the
+   palette flank is the VIS-3 surface and stays untouched), same radius,
+   family fill, on-accent initials (7.06–9.82 per rq5), initials lifted to
+   0.6875rem (11px) to hold the density-pass text floor. CSS attr() can
+   only read attributes off the element the pseudo originates from, and
+   the CARD is the element that carries data-initials, so the square is
+   the card's own ::before — pinned onto the header line via absolute
+   positioning (top/left = the card's padding + half the header/square
+   height difference, optically centering the 18px square on the 24px
+   header row). .node-drag-handle's padding-left below reserves the space;
+   that same padding doubles as the grip's wider hit area. */
+.node-card::before {
+  content: attr(data-initials);
+  position: absolute;
+  top: 0.5625rem;
+  left: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 3px;
+  background: var(--card-family, var(--line-strong));
+  color: var(--on-accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 .node-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
+  gap: 0.4rem;
+  /* No margin-bottom: the header→params gap lives inside the collapsible
+     region (the rows' own padding), so a collapsed card is EXACTLY the
+     slim header row. The min-height is the 24px hit-area floor the grip,
+     chevron and × all share. */
+  min-height: 1.5rem;
 }
 
+/* The handle spans the header line. Its padding-left (1.125rem square +
+   0.375rem air) clears the absolutely-positioned legend square AND widens
+   the grip's hit area leftward — padding, not glyph size. flex-grow
+   absorbs the header's slack so the chevron and × cluster together at the
+   right edge (and the drag hit area is the whole label line, VIS-7). */
 .node-drag-handle {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  padding-left: 1.5rem;
   cursor: grab;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 1.5rem;
   user-select: none;
 }
 
+/* Physical grip: muted dots at rest, brightening to primary when the
+   card is hovered (the handle answers with its module); grabbing cursor
+   once a drag latches. The icon's own padding widens the hit area a
+   little further without inflating the glyph. */
 .node-drag-icon {
-  color: var(--muted);
+  padding: 0.15rem 0.1rem;
+  color: var(--text-muted);
   font-size: 0.75rem;
   line-height: 1;
   letter-spacing: -0.1em;
+  transition: color 150ms ease;
 }
 
+.node-card:hover .node-drag-icon {
+  color: var(--text-primary);
+}
+
+.node-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Module label — the palette chips' silkscreen micro-style (same size,
+   weight, tracking as .node-chip's label), primary at rest: a placed
+   card is a committed module in the live path, not a menu entry. */
 .node-label {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Remove × — a real control: card ground + line-strong bezel + muted ×
+   (5.14), 1.5rem square for a comfortable hit area. Hover signals danger
+   via the red-edge BEZEL (3.45 non-text) with the glyph brightening to
+   primary text — red-edge is not used as text color (3.45 < 4.5 for a
+   small glyph; rq5's small-text red failure). The global :focus-visible
+   ring above covers keyboard focus. */
 .node-remove-btn {
   flex: none;
-  width: 1.4rem;
-  height: 1.4rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
-  background: #fff;
-  color: var(--muted);
-  font-size: 0.9rem;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.node-remove-btn:hover,
+.node-remove-btn:active {
+  color: var(--text-primary);
+  border-color: var(--red-edge);
+}
+
+/* VIS-7 — the collapse chevron: a real control in the remove-button
+   vocabulary but quieter (the × is destructive, the chevron is routine):
+   hairline seam at rest rising to the line-strong bezel on hover, muted
+   glyph brightening to primary. 1.5rem square = the 24px hit-target floor,
+   same as the remove button; the global :focus-visible ring covers
+   keyboard focus. */
+.node-collapse {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.7rem;
   line-height: 1;
   cursor: pointer;
 }
 
-.node-remove-btn:hover {
-  color: var(--bypass-off-border);
-  border-color: var(--bypass-off-border);
+.node-collapse:hover,
+.node-collapse:active {
+  color: var(--text-primary);
+  border-color: var(--line-strong);
 }
 
+/* Collapsed, the chevron rotates to point right — the disclosure-widget
+   convention: "content will appear below". A static transform (no
+   transition), so nothing here enters the motion inventory. */
+.node-card.collapsed .node-collapse {
+  transform: rotate(-90deg);
+}
+
+/* VIS-7 — the collapsible params region. .node-params is a one-row grid
+   whose track animates 1fr→0fr; the .node-params-inner wrapper (created
+   post-render by src/canvas.js so src/param-controls.js stays untouched)
+   carries min-height:0 + overflow:hidden — the pair that lets a 0fr track
+   actually clip the rows. Collapsed, visibility:hidden removes the rows
+   from tab order and the accessibility tree (an animating height alone
+   would leave invisible focusable sliders); the end-of-transition
+   visibility flip under the motion guard lets the collapse finish before
+   the content disappears, while expand restores it instantly. Under
+   prefers-reduced-motion none of the transitions exist — collapse is an
+   instant state change. Session-only: chain rebuilds (preset loads, agent
+   mutations) re-create cards expanded; accepted v1 behavior. */
 .node-params {
-  min-width: 170px;
+  display: grid;
+  grid-template-rows: 1fr;
+  min-width: 0;
 }
 
-/* SortableJS auto-applies these during a drag (forceFallback:true mode) —
-   per px1-layout-spec.md's "Mid-drag" state row: the dragged card lifts
-   slightly (shadow/opacity change), and the placeholder left behind marks
-   the target insertion position. */
+.node-params-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.node-card.collapsed .node-params {
+  grid-template-rows: 0fr;
+}
+
+.node-card.collapsed .node-params-inner {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Chevron bezel/color answer — same declaration the remove button
+     carries, guarded here so no NEW unguarded transition enters the file
+     (vis6 discipline; under reduce the colors snap instantly). */
+  .node-collapse {
+    transition:
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .node-params {
+    transition: grid-template-rows 180ms ease;
+  }
+
+  /* visibility transitions discretely and, per the CSS Transitions spec,
+     stays VISIBLE until the END of the duration when animating toward
+     hidden — exactly the "let the collapse finish first" behavior, with a
+     single in-budget 180ms duration. Expand (collapsed rules removed) has
+     no transition at all: the rows reappear instantly as the grid grows. */
+  .node-card.collapsed .node-params-inner {
+    transition: visibility 180ms;
+  }
+}
+
+/* Card states. Hover: the module answers with a line-strong bezel —
+   longhand border-top-color re-asserts the family edge after the
+   shorthand, so the hover bezel never swallows the card's identity. */
+.node-card:hover {
+  border-color: var(--line-strong);
+  border-top-color: var(--card-family, var(--line-strong));
+}
+
+/* SortableJS auto-applies these during a drag (forceFallback:true mode),
+   per px1-layout-spec.md's "Mid-drag" rows, upgraded to the console
+   vocabulary. Chosen (held, whole drag): amber bezel + the family edge
+   EMPHASIZED — a 3px inset family stripe stacks under the 3px border-top
+   (thicker edge marking, no layout shift, no glow). */
 .node-card.sortable-chosen {
   cursor: grabbing;
+  border-color: var(--accent);
+  border-top-color: var(--card-family, var(--accent));
+  box-shadow:
+    inset 0 3px 0 var(--card-family, var(--accent)),
+    0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
+/* Drag (the lifted live clone): stronger shadow — the module reads as
+   physically lifted off the faceplate. */
 .node-card.sortable-drag {
   opacity: 0.85;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
 }
 
+/* Ghost (the insertion placeholder): a dashed line-strong outline slot,
+   no shadow, no legend square — it marks where the module WILL land, so
+   it should not read as a module itself. */
 .node-card.sortable-ghost {
   opacity: 0.35;
-  border-style: dashed;
+  border: 1px dashed var(--line-strong);
+  border-top: 1px dashed var(--line-strong);
+  box-shadow: none;
+}
+
+.node-card.sortable-ghost::before {
+  content: none;
+}
+
+/* VIS-6 hook (FEW-1/MC events wire the .agent-pulse class later;
+   NOTHING sets it yet — this rule is deliberately inert). One amber
+   outline pulse, 150ms × 2: the card visibly answering an agent edit.
+   Outline, not box-shadow, per the lamp-light discipline — no glow on
+   static modules. The entire hook lives inside
+   prefers-reduced-motion: no-preference, so reduced-motion users get no
+   animation at all (the pulse is pure motion; VIS-6's toast carries the
+   information redundantly). */
+@media (prefers-reduced-motion: no-preference) {
+  .node-card.agent-pulse {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    animation: node-card-agent-pulse 150ms ease-in-out 2;
+  }
+
+  @keyframes node-card-agent-pulse {
+    0%,
+    100% {
+      outline-color: transparent;
+    }
+
+    50% {
+      outline-color: var(--accent);
+    }
+  }
 }
 
 /* ===========================================================================
-   Presets panel (PS-3) — the third column of the PX-1 mockup's 3-column
-   layout (docs/ultron/design/px1-mockup.html's .presets/.preset-name/
-   .unsaved-dot classes, the styling source of truth for this section —
-   reused verbatim below), wired up for the first time by
-   src/presets-ui.js. Reuses .control for the buttons/select (consistent
-   with how the top bar already uses that class) rather than the mockup's
-   plain `.presets button` rule, and the same --panel/--border/--muted
-   tokens as every other panel, per this file's established convention.
+   Presets panel (PS-3 + VIS-3) — same faceplate/card/silkscreen
+   vocabulary as the palette flank: silkscreen header over a hairline
+   rule, the current-preset name as a mono machine readout
+   (--font-readout — the panel's LCD register; primary text 12.32 on
+   panel), the unsaved flag in the amber accent as text (7.43), controls
+   in the shared .control vocabulary. The preset <select> is already
+   dark-coherent via the shared rules: color-scheme dark (root) renders
+   the native dropdown dark, line-strong bezel, text-primary.
    =========================================================================== */
 
 .presets {
-  border-left: 1px solid var(--border);
-  background: var(--panel);
+  border-left: 1px solid var(--hairline);
+  background: var(--bg-panel);
 }
 
+/* Silkscreen header — identical treatment to .palette h2 above (one
+   vocabulary across both flanks). */
 .presets h2 {
-  margin: 0 0 0.75rem;
-  font-size: 0.75rem;
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 0.7rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
 .preset-current {
   margin-bottom: 0.75rem;
 }
 
+/* The preset name is machine state — mono readout, block so the unsaved
+   flag reads as its own tight line beneath (the group then keeps the
+   panel's 0.75rem separation from the controls). */
 .preset-name {
+  display: block;
+  font-family: var(--font-readout);
   font-size: 0.85rem;
   font-weight: 600;
   margin-bottom: 0.25rem;
@@ -403,7 +1211,7 @@ select.control {
 }
 
 .unsaved-dot {
-  color: #d97706;
+  color: var(--accent);
   font-weight: 600;
   font-size: 0.75rem;
 }
@@ -429,6 +1237,33 @@ select.control {
   min-width: 0;
 }
 
+/* PS-4 — factory/user dropdown groups. The <optgroup> labels read as
+   silkscreen micro-legends (the .readout-label vocabulary: small, bold,
+   tracked, muted), so the native menu keeps the panel's faceplate voice;
+   the option rows themselves stay native and dark via the root
+   color-scheme: dark rule (no per-option styling — the shared rules
+   already render the popup dark). Grouping is structural only: the
+   factory options carry 'factory:'-prefixed values in the DOM, so the
+   styling never carries meaning on its own. Uppercasing degrades to the
+   markup's title case where a platform ignores text-transform here. */
+#preset-select optgroup {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* PS-4 — the quiet inline refusal note under the preset controls (e.g.
+   Delete on a factory entry): muted micro-text that self-hides, not a
+   modal — the panel reserves amber for the unsaved state, so an
+   informational note stays neutral. */
+.preset-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 /* Visually hide (but keep accessible to assistive tech) the device-select
    label — the mockup shows no separate label text, relying on context. */
 .sr-only {
@@ -441,4 +1276,756 @@ select.control {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ===========================================================================
+   Agent feedback (FEW-1 structure + VIS-6 console treatment) — themes the
+   components src/agent-ui.js creates dynamically: #agent-chip (inserted
+   into the .topbar immediately before #bypass-toggle-button) and
+   #agent-toast-region (appended as <body>'s last child). FEW-1's JS
+   contract — 6 s auto-dismiss with hover-pause, the 3-toast cap, Escape,
+   the undo-button invariant, role/aria — is entirely in src/agent-ui.js
+   and untouched here; this block is presentation only. Every new
+   transition/animation lives inside
+   @media (prefers-reduced-motion: no-preference); under reduce the chip
+   keeps its static state look and toasts appear/disappear instantly
+   (VIS-4's .agent-pulse rule above already carries its own guard).
+   =========================================================================== */
+
+/* The chip reads as a strip native: silkscreen-adjacent legend type
+   (same 0.75rem/700/0.08em register as .status and the panel headers),
+   card-ground pill. It is NOT a control — it reports, never acts — so
+   at rest it stays quiet. */
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: none;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* unavailable — the load-time default and deliberately the least loud
+   state on the strip: muted legend, hairline seam, no lamp. (Explicit
+   for completeness; this is the base treatment above.) */
+.agent-chip[data-state='unavailable'] {
+  border-color: var(--hairline);
+  color: var(--text-muted);
+}
+
+.agent-chip[data-state='unavailable']::before {
+  content: none;
+}
+
+/* tools-ready / acting — the agent lane is live: bezel rises to
+   line-strong (the meaningful-outline token), the label lifts to the
+   amber accent (6.65 on card; 7.43 on panel), and an 8px amber status
+   square (rq5's 8px-dot register; non-text ≥3:1) lights beside it.
+   Color is never the only signal — the copy reads AGENT READY / AGENT
+   ACTING either way. */
+.agent-chip[data-state='tools-ready'],
+.agent-chip[data-state='acting'] {
+  border-color: var(--line-strong);
+}
+
+.agent-chip[data-state='tools-ready'] .agent-chip-label,
+.agent-chip[data-state='acting'] .agent-chip-label {
+  color: var(--accent);
+}
+
+.agent-chip[data-state='tools-ready']::before,
+.agent-chip[data-state='acting']::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* Acting adds ONE slow activity breath (opacity 1→0.7→1, ~1.2 s loop —
+   a deliberate exception to the 150–250 ms state-transition budget,
+   pinned by the VIS-6 spec as a status lamp, not a transition). Guarded:
+   reduced motion keeps the static tools-ready look and the state stays
+   readable through the 'AGENT ACTING' copy. */
+@media (prefers-reduced-motion: no-preference) {
+  .agent-chip[data-state='acting'] {
+    animation: agent-chip-activity 1.2s ease-in-out infinite;
+  }
+
+  @keyframes agent-chip-activity {
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.7;
+    }
+  }
+}
+
+.agent-toast-region {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  /* Above the sticky top bar (z-index 10) and the dev harness (15) so
+     stacked toasts overlay both — z-order unchanged from FEW-1. */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+/* Toasts answer in the module-card vocabulary: bg-card surface,
+   line-strong bezel (a floating card overlaps arbitrary grounds, so its
+   boundary earns the meaningful-outline token), the same 8px radius and
+   lifted-depth shadow the sortable-drag cards carry. Comfortable
+   padding, ~340px cap (inside the region's 22rem slot). */
+.agent-toast {
+  max-width: 340px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-card);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+/* Adversarial-rejection toasts — the FEW-3 watchdog vocabulary: the
+   safety-red EDGE role as a full 2px bezel on ALL sides (never a
+   left-edge accent stripe, never red text — red-edge is 3.44 < 4.5 as small
+   text per rq5). The bezel IS the refusal signal; the body stays
+   text-primary and the summary copy already says what was refused.
+   :has() selects the toast from its .agent-toast-error child (the only
+   hook — FEW-1's markup is frozen). */
+.agent-toast:has(.agent-toast-error) {
+  border: 2px solid var(--red-edge);
+}
+
+.agent-toast-summary {
+  color: var(--text-primary);
+}
+
+/* Machine footnote zone: clamped/error/undone notes read in the mono
+   register (--font-readout) at micro size, muted. The FIRST note after
+   the summary carries a hairline seam (adjacent-sibling, so two stacked
+   notes never double-seam) — the card's summary-line/footnote split. */
+.agent-toast-clamped,
+.agent-toast-error,
+.agent-toast-undone {
+  margin-top: 0.35rem;
+  font-family: var(--font-readout);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.agent-toast-summary + .agent-toast-clamped,
+.agent-toast-summary + .agent-toast-error,
+.agent-toast-summary + .agent-toast-undone {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Refusal body: primary text on the card ground (11.04) — tone comes
+   from the bezel and the copy, not from a failing red. */
+.agent-toast-error {
+  color: var(--text-primary);
+}
+
+.agent-toast-undone {
+  font-weight: 600;
+}
+
+/* Undone toasts dim (data-undone is set by FEW-1's undo path): the
+   information was consumed and reverted; the card recedes. 0.75 keeps
+   the muted mono note legible while clearly reading as past-tense. */
+.agent-toast[data-undone='true'] {
+  opacity: 0.75;
+}
+
+/* Undo — the toast's ONE action, in the Start-button pairing: ink-on-
+   amber fill (on-accent 8.46–10.60 on every amber fill), hover to
+   accent-hover, pressed to accent-active, and the amber-safe DARK focus
+   ring while amber-filled (amber-on-amber 1.16 is unusable — the exact
+   case --focus-ring-on-accent exists for). Specificity note: the
+   :not(:disabled) state selectors outrank `button.control`'s same-shape
+   rules by class count; the base still wins its tie by file order, as
+   in FEW-1. */
+.agent-toast .agent-toast-undo {
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.agent-toast .agent-toast-undo:not(:disabled):hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+.agent-toast .agent-toast-undo:not(:disabled):active {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+  color: var(--on-accent);
+}
+
+.agent-toast .agent-toast-undo:focus-visible,
+.agent-toast .agent-toast-undo:active:focus-visible {
+  outline-color: var(--focus-ring-on-accent);
+  /* QA-4 V2: same geometry fix as Start — the ink ring belongs on the
+     amber fill, not the card ground outside it. */
+  outline-offset: -2px;
+}
+
+/* Entrance: 180 ms transform/opacity only — a toast slides up into
+   place without touching layout (the region is fixed). There is NO exit
+   animation BY CONSTRUCTION: FEW-1's dismiss path removes the element
+   synchronously, so under motion preferences and reduce alike the
+   disappearance is instant — the no-animation fallback and the animated
+   path share it. */
+@media (prefers-reduced-motion: no-preference) {
+  .agent-toast {
+    animation: agent-toast-in 180ms ease-out;
+  }
+
+  @keyframes agent-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  /* The undo fill states above transition like every amber control. */
+  .agent-toast .agent-toast-undo {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+}
+
+/* ===========================================================================
+   MC-4 — host-owned safe-output note. src/audio-graph.js creates this
+   element from JS (agent-ui creation pattern; never hardcoded in
+   index.html) right after the OUT anchor when the -6 dBFS output
+   attenuator first comes into existence. Small muted print on the
+   faceplate — disclosure only; VIS-4/6 may restyle it with the console
+   vocabulary later.
+   =========================================================================== */
+
+.safe-output-note {
+  flex: none;
+  /* VIS-7: in the top-down flow the note sits BENEATH the OUT anchor —
+     left-aligned so it reads as that block's caption, not a free-floating
+     caption for the whole canvas. */
+  align-self: flex-start;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ===========================================================================
+   FEW-3 — watchdog alert. src/meter-taps.js creates this element from
+   JS (agent-ui creation pattern; never hardcoded in index.html) ONLY
+   when the RQ-3 runtime watchdog trips (output peak above the derived
+   ceiling sustained >250 ms, or a ~1 s monotonic 1–8 kHz band rise):
+   the chain gate is force-muted and this alert appears next to the OUT
+   anchor, after the safe-output-note, until a human clicks Restore.
+   LOUD but token-pure per rq5: the safety-red EDGE role as a 2px ring
+   on panel ground (red-edge is never a text color — 3.45 < 4.5), bold
+   primary text, and the Restore button in the bypass-ON pairing
+   (red-fill ground + #FFFFFF text 5.08 PASS + red-edge ring) — the
+   loudest vocabulary the token set allows. The element carries
+   role="alert" so screen readers announce the mute. No animation:
+   nothing here needs to attract via motion (reduced-motion safe).
+   =========================================================================== */
+
+.watchdog-alert {
+  flex: none;
+  /* VIS-7: a full-width banner beneath the OUT block + safe-output note —
+     the loudest thing the token set allows, at the loudest width. */
+  align-self: stretch;
+  justify-content: center;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border: 2px solid var(--red-edge);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.watchdog-alert-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.watchdog-alert .watchdog-restore {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--red-edge);
+  border-radius: 6px;
+  background: var(--red-fill);
+  color: #FFFFFF;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.watchdog-alert .watchdog-restore:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.watchdog-alert .watchdog-restore:not(:disabled):active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* While pressed (amber fill), the dark focus-ring variant keeps the
+   global :focus-visible ring visible — same exception as .control:active. */
+.watchdog-alert .watchdog-restore:not(:disabled):active:focus-visible {
+  outline-color: var(--focus-ring-on-accent);
+}
+
+/* ===========================================================================
+   MC-6 — dev test harness (agent simulator). src/mcp-harness.js creates
+   #mcp-harness from JS only when location.search contains 'dev'
+   (index.html carries just the script tag; without the param none of
+   these rules ever apply to a rendered element). Fixed right-side
+   overlay on the bg-panel surface: hairline seams inside, one
+   line-strong bezel around, mono readout (--font-readout) for tool
+   names / JSON / the event log, text hierarchy via text-primary /
+   text-muted. The amber accent is used SPARINGLY per the MC-6 spec —
+   Run :active and the [error] flag only. top: 5.5rem keeps the sticky
+   topbar (and the Bypass button in it) fully visible; z-index 15 sits
+   above the app layout and below agent toasts (20), which may
+   transiently overlay the panel foot and self-dismiss in 6 s — fine
+   for a dev surface. Buttons reuse .control plus a mcp-harness-* class
+   for sizing; the global :focus-visible ring above applies unchanged.
+   =========================================================================== */
+
+.mcp-harness {
+  position: fixed;
+  top: 5.5rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  width: min(26rem, calc(100vw - 2rem));
+  max-width: 420px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.mcp-harness-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mcp-harness-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.mcp-harness-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+
+.mcp-harness-close {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+.mcp-harness-statusline,
+.mcp-harness-chipmirror {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.mcp-harness-chipmirror {
+  font-family: var(--font-readout);
+}
+
+.mcp-harness-section {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mcp-harness-section-title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* Tool cards — one per def from McpTools.getDefs(). */
+
+.mcp-harness-tool {
+  padding: 0.6rem;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--bg-card);
+}
+
+.mcp-harness-tool + .mcp-harness-tool {
+  margin-top: 0.5rem;
+}
+
+.mcp-harness-tool-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.mcp-harness-tool-name {
+  font-family: var(--font-readout);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mcp-harness-badge {
+  flex: none;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.mcp-harness-tool-desc {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.mcp-harness-param {
+  font-family: var(--font-readout);
+  font-size: 0.66rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-harness-params {
+  margin-top: 0.35rem;
+}
+
+.mcp-harness-args {
+  display: block;
+  width: 100%;
+  min-height: 5rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem;
+  resize: vertical;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--bg-body);
+  color: var(--text-primary);
+  font-family: var(--font-readout);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.mcp-harness-runrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.mcp-harness-run {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.75rem;
+}
+
+/* Accent use #1 (sparingly): the moment of invocation. */
+.mcp-harness-run:active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.mcp-harness-result {
+  max-height: 14rem;
+  overflow: auto;
+  margin: 0.5rem 0 0;
+  padding: 0.4rem;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--bg-body);
+  font-family: var(--font-readout);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre;
+}
+
+/* Accent use #2: the [error] flag on error:true results. */
+.mcp-harness-result[data-error="true"] {
+  border-color: var(--accent);
+}
+
+/* Event stream — scrolling mono log, newest at the bottom. */
+
+.mcp-harness-events-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.mcp-harness-clear {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.7rem;
+}
+
+.mcp-harness-log {
+  height: 9rem;
+  overflow-y: auto;
+  padding: 0.4rem;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--bg-body);
+  font-family: var(--font-readout);
+  font-size: 0.66rem;
+  line-height: 1.7;
+}
+
+.mcp-harness-log-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-harness-log-time,
+.mcp-harness-log-type {
+  margin-right: 0.4rem;
+  color: var(--text-muted);
+}
+
+.mcp-harness-log-detail {
+  color: var(--text-muted);
+}
+
+/* Mutations carry the payload that matters — lift them to primary. */
+.mcp-harness-log-line[data-kind="agentui:mutation"] .mcp-harness-log-detail {
+  color: var(--text-primary);
+}
+
+/* Undo bar — sticky foot of the panel. No clear-stack control (MC-6). */
+
+.mcp-harness-undo {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--hairline);
+}
+
+.mcp-harness-undo-btn {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+}
+
+.mcp-harness-undo-depth {
+  font-family: var(--font-readout);
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.mcp-harness-undo-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===========================================================================
+   VIS-5 — MIC IN / OUT level meters (src/meters.js, window.Meters).
+   Each meter unit is created from JS INSIDE one of the two .anchor labels
+   (query by text, "MIC IN" / "OUT") as a plain child of the anchor
+   (VIS-7: in the vertical canvas the anchor is a horizontal bar —
+   silkscreen label left, this unit right at the bar's end; still no
+   restructuring of .canvas's flex children, so the anchor → arrow →
+   chain-list rhythm and MC-4's safe-output-note
+   insertion point are untouched, and nothing here is absolutely
+   positioned over anything. The unit is: one canvas (the 96×26 lamp bar
+   + tick + clip dot + canvas-drawn dB scale) over one mono readout line.
+   All lamp/zone/tick colors are painted on the canvas from the rq5
+   tokens (--meter-low/mid/clip, --text-primary, --hairline as the unlit
+   lamp glass, --text-muted numerals) resolved at runtime — this block is
+   layout + type only, and deliberately adds NO animation or transition
+   of any kind: meter ballistics are functional motion drawn per-frame on
+   the canvas, so they stay live under prefers-reduced-motion by
+   construction (VIS-6's reduced-motion rule already has nothing to
+   quiet here). CSS size MUST stay in lockstep with src/meters.js's
+   CANVAS_W/CANVAS_H logical constants (96×26) — the JS sets the DPR-
+   scaled backing store; this fixes the CSS footprint.
+   =========================================================================== */
+
+.meter-unit {
+  /* VIS-7: inside the full-width vertical-flow anchor the unit sits at the
+     bar's right end (label left, meter right) — the old 6px margin-top was
+     air under the label in the horizontal flow and is gone. */
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-top: 0;
+  width: 96px;
+}
+
+/* Block, no inline-baseline wobble; fixed CSS footprint = the logical
+   canvas size (the backing store is devicePixelRatio-scaled in JS). */
+.meter-canvas {
+  display: block;
+  width: 96px;
+  height: 26px;
+}
+
+/* The mono dB readout — the console's LCD/VFD register (machine values
+   in --font-readout per the design brief), muted like the scale
+   numerals; tabular numerals so −∞ / −12.0 / CLIP don't jitter. The
+   'CLIP' latch text renders in the meter-clip stop as the one state
+   color the readout ever carries. */
+.meter-readout {
+  font-family: var(--font-readout);
+  font-size: 0.625rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* QA-4 V1 fix: the CLIP state is triple-redundant (red pin at 0 dB + red
+   dot on the canvas + this text) — the stop token itself is a non-text
+   color (4.01 as text < 4.5), so the text reads in primary while the
+   canvas carries the red. */
+.meter-readout[data-clip='true'] {
+  color: var(--text-primary);
+}
+
+/* ===========================================================================
+   VIS-7b (2026-08-28 user direction) — FLOW-DIRECTION TOGGLE. Vertical
+   top-down is the default (VIS-7 above); src/canvas.js flips .flow-horizontal
+   on the canvas panel from the .flow-toggle button and persists the choice
+   under karaoke-flow-orientation-v1. Everything orientation-sensitive is
+   scoped here so the two modes are one class apart. SortableJS re-reads
+   the container direction on drag start — no JS-mode coupling.
+   =========================================================================== */
+
+.flow-toggle {
+  display: block;
+  margin: 0.5rem auto 0.75rem;
+  padding: 0.3rem 0.9rem;
+  font-family: var(--font-readout);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+/* HORIZONTAL MODE — the cycle-1 reading: MIC IN at the left, chain runs
+   left→right, OUT at the right. The panel un-bounds (the page owns the
+   scroll, as it did before VIS-7), anchors return to compact stacked
+   blocks with their meters beneath, arrows stand upright, cards take
+   their content width in a row list. */
+.canvas-panel.flow-horizontal {
+  max-height: none;
+}
+
+.canvas-panel.flow-horizontal .canvas {
+  flex-direction: row;
+  overflow-y: visible;
+  overflow-x: auto;
+}
+
+.canvas-panel.flow-horizontal .chain-list {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.canvas-panel.flow-horizontal .arrow {
+  transform: none;
+}
+
+.canvas-panel.flow-horizontal .anchor {
+  flex-direction: column;
+  align-items: center;
+  width: auto;
+  min-width: 5.5rem;
+  justify-content: flex-start;
+}
+
+.canvas-panel.flow-horizontal .meter-unit {
+  margin-top: 0.35rem;
+}
+
+.canvas-panel.flow-horizontal .node-card {
+  width: auto;
+  min-width: 13rem;
+  max-width: 19rem;
+}
+
+.canvas-panel.flow-horizontal .safe-output-note {
+  align-self: center;
+  margin-top: 0;
+}
+
+.canvas-panel.flow-horizontal .watchdog-alert {
+  align-self: center;
+  max-width: 22rem;
 }

@@ -67,6 +67,22 @@
 // for NodeTypes.applyParam() to reach (e.g. EQ's `.low`/`.mid`/`.high`).
 // See the comments at getNodeInput()/getNodeOutput() and inside
 // buildGraph()'s deferred rewire for exactly where this matters.
+//
+// MC-4 addendum — host-owned output attenuator (RQ-3,
+// docs/ultron/research/rq3-loudness-policy.md): a SECOND persistent GainNode,
+// `outputAttenuator`, permanently inserted between the shared chain gate and
+// audioContext.destination (chainGate -> outputAttenuator -> destination).
+// Its fixed gain implements rq3's default output ceiling of -6 dBFS (linear
+// 10^(-6/20) = 0.5012): the limiter's spec-mandated makeup gain plus its
+// 0-1.5 ms attack overshoot plus intersample peaks can sit up to +3-4 dB
+// above the ceiling PARAM, so the host adds a margin no chain setting can
+// reach. It is HOST-OWNED: created once with the graph, never torn down or
+// rewired by buildGraph()'s teardown (the teardown section disconnects only
+// nodes in `nodeInstances`; the gate and the attenuator are deliberately
+// not in it), never exposed as a param to any agent tool (src/mcp-tools.js
+// hard-rejects attempts to address it), and never touched by AudioBypass —
+// the bypass dry tap connects sourceNode straight to destination
+// independently, so Bypass remains a fully human-controlled pure path.
 
 (function () {
   'use strict';
@@ -108,16 +124,43 @@
   var firstChainNode = null;
 
   // Shared "chain gate" GainNode — sits between the last node in the effect
-  // chain (or the mic source directly, if the model is empty) and
-  // audioContext.destination. Created lazily on first need (either the
-  // first buildGraph() call, or the first getChainGate() call, whichever
-  // comes first) since it requires window.AudioEngine.audioContext to
-  // already exist. Steady-state gain is 1 (chain output audible). AE-3's
-  // AudioBypass ramps this to 0 when bypass is engaged, independent of
-  // whatever buildGraph() has wired downstream of it; a future AE-4 will
-  // also use it for glitch-free rewiring ramps, per the project's RQ-1
-  // research design.
+  // chain (or the mic source directly, if the model is empty) and the
+  // host-owned outputAttenuator (see the MC-4 addendum in the file header).
+  // Created lazily on first need (either the first buildGraph() call, or
+  // the first getChainGate() call, whichever comes first) since it requires
+  // window.AudioEngine.audioContext to already exist. Steady-state gain is
+  // 1 (chain output audible). AE-3's AudioBypass ramps this to 0 when
+  // bypass is engaged, independent of whatever buildGraph() has wired
+  // downstream of it; AE-4 uses it for glitch-free rewiring ramps.
   var chainGate = null;
+
+  // MC-4: host-owned output attenuator GainNode — chainGate ->
+  // outputAttenuator -> destination, gain fixed at OUTPUT_ATTENUATOR_LINEAR
+  // (-6 dBFS). Created lazily alongside the chain gate (same
+  // audioContext-must-exist contract), connected to destination exactly
+  // once at creation, and NEVER disconnected by buildGraph()'s teardown —
+  // only the chainGate -> outputAttenuator edge is (idempotently)
+  // re-asserted per rebuild. No param exposure: nothing outside this file
+  // may write its gain (FEW-3's watchdog reads it via getOutputAttenuator()
+  // but is likewise forbidden from re-gaining it — its emergency action is
+  // the chainGate it already owns).
+  var outputAttenuator = null;
+
+  // MC-4: the rq3 host-attenuator constants. OUTPUT_CEILING_DBFS is the
+  // single source of truth for BOTH the attenuator's gain and the on-screen
+  // "Safe output" note text (no literal -6 anywhere else); the linear value
+  // is derived, never duplicated. Exposed read-only on window.AudioGraph
+  // for FEW-3 (watchdog ceiling math) and QA-2/MC-6 (expected test peak).
+  var OUTPUT_CEILING_DBFS = -6;
+  var OUTPUT_ATTENUATOR_LINEAR = Math.pow(10, OUTPUT_CEILING_DBFS / 20); // = 0.50119... ~= 0.5012
+
+  // MC-4: verifyAttenuatorOffline()'s test fixture — a square wave driven
+  // at -1 dBFS (a hot, already-nearly-clipping input, per plan MC-4's
+  // acceptance: "attenuator verified with hot signals (square-wave -1 dBFS
+  // test input)"). Test-fixture constant, not a policy number.
+  var VERIFY_TEST_INPUT_DBFS = -1;
+  var VERIFY_TEST_DURATION_S = 0.25;
+  var VERIFY_TEST_SAMPLE_RATE = 44100;
 
   // Fade duration (seconds) used both to duck the chain gate before a
   // rebuild's graph surgery and to un-duck it afterward. 15ms, per the
@@ -152,6 +195,170 @@
       chainGate.gain.value = 1; // normal operation — chain output audible by default
     }
     return chainGate;
+  }
+
+  /**
+   * MC-4: create (once) the .safe-output-note disclosure element next to
+   * the OUT anchor in the canvas panel — the rq3-mandated UI note
+   * "Safe output: ON, ceiling -6 dBFS". Created from JS in the same spirit
+   * as src/agent-ui.js's components (never hardcoded in index.html), so
+   * the note cannot exist without the attenuator feature that justifies
+   * it. Idempotent; silently skipped when there is no DOM (e.g. a Node
+   * test harness) or no canvas panel — the note is disclosure, not
+   * function, and must never be able to throw into the audio path. The
+   * text is DERIVED from OUTPUT_CEILING_DBFS so the note and the actual
+   * ceiling can never drift apart.
+   */
+  function ensureSafeOutputNote() {
+    try {
+      if (document.getElementById('safe-output-note')) {
+        return;
+      }
+      var canvasEl = document.getElementById('chain-canvas');
+      if (!canvasEl) {
+        return;
+      }
+      var note = document.createElement('div');
+      note.id = 'safe-output-note';
+      note.className = 'safe-output-note';
+      note.setAttribute('role', 'note');
+      note.textContent =
+        'Safe output: ON, ceiling ' + OUTPUT_CEILING_DBFS + ' dBFS';
+      // "Next to the OUT anchor": the canvas's LAST .anchor is OUT
+      // (index.html order: MIC IN anchor ... chain list ... OUT anchor).
+      // Insert immediately after it; fall back to appending at the end.
+      var anchors = canvasEl.querySelectorAll('.anchor');
+      var outAnchor = anchors.length > 0 ? anchors[anchors.length - 1] : null;
+      if (outAnchor && outAnchor.parentNode === canvasEl) {
+        canvasEl.insertBefore(note, outAnchor.nextSibling);
+      } else {
+        canvasEl.appendChild(note);
+      }
+    } catch (err) {
+      // No DOM here (e.g. a bare Node harness) — purely cosmetic, never fatal.
+    }
+  }
+
+  /**
+   * MC-4: get the host-owned output attenuator GainNode
+   * (chainGate -> attenuator -> destination; gain fixed at -6 dBFS),
+   * creating it on first call if it doesn't exist yet. Requires
+   * window.AudioEngine.audioContext to already exist — the same contract
+   * as getChainGate() above. The attenuator is connected to
+   * audioContext.destination exactly once, here at creation, and is never
+   * disconnected afterwards: buildGraph() only ever (re)connects the
+   * chainGate INTO it.
+   *
+   * Consumers: buildGraph() (wiring), FEW-3's watchdog/QA (read-only tap
+   * point — the RQ-3 runtime watchdog monitors downstream of exactly this
+   * node). Nothing may write its gain.
+   *
+   * @returns {GainNode}
+   */
+  function getOutputAttenuator() {
+    if (!outputAttenuator) {
+      var audioContext = window.AudioEngine && window.AudioEngine.audioContext;
+      if (!audioContext) {
+        throw new Error(
+          'AudioGraph.getOutputAttenuator: window.AudioEngine.audioContext must already exist. ' +
+          'Call AudioEngine.start() (and await it) first.'
+        );
+      }
+      outputAttenuator = audioContext.createGain();
+      outputAttenuator.gain.value = OUTPUT_ATTENUATOR_LINEAR; // -6 dBFS
+      outputAttenuator.connect(audioContext.destination);
+      ensureSafeOutputNote();
+    }
+    return outputAttenuator;
+  }
+
+  /**
+   * MC-4 (QA-2/MC-6 callable proof): render a -1 dBFS square wave through
+   * the stock limiter configuration + the host attenuator in an
+   * OfflineAudioContext and resolve the MEASURED output peak (linear
+   * 0..1-ish). This is the offline verification that the -6 dBFS ceiling
+   * actually holds for a hot input even with limiter makeup/overshoot.
+   *
+   * Usage (QA-2 matrix / MC-6 harness):
+   *   AudioGraph.verifyAttenuatorOffline().then(function (peak) {
+   *     // peak === null -> OfflineAudioContext unavailable in this context.
+   *     // Expected: ~OUTPUT_ATTENUATOR_LINEAR (0.5012) plus a few percent
+   *     // of limiter overshoot; QA-2 asserts peak < 0.6 (-4.4 dBFS), i.e.
+   *     // inside rq3's absolute never-exceed -3 dBFS headroom.
+   *   });
+   *
+   * The limiter is configured exactly like src/node-limiter.js's factory
+   * defaults (ceiling -1 dB, ratio 20:1, attack 0, hard knee, 50 ms
+   * release) so the measurement exercises the same DSP the live graph
+   * uses; the attenuator gain is the SAME OUTPUT_ATTENUATOR_LINEAR
+   * constant. Never throws and never rejects: any internal failure
+   * (including no OfflineAudioContext in this runtime) resolves null.
+   *
+   * @param {Object} [options] - { durationS?: number, sampleRate?: number }
+   * @returns {Promise<number|null>} the measured linear peak, or null.
+   */
+  function verifyAttenuatorOffline(options) {
+    return new Promise(function (resolve) {
+      try {
+        var Ctor = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (typeof Ctor !== 'function') {
+          resolve(null); // No offline rendering in this runtime (e.g. Node).
+          return;
+        }
+        var opts = options || {};
+        var sampleRate = opts.sampleRate || VERIFY_TEST_SAMPLE_RATE;
+        var durationS =
+          typeof opts.durationS === 'number' && opts.durationS > 0
+            ? opts.durationS
+            : VERIFY_TEST_DURATION_S;
+        var ctx = new Ctor(1, Math.max(1, Math.round(durationS * sampleRate)), sampleRate);
+
+        // Hot test signal: square wave at -1 dBFS (VERIFY_TEST_INPUT_DBFS).
+        var osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = 440;
+        var sourceGain = ctx.createGain();
+        sourceGain.gain.value = Math.pow(10, VERIFY_TEST_INPUT_DBFS / 20);
+
+        // Stock safety limiter (src/node-limiter.js factory defaults).
+        var limiter = ctx.createDynamicsCompressor();
+        limiter.threshold.value = -1;
+        limiter.ratio.value = 20;
+        limiter.attack.value = 0;
+        limiter.knee.value = 0;
+        limiter.release.value = 0.05;
+
+        // The host attenuator, at its real fixed gain.
+        var attenuator = ctx.createGain();
+        attenuator.gain.value = OUTPUT_ATTENUATOR_LINEAR;
+
+        osc.connect(sourceGain);
+        sourceGain.connect(limiter);
+        limiter.connect(attenuator);
+        attenuator.connect(ctx.destination);
+        osc.start(0);
+        osc.stop(durationS);
+
+        ctx.startRendering().then(
+          function (buffer) {
+            var data = buffer.getChannelData(0);
+            var peak = 0;
+            for (var i = 0; i < data.length; i++) {
+              var v = Math.abs(data[i]);
+              if (v > peak) {
+                peak = v;
+              }
+            }
+            resolve(peak);
+          },
+          function () {
+            resolve(null); // Rendering failed — honest null, never a throw.
+          }
+        );
+      } catch (err) {
+        resolve(null);
+      }
+    });
   }
 
   /**
@@ -367,6 +574,12 @@
     }
 
     var gate = getChainGate();
+    // MC-4: ensure the host-owned output attenuator exists from the very
+    // first build (created once; see getOutputAttenuator()). Resolved here
+    // in the synchronous section so the steady-state path
+    // chainGate -> attenuator -> destination is established by the same
+    // first rebuild that establishes the gate itself.
+    var attenuator = getOutputAttenuator();
     var oldNodeInstances = nodeInstances; // current live map, captured now
 
     // ---- Phase 1 (SYNCHRONOUS, happens immediately, before any ducking) ----
@@ -459,14 +672,19 @@
         previousOutput = nodeOutput;
       });
       previousOutput.connect(gate);
-      // Connecting the gate to the destination is idempotent (a no-op on
-      // an already-connected pair, per the Web Audio spec) but must still
-      // happen here: without it, `gate` has no path to destination, so the
-      // audio thread never evaluates its gain automation at all — silent
-      // forever, and rampGateTo()/AudioBypass's own ramps on this same node
-      // become inert. Restored from the pre-AE-4 buildGraph(), which made
-      // this same connect() call every rebuild for the same reason.
-      gate.connect(audioContext.destination);
+      // MC-4: connect the gate into the host-owned output attenuator (NOT
+      // straight to destination — the attenuator is a permanent fixture of
+      // the graph shape). Idempotent (a no-op on an already-connected pair,
+      // per the Web Audio spec) but must still happen here every rebuild:
+      // without a path onward to destination, the audio thread never
+      // evaluates the gate's gain automation at all — silent forever, and
+      // rampGateTo()/AudioBypass's own ramps on this same node become
+      // inert. The attenuator's own ->destination edge was made once, at
+      // its creation inside getOutputAttenuator(), and is deliberately NOT
+      // touched by this teardown/rebuild: teardown above disconnects only
+      // nodes in oldNodeInstances, so chainGate -> attenuator ->
+      // destination persists across every rebuild.
+      gate.connect(attenuator);
       if (newFirstNode === null) {
         newFirstNode = gate;
       }
@@ -497,5 +715,14 @@
     getChainGate: getChainGate,
     getNodeInstance: getNodeInstance,
     updateNodeParams: updateNodeParams,
+    // MC-4 (host attenuator, RQ-3): read-only access for FEW-3's watchdog
+    // tap point and QA; verifyAttenuatorOffline() is the QA-2/MC-6 proof.
+    // OUTPUT_CEILING_DBFS / OUTPUT_ATTENUATOR_LINEAR are the single source
+    // of truth for the ceiling constant (FEW-3's watchdog derives its
+    // ceiling+0.5 dB threshold from them) — treat them as read-only.
+    getOutputAttenuator: getOutputAttenuator,
+    verifyAttenuatorOffline: verifyAttenuatorOffline,
+    OUTPUT_CEILING_DBFS: OUTPUT_CEILING_DBFS,
+    OUTPUT_ATTENUATOR_LINEAR: OUTPUT_ATTENUATOR_LINEAR,
   };
 })();

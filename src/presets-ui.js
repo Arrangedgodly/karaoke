@@ -2,15 +2,34 @@
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single
 // `window.X` export pattern as the rest of this project. Depends on
-// window.PresetStore (src/preset-store.js) and window.ChainCanvas
-// (src/canvas.js) — both already loaded by the time this file runs, per
-// index.html's script order.
+// window.PresetStore (src/preset-store.js), window.ChainCanvas
+// (src/canvas.js), and window.FactoryPresets (src/factory-presets.js,
+// PS-4 — optional at runtime, see factoryPresets() below) — all already
+// loaded by the time this file runs, per index.html's script order.
 //
 // PS-3 scope: wires the real Presets panel markup in index.html
 // (#save-preset-btn/#preset-select/#load-preset-btn/#delete-preset-btn/
 // #current-preset-name/#unsaved-indicator) up to window.PresetStore
 // (named, user-managed saved presets) and window.ChainCanvas
 // (getCurrentModel()/loadModel(), the live on-screen chain).
+//
+// PS-4 scope: the dropdown gains two <optgroup> groups — "Factory"
+// (window.FactoryPresets' six shipped presets, first) and "Yours"
+// (PresetStore's user presets). The merge happens HERE, at the dropdown,
+// deliberately NOT inside PresetStore: the store owns exactly one thing
+// (the user's named presets under 'karaoke-presets-v1'), and the factory
+// library is static runtime content that is never persisted — merging at
+// the presentation seam keeps both owners single-purpose and means a
+// fresh profile sees the full factory group with ZERO localStorage
+// seeding. Factory entries are namespaced in the dropdown's option values
+// ('factory:Warm Ballad') so they can never collide with — or shadow — a
+// user preset of the same name (the optgroups also separate them
+// visually). Factory semantics: Load applies the factory nodes through
+// the SAME ChainCanvas.loadModel path a user-preset Load uses (the store
+// is never consulted for factory content); Delete refuses factory
+// selections with a quiet inline note (never a modal, never
+// store.remove); Save As… is unchanged and always writes the USER store —
+// saving under a factory name creates a separate user preset beside it.
 //
 // This file owns two independent bits of state, both purely DOM-display
 // concerns — neither is persisted anywhere, and both reset to their
@@ -20,8 +39,10 @@
 //     yet this session — displayed as "Unsaved chain").
 //   - the `#unsaved-indicator` element's visibility: whether the live chain
 //     has drifted from `currentPresetName`'s last-saved/loaded state.
-//     src/canvas.js calls markModified() (this file's one exported
-//     function) at its three user-EDIT chokepoints (onSort, the
+//     src/canvas.js calls markModified() (one of this file's exports; the
+//     full display write path — setCurrentPreset/clearModified/
+//     refreshPresetSelect — is exported too, per the VIS-3 note at the
+//     bottom of the IIFE) at its three user-EDIT chokepoints (onSort, the
 //     remove-button handler, and a param-tweak's onParamsChanged callback)
 //     — never on a load, which is a clean state by definition, not an
 //     edit.
@@ -51,22 +72,121 @@
   // confused with the placeholder.
   var currentPresetName = null;
 
+  // PS-4: dropdown option-value prefix marking a FACTORY entry. Namespaced
+  // so 'factory:Warm Ballad' can never collide with a user preset whose
+  // plain name happens to be 'Warm Ballad' — the Load/Delete handlers
+  // branch on this prefix, and Save As… never generates it.
+  var FACTORY_VALUE_PREFIX = 'factory:';
+
+  // PS-4: the inline refusal note element (lazily created on first use —
+  // see showFactoryNote) and the timer hiding it again.
+  var factoryNoteEl = null;
+  var factoryNoteTimer = null;
+
   /**
-   * Rebuild #preset-select's <option> list from PresetStore.listNames().
-   * PresetStore.listNames() itself guarantees the list is never empty (it
-   * seeds the default preset on a completely fresh/empty store) — the
-   * "-- no presets --" placeholder below is defensive only, in case that
-   * invariant is ever changed.
+   * PS-4: read the factory library, guarded. An absent or damaged
+   * window.FactoryPresets (its script failed to load, or a bare test
+   * sandbox that never loaded it) degrades honestly to an empty library —
+   * the dropdown then renders PS-3's flat user list, exactly as before
+   * PS-4 existed.
    *
-   * @param {string} [selectName] - if provided and present in the list,
+   * @returns {Array<{name: string, nodes: Array<{id: string, type: string, params: Object}>}>}
+   */
+  function factoryPresets() {
+    try {
+      if (window.FactoryPresets && typeof window.FactoryPresets.list === 'function') {
+        var listed = window.FactoryPresets.list();
+        if (Array.isArray(listed)) {
+          return listed.filter(function (preset) {
+            return !!preset && typeof preset.name === 'string' && Array.isArray(preset.nodes);
+          });
+        }
+      }
+    } catch (err) {
+      // Static content module damaged — fall through to the empty library.
+    }
+    return [];
+  }
+
+  /**
+   * PS-4: find one factory preset by its friendly name. Returns a FRESH
+   * entry (FactoryPresets.list() deep-copies per call), or null.
+   *
+   * @param {string} name
+   * @returns {{name: string, nodes: Array<{id: string, type: string, params: Object}>}|null}
+   */
+  function findFactoryPreset(name) {
+    var library = factoryPresets();
+    for (var i = 0; i < library.length; i++) {
+      if (library[i].name === name) {
+        return library[i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * PS-4: show the quiet inline refusal note under the preset controls
+   * (created lazily on first use, auto-hidden again after 4 s — a note,
+   * not a modal; the app reserves alerts/confirms for the PS-3 defensive
+   * paths and deletions). Best-effort by construction: with no parent to
+   * anchor it to (a bare harness DOM) it is a silent no-op, never a
+   * thrown error out of a click handler.
+   *
+   * @param {string} text
+   */
+  function showFactoryNote(text) {
+    var host = presetSelectEl.parentNode;
+    if (!host || typeof host.appendChild !== 'function') {
+      return;
+    }
+    if (!factoryNoteEl) {
+      factoryNoteEl = document.createElement('p');
+      factoryNoteEl.id = 'factory-preset-note';
+      factoryNoteEl.className = 'preset-note';
+      factoryNoteEl.style.display = 'none';
+      host.appendChild(factoryNoteEl);
+    }
+    factoryNoteEl.textContent = text;
+    factoryNoteEl.style.display = '';
+    if (factoryNoteTimer) {
+      window.clearTimeout(factoryNoteTimer);
+    }
+    factoryNoteTimer = window.setTimeout(function () {
+      factoryNoteEl.style.display = 'none';
+    }, 4000);
+  }
+
+  /**
+   * Rebuild #preset-select's <option> list: PS-4's two groups — a
+   * "Factory" <optgroup> (window.FactoryPresets' library, first) and a
+   * "Yours" <optgroup> (PresetStore.listNames()' user presets).
+   * PresetStore.listNames() itself guarantees the user list is never
+   * empty (it seeds the default preset on a completely fresh/empty
+   * store) — the "-- no presets --" placeholder below is defensive only,
+   * in case that invariant is ever changed.
+   *
+   * Degrade path: when the factory library is empty/absent (script failed
+   * to load, or a bare test sandbox), the dropdown renders PS-3's flat
+   * user list unchanged — the panel stays usable and old sandboxes see
+   * byte-identical behavior.
+   *
+   * Selection: a USER option matches `selectName` by its plain name; a
+   * FACTORY option matches only the namespaced 'factory:<name>' form.
+   * That keeps refreshPresetSelect('Warm Ballad') deterministic when a
+   * user preset shares a factory name — the just-saved USER entry is the
+   * one selected, never the factory look-alike.
+   *
+   * @param {string} [selectName] - if provided and present in a group,
    *   that option is marked selected; otherwise the browser's own default
    *   (first option) applies.
    */
   function refreshPresetSelect(selectName) {
     var names = window.PresetStore.listNames();
+    var factory = factoryPresets();
     presetSelectEl.innerHTML = '';
 
-    if (names.length === 0) {
+    if (names.length === 0 && factory.length === 0) {
       var emptyOpt = document.createElement('option');
       emptyOpt.value = '';
       emptyOpt.textContent = '-- no presets --';
@@ -74,15 +194,47 @@
       return;
     }
 
-    names.forEach(function (name) {
+    if (factory.length === 0) {
+      // Degrade path — PS-3's flat user list, byte-identical behavior.
+      names.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === selectName) {
+          opt.selected = true;
+        }
+        presetSelectEl.appendChild(opt);
+      });
+      return;
+    }
+
+    var factoryGroup = document.createElement('optgroup');
+    factoryGroup.label = 'Factory';
+    factory.forEach(function (preset) {
       var opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      if (name === selectName) {
+      opt.value = FACTORY_VALUE_PREFIX + preset.name;
+      opt.textContent = preset.name;
+      if (selectName === FACTORY_VALUE_PREFIX + preset.name) {
         opt.selected = true;
       }
-      presetSelectEl.appendChild(opt);
+      factoryGroup.appendChild(opt);
     });
+    presetSelectEl.appendChild(factoryGroup);
+
+    if (names.length > 0) {
+      var userGroup = document.createElement('optgroup');
+      userGroup.label = 'Yours';
+      names.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === selectName) {
+          opt.selected = true;
+        }
+        userGroup.appendChild(opt);
+      });
+      presetSelectEl.appendChild(userGroup);
+    }
   }
 
   /**
@@ -100,8 +252,7 @@
    * Called by src/canvas.js at each of its three user-EDIT chokepoints
    * (onSort, the remove-button handler, a param tweak's onParamsChanged) —
    * never on a load, which is a clean state, not an edit. Exposed on this
-   * module's export; nothing else in this file needs to be callable from
-   * outside its own IIFE.
+   * module's export (see the export note at the bottom of this IIFE).
    */
   function markModified() {
     if (unsavedIndicatorEl) {
@@ -133,6 +284,14 @@
       return;
     }
 
+    // PS-4 note: this ALWAYS writes the USER store (PresetStore.save),
+    // even when `trimmed` collides with a factory name or the suggestion
+    // came from a loaded factory preset — namespaces are separate, so a
+    // user "Warm Ballad" simply appears beside the factory one (different
+    // optgroup, different option value) and the factory library is never
+    // touched. refreshPresetSelect(trimmed) selects the USER option on
+    // such a collision (user options match plain names; factory options
+    // only match their 'factory:'-prefixed form).
     window.PresetStore.save(trimmed, window.ChainCanvas.getCurrentModel());
     refreshPresetSelect(trimmed);
     setCurrentPreset(trimmed);
@@ -140,11 +299,31 @@
   });
 
   loadBtn.addEventListener('click', function () {
-    var name = presetSelectEl.value;
-    if (!name) {
+    var value = presetSelectEl.value;
+    if (!value) {
       return;
     }
 
+    // PS-4: factory selections resolve from window.FactoryPresets — the
+    // user store is never consulted — then apply through the SAME model
+    // path a user-preset Load uses (ChainCanvas.loadModel, which also
+    // re-baselines the autosave internally, see src/canvas.js), with the
+    // same clean display state (name shown, unsaved dot hidden).
+    if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
+      var factoryPreset = findFactoryPreset(value.slice(FACTORY_VALUE_PREFIX.length));
+      if (!factoryPreset) {
+        // Defensive — the dropdown only lists names the library itself
+        // reported, so this needs the library to have changed mid-session.
+        window.alert('Could not load that preset — it may have been removed.');
+        return;
+      }
+      window.ChainCanvas.loadModel(factoryPreset.nodes);
+      setCurrentPreset(factoryPreset.name);
+      clearModified();
+      return;
+    }
+
+    var name = value;
     var result = window.PresetStore.load(name);
     if (!result) {
       // Defensive — shouldn't normally happen since the dropdown only ever
@@ -162,11 +341,20 @@
   });
 
   deleteBtn.addEventListener('click', function () {
-    var name = presetSelectEl.value;
-    if (!name) {
+    var value = presetSelectEl.value;
+    if (!value) {
       return;
     }
 
+    // PS-4: factory entries are load-only shipped content, not user data —
+    // a quiet inline refusal (no confirm modal, no store.remove, the
+    // dropdown selection left exactly as it was).
+    if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
+      showFactoryNote("Factory presets can't be deleted");
+      return;
+    }
+
+    var name = value;
     if (!window.confirm('Delete preset "' + name + '"?')) {
       return;
     }
@@ -188,7 +376,18 @@
   // list is never empty even before Start has been clicked.
   refreshPresetSelect();
 
+  // VIS-3: the full preset-display write path is exported, not just
+  // markModified. src/mcp-tools.js (save_preset + the MC-5 undo restores)
+  // previously MIRRORED these three functions' DOM operations because they
+  // were private — which left this file's private `currentPresetName`
+  // stale after an agent write (the Save prompt's default suggestion could
+  // lag the displayed name). With the real functions exported, agents and
+  // the UI buttons now share ONE write path and the private state can
+  // never drift. Behavior of each function is unchanged.
   window.PresetsUI = {
     markModified: markModified,
+    setCurrentPreset: setCurrentPreset,
+    clearModified: clearModified,
+    refreshPresetSelect: refreshPresetSelect
   };
 })();

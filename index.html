@@ -9,44 +9,73 @@
 <body>
   <!--
     ================================================================
-    UI-1 — real top bar, per docs/ultron/design/px1-layout-spec.md and
-    the approved visual reference docs/ultron/design/px1-mockup.html.
+    VIS-2 — the topbar as the console's STATUS LCD STRIP, per
+    .impeccable/surfaces/index-html.md (the committed world: status-strip
+    discipline donated by broadcast rack gear's dense status displays)
+    and the rq5 palette (docs/ultron/research/rq5-palette.md).
 
-    Replaces the old temporary #ae1-test-harness section (AE-1/AE-3).
-    Structure/CSS classes (.topbar/.app-title/.status/.dot/.control)
-    are adapted directly from the mockup so this matches the approved
-    top-bar region. Start button and device <select> keep their
-    original ids (#start-button / #input-device-select) so the
-    existing wiring in src/main.js needs no id changes.
+    Restructure of UI-1's real top bar into one persistent strip, left
+    to right: identity legend (h1, copy verbatim) · engine-state block ·
+    machine readout group (sample rate / latency / node count) · Start +
+    device controls · Bypass at the far right. The readout ids
+    (#readout-sample-rate / #readout-latency / #readout-node-count) are
+    reserved for FEW-2's wiring — values read '—' until then; their
+    labels (RATE / LATENCY / NODES) are new terse-technical copy on new
+    elements, not changes to existing copy.
+
+    Every pre-existing id/class survives verbatim (.topbar, .app-title,
+    #status + #status-dot/#status-text, .control, #start-button, the
+    sr-only label + #input-device-select, #bypass-toggle-button /
+    .bypass-btn), so src/main.js wiring needed no change; the
+    .topbar-section / .readout wrappers below are structural ADDITIONS
+    only — no element was removed or renamed.
+
+    UI-2's emergency Bypass contract is honored unchanged: audio
+    routing stays AE-3's window.AudioBypass (src/audio-bypass.js), the
+    `engaged` class + "Bypass: ON/OFF" text stay toggled in lockstep by
+    src/main.js, and the button stays a DIRECT child of .topbar (the
+    last one), so FEW-1's agent chip (src/agent-ui.js) still inserts
+    immediately before it. VIS-2's CSS makes it the strip's single
+    loudest element (rq5 split-role safety red on steel — see
+    styles/main.css).
     ================================================================
   -->
   <header class="topbar">
-    <h1 class="app-title">Node-Based Web Audio Chain Builder</h1>
+    <div class="topbar-section topbar-identity">
+      <h1 class="app-title">Node-Based Web Audio Chain Builder</h1>
+    </div>
 
-    <span class="status" id="status">
-      <span class="dot" id="status-dot"></span>
-      <span id="status-text">Stopped</span>
-    </span>
+    <div class="topbar-section topbar-status">
+      <span class="status" id="status">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Stopped</span>
+      </span>
+    </div>
 
-    <button id="start-button" class="control" type="button">Start</button>
+    <div class="readout-group" role="group" aria-label="Engine readouts">
+      <span class="readout">
+        <span class="readout-label">RATE</span>
+        <span class="readout-value" id="readout-sample-rate">—</span>
+      </span>
+      <span class="readout">
+        <span class="readout-label">LATENCY</span>
+        <span class="readout-value" id="readout-latency">—</span>
+      </span>
+      <span class="readout">
+        <span class="readout-label">NODES</span>
+        <span class="readout-value" id="readout-node-count">—</span>
+      </span>
+    </div>
 
-    <label for="input-device-select" class="sr-only">Input device:</label>
-    <select id="input-device-select" class="control" disabled>
-      <option value="">-- click Start to list devices --</option>
-    </select>
+    <div class="topbar-section topbar-controls">
+      <button id="start-button" class="control" type="button">Start</button>
 
-    <!--
-      UI-2 — the emergency Bypass control. Audio routing/toggle logic is
-      AE-3's (window.AudioBypass.toggle()/isEngaged(), src/audio-bypass.js);
-      this task only adds the visually-dominant "emergency" treatment per
-      docs/ultron/design/px1-layout-spec.md and reuses .bypass-btn /
-      .bypass-btn.engaged from docs/ultron/design/px1-mockup.html verbatim
-      (see styles/main.css). The `engaged` class is toggled in src/main.js
-      in lockstep with the "Bypass: ON/OFF" text, both driven by the same
-      AudioBypass.isEngaged() call. Disabled until AudioEngine.start()
-      succeeds, since bypass needs a live source node — also gates the
-      spacebar shortcut (see src/main.js).
-    -->
+      <label for="input-device-select" class="sr-only">Input device:</label>
+      <select id="input-device-select" class="control" disabled>
+        <option value="">-- click Start to list devices --</option>
+      </select>
+    </div>
+
     <button id="bypass-toggle-button" class="bypass-btn" type="button" disabled>Bypass: OFF</button>
   </header>
 
@@ -135,6 +164,18 @@
   <script src="src/param-controls.js"></script>
   <script src="src/preset-schema.js"></script>
   <script src="src/default-preset.js"></script>
+  <!--
+    PS-4 — factory preset library (window.FactoryPresets,
+    src/factory-presets.js): the six shipped starting points (Classic
+    Karaoke + the five QA-3 acceptance chains, content verbatim from
+    docs/ultron/qa/qa3-driver.js). Static runtime content, loaded here
+    right after default-preset.js — BEFORE preset-store.js/presets-ui.js/
+    mcp-tools.js, its three consumers — and never persisted: the preset
+    dropdown merges it at runtime (Factory/Yours optgroups), so a fresh
+    profile sees the full library with zero localStorage seeding and
+    PresetStore's user namespace is untouched.
+  -->
+  <script src="src/factory-presets.js"></script>
   <script src="src/preset-store.js"></script>
   <!--
     DEL-2: vendored locally (vendor/sortable.min.js, SortableJS 1.15.7, MIT)
@@ -146,7 +187,94 @@
   <script src="vendor/sortable.min.js"></script>
   <script src="src/canvas.js"></script>
   <script src="src/persistence.js"></script>
+  <!--
+    FEW-1: shared agent-feedback event contract + unstyled DOM skeletons
+    (window.AgentUI, src/agent-ui.js) — lifecycle state, mutation-summary
+    toasts, and the undo stack that both later cycle-2 tracks (the WebMCP
+    shim and the console re-skin) code against. Standalone: no
+    dependencies on any other script and no WebMCP logic — it creates its
+    own #agent-chip / #agent-toast-region at runtime.
+  -->
+  <script src="src/agent-ui.js"></script>
+  <!--
+    MC-0 — WebMCP spike: registers one test tool ("echo") when the WebMCP
+    API is present (chrome://flags/#enable-webmcp-testing), silent no-op
+    otherwise. See src/mcp-server.js header + docs/ultron/research/
+    rq1-webmcp-api.md. Loads after agent-ui.js so it can drive the agent
+    chip via the FEW-1 contract.
+  -->
+  <script src="src/mcp-server.js"></script>
+  <!--
+    MC-2 — the 8 real agent tool definitions (window.McpTools,
+    src/mcp-tools.js): ModelContextTool-shaped schemas + structural
+    argument validation, honest NOT_IMPLEMENTED stubs until MC-3/MC-4
+    implement the bodies (MC-6's harness reuses McpTools.getDefs()).
+    Loads after mcp-server.js and self-registers through
+    McpServer.registerTools(); the node-*.js files above are already
+    loaded, so the schemas/validation read the real node registry via
+    window.NodeTypes. No WebMCP API → the shim's one batch diagnostic;
+    the app is otherwise untouched.
+  -->
+  <script src="src/mcp-tools.js"></script>
+  <!--
+    MC-6 — dev test harness (agent simulator): a fixed right-side overlay
+    panel (src/mcp-harness.js, built entirely from JS — no markup here)
+    that lists all 8 tools from McpTools.getDefs() with editable JSON
+    args and Run buttons invoking def.execute() DIRECTLY (defs-direct
+    path — works with WebMCP absent; the portfolio agent-free demo), plus
+    an agentui:* event stream and a real AgentUI undo bar. ?dev GATED:
+    the module activates only when location.search contains 'dev' (e.g.
+    http://localhost:8000/?dev); without the param it is one cheap
+    string parse and nothing else — zero elements, listeners or exports.
+    Pure consumer: never registers anything with McpServer; zero
+    localStorage (reload resets). Close/Escape hides the panel for this
+    load only — reopen by reloading with ?dev.
+  -->
+  <script src="src/mcp-harness.js"></script>
   <script src="src/presets-ui.js"></script>
+  <!--
+    VIS-5 — MIC IN / OUT level meters (window.Meters, src/meters.js):
+    canvas lamp-bar meter components created from JS at the two .anchor
+    labels (matched by their exact text, "MIC IN" / "OUT"), pure visual +
+    ballistics with ZERO Web Audio in this file — all rq4 ballistics
+    (12 dB/s falls, 50 ms RMS, 1500 ms peak-hold, 2 s clip latch) live
+    inside the component. FEW-3 owns the AnalyserNode side-taps (IN off
+    AudioEngine.sourceNode, OUT off AudioGraph.getChainGate()) and drives
+    both meters per frame via Meters.feed('in'|'out', {peakDb, rmsDb,
+    clipRun}) — the authoritative contract block is at the top of
+    src/meters.js. Until FEW-3 calls Meters.setEngineState(true), the
+    meters render silent-at-rest dark: scale visible, bars empty,
+    readout −∞. Loads after the DOM it annotates and before main.js,
+    which runs last by house convention.
+  -->
+  <script src="src/meters.js"></script>
+  <!--
+    FEW-3 — meter wiring + runtime watchdog (window.MeterTaps,
+    src/meter-taps.js): the two AnalyserNode side-taps rq4-meters.md
+    committed (IN off AudioEngine.sourceNode, OUT off the persistent
+    chainGate — created once per session, outside buildGraph()) plus
+    the ONE shared rAF loop that feeds Meters both sides every frame
+    and runs the RQ-3 watchdog on the shared OUT analyser (peak above
+    the derived OUTPUT_CEILING_DBFS threshold sustained >250 ms, or a
+    ~1 s monotonic 1–8 kHz band rise → chainGate force-muted, alert +
+    human-only Restore). src/main.js calls the three lifecycle hooks
+    (onEngineStarted / onEngineStopped / onDeviceSwitched). Must load
+    after meters.js (it drives the Meters contract) and before main.js.
+  -->
+  <script src="src/meter-taps.js"></script>
+  <!--
+    FEW-2 — status readout wiring (window.StatusReadouts,
+    src/status-readouts.js): feeds the VIS-2 readout slots in the topbar
+    (#readout-sample-rate / #readout-latency / #readout-node-count)
+    their real values — RATE and LATENCY once per engine start (off
+    AudioEngine's live AudioContext; latency is the context-REPORTED
+    base+output estimate), NODES at 1 Hz off ChainCanvas's live model.
+    Entirely hook-driven: nothing runs until src/main.js's Start success
+    handler calls StatusReadouts.onEngineStarted(), so its only ordering
+    constraint is the house one — before main.js. Guarded consumer: a
+    missing topbar element or a bad argument leaves it a harmless no-op.
+  -->
+  <script src="src/status-readouts.js"></script>
   <script src="src/main.js"></script>
 </body>
 </html>
