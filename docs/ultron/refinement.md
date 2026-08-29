@@ -461,13 +461,13 @@ mode, one entry at a time, per-entry user gate.
 
 | # | Command | Critique finding it addresses | Status |
 |---|---------|-------------------------------|--------|
-| R2-1 | `$impeccable layout` | **[P2]** OUT meter below the fold in the default expanded live state — output health depends on scroll position (occlusion is fixed; visibility is not). Fix: persistent OUT presence in the always-visible region — pinned compact readout at the canvas panel's foot, independent of scroll/collapse. | done-pending-approval |
-| R2-2 | `$impeccable adapt` | **[P2]** Node addition unreachable by keyboard/screen reader — palette chips are non-focusable divs. Fix: button semantics + add-to-chain activation. | **done** (user-approved 2026-08-29) |
-| R2-3 | `$impeccable clarify` | **[P2]** Native prompt()/confirm() break the console vocabulary mid-show (Save-As naming, Delete confirmation). Fix: in-panel inline naming + two-step Delete, no browser dialogs. | **done** (user-approved 2026-08-29) |
+| R2-1 | `$impeccable layout` | **[P2]** OUT meter below the fold in the default expanded live state — output health depends on scroll position (occlusion is fixed; visibility is not). Fix: persistent OUT presence in the always-visible region — pinned compact readout at the canvas panel's foot, independent of scroll/collapse. | **done** (user-approved 2026-08-29) |
+| R2-2 | `$impeccable adapt` | **[P2]** Node addition unreachable by keyboard/screen reader — palette chips are non-focusable divs. Fix: button semantics + add-to-chain activation. | **done** (approved by progression 2026-08-29) |
+| R2-3 | `$impeccable clarify` | **[P2]** Native prompt()/confirm() break the console vocabulary mid-show (Save-As naming, Delete confirmation). Fix: in-panel inline naming + two-step Delete, no browser dialogs. | in-progress |
 
 ## Round 2 entry log
 
-### R2-1 — `$impeccable layout` (pinned OUT footer) — done-pending-approval
+### R2-1 — `$impeccable layout` (pinned OUT footer) — **done** (user-approved 2026-08-29)
 
 **Finding** (closing critique P2 #1): with the default preset expanded in
 the bounded vertical canvas, the OUT anchor/meter sat below the fold —
@@ -531,5 +531,90 @@ inside the bounded panel with all states still fitting; (3) the footer
 is a compact full 96×26 meter, not a slimmer mini-bar — a smaller
 variant would have broken the single-size lockstep contract, so the
 row reads slightly taller than a bare legend+digit strip would.
+
+### R2-2 — `$impeccable adapt` (keyboard/screen-reader node addition) — **done** (approved by progression 2026-08-29)
+
+**Finding** (closing critique P2 #2, also the first critique's Sam-persona
+red flag): node addition was pointer-only — palette chips were
+non-focusable `<div>`s, the last keyboard-unreachable primary action on
+the surface (QA-4's documented cycle-1 carryover gap). **Fix**: real
+button semantics + add-to-chain activation, with SortableJS drag fully
+preserved.
+
+**Semantics** (`src/canvas.js` `renderPalette`): each chip is now
+`<button type="button" class="node-chip" data-node-type data-family
+data-initials aria-label="Add <Label> to chain">` — the visible
+silkscreen text stays verbatim; the action phrasing lives in the
+aria-label. **Activation** (`addNodeType`): Enter/Space add the node —
+append to the chain's END, except a terminal limiter stays terminal
+(insert immediately before a limiter occupying the last position; plain
+append when none/empty). The keyboard path commits through
+`commitStructuralChange()` — the SortableJS `onSort` body factored out
+verbatim — so autosave (PS-2), the unsaved dot (PS-3), and the
+human-edit revision bump (Issue #6) fire exactly as for a drag-add:
+keyboard adds are human adds, no agent toast class, agent-undo parity
+identical. `onAdd` now shares `defaultParamsForType()` so the two
+add paths cannot drift. **Gating**: chips ship `disabled` (the
+Start-button pattern) — pre-Start they are absent from the tab order and
+honestly announced unavailable (the `.engine-not-started`
+pointer-events gate says nothing to keyboard/AT);
+`onEngineStarted()` removes the attributes at the exact transition
+dragging unlocks. The #4 lifecycle-loss path deliberately does NOT
+re-gate the flanks today (main.js `surfaceLoss` leaves the panels
+un-dimmed), so chips stay enabled after a loss — matching the region.
+
+**Coherence fix found by verification** (`src/main.js` spacebar-bypass
+handler): a focused `<button>`'s native Space activation was being
+`preventDefault`ed and swallowed into a bypass toggle — space on ANY
+focused button (Save As, chips, remove ×) toggled bypass instead of the
+button. The form-control guard now includes `BUTTON` (the Bypass button
+itself stays exempted, so its focused-space still toggles exactly once
+via the handler's own preventDefault+toggle). This is the same
+"skip when space has its own native meaning" rule the guard already
+documented — extended to the control it forgot.
+
+**CSS** (`styles/main.css` `.node-chip`): three UA button-default
+resets to what the div rendered — `width: 100%`, `font-family: inherit`,
+`text-align: left`. No visual change at rest; `cursor: grab` and all
+hover/active/chosen/drag states survive; the global `:focus-visible`
+ring covers chip focus (verified computed: `solid 2px rgb(255,182,64)`
+on card ground — the F3 pass, no override needed).
+
+**Evidence** (playwright-core + system Chrome, fake-mic flags, real
+Start → Live, fresh profile, default 6-card preset): (a) PRE-START: all
+six chips `BUTTON`, `disabled`, absent from tab order (12-Tab sweep:
+start-button → flow-toggle → presets only, no chips), aria-labels all
+present; (b) POST-START: gate class dropped, all chips enabled, tab
+sequence `input-device-select → bypass → chip:gain → … chip:limiter →
+canvas cards` in DOM order; (c) Enter on EQ → `[g,c,eq,d,rv,eq,LM]`
+(inserted before terminal limiter, limiter stays last); Space on DELAY
+(after the main.js fix — it toggled bypass before) → `[…,eq,delay,LM]`;
+no-limiter case: remove limiter, keyboard-add gain → appended at true
+end; (d) drag survives the div→button conversion: palette→chain
+drag-add works post-Start (forceFallback, chosen/drag states, reverb
+inserted at drop slot); (e) parity: after keyboard adds the
+`karaoke-autosave-v1` slot contains the new `node-N` entries
+synchronously, same as a drag-add — one shared commit path; (f) focus
+ring computed on chip focus (above); (g) chips remain enabled through
+normal live operation (no re-gate path exists, matching the flanks).
+Screenshot: `/tmp/r2-2-vertical.png`.
+
+**Suite**: `node tests/run.js` — 14/14 files, 770/770 checks, green
+(no test asserts chip markup; the spacebar-guard change has no test
+coverage today — the QA-4 manual keyboard script step 2 is the
+regression watch-point). **Detector**: regex-mode note (parser deps
+outside repo, same degradation as entries 1–5) — `[]`, no new findings.
+
+**Residuals (disclosed)**: (1) keyboard REORDER of existing cards
+remains out of reach (the critique's finding was node ADDITION; drag
+reorder stays pointer-only — RQ-2's committed library decision,
+unchanged scope); (2) in the headless harness the HORIZONTAL-orientation
+synthetic drag did not commit — reproduced IDENTICALLY against a
+pristine `git archive HEAD` tree, so it is a pre-existing
+simulation/geometry artifact, not a regression from this entry (the
+vertical synthetic drag commits on both trees); (3) the main.js
+spacebar-guard extension changes focused-button Space from
+"toggles bypass" to "activates the button" app-wide — strictly the
+native contract, but a behavior change beyond the palette worth naming.
 
 (Workers append outcome + evidence here; the master records gate outcomes.)

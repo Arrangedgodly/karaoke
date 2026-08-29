@@ -90,24 +90,30 @@ console.log('App scaffold loaded');
     // happens to be.
     //
     // Two guards keep this from misbehaving:
-    //  - Skip when focus is on a form control where space has its own
-    //    native meaning (e.g. the device <select>, where space opens the
-    //    dropdown; also text inputs/textareas). Only body, the bypass
-    //    button itself, or other non-form-control elements pass through.
-    //  - Skip while the button is disabled — mirrors the button's own
-    //    disabled state (bypass is meaningless before AudioEngine.start()
-    //    succeeds; there's no live source node to bypass yet).
-    document.addEventListener('keydown', function (event) {
-      if (event.code !== 'Space' && event.key !== ' ') {
-        return;
-      }
+      //  - Skip when focus is on a form control where space has its own
+      //    native meaning (e.g. the device <select>, where space opens the
+      //    dropdown; also text inputs/textareas, and BUTTON — R2-2: a
+      //    focused palette chip's native space-activation must fire the
+      //    add-to-chain click, not toggle bypass; the Bypass button itself
+      //    is exempted below so its focused-space still toggles exactly
+      //    once, via this handler's own preventDefault+toggle). Only body,
+      //    the bypass button itself, or other non-form-control elements
+      //    pass through.
+      //  - Skip while the button is disabled — mirrors the button's own
+      //    disabled state (bypass is meaningless before AudioEngine.start()
+      //    succeeds; there's no live source node to bypass yet).
+      document.addEventListener('keydown', function (event) {
+        if (event.code !== 'Space' && event.key !== ' ') {
+          return;
+        }
 
-      var active = document.activeElement;
-      var activeTag = active && active.tagName;
-      var isFormControl = activeTag === 'SELECT' || activeTag === 'INPUT' || activeTag === 'TEXTAREA';
-      if (isFormControl && active !== bypassButton) {
-        return;
-      }
+        var active = document.activeElement;
+        var activeTag = active && active.tagName;
+        var isFormControl = activeTag === 'SELECT' || activeTag === 'INPUT' ||
+          activeTag === 'TEXTAREA' || activeTag === 'BUTTON';
+        if (isFormControl && active !== bypassButton) {
+          return;
+        }
 
       if (bypassButton.disabled) {
         return;

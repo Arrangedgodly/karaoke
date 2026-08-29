@@ -182,7 +182,15 @@
     paletteListEl.innerHTML = '';
     var types = window.NodeTypes.getAllTypes();
     types.forEach(function (type) {
-      var chip = document.createElement('div');
+      // R2-2 (a11y critique P2): the chip is a real <button>, not a div —
+      // tab-focusable in DOM order (palette before canvas), Enter/Space
+      // activates addNodeType() below, and the screen reader gets an
+      // action-phrase accessible name ("Add Reverb to chain") while the
+      // visible silkscreen label stays exactly as designed. SortableJS's
+      // drag wiring is element-agnostic (forceFallback on), so converting
+      // div→button does not touch the drag path.
+      var chip = document.createElement('button');
+      chip.type = 'button';
       chip.className = 'node-chip';
       chip.setAttribute('data-node-type', type);
       // VIS-3: family edge-coding hooks — data-family maps the chip's
@@ -192,8 +200,105 @@
       chip.setAttribute('data-family', type);
       chip.setAttribute('data-initials', familyInitials(type));
       chip.textContent = window.NodeTypes.getLabel(type);
+      chip.setAttribute('aria-label', 'Add ' + window.NodeTypes.getLabel(type) + ' to chain');
+      // Gating: chips ship DISABLED, mirroring the Start/Bypass
+      // disabled-until-start pattern (the .engine-not-started panel gate
+      // is pointer-events:none, which says nothing to a keyboard or a
+      // screen reader — a focusable inert chip would be a focus trap of
+      // nothing-doing). A real disabled attribute removes the chip from
+      // the tab order and announces "unavailable" honestly;
+      // onEngineStarted() (below) enables them at the exact transition
+      // where dragging also unlocks. Note the #4 lifecycle-loss path
+      // deliberately does NOT re-gate the flanks (main.js's surfaceLoss
+      // leaves the panels un-dimmed; only Start/Bypass flip), so chips
+      // stay enabled after a loss — matching what the region already
+      // does today.
+      chip.disabled = true;
+      chip.addEventListener('click', function () {
+        // A disabled <button> never fires click, so this handler is only
+        // ever reachable post-Start — the same guarantee the SortableJS
+        // pointer path gets from the pointer-events:none panel gate.
+        addNodeType(type);
+      });
       paletteListEl.appendChild(chip);
     });
+  }
+
+  // R2-2: default params for a freshly-added node of `type` — the exact
+  // object the SortableJS onAdd handler mints, factored out so the
+  // keyboard add path and the drag add path CANNOT drift apart.
+  function defaultParamsForType(type) {
+    var paramSpec = window.NodeTypes.getParamSpec(type);
+    var defaultParams = {};
+    paramSpec.forEach(function (spec) {
+      defaultParams[spec.id] = spec.default;
+    });
+    return defaultParams;
+  }
+
+  /**
+   * R2-2: keyboard-activation add path — the button-semantics twin of a
+   * palette drag-drop. Placement policy: a HUMAN adding a node by keyboard
+   * behaves like the human drag it is — append to the END of the chain,
+   * except a terminal limiter must stay terminal (the default preset's
+   * safe-output invariant), so the card is inserted immediately BEFORE a
+   * limiter that currently occupies the last position. With no terminal
+   * limiter (or an empty chain) it appends at the end. Commits through
+   * commitStructuralChange() — the SAME chokepoint the SortableJS onSort
+   * handler uses — so autosave (PS-2), the unsaved dot (PS-3), and the
+   * human-edit revision bump (Issue #6) all fire exactly as they do for a
+   * drag-add. No agent toast class: this is a human action.
+   *
+   * @param {string} type - the node type to add (from the chip's
+   *   data-node-type, itself from the registry-driven palette loop).
+   */
+  function addNodeType(type) {
+    var card = createNodeCard(type, defaultParamsForType(type));
+    var cards = chainListEl.querySelectorAll('.node-card');
+    var lastCard = cards.length > 0 ? cards[cards.length - 1] : null;
+    if (lastCard &&
+        lastCard.getAttribute('data-family') === 'limiter') {
+      // Keep the terminal limiter terminal: insert just before it.
+      chainListEl.insertBefore(card, lastCard);
+    } else {
+      chainListEl.appendChild(card);
+    }
+    commitStructuralChange();
+  }
+
+  /**
+   * R2-2 factoring: the SINGLE post-structural-change commit — model
+   * recompute, empty-hint flip, graph rebuild, autosave, unsaved dot,
+   * human-edit revision bump. Previously the body of the SortableJS onSort
+   * handler; now shared verbatim with addNodeType() above so a keyboard
+   * add and a drag add are indistinguishable downstream.
+   */
+  function commitStructuralChange() {
+    recomputeModelFromDom();
+    updateEmptyHint();
+    rebuildGraph();
+    // PS-2: persist the chain after every structural add/remove/reorder.
+    // Pass chainModel explicitly rather than AudioGraph.getModel() — see
+    // the comment on Persistence.saveCurrentChain() for why: AudioGraph's
+    // own model commits asynchronously, ~20ms after rebuildGraph()
+    // returns, so reading through it right here would silently save the
+    // OLD, pre-change model (e.g. a just-dropped-in node would never
+    // actually make it into the autosave slot).
+    if (window.Persistence) {
+      window.Persistence.saveCurrentChain(chainModel);
+    }
+    // PS-3: a drag-driven add/remove/reorder is a user EDIT — mark unsaved.
+    if (window.PresetsUI) {
+      window.PresetsUI.markModified();
+    }
+    // Issue #6: a HUMAN add/reorder (palette drag OR keyboard add — both
+    // human actions) — bump the state revision so a stale agent Undo
+    // entry can no longer auto-apply over it. The agent write path uses
+    // loadModel() directly, never this commit path, so agent edits do
+    // not bump.
+    if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+      window.AgentUI.noteHumanEdit();
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -463,12 +568,7 @@
     onAdd: function (evt) {
       var clonedItem = evt.item;
       var type = clonedItem.getAttribute('data-node-type');
-      var paramSpec = window.NodeTypes.getParamSpec(type);
-      var defaultParams = {};
-      paramSpec.forEach(function (spec) {
-        defaultParams[spec.id] = spec.default;
-      });
-      var card = createNodeCard(type, defaultParams);
+      var card = createNodeCard(type, defaultParamsForType(type));
       clonedItem.replaceWith(card);
     },
 
@@ -480,34 +580,10 @@
     // SortableJS only fires this on an actual committed DOM-order change —
     // never during pointermove/dragover, and not at all for a drag that's
     // picked up and dropped back in its original position (no reorder to
-    // commit).
+    // commit). R2-2: the body now lives in commitStructuralChange()
+    // (shared verbatim with the keyboard add path addNodeType()).
     onSort: function () {
-      recomputeModelFromDom();
-      updateEmptyHint();
-      rebuildGraph();
-      // PS-2: persist the chain after every structural add/remove/reorder
-      // that flows through this single chokepoint. Pass chainModel
-      // explicitly rather than AudioGraph.getModel() — see the comment on
-      // Persistence.saveCurrentChain() for why: AudioGraph's own model
-      // commits asynchronously, ~20ms after rebuildGraph() returns, so
-      // reading through it right here would silently save the OLD,
-      // pre-change model (e.g. a just-dropped-in node would never actually
-      // make it into the autosave slot).
-      if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel);
-      }
-      // PS-3: a drag-driven add/remove/reorder is a user EDIT — mark unsaved.
-      if (window.PresetsUI) {
-        window.PresetsUI.markModified();
-      }
-      // Issue #6: a HUMAN drag (palette add or in-list reorder) — bump
-      // the state revision so a stale agent Undo entry can no longer
-      // auto-apply over it. The agent write path uses loadModel()
-      // directly, never this SortableJS handler, so agent edits do not
-      // bump.
-      if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-        window.AgentUI.noteHumanEdit();
-      }
+      commitStructuralChange();
     },
   });
 
@@ -524,6 +600,15 @@
     if (layoutEl) {
       layoutEl.classList.remove('engine-not-started');
     }
+    // R2-2: unlock the palette chips at the exact same transition — real
+    // disabled attributes come OFF here (they shipped ON in
+    // renderPalette), so the keyboard add path goes live precisely when
+    // the pointer drag path does. Purely the gating flip; addNodeType()
+    // itself commits through the same chokepoint as a drag.
+    var chips = paletteListEl.querySelectorAll('.node-chip');
+    Array.prototype.forEach.call(chips, function (chip) {
+      chip.disabled = false;
+    });
     // Refinement entry 2 ($impeccable clarify): the empty-hint's copy is
     // STATE-AWARE. Pre-Start, index.html's static default teaches the true
     // first action ("Press Start to power on") because the palette is
