@@ -283,6 +283,21 @@
     }
   }
 
+  /**
+   * Issue #6: bump the agent-undo state revision — called at this
+   * panel's three HUMAN mutation entry points (a successful Save As /
+   * overwrite, a Load, a successful Delete). The agent save_preset path
+   * writes through PresetStore/PresetsUI exports directly, never these
+   * button handlers, so agent edits do not bump and pure-agent undo
+   * sequences keep today's semantics. Guarded: a page (or test sandbox)
+   * without window.AgentUI simply skips it.
+   */
+  function noteHumanEditGuarded() {
+    if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+      window.AgentUI.noteHumanEdit();
+    }
+  }
+
   saveBtn.addEventListener('click', function () {
     var defaultName = currentPresetName || '';
     var name = window.prompt('Save chain as:', defaultName);
@@ -320,6 +335,12 @@
     refreshPresetSelect(trimmed);
     setCurrentPreset(trimmed);
     clearModified();
+    // Issue #6: a HUMAN save/overwrite — bump the state revision so a
+    // stale agent save_preset Undo entry can no longer auto-apply over
+    // the human's newer stored content.
+    if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+      window.AgentUI.noteHumanEdit();
+    }
   });
 
   loadBtn.addEventListener('click', function () {
@@ -344,6 +365,7 @@
       window.ChainCanvas.loadModel(factoryPreset.nodes);
       setCurrentPreset(factoryPreset.name);
       clearModified();
+      noteHumanEditGuarded();
       return;
     }
 
@@ -362,6 +384,7 @@
     window.ChainCanvas.loadModel(result.nodes);
     setCurrentPreset(result.name);
     clearModified();
+    noteHumanEditGuarded();
   });
 
   deleteBtn.addEventListener('click', function () {
@@ -404,6 +427,11 @@
     if (currentPresetName === name) {
       setCurrentPreset(null);
     }
+    // Issue #6: a HUMAN delete — bump the state revision so a stale
+    // agent save_preset Undo entry (whose restore re-saves or removes
+    // stored content) can no longer auto-apply over the human's newer
+    // store state.
+    noteHumanEditGuarded();
   });
 
   // Populate the dropdown once at script-init time — this is also the very

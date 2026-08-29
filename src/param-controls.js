@@ -271,6 +271,15 @@
       // exactly the point: a host tuning by ear expects to hear the change
       // live as the slider moves, not only once they let go.
       input.addEventListener('input', function () {
+        // Issue #6: a HUMAN slider move — mark the state revision so a
+        // stale agent Undo entry can no longer auto-apply over it. The
+        // agent set_param fast path deliberately does NOT fire this
+        // handler (it writes through AudioGraph/NodeTypes/
+        // ChainCanvas.updateNodeParam directly), so agent edits keep
+        // today's pure-agent undo semantics.
+        if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+          window.AgentUI.noteHumanEdit();
+        }
         var newValue = parseFloat(input.value);
 
         valueDisplay.textContent = formatValue(newValue, spec.unit);

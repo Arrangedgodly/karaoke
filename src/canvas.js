@@ -409,6 +409,11 @@
       if (window.PresetsUI) {
         window.PresetsUI.markModified();
       }
+      // Issue #6: a HUMAN removal — bump the state revision so a stale
+      // agent Undo entry can no longer auto-apply over it.
+      if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+        window.AgentUI.noteHumanEdit();
+      }
     });
 
     return card;
@@ -494,6 +499,14 @@
       // PS-3: a drag-driven add/remove/reorder is a user EDIT — mark unsaved.
       if (window.PresetsUI) {
         window.PresetsUI.markModified();
+      }
+      // Issue #6: a HUMAN drag (palette add or in-list reorder) — bump
+      // the state revision so a stale agent Undo entry can no longer
+      // auto-apply over it. The agent write path uses loadModel()
+      // directly, never this SortableJS handler, so agent edits do not
+      // bump.
+      if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+        window.AgentUI.noteHumanEdit();
       }
     },
   });
