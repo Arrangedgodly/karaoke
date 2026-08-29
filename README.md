@@ -70,3 +70,11 @@ The big red **Bypass** button (top right) instantly cuts every effect and sends 
 - **Browser didn't open on its own:** open Chrome yourself and go to `http://localhost:8000`.
 - **"Python not found" message:** see the Python note above.
 - **Still stuck:** hit Bypass so the show can go on with a clean mic, then sort it out at the break.
+
+## License & credits
+
+This project is open source under the MIT License — see [LICENSE](LICENSE).
+Two bundled third-party pieces ship under their own terms, detailed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): **Sortable.js 1.15.7**
+(MIT, vendored for drag-and-drop) and the **reverb impulse response**
+"IR Rollo Transparent Plate" by Rollo145 (CC0 1.0, from Freesound).
