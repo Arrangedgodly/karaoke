@@ -100,7 +100,16 @@
 //                         overwrote, nodeCount } (saved = the TRIMMED
 //                         name actually stored; overwrote = a preset
 //                         already existed under it; see the save_preset
-//                         block below).
+//                         block below), and since issue #8 its FAILURE
+//                         shape is the stable refusal
+//                         { error: true, code: 'PRESET_SAVE_FAILED',
+//                           tool: 'save_preset', applied: false, saved:
+//                           null, reason, suggestion } — PresetStore now
+//                         throws its typed StorageError when a write did
+//                         not persist (quota/SecurityError/unavailable/
+//                         serialization/read-back mismatch), and a failed
+//                         save gets NO success side effects (no undo
+//                         entry, no display writes, no dot clear).
 //                       MC-5 additions on every SUCCESS: a human-readable
 //                       one-line summary toast (AgentUI.reportMutation:
 //                       'Agent set EQ mid gain to +3 dB (eq1)'-style) and
@@ -121,8 +130,12 @@
 //                       chain rules — limiter-required-terminal,
 //                       gain-budget-12db, ...), 'HOST_OWNED' (writes to
 //                       host-owned elements), 'NODE_NOT_FOUND' (unknown
-//                       node id, validIds included), or 'BUSY' (a user
-//                       drag outlived the ~5 s mutation queue; retry).
+//                       node id, validIds included), 'BUSY' (a user
+//                       drag outlived the ~5 s mutation queue; retry), or
+//                       — save_preset only, issue #8 —
+//                       'PRESET_SAVE_FAILED' (the write was attempted
+//                       and did not persist, so applied is FALSE rather
+//                       than null; nothing downstream was touched).
 //                       Cumulative constraints (gain budget, EQ boost
 //                       sum) additionally carry the remaining-budget
 //                       numbers and a per-node breakdown so a rejected
@@ -3467,6 +3480,44 @@
   }
 
   /**
+   * Issue #8: the STABLE refusal result save_preset resolves whenever
+   * PresetStore.save() threw its typed StorageError — the preset did not
+   * persist, so nothing about the preset panel, the current-preset
+   * display, the unsaved indicator, or the undo stack was touched.
+   * Shaped like every other refusal ({ error, code, tool, reason,
+   * suggestion }) with applied:false (the write was ATTEMPTED and failed
+   * — unlike a policy rejection's applied:null, where nothing was
+   * attempted), and the store's own operation + underlying message are
+   * carried in the reason so the agent can tell quota from SecurityError
+   * from a read-back mismatch.
+   *
+   * @param {string} name - the trimmed name that failed to save.
+   * @param {*} err - the PresetStore.StorageError (or anything else).
+   * @returns {Object}
+   */
+  function presetSaveFailedResult(name, err) {
+    var operation = err && err.operation ? err.operation : 'unknown';
+    var detail = err && err.message ? err.message : String(err);
+    return {
+      error: true,
+      code: 'PRESET_SAVE_FAILED',
+      tool: 'save_preset',
+      applied: false,
+      saved: null,
+      reason:
+        'PRESET_SAVE_FAILED: preset ' + JSON.stringify(name) +
+        ' was NOT persisted (storage ' + operation + ' failure) — ' + detail +
+        '. Nothing was saved; the preset panel, the current-preset display, ' +
+        'the unsaved indicator, and the undo stack are unchanged.',
+      suggestion:
+        'The preset was not written. Storage may be full (quota), blocked ' +
+        '(private browsing / site-data settings), or unavailable — free or ' +
+        'unblock it, then call save_preset again. The live chain itself is ' +
+        'unaffected and set_chain still works.'
+    };
+  }
+
+  /**
    * The save_preset body (MC-5). Mirrors the UI Save As flow's steps
    * exactly (src/presets-ui.js): trim the name (refuse empty),
    * PresetStore.save(name, ChainCanvas.getCurrentModel()) — the SAME
@@ -3480,10 +3531,18 @@
    * capture immune to later mutation); both restores then put the preset
    * display back to its pre-save state. No drag queue: like the UI's Save
    * button, this reads whatever model is current at call time and never
-   * touches the chain. Note the store swallows its own localStorage
-   * failures (console.error, same as the UI path) — the tool mirrors the
-   * UI's contract and reports success; the preset panel's next refresh
-   * shows the truth.
+   * touches the chain.
+   *
+   * Issue #8: the store now THROWS its typed StorageError when the write
+   * did not persist (quota, SecurityError, storage unavailable,
+   * serialization failure, or a read-back mismatch from a silently
+   * dropped/truncated write) instead of swallowing it — a failed save is
+   * reported as the stable PRESET_SAVE_FAILED refusal (applied: false),
+   * with NONE of the success side effects: no undo entry, no dropdown
+   * refresh, no current-preset display change, no unsaved-dot clear; the
+   * refusal toast follows the same reportAgentRejection path every other
+   * refusal uses. The undo restores' own store calls are wrapped by the
+   * restores' never-throw contract (below), unchanged.
    *
    * @param {*} input
    * @returns {Promise<Object>}
@@ -3547,7 +3606,17 @@
       var displayBefore = readPresetDisplay();
 
       // The save itself — the UI Save As handler's exact store call.
-      window.PresetStore.save(name, model);
+      // Issue #8: it either persists (the store verifies by read-back)
+      // or throws the typed StorageError — and a failed save must be
+      // reported as the stable refusal below, with NONE of the success
+      // side effects (no undo entry, no display writes, no dot clear).
+      try {
+        window.PresetStore.save(name, model);
+      } catch (err) {
+        var failed = presetSaveFailedResult(name, err);
+        reportAgentRejection('save_preset', failed);
+        return Promise.resolve(failed);
+      }
 
       // ...and its exact UI state updates, now through PresetsUI's real
       // exports (VIS-3 single write path — the same functions the UI's
@@ -3622,7 +3691,9 @@
         'Save the current chain as a named preset (name is 1-40 characters, trimmed). Saving under an ' +
         "existing preset's name overwrites it (no auto-numbering); presets persist locally and also appear in " +
         "the app's Presets panel for the human host. Undo deletes the preset if this call created it, or " +
-        'restores the previous content if it overwrote one.',
+        'restores the previous content if it overwrote one. If the write cannot be persisted (storage quota ' +
+        'exhausted, blocked, or unavailable), the call resolves the stable PRESET_SAVE_FAILED refusal with ' +
+        'applied:false and NOTHING changes — no preset is created, no undo entry is pushed.',
       inputSchema: {
         type: 'object',
         properties: {

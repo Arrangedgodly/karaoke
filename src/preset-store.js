@@ -17,23 +17,71 @@
 // saved here is never touched by autosave, and the autosave slot is never
 // listed here.
 //
-// Consumed by src/presets-ui.js, which is the only caller:
+// Consumed by src/presets-ui.js (the human panel) and src/mcp-tools.js's
+// save_preset (the agent path, since MC-5):
 //   - listNames() populates the `#preset-select` dropdown, both once at
 //     script-init time (so the list is visible even before Start is
 //     clicked) and again after every Save As/Delete.
-//   - save() backs the "Save As…" button, handed whatever
-//     window.ChainCanvas.getCurrentModel() returns at that moment.
+//   - save() backs the "Save As…" button (and save_preset), handed
+//     whatever window.ChainCanvas.getCurrentModel() returns at that
+//     moment.
 //   - load() backs the "Load" button; presets-ui.js hands its `.nodes`
 //     straight to window.ChainCanvas.loadModel().
-//   - remove() backs the "Delete" button.
+//   - remove() backs the "Delete" button (and save_preset's undo).
 //
-// Fails safe, always, same philosophy as src/persistence.js: corrupt/
-// unparsable stored JSON is logged via console.error and treated as if
-// nothing were stored at all, never thrown up to the caller.
+// Persistence contract (issue #8 — report preset persistence failures
+// truthfully):
+//   - READS (listNames/load) still fail safe, same philosophy as
+//     src/persistence.js: corrupt/unparsable stored JSON is logged via
+//     console.error and treated as if nothing were stored at all, never
+//     thrown up to the caller.
+//   - MUTATIONS (save/remove) are TRUTHFUL: each either returns a
+//     structured success result — save(): {ok: true, name, overwrote},
+//     remove(): {ok: true, name, removed} (removed:false when the name
+//     wasn't stored; deleting something already gone is not exceptional)
+//     — or throws the typed window.PresetStore.StorageError carrying the
+//     underlying error (its `cause`) and the failing step (`operation`:
+//     'serialize' | 'write' | 'verify' | 'read'). No silent
+//     console.error-and-pretend-success catches remain.
+//   - VERIFIED WRITES: writeStore() (internal) serializes, setItem()s,
+//     then READS THE STORE BACK with getItem() and compares before
+//     reporting success — a storage layer that silently truncates or
+//     drops the write (quota edge behavior) is reported as a failure,
+//     not a success.
+//   - listNames() itself still never throws: its default-preset seeding
+//     stays best-effort (a failed seed write is logged and the names are
+//     still returned — the seeding policy is issue #11's scope).
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'karaoke-presets-v1';
+
+  /**
+   * The typed persistence error every mutating operation throws on
+   * failure (see the contract block in the file header). An Error
+   * subclass in spirit: `name` identifies it, `operation` names the
+   * failing step ('serialize' | 'write' | 'verify' | 'read'), and
+   * `cause` carries the underlying error (quota/SecurityError/TypeError
+   * from localStorage or JSON, or null when there is none — e.g. the
+   * read-back mismatch). Exported as window.PresetStore.StorageError so
+   * callers can `instanceof` it.
+   *
+   * @param {string} operation - the failing step.
+   * @param {string} message - human-readable context (the cause's own
+   *   message is appended when present).
+   * @param {*} [cause] - the underlying error, or null.
+   * @constructor
+   */
+  function StorageError(operation, message, cause) {
+    this.name = 'PresetStore.StorageError';
+    this.operation = operation;
+    this.message = cause && cause.message
+      ? message + ': ' + cause.message
+      : message;
+    this.cause = cause || null;
+  }
+  StorageError.prototype = Object.create(Error.prototype);
+  StorageError.prototype.constructor = StorageError;
 
   /**
    * Read and validate the stored `name -> serialized preset` map. Never
@@ -74,19 +122,103 @@
   }
 
   /**
-   * Persist the given `name -> serialized preset` map. Wrapped in try/catch
-   * — localStorage.setItem() can throw (quota exceeded, private-browsing
-   * mode in some browsers) — logging via console.error rather than
-   * propagating, same as src/persistence.js's saveCurrentChain().
+   * The strict variant of readStore() below, used ONLY by remove(): a
+   * failing/corrupt read THROWS the typed StorageError instead of
+   * degrading to {}. remove() needs this because "the store read as
+   * empty" and "the store could not be read at all" must not share an
+   * answer — reporting removed:false while storage is unreadable could
+   * vanish a preset that is still stored (issue #8's delete-truthfulness
+   * criterion). save() deliberately keeps the lenient readStore():
+   * treating corrupt stored data as {} when SAVING is the documented
+   * PS-3 recovery behavior (a fresh write over the corrupt blob), and
+   * the write itself is verified by writeStore() either way.
+   *
+   * @returns {Object<string, Object>}
+   * @throws {StorageError} operation 'read' when localStorage is
+   *   unreadable or the stored value is corrupt.
+   */
+  function readStoreStrict() {
+    var raw;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+    } catch (err) {
+      throw new StorageError(
+        'read',
+        'PresetStore: could not read the preset store from localStorage',
+        err
+      );
+    }
+    if (!raw) {
+      return {};
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('stored presets value is not a plain object');
+      }
+      return parsed;
+    } catch (err) {
+      throw new StorageError(
+        'read',
+        'PresetStore: stored presets data is invalid/corrupt',
+        err
+      );
+    }
+  }
+
+  /**
+   * Persist the given `name -> serialized preset` map, VERIFIED: after
+   * setItem() the store is read back with getItem() and compared against
+   * exactly what was written — a storage layer that silently truncates
+   * or drops the write is a failure, not a success (issue #8). Every
+   * failure mode throws the typed StorageError with the underlying error
+   * carried (quota exhaustion, SecurityError, storage unavailable,
+   * serialization failure); there is deliberately no silent catch.
    *
    * @param {Object<string, Object>} store
+   * @returns {{ok: true, bytes: number}} the truthy success result
+   *   (bytes = the persisted payload's length).
+   * @throws {StorageError} operation 'serialize', 'write', or 'verify'.
    */
   function writeStore(store) {
+    var payload;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      payload = JSON.stringify(store);
     } catch (err) {
-      console.error('PresetStore: failed to write to localStorage', err);
+      throw new StorageError(
+        'serialize',
+        'PresetStore: the preset store could not be serialized',
+        err
+      );
     }
+    try {
+      localStorage.setItem(STORAGE_KEY, payload);
+    } catch (err) {
+      throw new StorageError(
+        'write',
+        'PresetStore: localStorage.setItem() failed for the preset store',
+        err
+      );
+    }
+    var readBack;
+    try {
+      readBack = localStorage.getItem(STORAGE_KEY);
+    } catch (err) {
+      throw new StorageError(
+        'verify',
+        'PresetStore: could not read the preset store back after writing it',
+        err
+      );
+    }
+    if (readBack !== payload) {
+      throw new StorageError(
+        'verify',
+        'PresetStore: the preset store read back from localStorage does not ' +
+          'match what was written (silent truncation or drop) — the save did not persist',
+        null
+      );
+    }
+    return { ok: true, bytes: payload.length };
   }
 
   /**
@@ -104,7 +236,15 @@
     if (names.length === 0) {
       var seeded = window.PresetSchema.serialize(window.DEFAULT_PRESET.name, window.DEFAULT_PRESET.nodes);
       store[window.DEFAULT_PRESET.name] = seeded;
-      writeStore(store);
+      // Best-effort seed (issue #8 contract keeps listNames itself
+      // non-throwing — the seeding POLICY is issue #11's scope): a failed
+      // seed write is logged and the names are still returned, exactly
+      // the pre-issue-#8 behavior.
+      try {
+        writeStore(store);
+      } catch (err) {
+        console.error('PresetStore: failed to seed the default preset into localStorage', err);
+      }
       names = Object.keys(store);
     }
     return names;
@@ -118,27 +258,37 @@
    * if `name` already exists — that's the intended "re-save" behavior, not
    * an error case.
    *
-   * Wrapped in try/catch, same as src/persistence.js's saveCurrentChain():
-   * localStorage can throw, and a failed save must never propagate up into
-   * whatever UI interaction (a button click) triggered it. Note this also
-   * means a bad `name`/`model` (PresetSchema.serialize() throwing its own
-   * validation error) is caught and logged here too, rather than thrown to
-   * the caller — presets-ui.js's own Save As handler already guards against
-   * ever passing an empty name, so this is a defensive backstop, not the
-   * primary validation path.
+   * Issue #8 contract: TRUTHFUL — either the structured success result
+   * ({ok: true, name, overwrote}) or the typed StorageError; a preset
+   * that could not be persisted is never reported as saved. That
+   * includes PresetSchema.serialize()'s own validation throw (operation
+   * 'serialize') — presets-ui.js guards against an empty name before
+   * calling and mcp-tools validates the name/model first, so that path
+   * is a defensive backstop, but if it ever fires the caller now HEARS
+   * about it instead of a console.error and a phantom success.
    *
    * @param {string} name
    * @param {Array<{id: string, type: string, params: Object}>} model
+   * @returns {{ok: true, name: string, overwrote: boolean}}
+   * @throws {StorageError} operation 'serialize', 'write', or 'verify'.
    */
   function save(name, model) {
+    var serialized;
     try {
-      var serialized = window.PresetSchema.serialize(name, model);
-      var store = readStore();
-      store[name] = serialized;
-      writeStore(store);
+      serialized = window.PresetSchema.serialize(name, model);
     } catch (err) {
-      console.error('PresetStore: failed to save preset ' + JSON.stringify(name), err);
+      throw new StorageError(
+        'serialize',
+        'PresetStore: preset ' + JSON.stringify(name) +
+          ' failed schema validation and was not saved',
+        err
+      );
     }
+    var store = readStore();
+    var overwrote = Object.prototype.hasOwnProperty.call(store, name);
+    store[name] = serialized;
+    writeStore(store); // throws StorageError on any persistence failure
+    return { ok: true, name: name, overwrote: overwrote };
   }
 
   /**
@@ -166,17 +316,28 @@
   }
 
   /**
-   * Remove a named preset. A no-op (not an error) if `name` isn't in the
-   * store — deleting something that's already gone is not exceptional.
+   * Remove a named preset. A success (not an error) when `name` isn't in
+   * the store — deleting something that's already gone is not exceptional
+   * — reported as removed:false so callers can tell the difference.
+   *
+   * Issue #8 contract: TRUTHFUL — a removal that could not be persisted
+   * throws the typed StorageError rather than pretending the entry is
+   * gone (the entry still lives in storage, so the UI must keep listing
+   * it). The read is the STRICT variant on purpose: an unreadable store
+   * must not degrade to "nothing was there" here (see readStoreStrict).
    *
    * @param {string} name
+   * @returns {{ok: true, name: string, removed: boolean}}
+   * @throws {StorageError} operation 'read', 'write', or 'verify'.
    */
   function remove(name) {
-    var store = readStore();
-    if (Object.prototype.hasOwnProperty.call(store, name)) {
-      delete store[name];
-      writeStore(store);
+    var store = readStoreStrict();
+    if (!Object.prototype.hasOwnProperty.call(store, name)) {
+      return { ok: true, name: name, removed: false };
     }
+    delete store[name];
+    writeStore(store); // throws StorageError on any persistence failure
+    return { ok: true, name: name, removed: true };
   }
 
   window.PresetStore = {
@@ -184,5 +345,6 @@
     save: save,
     load: load,
     remove: remove,
+    StorageError: StorageError,
   };
 })();

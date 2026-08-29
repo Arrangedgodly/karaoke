@@ -47,9 +47,10 @@
 //   6. One valid mutation + exact-state Undo
 //        -> tests/test-mutation-undo.js
 //   7. save_preset reports storage failures honestly
-//        -> DEFERRED: lands with issue #8 (the storage-truthfulness fix).
-//           No failing test was written for it; when #8 ships its
-//           tests/test-*.js file, this runner discovers it automatically.
+//        -> tests/test-preset-persistence-honesty.js (issue #8: quota,
+//           SecurityError, unavailable storage, serialization failure,
+//           overwrite failure, silent-drop-vs-read-back — plus the
+//           unchanged happy path and the human Save As/Delete paths)
 //   8. Physical mic/PA/audible-DSP/hidden-tab checks
 //        -> docs/ACCEPTANCE.md (manual acceptance checklist)
 // =====================================================================
@@ -196,8 +197,7 @@ function main() {
     console.log('  4. same-ID type change -> right AudioNode .... tests/test-node-reuse-type-match.js');
     console.log('  5. limiter/after-limiter/ceiling refused ..... tests/test-safety-refusals.js');
     console.log('  6. one valid mutation + Undo ................ tests/test-mutation-undo.js');
-    console.log('  7. save_preset storage failures honest ....... DEFERRED — arrives with issue #8;');
-    console.log('        its future tests/test-*.js file is auto-discovered by this runner');
+    console.log('  7. save_preset storage failures honest ....... tests/test-preset-persistence-honesty.js');
     console.log('  8. physical mic/PA/DSP/hidden-tab ............ docs/ACCEPTANCE.md (manual checklist)');
   }
 

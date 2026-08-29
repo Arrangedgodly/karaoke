@@ -31,6 +31,14 @@
 // store.remove); Save As… is unchanged and always writes the USER store —
 // saving under a factory name creates a separate user preset beside it.
 //
+// Issue #8 scope: PresetStore's mutating ops now THROW their typed
+// StorageError when a write/delete did not persist (verified by
+// read-back) instead of swallowing it. Both handlers here honor that:
+// a failed Save As changes NO display state (no dropdown entry, no
+// current-preset rename, no unsaved-dot clear) and a failed Delete
+// keeps the preset listed; both surface the failure through the same
+// quiet inline .preset-note line PS-4 introduced (showPresetNote).
+//
 // This file owns two independent bits of state, both purely DOM-display
 // concerns — neither is persisted anywhere, and both reset to their
 // initial "nothing loaded/saved yet" values on every page load:
@@ -79,9 +87,9 @@
   var FACTORY_VALUE_PREFIX = 'factory:';
 
   // PS-4: the inline refusal note element (lazily created on first use —
-  // see showFactoryNote) and the timer hiding it again.
-  var factoryNoteEl = null;
-  var factoryNoteTimer = null;
+  // see showPresetNote) and the timer hiding it again.
+  var presetNoteEl = null;
+  var presetNoteTimer = null;
 
   /**
    * PS-4: read the factory library, guarded. An absent or damaged
@@ -126,34 +134,37 @@
   }
 
   /**
-   * PS-4: show the quiet inline refusal note under the preset controls
-   * (created lazily on first use, auto-hidden again after 4 s — a note,
-   * not a modal; the app reserves alerts/confirms for the PS-3 defensive
-   * paths and deletions). Best-effort by construction: with no parent to
-   * anchor it to (a bare harness DOM) it is a silent no-op, never a
-   * thrown error out of a click handler.
+   * Show the quiet inline note under the preset controls (created
+   * lazily on first use, auto-hidden again after 4 s — a note, not a
+   * modal; the app reserves alerts/confirms for the PS-3 defensive
+   * paths and deletions). PS-4 introduced it for factory-refusal
+   * notes; issue #8 reuses the SAME element/vehicle for persistence
+   * failure notes ("Could not save/delete …") so every quiet refusal
+   * in this panel reads identically. Best-effort by construction: with
+   * no parent to anchor it to (a bare harness DOM) it is a silent
+   * no-op, never a thrown error out of a click handler.
    *
    * @param {string} text
    */
-  function showFactoryNote(text) {
+  function showPresetNote(text) {
     var host = presetSelectEl.parentNode;
     if (!host || typeof host.appendChild !== 'function') {
       return;
     }
-    if (!factoryNoteEl) {
-      factoryNoteEl = document.createElement('p');
-      factoryNoteEl.id = 'factory-preset-note';
-      factoryNoteEl.className = 'preset-note';
-      factoryNoteEl.style.display = 'none';
-      host.appendChild(factoryNoteEl);
+    if (!presetNoteEl) {
+      presetNoteEl = document.createElement('p');
+      presetNoteEl.id = 'preset-note';
+      presetNoteEl.className = 'preset-note';
+      presetNoteEl.style.display = 'none';
+      host.appendChild(presetNoteEl);
     }
-    factoryNoteEl.textContent = text;
-    factoryNoteEl.style.display = '';
-    if (factoryNoteTimer) {
-      window.clearTimeout(factoryNoteTimer);
+    presetNoteEl.textContent = text;
+    presetNoteEl.style.display = '';
+    if (presetNoteTimer) {
+      window.clearTimeout(presetNoteTimer);
     }
-    factoryNoteTimer = window.setTimeout(function () {
-      factoryNoteEl.style.display = 'none';
+    presetNoteTimer = window.setTimeout(function () {
+      presetNoteEl.style.display = 'none';
     }, 4000);
   }
 
@@ -292,7 +303,20 @@
     // touched. refreshPresetSelect(trimmed) selects the USER option on
     // such a collision (user options match plain names; factory options
     // only match their 'factory:'-prefixed form).
-    window.PresetStore.save(trimmed, window.ChainCanvas.getCurrentModel());
+    //
+    // Issue #8: the store now throws its typed StorageError when the
+    // write did not persist (verified by read-back). On failure NOTHING
+    // downstream may run — no dropdown refresh (the preset was not
+    // saved, so it must not appear), no current-preset display change,
+    // no clearModified() (the chain is still unsaved) — and the failure
+    // is surfaced through the panel's quiet inline note, never a modal.
+    try {
+      window.PresetStore.save(trimmed, window.ChainCanvas.getCurrentModel());
+    } catch (err) {
+      console.error('Presets panel: Save As "' + trimmed + '" failed — nothing was written', err);
+      showPresetNote('Could not save "' + trimmed + '" — nothing was written (storage failure)');
+      return;
+    }
     refreshPresetSelect(trimmed);
     setCurrentPreset(trimmed);
     clearModified();
@@ -350,7 +374,7 @@
     // a quiet inline refusal (no confirm modal, no store.remove, the
     // dropdown selection left exactly as it was).
     if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
-      showFactoryNote("Factory presets can't be deleted");
+      showPresetNote("Factory presets can't be deleted");
       return;
     }
 
@@ -359,7 +383,19 @@
       return;
     }
 
-    window.PresetStore.remove(name);
+    // Issue #8: a delete that could not be persisted throws the typed
+    // StorageError — the preset is STILL stored, so it must not vanish
+    // from the list. Reconcile the dropdown from the store (what it
+    // truthfully still contains) and say so through the quiet note; the
+    // current-preset display is left untouched either way.
+    try {
+      window.PresetStore.remove(name);
+    } catch (err) {
+      console.error('Presets panel: Delete "' + name + '" failed — it is still saved', err);
+      showPresetNote('Could not delete "' + name + '" — it is still saved (storage failure)');
+      refreshPresetSelect();
+      return;
+    }
     refreshPresetSelect();
 
     // Deleting a saved preset never touches the live chain itself — only
