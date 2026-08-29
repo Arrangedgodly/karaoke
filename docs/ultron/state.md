@@ -7,18 +7,24 @@ approved 2026-08-27; its production-log, QA, research, and design references
 remain valid there).
 
 ## Current Phase
-`production` — research gate **passed 2026-08-27**: D1–D5 all committed by
-user + revised plan re-approved as a whole (D2 acceptance-criteria change
-covered). Executing plan.md task index one task at a time, pausing for user
-review after each completed task.
+`impeccable` (POL-1 closer, ultron-impeccable) — **production complete
+2026-08-28**: all 22 plan tasks done (QA-3 5/5 PASS, user-judged; QA-1/2/4
+user-PASSed; PS-4/VIS-7/VIS-7b committed in 8be184c). `$impeccable document`
+ran 2026-08-28: DESIGN.md + .impeccable/design.json generated (scan mode,
+user-ratified North Star "The Touring Rack") and **user-accepted**.
+`$impeccable critique` ran (first run, **27/40**, snapshot
+`.impeccable/critique/2026-08-29T05-41-33Z__index-html.md`); user gate
+answers: occlusion first · family edge keep · all 5 issues · include canvas
+bypass cue. Executing the refinement checklist one entry at a time, pausing
+for user approval after each.
 
 ## Active Task
-**QA-3 — the live 5-prompt judgment run (user's).** Run sheet:
-[qa/qa-3-live-agent-acceptance.md](qa/qa-3-live-agent-acceptance.md) —
-Inspector extension as agent, DevTools pane as instrument, per-prompt
-get_chain capture + rating + exact-undo check; gate ≥4/5. Completed and
-user-PASSed: QA-1, QA-2 (peak 0.476), QA-4, DOC-1. After QA-3: POL-1
-finish review → cycle acceptance.
+**Refinement entry 1 of 5** — see [refinement.md](refinement.md):
+`$impeccable layout` (P1 occlusion: OUT anchor/meter + safe-output note
+buried by overflowing cards in the default vertical-flow state) → then
+clarify → harden → typeset → polish (canvas bypass cue). After all entries:
+closing critique → (document refresh if built reality changed) → cycle
+acceptance.
 
 ## Open Decisions (owners set in town-hall.md § Open questions)
 - OQ-1 WebMCP localhost enable mechanics + API signature — deep-research, **blocks Track-A**

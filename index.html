@@ -46,7 +46,16 @@
     </div>
 
     <div class="topbar-section topbar-status">
-      <span class="status" id="status">
+      <!--
+        Refinement entry 3 ($impeccable harden, 2026-08-28): the strip's
+        state sentence (Live / Stopped / operator error copy) announces to
+        assistive tech via role="status" + aria-live="polite" on the
+        EXISTING #status element — previously only the agent-toast region
+        announced, so "Live"/failure transitions were silent (critique
+        P1 #3). The demoted technical footnote span (.status-detail)
+        inside #status-text is created by src/main.js at failure time.
+      -->
+      <span class="status" id="status" role="status" aria-live="polite">
         <span class="dot" id="status-dot"></span>
         <span id="status-text">Stopped</span>
       </span>
@@ -68,7 +77,20 @@
     </div>
 
     <div class="topbar-section topbar-controls">
-      <button id="start-button" class="control" type="button">Start</button>
+      <!--
+        Refinement entry 2 ($impeccable clarify, 2026-08-28): the strip's
+        one visible pre-Start instruction, anchored to Start via
+        aria-describedby. It must sit AFTER the button in DOM order so CSS
+        can key its visibility off the button's own disabled state
+        (#start-button:disabled ~ .start-hint in styles/main.css): Start is
+        disabled synchronously during the mic request and stays disabled
+        once the engine is live, and src/main.js re-enables it only on
+        failure — so the line shows exactly while pressing Start is the
+        true next action, with zero extra JS. Its copy matches the
+        pre-Start #empty-hint line below (same instruction, two anchors).
+      -->
+      <button id="start-button" class="control" type="button" aria-describedby="start-hint">Start</button>
+      <span class="start-hint" id="start-hint">Press Start to power on</span>
 
       <label for="input-device-select" class="sr-only">Input device:</label>
       <select id="input-device-select" class="control" disabled>
@@ -117,7 +139,18 @@
         <div class="anchor">MIC IN</div>
         <span class="arrow" aria-hidden="true">→</span>
         <div class="chain-list" id="chain-list"></div>
-        <div class="empty-hint" id="empty-hint">Drag an effect here to start building your chain</div>
+        <!--
+          Refinement entry 2: the empty-hint is STATE-AWARE. This static
+          default is the PRE-START copy — the palette is pointer-locked
+          until Start succeeds, so teaching "drag" here would be an
+          invitation the gated surface cannot honor (critique P2).
+          src/canvas.js's onEngineStarted() flips this element to the
+          cycle-1 drag teaching copy ("Drag an effect here to start
+          building your chain", verbatim) at the exact transition where
+          dragging becomes possible; styles/main.css retires the dashed
+          drop-target affordance while the engine-not-started gate holds.
+        -->
+        <div class="empty-hint" id="empty-hint">Press Start to power on</div>
         <span class="arrow" aria-hidden="true">→</span>
         <div class="anchor">OUT</div>
       </div>

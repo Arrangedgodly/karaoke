@@ -142,9 +142,19 @@ body {
 
 /* Identity absorbs the strip's slack: the legend ellipsizes first, so
    the controls and BYPASS keep their place on the row as long as the
-   viewport allows (see the <900px rule below for the narrow fallback). */
+   viewport allows (see the <900px rule below for the narrow fallback).
+   Refinement entry 3 ($impeccable harden): the basis drops from `auto`
+   to 0 to make that declared yield actually happen — with basis:auto
+   the legend's content width forces flex-wrap to break the row before
+   the legend ever gets a chance to ellipsize (wrapping is decided on
+   base sizes, and only then does shrinking engage). basis:0 + grow
+   reproduces today's rendered width exactly whenever the row has slack
+   (the legend grows back to its content width), so every non-error
+   state renders unchanged; it differs only when the row is over-full —
+   exactly the failure states whose error copy must not wrap the strip
+   (see .start-hint / .topbar-status caps below). */
 .topbar-identity {
-  flex: 1 1 auto;
+  flex: 1 1 0;
 }
 
 /* App title as a SILKSCREENED LEGEND — the same micro-style as the panel
@@ -164,9 +174,15 @@ body {
 
 .topbar-status {
   /* Shrinkable (not rigid): a transient long error label ellipsizes like
-     a real LCD strip instead of pumping the strip's width. */
+     a real LCD strip instead of pumping the strip's width. Entry 3: the
+     hard max-width also caps the flex BASE size — with flex-wrap on the
+     strip, an uncapped base would wrap the row (wrapping beats
+     shrinking) instead of ellipsizing. 20rem fits every WHAT-HAPPENED
+     sentence in full; the longer device-switch lines (sentence + next
+     action, front-loaded) and footnotes ellipsize by design. */
   flex: 0 1 auto;
   min-width: 0;
+  max-width: 20rem;
 }
 
 /* Engine-state lamp: silkscreen label + dot, one vocabulary with the
@@ -211,6 +227,31 @@ body {
 
 .status.live {
   color: var(--text-primary);
+}
+
+/* Refinement entry 3 ($impeccable harden, 2026-08-28): the ERROR
+   register. A failed Start / device switch raises the sentence to Error
+   Coral — rq5's status-error token on its verified panel pairing
+   (6.13:1) — while the DOT above keeps telling the engine truth (muted =
+   stopped, amber = still live: a failed switch never stops the show).
+   Copy + color redundancy, same pattern as .live. */
+.status.error {
+  color: var(--status-error);
+}
+
+/* The demoted technical footnote ("NotAllowedError: Permission denied")
+   appended by src/main.js after an operator sentence — on the status
+   line for device-switch failures, and in the .start-hint after the
+   recovery action for failed Starts: muted mono, sentence case,
+   untracked — the machine footnote register the agent toasts already
+   use. Same 0.75rem as the host line (12px, above the 11px floor), one
+   rank below the operator copy it follows. */
+.status-detail {
+  font-family: var(--font-readout);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-muted);
 }
 
 /* Machine readout group — the strip's LCD register (VIS-2, wired by
@@ -275,6 +316,38 @@ body {
    the strip's width — cap the select, it ellipsizes natively. */
 #input-device-select {
   max-width: 15rem;
+}
+
+/* Refinement entry 2 ($impeccable clarify): the strip's one visible
+   pre-Start instruction — "Press Start to power on" — as muted sentence
+   copy beside Start (0.75rem = 12px, above the 11px floor; same register
+   as the unsaved-dot flag, NOT a silkscreen legend: it is an instruction,
+   not machine state). Visibility keys off the button's OWN disabled state:
+   src/main.js disables Start synchronously for the mic request and leaves
+   it disabled once live (re-enabling only on failure), so the
+   following-sibling rule below tracks the real engine state with zero JS
+   and can never drift from it. */
+.start-hint {
+  flex: none;
+  /* Entry 3: recovery copy (e.g. the Chrome mic-permission path, plus a
+     demoted technical footnote) runs far longer than "Press Start to
+     power on" — the cap bounds the flex BASE size so the block can
+     never widen the strip into wrapping a second row (with flex-wrap,
+     wrapping is decided on base sizes before any shrinking engages);
+     the excess ellipsizes, the copy is front-loaded so the operative
+     instruction survives the cut, and the full pair rides the
+     element's title attribute (set by src/main.js). */
+  max-width: 21rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+#start-button:disabled ~ .start-hint {
+  display: none;
 }
 
 /* Controls (Start, device select, preset buttons, toast Undo) — dark
@@ -574,12 +647,43 @@ select.control {
    pre-Start drop from throwing. Includes .presets (PS-3) too — the whole
    3-column layout stays dimmed/inert together until Start succeeds.
    Dark-theme note: 0.55 opacity still blends labels to ≈3:1 — legible
-   enough to read WHAT is gated while clearly reading as inert. */
+   enough to read WHAT is gated while clearly reading as inert.
+   Refinement entry 2 ($impeccable clarify): the 0.55 dim stays where it
+   was ON PURPOSE — it already sits at the documented ≈3:1 gated-legibility
+   floor, so a stronger dim would trade away "read what is gated". The
+   locked reading instead comes from two honest, token-pure signals added
+   below: the inset hairline LOCK SEAM on each sealed panel, and the
+   not-allowed cursor on the gated region (critique P2: the dim alone was
+   ambiguous). */
 .layout.engine-not-started .palette,
 .layout.engine-not-started .canvas-panel,
 .layout.engine-not-started .presets {
   opacity: 0.55;
   pointer-events: none;
+  /* Lock seam — decorative hairline per the Seam Rule: state
+     reinforcement, not a meaningful outline. Comes off with the class. */
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+/* Refinement entry 2: the gated region answers the pointer with
+   not-allowed. The panels above are pointer-events:none, so hit-testing
+   passes through them to THIS .layout element — its cursor is what
+   actually renders over the whole locked region (computed cursor
+   resolves through inheritance for every child). Removed the instant
+   onEngineStarted() drops the class. */
+.layout.engine-not-started {
+  cursor: not-allowed;
+}
+
+/* Refinement entry 2: pre-Start, the empty-hint must not carry the dashed
+   interactive drop-target affordance — dropping is impossible in this
+   state, and the dashed line-strong target was half of the dishonest
+   invitation (critique P2). While gated, it recedes to a solid hairline
+   seam; the base .empty-hint rule below restores the drop-target look
+   exactly when the drag copy returns (copy flip lives in
+   src/canvas.js's onEngineStarted). */
+.layout.engine-not-started .empty-hint {
+  border: 1px solid var(--hairline);
 }
 
 .panel {
@@ -794,11 +898,46 @@ select.control {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  flex: 1 1 auto;
+  /* flex-shrink MUST be 0 (the pre-fix `flex: 1 1 auto` carried 1): the
+     list may never shrink below its cards on the canvas's main axis. The
+     min-height below overrides the flex item's automatic content-based
+     minimum on that axis, so with shrink 1 the bounded VIS-7 panel could
+     squeeze the list toward 1.5rem while the flex:none (position:relative)
+     cards kept their size — the overflow then painted over the static OUT
+     anchor + meter, the MC-4 safe-output note and the FEW-3 watchdog alert
+     (the P1 occlusion defect; measured 100% of the OUT block at 1440x900
+     default state, and up to 100% of the OUT meter in horizontal mode).
+     With shrink 0 the list keeps its content size, growth still shares the
+     canvas's slack with the empty-hint, and .canvas's own overflow owns
+     the scrolling in BOTH orientations (vertical: overflow-y inside the
+     bounded panel, so a long chain never grows the page; horizontal:
+     overflow-x). In horizontal mode this only makes explicit what the row
+     list's automatic min-width already implied — flex:none cards never
+     shrink, so no behavior changes there. */
+  flex: 1 0 auto;
   /* Keeps a droppable slot between the arrows while the chain is empty
      (SortableJS drops land on the list element itself; the visible dashed
      target next to it is the empty-hint below). */
   min-height: 1.5rem;
+}
+
+/* Occlusion guard, second layer of the same P1 fix: node cards are
+   position:relative (the anchor for their ::before legend square), which
+   paints them above STATIC siblings if their boxes ever intersect. The
+   chain-list flex rule above makes that geometrically impossible; this
+   rule makes the invariant fail-safe regardless — the flow's fixed
+   instrumentation (both anchors with their VIS-5 meters, the MC-4
+   safe-output note, the FEW-3 watchdog alert) always paints above card
+   paint. z-index only applies to positioned boxes, hence position:
+   relative — no layout effect: all three stay in normal flow exactly
+   where they are, and SortableJS's forceFallback drag clone lives at
+   body level (far above everything here), so drag visuals are
+   untouched in both orientations. */
+.anchor,
+.safe-output-note,
+.watchdog-alert {
+  position: relative;
+  z-index: 1;
 }
 
 /* Taught empty state (VIS-4): copy verbatim from cycle 1, styled as an

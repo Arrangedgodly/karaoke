@@ -511,6 +511,19 @@
     if (layoutEl) {
       layoutEl.classList.remove('engine-not-started');
     }
+    // Refinement entry 2 ($impeccable clarify): the empty-hint's copy is
+    // STATE-AWARE. Pre-Start, index.html's static default teaches the true
+    // first action ("Press Start to power on") because the palette is
+    // pointer-locked and dragging is impossible in that state — the old
+    // always-drag default was an invitation the gated surface could not
+    // honor (critique P2). Flipped HERE, at the exact transition where the
+    // palette un-locks, to the cycle-1 drag teaching copy (verbatim — the
+    // only place that string lives now). updateEmptyHint() only ever
+    // toggles display, so the live copy persists across every later
+    // empty/populated state (e.g. removing the last node re-shows it).
+    if (emptyHintEl) {
+      emptyHintEl.textContent = 'Drag an effect here to start building your chain';
+    }
   }
 
   /**

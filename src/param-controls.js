@@ -29,9 +29,90 @@
 // would be both wasteful and audibly wrong (a rebuild-storm of tiny fades
 // instead of one smooth, glitch-free parameter change) — buildGraph() is
 // NEVER called from this file.
+//
+// Refinement entry 2 ($impeccable clarify, 2026-08-28) — the plain-language
+// layer: one help line per param for the non-engineer operator PRODUCT.md
+// declares as the at-risk live user (Threshold/Ratio/Attack-in-seconds and
+// friends previously had ZERO plain-language help anywhere — critique P1).
+// The layer is ADDITIVE only: the terse-technical silkscreen labels are
+// ratified design and stay verbatim, the mono value register is untouched,
+// and input semantics/wiring are exactly as before. Each line lives in the
+// PLAIN_LANGUAGE_HELP map below — the single source, keyed by node type +
+// param id, never duplicated across renderers — and reaches the user three
+// ways with no tooltip framework and no new deps:
+//   - hover / long-press: the native `title` attribute (row + slider —
+//     title tooltips inherit down the subtree);
+//   - keyboard: the same `title` on the slider (Chromium also surfaces the
+//     title tooltip of a keyboard-focused element);
+//   - screen readers: an .sr-only span wired via `aria-describedby` on the
+//     slider, so the line is ANNOUNCED WITH the control rather than
+//     replacing its label or interrupting the reading flow.
+// A param with no map entry renders exactly as it did before this entry.
+// Trade-off (deliberate, per the ratified "no tooltip framework" scope):
+// native title tooltips are not styleable and their delay is the OS's —
+// acceptable for this pass; the copy itself is ours and lives in one place.
 
 (function () {
   'use strict';
+
+  /**
+   * Refinement entry 2: the plain-language help map — one line per param,
+   * keyed `type -> paramId -> line`, in the README's operator voice. No
+   * label prefix: the row already silkscreens the label, the tooltip
+   * anchors to that row, and screen readers announce the label[for] name
+   * before this description — so the line spends its whole budget on the
+   * explanation. The five riskiest controls (compressor
+   * Threshold/Ratio, delay Feedback/Mix, limiter Ceiling — the ones whose
+   * mid-show misuse is most consequential) are outcome-framed with an
+   * explicit direction clause ("lower = …"). Lines describe only what the
+   * matching AudioParam in src/node-*.js actually does; no new factual
+   * claims, no marketing voice.
+   */
+  var PLAIN_LANGUAGE_HELP = {
+    gain: {
+      gainDb: 'Overall mic volume. Higher = louder.'
+    },
+    compressor: {
+      threshold: 'Where squashing kicks in. Lower = squeezes more.',
+      ratio: 'How hard loud parts get squeezed. Higher = more squash.',
+      attack: 'How fast squeezing starts. Smaller = starts sooner.',
+      release: 'How fast squeezing lets go. Bigger = lets go slower.'
+    },
+    eq: {
+      lowGain: 'The bass end. Higher = more bass, lower = less.',
+      midGain: 'The body of the voice. Higher = fuller, lower = thinner.',
+      highGain: 'Brightness and air. Higher = brighter, lower = duller.'
+    },
+    delay: {
+      timeMs: 'The gap between echoes. Longer = a slower echo.',
+      feedback: 'How many repeats each echo adds. Higher = more repeats.',
+      mix: 'How much echo you hear. Higher = more echo.'
+    },
+    reverb: {
+      mix: 'How much reverb you hear. Higher = more.'
+    },
+    limiter: {
+      ceiling: 'The loudest sound allowed through. Lower = quieter.',
+      release: 'How fast the limiter lets go after a loud peak. Smaller = sooner.'
+    }
+  };
+
+  /**
+   * Look up the plain-language line for one param, or null when the map
+   * carries none (unknown type, or a param added after this entry — both
+   * render exactly as they did before the layer existed).
+   *
+   * @param {string} type
+   * @param {string} paramId
+   * @returns {?string}
+   */
+  function lookupHelpLine(type, paramId) {
+    var typeHelp = PLAIN_LANGUAGE_HELP[type];
+    if (!typeHelp || !Object.prototype.hasOwnProperty.call(typeHelp, paramId)) {
+      return null;
+    }
+    return typeHelp[paramId];
+  }
 
   /**
    * Format a numeric value with its spec-defined unit for display.
@@ -147,6 +228,26 @@
       row.appendChild(label);
       row.appendChild(input);
       row.appendChild(valueDisplay);
+
+      // Refinement entry 2: attach the plain-language line (see
+      // PLAIN_LANGUAGE_HELP above) — title for hover/long-press/keyboard,
+      // aria-describedby for screen readers. The help span is .sr-only
+      // (position:absolute, clip-hidden — zero layout footprint), so the
+      // row's flex order stack (label 1 / value 2 / slider 3) and its
+      // geometry are bit-for-bit what they were without it.
+      var helpText = lookupHelpLine(modelEntry.type, spec.id);
+      if (helpText) {
+        var helpSpan = document.createElement('span');
+        helpSpan.id = 'param-help-' + modelEntry.id + '-' + spec.id;
+        helpSpan.className = 'sr-only';
+        helpSpan.textContent = helpText;
+        row.appendChild(helpSpan);
+
+        row.title = helpText;
+        input.title = helpText;
+        input.setAttribute('aria-describedby', helpSpan.id);
+      }
+
       container.appendChild(row);
     });
   }

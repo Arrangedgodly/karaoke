@@ -33,6 +33,7 @@ console.log('App scaffold loaded');
   var deviceSelect = document.getElementById('input-device-select');
   var statusWrapper = document.getElementById('status');
   var statusTextEl = document.getElementById('status-text');
+  var startHintEl = document.getElementById('start-hint');
   var bypassButton = document.getElementById('bypass-toggle-button');
 
   if (!startButton || !deviceSelect) {
@@ -107,17 +108,180 @@ console.log('App scaffold loaded');
   // this specific bypass-interaction visual wasn't part of UI-3's own task
   // spec, so it isn't added here as an incidental side effect.
 
+  // ---------------------------------------------------------------------
+  // Refinement entry 3 ($impeccable harden, 2026-08-28) — operator-voice
+  // error copy for mic failures. getUserMedia rejections (a failed Start
+  // or a failed device switch) arrive as DOMExceptions whose `.name` is
+  // the stable machine identity of the failure; the map below turns that
+  // name into a plain WHAT HAPPENED sentence plus a concrete NEXT ACTION,
+  // instead of the old dead-end "Failed to start (Permission denied)"
+  // (critique P1 #3). The raw technical string (name: message) is kept
+  // but DEMOTED to a muted mono footnote — the developer persona keeps
+  // it, the operator no longer has to read it. Nothing is swallowed:
+  // every path also console.error()s the full exception.
+  //
+  // Where each piece renders (the strip is geometrically tight — its
+  // fixed blocks leave ~560px for status + hint copy, so long text is
+  // budgeted, front-loaded, and capped in styles/main.css so an error
+  // can never wrap the strip out of its one-row rhythm):
+  //  - Failed START: WHAT HAPPENED (alone) on the strip status line —
+  //    short enough to always read in full — and NEXT ACTION + the
+  //    demoted footnote in the .start-hint beside Start (refinement
+  //    entry 2's element; its visibility is CSS-keyed to Start's own
+  //    disabled state, so it shows exactly while pressing Start is the
+  //    true next action, which after a failed start is precisely the
+  //    case). The hint's title attribute carries the full untruncated
+  //    pair for hover.
+  //  - Failed SWITCH: engine still live (Start stays disabled, hint
+  //    hidden), so the status line itself carries WHAT HAPPENED + NEXT
+  //    ACTION in one front-loaded sentence, with the footnote demoted
+  //    inline.
+  //
+  // The two mappings that are NOT DOMExceptions: audio-engine.js's own
+  // secure-context guard is a plain Error('getUserMedia is not
+  // available (…)') — plain Errors share the name 'Error' with every
+  // unmapped failure, so it is matched by its stable message text; and
+  // anything unrecognized falls to an honest generic that still names a
+  // retry step.
+  // ---------------------------------------------------------------------
+  var MIC_ERROR_COPY = {
+    NotAllowedError: {
+      line: 'Mic was blocked.',
+      startAction:
+        'Click the camera icon in the address bar \u2192 Microphone \u2192 Allow, then press Start.',
+      switchLine: 'Mic blocked. Re-allow from the address-bar icon, then pick again.',
+    },
+    NotFoundError: {
+      line: 'No mic was found.',
+      startAction: 'Plug a mic in, then press Start.',
+      switchLine: 'That mic is gone. Pick another from the dropdown.',
+    },
+    NotReadableError: {
+      line: 'Mic is busy.',
+      startAction: 'Close the other app using the mic, then press Start.',
+      switchLine: 'That mic is busy. Close its app, then pick again.',
+    },
+    OverconstrainedError: {
+      line: 'Could not start the engine.',
+      startAction: 'Press Start to try again.',
+      switchLine: 'That mic is gone. Pick another from the dropdown.',
+    },
+    SecurityError: {
+      line: 'Mic blocked by browser.',
+      startAction: 'Open Chrome at http://localhost:8000, then press Start.',
+      switchLine: 'Browser blocked that mic. Pick another.',
+    },
+    AbortError: {
+      line: 'Mic request cut off.',
+      startAction: 'Press Start to try again.',
+      switchLine: 'That mic did not respond. Pick it again.',
+    },
+  };
+
+  // audio-engine.js's secure-context guard (served from file:// or a
+  // non-localhost origin): only reachable on the Start path — switching
+  // devices requires a started engine, which requires getUserMedia.
+  var NO_GETUSERMEDIA_COPY = {
+    line: 'Mic not available here.',
+    startAction: 'Open Chrome at http://localhost:8000 (use the start file), then press Start.',
+  };
+
+  // Anything unmapped (TypeError, unknown names, non-Error rejections):
+  // name the problem honestly, offer the retry, keep the technical
+  // footnote — never a bare exception, never silence.
+  var MIC_ERROR_FALLBACK = {
+    line: 'Could not start.',
+    startAction: 'Press Start to try again.',
+    switchLine: 'Could not switch. Pick another mic, then try again.',
+  };
+
+  // The demoted footnote: "Name: message" in the mono register.
+  function errorFootnote(err) {
+    if (!err) {
+      return '';
+    }
+    var name = err.name || 'Error';
+    return err.message ? name + ': ' + err.message : name;
+  }
+
+  /** Map a mic failure to operator copy. `forSwitch` selects the
+   *  device-switch variant (next action folded into the line, since the
+   *  start-hint is hidden while the engine is live). */
+  function micErrorCopy(err, forSwitch) {
+    var entry = null;
+    if (err && err.name === 'Error' && String(err.message).indexOf('getUserMedia is not available') !== -1) {
+      entry = NO_GETUSERMEDIA_COPY;
+    } else if (err) {
+      entry = MIC_ERROR_COPY[err.name] || null;
+    }
+    if (!entry) {
+      entry = MIC_ERROR_FALLBACK;
+    }
+    return {
+      line: forSwitch ? (entry.switchLine || entry.line) : entry.line,
+      action: entry.startAction,
+      footnote: errorFootnote(err),
+    };
+  }
+
   // Drives the top bar's status dot + text. `text` is the label shown
-  // (e.g. "Live", "Stopped", or an error message); `isLive` toggles the
-  // `.live` class on the wrapper, which is what turns the dot green (see
-  // `.status.live .dot` in styles/main.css) versus its default gray.
-  function setStatus(text, isLive) {
+  // (e.g. "Live", "Stopped", or an operator error sentence); `isLive`
+  // toggles the `.live` class on the wrapper, which is what turns the
+  // dot green (see `.status.live .dot` in styles/main.css) versus its
+  // default gray. `detail` (entry 3), when present, is appended as a
+  // demoted mono footnote span (.status-detail) — the technical string
+  // riding along at lowered rank, not replacing the operator sentence.
+  // Any non-error call also clears a stale `.error` class, so the error
+  // register lasts exactly until the next state change.
+  function setStatus(text, isLive, detail) {
     if (statusTextEl) {
       statusTextEl.textContent = text;
+      if (detail) {
+        var detailEl = document.createElement('span');
+        detailEl.className = 'status-detail';
+        detailEl.textContent = ' (' + detail + ')';
+        statusTextEl.appendChild(detailEl);
+      }
     }
     if (statusWrapper) {
       statusWrapper.classList.toggle('live', !!isLive);
+      statusWrapper.classList.remove('error');
     }
+  }
+
+  // Entry 3: error variant of setStatus. Raises the sentence to the
+  // status-error register (rq5's Error Coral) while the DOT keeps
+  // telling the engine truth — `isLive` is preserved, because a failed
+  // device switch does not stop a running engine.
+  function setErrorStatus(line, detail, isLive) {
+    setStatus(line, isLive, detail);
+    if (statusWrapper) {
+      statusWrapper.classList.add('error');
+    }
+  }
+
+  // Entry 3: after a failed Start, the recovery NEXT ACTION (with the
+  // demoted technical footnote appended) replaces entry 2's default hint
+  // copy ("Press Start to power on") — the hint region is hidden while
+  // Start is disabled, so this text is only ever seen in the state where
+  // acting on it is possible. The default copy needs no restore path: it
+  // matters only before the first attempt, and every later failure
+  // overwrites it with that failure's action. The element's width is
+  // capped in styles/main.css, so the full pair also goes into its title
+  // attribute (hover/long-press — the same native mechanism entry 2 uses
+  // on param rows).
+  function setStartHint(text, footnote) {
+    if (!startHintEl) {
+      return;
+    }
+    startHintEl.textContent = text;
+    if (footnote) {
+      var detailEl = document.createElement('span');
+      detailEl.className = 'status-detail';
+      detailEl.textContent = ' (' + footnote + ')';
+      startHintEl.appendChild(detailEl);
+    }
+    startHintEl.title = footnote ? text + ' (' + footnote + ')' : text;
   }
 
   // Derives Live/Stopped from the same underlying state the rest of the
@@ -236,7 +400,13 @@ console.log('App scaffold loaded');
       })
       .catch(function (err) {
         console.error('AudioEngine failed to start:', err);
-        setStatus('Failed to start (' + err.message + ')', false);
+        // Entry 3: the short WHAT HAPPENED sentence alone on the status
+        // line (it must read in full even on the tight strip); the NEXT
+        // ACTION + demoted technical footnote land in the .start-hint
+        // beside Start, which the re-enable below immediately un-hides.
+        var copy = micErrorCopy(err, false);
+        setErrorStatus(copy.line, null, false);
+        setStartHint(copy.action, copy.footnote);
         startButton.disabled = false;
       });
   });
@@ -280,7 +450,11 @@ console.log('App scaffold loaded');
         // successfully obtained (see switchInputDevice() in
         // audio-engine.js), so a failed switch doesn't change whether the
         // engine itself is still live — only the attempted switch failed.
-        setStatus('Failed to switch device (' + err.message + ')', isEngineLive());
+        // Entry 3: while live, the hint region is hidden (Start stays
+        // disabled), so the switchLine carries what happened AND the next
+        // action; the lamp stays truthful via isEngineLive().
+        var copy = micErrorCopy(err, true);
+        setErrorStatus(copy.line, copy.footnote, isEngineLive());
       });
   });
 })();
