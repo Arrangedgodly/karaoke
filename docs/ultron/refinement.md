@@ -448,3 +448,23 @@ stay in the snapshot as backlog.
   bounded canvas with the occlusion guard still at 0px overlap in all
   states. (3) `recoverFromLoss` re-syncs the class but the strip button's
   label too — both from the one read, so no drift path exists.
+
+---
+
+# Round 2 (funded 2026-08-29, closing-critique P2s)
+
+**Source critique**: `.impeccable/critique/2026-08-29T16-31-45Z__index-html.md`
+— closing run **33/40 (Good)**, up from 27/40; round-1 entries 1-5 all
+verified resolved, no regressions from the hardening wave. Three P2s
+remain. User gate: **fund round 2 (all three)**. Same rules — approval
+mode, one entry at a time, per-entry user gate.
+
+| # | Command | Critique finding it addresses | Status |
+|---|---------|-------------------------------|--------|
+| R2-1 | `$impeccable layout` | **[P2]** OUT meter below the fold in the default expanded live state — output health depends on scroll position (occlusion is fixed; visibility is not). Fix: persistent OUT presence in the always-visible region — pinned compact readout at the canvas panel's foot, independent of scroll/collapse. | queued |
+| R2-2 | `$impeccable adapt` | **[P2]** Node addition unreachable by keyboard/screen reader — palette chips are non-focusable divs. Fix: button semantics + add-to-chain activation. | queued |
+| R2-3 | `$impeccable clarify` | **[P2]** Native prompt()/confirm() break the console vocabulary mid-show (Save-As naming, Delete confirmation). Fix: in-panel inline naming + two-step Delete, no browser dialogs. | queued |
+
+## Round 2 entry log
+
+(Workers append outcome + evidence here; the master records gate outcomes.)

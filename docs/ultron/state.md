@@ -19,7 +19,7 @@ bypass cue. Executing the refinement checklist one entry at a time, pausing
 for user approval after each.
 
 ## Active Task
-**Refinement entry 1 of 5** — see [refinement.md](refinement.md):
+**Round 2 of the refinement loop (R2-1..R2-3)** — see [refinement.md](refinement.md):
 `$impeccable layout` (P1 occlusion: OUT anchor/meter + safe-output note
 buried by overflowing cards in the default vertical-flow state) → then
 clarify → harden → typeset → polish (canvas bypass cue). After all entries:
