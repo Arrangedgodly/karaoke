@@ -77,15 +77,13 @@ existing flows persist).
 
 Explicitly undecided product facts (recorded, not invented):
 
-- **Product name** — working title "Node-Based Web Audio Chain Builder"
-  remains binding until the user chooses a name; do not invent one.
 - **Brand voice** — current copy is plain-friendly (see README); a
   terse hardware-manual voice was flagged as an open direction, undecided.
 
 ## Brand Commitments
 
-- Working title (binding until renamed): **"Node-Based Web Audio Chain
-  Builder"** shown in the top bar and README.
+- Product name (chosen by the user 2026-08-29): **"Karaoke Chain Builder"**
+  — shown in the top bar and README.
 - No logo, mark, or visual brand assets exist. **Absence is real: do not
   fabricate brand imagery, testimonials, users, or metrics.**
 - Approved design direction (cycle-2 town-hall): dark pro-audio console —

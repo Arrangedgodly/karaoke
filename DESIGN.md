@@ -1,5 +1,5 @@
 ---
-name: Node-Based Web Audio Chain Builder
+name: Karaoke Chain Builder
 description: A dark pro-audio touring rack in the browser — karaoke vocal chains built live, legible from two meters, safe by construction.
 colors:
   bg-body: "#1B1917"
@@ -109,7 +109,7 @@ components:
     width: "340px"
 ---
 
-# Design System: Node-Based Web Audio Chain Builder
+# Design System: Karaoke Chain Builder
 
 ## Overview
 

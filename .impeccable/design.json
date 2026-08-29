@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-08-28T23:59:00+02:00",
-  "title": "Design System: Node-Based Web Audio Chain Builder",
+  "title": "Design System: Karaoke Chain Builder",
   "extensions": {
     "colorMeta": {
       "bg-body": { "role": "neutral", "displayName": "Chassis Charcoal", "canonical": "#1B1917", "tonalRamp": ["#292623", "#49433e", "#686159", "#887e74", "#a39b93", "#beb8b2", "#d8d5d2", "#f3f2f1"] },
