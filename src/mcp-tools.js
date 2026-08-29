@@ -1,4 +1,4 @@
-// Tool schema layer (the 8 real agent tools) for the Node-Based Web Audio
+// Tool schema layer (the 10 real agent tools) for the Node-Based Web Audio
 // Chain Builder.
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single `window.X`
@@ -33,7 +33,7 @@
 // persistence goes through PresetStore (named presets) or the loadModel
 // autosave baseline.
 //
-// MC-2 scope (docs/ultron/plan.md): the 8 tool DEFINITIONS in the
+// MC-2 scope (docs/ultron/plan.md): the tool DEFINITIONS in the
 // ModelContextTool shape (RQ-1, docs/ultron/research/rq1-webmcp-api.md) —
 // name/description/inputSchema/annotations — plus STRUCTURAL argument
 // validation inside each execute stub. Structural = required fields
@@ -64,9 +64,9 @@
 // MCP-TOOLS LAYER — window.McpTools (AUTHORITATIVE)
 // =====================================================================
 //
-//   McpTools.getDefs() -> array of 8 fresh tool defs, order fixed:
+//   McpTools.getDefs() -> array of 10 fresh tool defs, order fixed:
 //     get_capabilities, get_chain, set_chain, add_node, remove_node,
-//     set_param, list_presets, save_preset
+//     set_param, list_presets, get_preset, load_preset, save_preset
 //   Each def = { name, description, inputSchema, annotations, execute }
 //   in exactly the shape McpServer.registerTools() accepts (see
 //   src/mcp-server.js's contract block). Fresh objects every call, so
@@ -177,13 +177,41 @@
 //                     the preset display name against EITHER group (the
 //                     human may have loaded a factory preset); note only
 //                     when PresetStore is unavailable/failed.
+//   get_preset   -> (issue #12) the COMPLETE preset-shaped object for one
+//                     listed name: { name, namespace: 'factory'|'user',
+//                     preset: {name, nodes: [{id, type, params}]},
+//                     nodeCount } — `preset` is shaped exactly like the
+//                     factory-presets/user-store entries (a fresh copy; the
+//                     tool is read-only and writes nothing). `namespace` is
+//                     optional in the input: omitted + exactly one match
+//                     across namespaces resolves that one; omitted + the
+//                     name exists in BOTH resolves the stable
+//                     { error: true, code: 'AMBIGUOUS_NAMESPACE', ... }
+//                     result naming both (call again with namespace).
+//                     Unknown names resolve the stable
+//                     { error: true, code: 'PRESET_NOT_FOUND', requested,
+//                       available: {factory: [...], user: [...]},
+//                       nearest: [...], reason, suggestion } result.
+//   load_preset  -> (issue #12) a MUTATION resolving set_chain's SUCCESS/
+//                     REJECTION vocabulary: the resolved preset's nodes
+//                     become the candidate chain, judged by the SAME rq3
+//                     policy set_chain enforces (a preset that fails
+//                     policy refuses with nothing applied), applied
+//                     through the same drag-settle + abort-aware
+//                     mutationExecute path (issue #10 — ABORTED/BUSY
+//                     included), then the human-Load display semantics
+//                     (current-preset name shown, unsaved dot cleared)
+//                     and the MC-5 snapshot undo (prior chain AND prior
+//                     current-preset name restored — exactly what the
+//                     human Load path's own undo story is). Success
+//                     additionally carries { loaded, namespace, nodeCount }.
 //   get_capabilities -> the structured capability object (app, summary,
 //                     nodeTypes with per-param nominal+agent ranges,
 //                     chainRules, orderGuidance, starterChains,
-//                     safetyNotes, factoryPresets — PS-4's one-line
-//                     disclosure of the factory library names + the
-//                     set_chain loading path, no load_preset tool by
-//                     design) — see the MC-3 policy block below.
+//                     safetyNotes, factoryPresets — the factory library
+//                     names + the issue-#12 preset-retrieval workflow
+//                     (get_preset/load_preset)) — see the MC-3 policy
+//                     block below.
 //   validator bug-> { error: true, code: 'SCHEMA_LAYER_FAULT', ... }
 //     (a caught internal failure of THIS layer — nothing was applied).
 //
@@ -1168,6 +1196,250 @@
     };
   }
 
+  // ---------------------------------------------------------------------
+  // Issue #12 — preset retrieval (get_preset) + loading (load_preset).
+  //
+  // Shared name-resolution machinery for both tools. The two namespaces
+  // (factory = window.FactoryPresets' shipped library, user =
+  // PresetStore's saved names) are explicit whenever a name collides:
+  // an omitted `namespace` resolves ONLY when exactly one namespace has
+  // the name; a collision resolves the stable AMBIGUOUS_NAMESPACE
+  // refusal naming both. Unknown names resolve the stable
+  // PRESET_NOT_FOUND refusal carrying every available name (labelled by
+  // namespace) plus nearest matches (exact > prefix > case-insensitive
+  // contains — dependency-free and deterministic: candidates are scored
+  // in factory-then-user order and ties keep that order).
+  // ---------------------------------------------------------------------
+
+  /**
+   * The user store's names, guarded. Absent/damaged PresetStore or a
+   * throwing listNames() (it never throws by contract, but the guard is
+   * the discipline every other read here follows) resolves [] — the user
+   * namespace then simply has nothing to match, exactly like a fresh
+   * profile.
+   *
+   * @returns {Array<string>}
+   */
+  function userPresetNames() {
+    try {
+      if (window.PresetStore && typeof window.PresetStore.listNames === 'function') {
+        var listed = window.PresetStore.listNames();
+        if (Array.isArray(listed)) {
+          return listed.filter(function (n) {
+            return typeof n === 'string';
+          });
+        }
+      }
+    } catch (err) {
+      // Guarded read — the honest empty user namespace stands.
+    }
+    return [];
+  }
+
+  /**
+   * One user preset through the store's own read-only load(), guarded.
+   * PresetStore.load() returns null for a missing name OR a corrupt
+   * entry (its own validation) and never throws; the try/catch is the
+   * standard absence discipline. The returned object is the store's own
+   * fresh copy ({name, nodes}).
+   *
+   * @param {string} name
+   * @returns {{name: string, nodes: Array<Object>}|null}
+   */
+  function userPresetByName(name) {
+    try {
+      if (window.PresetStore && typeof window.PresetStore.load === 'function') {
+        return window.PresetStore.load(name);
+      }
+    } catch (err) {
+      // Guarded read — treat as absent.
+    }
+    return null;
+  }
+
+  /**
+   * One factory preset, fresh-copied via FactoryPresets.list() (which
+   * deep-copies per call), or null when the library is absent/empty or
+   * does not carry the name.
+   *
+   * @param {string} name
+   * @returns {{name: string, nodes: Array<Object>}|null}
+   */
+  function factoryPresetByName(name) {
+    var library = factoryPresets();
+    for (var i = 0; i < library.length; i++) {
+      if (library[i].name === name) {
+        return library[i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Nearest matches for a requested preset name: every candidate
+   * (factory first, then user, deduped) is scored 3 = exact, 2 = prefix
+   * (case-insensitive), 1 = contains (case-insensitive); candidates
+   * scoring >= 1 are returned highest-score first, ties in the original
+   * factory-then-user order, capped at 5. Deterministic and
+   * dependency-free by construction.
+   *
+   * @param {string} requested
+   * @returns {Array<string>}
+   */
+  function nearestPresetMatches(requested) {
+    var needle = String(requested).toLowerCase();
+    var seen = {};
+    var candidates = [];
+    factoryPresets().forEach(function (preset) {
+      if (!seen[preset.name]) {
+        seen[preset.name] = true;
+        candidates.push(preset.name);
+      }
+    });
+    userPresetNames().forEach(function (name) {
+      if (!seen[name]) {
+        seen[name] = true;
+        candidates.push(name);
+      }
+    });
+    var scored = [];
+    candidates.forEach(function (name, index) {
+      var lower = name.toLowerCase();
+      var score = 0;
+      if (lower === needle) {
+        score = 3;
+      } else if (lower.indexOf(needle) === 0) {
+        score = 2;
+      } else if (lower.indexOf(needle) !== -1) {
+        score = 1;
+      }
+      if (score > 0) {
+        scored.push({ name: name, score: score, index: index });
+      }
+    });
+    scored.sort(function (a, b) {
+      return b.score - a.score || a.index - b.index;
+    });
+    return scored.slice(0, 5).map(function (entry) {
+      return entry.name;
+    });
+  }
+
+  /**
+   * The stable not-found refusal: every available name (labelled by
+   * namespace) plus the nearest matches, so the agent can correct in
+   * one step. Shaped like every other refusal ({error, code, reason,
+   * suggestion}); applied:null (nothing was attempted).
+   *
+   * @param {string} requested
+   * @returns {Object}
+   */
+  function presetNotFoundResult(requested) {
+    return {
+      error: true,
+      code: 'PRESET_NOT_FOUND',
+      requested: requested,
+      applied: null,
+      available: {
+        factory: factoryPresets().map(function (preset) {
+          return preset.name;
+        }),
+        user: userPresetNames()
+      },
+      nearest: nearestPresetMatches(requested),
+      reason: 'No preset named ' + JSON.stringify(requested) +
+        ' exists in the factory library or the user store.',
+      suggestion:
+        'Call list_presets to see both namespaces, or get_preset with one of ' +
+        'the nearest names above (namespace "factory" or "user" when a name ' +
+        'exists in both).'
+    };
+  }
+
+  /**
+   * The stable ambiguity refusal: the name exists in BOTH namespaces and
+   * no `namespace` was given — the caller must disambiguate explicitly
+   * (the two namespaces are separate stores; guessing would load the
+   * wrong preset).
+   *
+   * @param {string} requested
+   * @returns {Object}
+   */
+  function ambiguousNamespaceResult(requested) {
+    return {
+      error: true,
+      code: 'AMBIGUOUS_NAMESPACE',
+      requested: requested,
+      namespaces: ['factory', 'user'],
+      applied: null,
+      reason: 'Preset ' + JSON.stringify(requested) +
+        ' exists in BOTH the factory library and the user store — pass ' +
+        'namespace: "factory" or "user" to pick one.',
+      suggestion:
+        'Repeat the call with namespace: "factory" (the shipped, read-only ' +
+        'library) or namespace: "user" (the host\'s saved presets).'
+    };
+  }
+
+  /**
+   * Resolve one preset by name (+ optional namespace) across the two
+   * stores. Read-only: factory copies come fresh from
+   * FactoryPresets.list(), user copies from PresetStore.load() — the
+   * caller owns the object either way.
+   *
+   * @param {string} name
+   * @param {string|undefined} namespace - 'factory' | 'user' | undefined.
+   * @returns {{namespace: string, preset: {name: string, nodes: Array<Object>}}}
+   *   or {error: <result>} (PRESET_NOT_FOUND | AMBIGUOUS_NAMESPACE).
+   */
+  function resolvePresetByName(name, namespace) {
+    var factoryMatch = namespace === undefined || namespace === 'factory'
+      ? factoryPresetByName(name)
+      : null;
+    var userMatch = namespace === undefined || namespace === 'user'
+      ? userPresetByName(name)
+      : null;
+    if (factoryMatch && userMatch) {
+      return { error: ambiguousNamespaceResult(name) };
+    }
+    if (factoryMatch) {
+      return { namespace: 'factory', preset: factoryMatch };
+    }
+    if (userMatch) {
+      return { namespace: 'user', preset: userMatch };
+    }
+    return { error: presetNotFoundResult(name) };
+  }
+
+  /**
+   * get_preset's payload: the COMPLETE preset-shaped object, exactly as
+   * the factory library / user store hold it ({name, nodes: [{id, type,
+   * params}]}), plus the resolved namespace and node count. The preset
+   * copy is JSON round-tripped so no result ever shares references with
+   * the library literal or the store's parsed entry.
+   *
+   * @param {{name: string, namespace?: string}} input - validated.
+   * @returns {Object}
+   */
+  function buildGetPresetResult(input) {
+    var resolved = resolvePresetByName(input.name, input.namespace);
+    if (resolved.error) {
+      if (!resolved.error.tool) {
+        resolved.error.tool = 'get_preset';
+      }
+      return resolved.error;
+    }
+    var preset = freshCopy(resolved.preset);
+    return {
+      name: preset.name,
+      namespace: resolved.namespace,
+      preset: preset,
+      nodeCount: preset.nodes.length
+    };
+  }
+
+
+
   /**
    * Fresh deep copy of a pure-JSON static block, so two get_capabilities
    * results can never share mutable references (same freshness discipline
@@ -1239,11 +1511,13 @@
         params: params
       };
     });
-    // PS-4: one-line disclosure of the factory library — names plus the
-    // sanctioned agent loading path. There is deliberately NO load_preset
-    // tool (town-hall rejected alternative: it duplicates set_chain's
-    // value); loading a factory preset as the agent = set_chain with that
-    // preset's nodes. Empty names (bare harness, module absent) still
+    // PS-4 / issue #12: one-line disclosure of the factory library plus
+    // the preset-retrieval workflow. (The PS-4-era note said no load_preset
+    // tool would exist by design — issue #12 reversed that: preset
+    // discovery was a dead end for agents, since list_presets only names
+    // them. get_preset retrieves a listed preset's full nodes and
+    // load_preset applies one through the same policy + UI path as
+    // set_chain.) Empty names (bare harness, module absent) still
     // disclose the mechanism honestly.
     var factoryNames = factoryPresets().map(function (preset) {
       return preset.name;
@@ -1251,8 +1525,10 @@
     var factoryNote =
       'Factory preset library (read-only; the human Presets panel lists it under "Factory"): ' +
       (factoryNames.length > 0 ? factoryNames.join(', ') + '. ' : '') +
-      'No load_preset tool exists by design — to load one as the agent, call set_chain with that preset\'s nodes ' +
-      '(the factory group in list_presets names them; get_chain reveals the exact nodes once the human has loaded one).';
+      'Preset workflow: list_presets names both namespaces (factory + user), get_preset(name, namespace?) returns a ' +
+      'preset\'s complete nodes, and load_preset(name, namespace?) applies one through the same loudness policy and ' +
+      'visible UI path as set_chain (undo restores the prior chain and prior preset name). set_chain with a preset\'s ' +
+      'nodes remains equally valid.';
     return {
       app: 'karaoke-chain-builder',
       summary:
@@ -2954,6 +3230,51 @@
     };
   }
 
+  /**
+   * load_preset (issue #12): resolve the named preset, then run its
+   * nodes through EXACTLY the judgment set_chain applies (host-owned
+   * pre-scan, per-param policy, every chain rule) — a preset that fails
+   * policy refuses like a set_chain carrying the same nodes would, with
+   * nothing applied. The candidate is the policy-applied node list; the
+   * preset's own display name is what the postApply hook shows (and what
+   * the result's `loaded` field carries).
+   */
+  function planLoadPreset(input, model) {
+    var resolved = resolvePresetByName(input.name, input.namespace);
+    if (resolved.error) {
+      return { error: resolved.error };
+    }
+    var preset = resolved.preset;
+    var hostOwned = findHostOwnedInNodes(preset.nodes, 'preset.nodes');
+    if (hostOwned) {
+      return { error: hostOwned };
+    }
+    var applied = applyPolicyToNodes(preset.nodes);
+    if (applied.reject) {
+      return { error: applied.reject };
+    }
+    var violations = evaluateChainRules(applied.nodes);
+    if (violations.length > 0) {
+      return { error: violations[0] };
+    }
+    var nodeIds = applied.nodes.map(function (entry) { return entry.id; });
+    var count = applied.nodes.length;
+    return {
+      candidate: applied.nodes,
+      clamped: applied.clamped,
+      changes: diffModels(model, applied.nodes),
+      nodeIds: nodeIds,
+      summary: 'Agent loaded preset "' + preset.name + '" (' + resolved.namespace +
+        ', ' + count + ' nodes)' + clampSuffix(applied.clamped),
+      label: 'load_preset "' + preset.name + '" (' + resolved.namespace + ')',
+      resultExtras: {
+        loaded: preset.name,
+        namespace: resolved.namespace,
+        nodeCount: count
+      }
+    };
+  }
+
   // ---------------------------------------------------------------------
   // Shared validators.
   // ---------------------------------------------------------------------
@@ -3382,6 +3703,34 @@
     }
   }
 
+  /**
+   * get_preset / load_preset (issue #12): name required, a non-empty
+   * string matched EXACTLY against the stored names (no trimming, no
+   * case folding — list_presets returns the exact keys); namespace
+   * optional, enum ['factory', 'user']. Whether the name exists is a
+   * runtime concern resolved against the stores, not a structural one.
+   *
+   * @param {*} input
+   * @param {Array<Object>} problems
+   */
+  function validatePresetSelector(input, problems) {
+    var inputObject = checkInputObject(input, problems);
+    if (problems.length > 0) {
+      return;
+    }
+    requireString(inputObject, 'name', problems);
+    if (inputObject.namespace !== undefined) {
+      if (typeof inputObject.namespace !== 'string' ||
+          (inputObject.namespace !== 'factory' && inputObject.namespace !== 'user')) {
+        problems.push(
+          problem('namespace', "'namespace' must be 'factory' or 'user' (optional — " +
+            'omit it when the name exists in only one of them); got ' +
+            displayValue(inputObject.namespace), ['factory', 'user'])
+        );
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Tool definitions. Each execute validates structurally FIRST, then
   // resolves one of the contract's result objects. Never throws.
@@ -3415,6 +3764,30 @@
   }
 
   /**
+   * get_preset's body (issue #12): the read-tool pattern, except the
+   * builder needs the VALIDATED input (the name + optional namespace the
+   * resolution runs against). Same contract otherwise: the builder
+   * guards its own reads (absent stores degrade honestly into the
+   * PRESET_NOT_FOUND result), never throws, and a caught crash really is
+   * a bug in THIS layer (SCHEMA_LAYER_FAULT).
+   *
+   * @param {*} input
+   * @returns {Promise<Object>}
+   */
+  function getPresetExecute(input) {
+    try {
+      var problems = [];
+      validatePresetSelector(input, problems);
+      if (problems.length > 0) {
+        return Promise.resolve(invalidArgumentsResult('get_preset', problems));
+      }
+      return Promise.resolve(buildGetPresetResult(input));
+    } catch (err) {
+      return Promise.resolve(schemaLayerFaultResult('get_preset', err));
+    }
+  }
+
+  /**
    * The mutation-tool body (MC-4 + MC-5): validate structurally, queue
    * behind any in-progress user drag, then plan against the LIVE model
    * (policy enforcement), snapshot the pre-apply state (MC-5), apply
@@ -3429,6 +3802,19 @@
    * @param {Function} validator - (input, problems) => void.
    * @param {Function} planner - (input, liveModel) => {error} |
    *   {candidate, changes, clamped, nodeIds, summary, label, note?}.
+   * @param {Object} [hooks] - optional per-tool extensions (issue #12's
+   *   load_preset is the first consumer; the five MC-4/MC-5 mutation
+   *   tools pass nothing and get today's behavior byte-for-byte):
+   *   skipParamOnlyFastPath (boolean) — force the FULL loadModel path
+   *   even for a param-shaped candidate (a preset load is structural);
+   *   postApply (plan, snapshot) — run after the write succeeded and
+   *   BEFORE the undo entry is pushed, for tool-specific display
+   *   semantics (load_preset shows the preset name + clears the unsaved
+   *   dot, mirroring the human Load path). The snapshot's restore already
+   *   covers whatever the postApply changed as long as the same state
+   *   was captured in captureUndoSnapshot (it captures the preset
+   *   display name + dot). A planner may also return resultExtras
+   *   ({key: value}) merged into the success result.
    * @returns {Function} execute(input, options) -> Promise<Object>.
    *   Issue #10: execution options are accepted; options.signal (an
    *   AbortSignal) cancels the mutation — before the queue, while queued
@@ -3438,7 +3824,8 @@
    *   Undo. Options are optional: callers that pass none (the ?dev
    *   harness) get today's behavior byte-for-byte.
    */
-  function mutationExecute(name, validator, planner) {
+  function mutationExecute(name, validator, planner, hooks) {
+    hooks = hooks || {};
     return function (input, options) {
       var signal = options ? options.signal : null;
       // Pre-abort: a call arriving already cancelled never queues, never
@@ -3498,8 +3885,21 @@
           // same autosave a human slider move produces. Anything else —
           // or any miss inside the fast path — falls back to the full
           // single write path below.
-          if (!applyParamOnlyViaUi(model, plan.candidate)) {
+          if (hooks.skipParamOnlyFastPath) {
+            // Issue #12 (load_preset): loading a preset is a STRUCTURAL
+            // change by definition — always the full loadModel path, never
+            // the param-only fast path, exactly like the human Load button.
             applyCandidateViaUi(plan.candidate);
+          } else if (!applyParamOnlyViaUi(model, plan.candidate)) {
+            applyCandidateViaUi(plan.candidate);
+          }
+          // Tool-specific post-apply semantics (load_preset's display
+          // writes) run BEFORE the undo push, inside the same try — a
+          // throw here still resolves SCHEMA_LAYER_FAULT with the undo
+          // entry unpushed, the same never-half-applied contract as the
+          // write itself.
+          if (typeof hooks.postApply === 'function') {
+            hooks.postApply(plan, snapshot);
           }
           // Pushed only once the apply SUCCEEDED: a thrown write path
           // resolves SCHEMA_LAYER_FAULT below with nothing to undo.
@@ -3514,6 +3914,11 @@
           };
           if (plan.note) {
             result.note = plan.note;
+          }
+          if (plan.resultExtras) {
+            Object.keys(plan.resultExtras).forEach(function (key) {
+              result[key] = plan.resultExtras[key];
+            });
           }
           return result;
         } catch (err) {
@@ -3763,6 +4168,108 @@
   }
 
   /**
+   * @returns {Object} the get_preset tool def (issue #12).
+   */
+  function makeGetPreset() {
+    return {
+      name: 'get_preset',
+      description:
+        'Retrieve one listed preset\'s COMPLETE preset-shaped object — {name, nodes: ' +
+        '[{id, type, params}]} exactly as the factory library or the user store holds ' +
+        'it — without loading anything. The name must match list_presets exactly; ' +
+        'namespace is optional and only needed when the name exists in BOTH groups ' +
+        '(otherwise the call resolves the stable AMBIGUOUS_NAMESPACE result). Unknown ' +
+        'names resolve PRESET_NOT_FOUND with every available name and the nearest ' +
+        'matches. Inspect a preset first, then load it with load_preset (or feed its ' +
+        'nodes to set_chain).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 1,
+            description: 'Preset name, exactly as list_presets returns it (no trimming, no case folding).'
+          },
+          namespace: {
+            type: 'string',
+            enum: ['factory', 'user'],
+            description:
+              "Which namespace to read: 'factory' (the shipped read-only library) or 'user' " +
+              '(saved presets). Optional — omit it when the name exists in only one of them.'
+          }
+        },
+        required: ['name']
+      },
+      // Issue #12 (+ #11's matrix): read-only, and the returned name/nodes
+      // are stored or user-/agent-authored content (user preset names are
+      // whatever save_preset was given) — the untrusted-content hint is
+      // true, like list_presets.
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      execute: getPresetExecute
+    };
+  }
+
+  /**
+   * @returns {Object} the load_preset tool def (issue #12).
+   */
+  function makeLoadPreset() {
+    return {
+      name: 'load_preset',
+      description:
+        'Load one listed preset as the live chain — the same workflow as the human ' +
+        'Presets-panel Load button, through the same loudness policy and visible UI ' +
+        'path set_chain uses: the preset\'s nodes are validated against every chain ' +
+        'rule (a preset that fails policy refuses with nothing applied), the canvas ' +
+        'rebuilds, the preset name is shown, and the change gets a summary toast plus ' +
+        'one-click Undo that restores the prior chain AND the prior preset name. The ' +
+        'name must match list_presets exactly; namespace is optional and only needed ' +
+        'when the name exists in both the factory library and the user store. Use ' +
+        'get_preset first to inspect a preset without loading it.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 1,
+            description: 'Preset name, exactly as list_presets returns it (no trimming, no case folding).'
+          },
+          namespace: {
+            type: 'string',
+            enum: ['factory', 'user'],
+            description:
+              "Which namespace to load from: 'factory' (the shipped read-only library) or " +
+              "'user' (saved presets). Optional — omit it when the name exists in only one of them."
+          }
+        },
+        required: ['name']
+      },
+      // Issue #12: a mutation (readOnlyHint false). untrustedContentHint
+      // true: its results and toast echo the caller-requested preset name
+      // (loaded, summary, labels) — user-/agent-authored text, same
+      // rationale as save_preset.
+      annotations: { readOnlyHint: false, untrustedContentHint: true },
+      execute: mutationExecute(
+        'load_preset',
+        validatePresetSelector,
+        planLoadPreset,
+        {
+          // Loading is structural: always the full loadModel path (issue
+          // #5's fast path is for param tweaks only), and after the write
+          // the human-Load display semantics — preset name shown, unsaved
+          // dot cleared (src/presets-ui.js's Load handler order). The
+          // mutationExecute snapshot (taken pre-apply) already captured
+          // the prior name + dot, so the undo entry restores both.
+          skipParamOnlyFastPath: true,
+          postApply: function (plan) {
+            presetsUiSetCurrentPreset(plan.resultExtras.loaded);
+            presetsUiClearModified();
+          }
+        }
+      )
+    };
+  }
+
+  /**
    * Issue #8: the STABLE refusal result save_preset resolves whenever
    * PresetStore.save() threw its typed StorageError — the preset did not
    * persist, so nothing about the preset panel, the current-preset
@@ -3999,7 +4506,9 @@
   }
 
   /**
-   * Build the 8 tool defs in fixed order. Fresh objects every call —
+   * Build the 10 tool defs in fixed order (get_preset/load_preset joined
+   * between list_presets and save_preset — the preset trio reads as one
+   * workflow: list, retrieve, load, save). Fresh objects every call —
    * callers (self-init here, the MC-6 harness later) can never receive
    * something another caller already mutated.
    *
@@ -4014,6 +4523,8 @@
       makeRemoveNode(),
       makeSetParam(),
       makeListPresets(),
+      makeGetPreset(),
+      makeLoadPreset(),
       makeSavePreset()
     ];
   }

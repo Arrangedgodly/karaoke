@@ -1,8 +1,9 @@
-// Test for issue #9 — all eight WebMCP tools must REGISTER with the
-// schemas and annotations the code intends, through the REAL shim.
+// Test for issue #9 (+ #12's two preset tools) — all ten WebMCP tools
+// must REGISTER with the schemas and annotations the code intends,
+// through the REAL shim.
 //
 // What is under test here is the registration SURFACE an agent's host
-// actually sees: src/mcp-tools.js builds 8 ModelContextTool defs and
+// actually sees: src/mcp-tools.js builds 10 ModelContextTool defs and
 // self-registers them at parse time through src/mcp-server.js (the
 // permanent WebMCP shim), which validates each def, WRAPS its execute
 // (lifecycle/timeout/rejection capture), forwards only the known fields,
@@ -18,15 +19,15 @@
 // accepts every tool and records exactly what it was handed; the
 // assertions then run over BOTH sides of the registration:
 //
-//   A. McpTools.getDefs() — 8 defs, fixed order, well-formed shapes.
+//   A. McpTools.getDefs() — 10 defs, fixed order, well-formed shapes.
 //   B. the SHIM's registry (McpServer.listRegistered()) and the stub
 //      API's captures — every tool made it through, in order, and what
 //      the API received is exactly the five fields the shim forwards
 //      (name, description, execute [wrapped], inputSchema, annotations).
 //   C. the INTENDED per-tool specifics, read off the real registration
-//      code: readOnlyHint true on the three read tools (get_capabilities,
-//      get_chain, list_presets) and false on the five mutation tools;
-//      untrustedContentHint TRUE on the tools whose results return or
+//      code: readOnlyHint true on the four read tools (get_capabilities,
+//      get_chain, list_presets, get_preset) and false on the six mutation
+//      tools; untrustedContentHint TRUE on the tools whose results return or
 //      echo stored/user-/agent-authored content (get_chain's node ids and
 //      name, list_presets' user-saved names, save_preset's echoed name)
 //      and FALSE on get_capabilities (fully host-authored static text)
@@ -120,27 +121,33 @@ var EXPECTED_ORDER = [
   'remove_node',
   'set_param',
   'list_presets',
+  'get_preset',
+  'load_preset',
   'save_preset'
 ];
 
 // The INTENDED annotations, transcribed from the make*Tool() registration
-// code in src/mcp-tools.js: the three read tools publish a read-only
-// hint, the five mutation tools do not. untrustedContentHint is true for
+// code in src/mcp-tools.js: the four read tools publish a read-only
+// hint, the six mutation tools do not. untrustedContentHint is true for
 // the tools whose results carry stored or user-/agent-authored content
 // (issue #11): get_chain (the model incl. agent-assigned node ids and the
-// stored chain name), list_presets (user-saved preset names), and
-// save_preset (its success echoes the caller-provided name). It is false
-// for get_capabilities (fully host-authored static text) and the four
-// structural mutation tools, whose results carry only host-authored
-// diagnostics and host-assigned ids.
+// stored chain name), list_presets (user-saved preset names),
+// save_preset (its success echoes the caller-provided name), and — issue
+// #12 — get_preset (returns stored/user-authored preset names + nodes)
+// and load_preset (its success and toast echo the requested preset
+// name). It is false for get_capabilities (fully host-authored static
+// text) and the four structural mutation tools, whose results carry only
+// host-authored diagnostics and host-assigned ids.
 var EXPECTED_ANNOTATIONS = {
   get_capabilities: { readOnlyHint: true, untrustedContentHint: false },
   get_chain: { readOnlyHint: true, untrustedContentHint: true },
   list_presets: { readOnlyHint: true, untrustedContentHint: true },
+  get_preset: { readOnlyHint: true, untrustedContentHint: true },
   set_chain: { readOnlyHint: false, untrustedContentHint: false },
   add_node: { readOnlyHint: false, untrustedContentHint: false },
   remove_node: { readOnlyHint: false, untrustedContentHint: false },
   set_param: { readOnlyHint: false, untrustedContentHint: false },
+  load_preset: { readOnlyHint: false, untrustedContentHint: true },
   save_preset: { readOnlyHint: false, untrustedContentHint: true }
 };
 
@@ -303,15 +310,15 @@ async function main() {
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/mcp-tools.js'); // self-registers through the shim at parse
 
-  // Let the shim's sequential registration queue drain (8 chained
+  // Let the shim's sequential registration queue drain (10 chained
   // registerTool promises) before observing the registries.
   await sleep(20);
 
   // --------------------------------------------------------------------
-  console.log('A. the 8 defs McpTools.getDefs() returns');
+  console.log('A. the 10 defs McpTools.getDefs() returns');
   // --------------------------------------------------------------------
   var defs = sandbox.McpTools.getDefs();
-  check(Array.isArray(defs) && defs.length === 8, 'A1: getDefs() returns exactly 8 defs');
+  check(Array.isArray(defs) && defs.length === 10, 'A1: getDefs() returns exactly 10 defs');
   check(
     defs.map(function (d) { return d.name; }).join(',') === EXPECTED_ORDER.join(','),
     'A1: def order is the fixed contract order (' + EXPECTED_ORDER.join(', ') + ')'
@@ -345,12 +352,12 @@ async function main() {
   );
   check(
     sandbox.McpServer.listRegistered().join(',') === EXPECTED_ORDER.join(','),
-    'B1: the shim\'s registry lists all 8 tools in registration order'
+    'B1: the shim\'s registry lists all 10 tools in registration order'
   );
   check(
-    apiRegisterCalls.length === 8 &&
+    apiRegisterCalls.length === 10 &&
       apiRegisterCalls.map(function (t) { return t.name; }).join(',') === EXPECTED_ORDER.join(','),
-    'B1: the WebMCP API received exactly 8 registerTool calls, same names, same order'
+    'B1: the WebMCP API received exactly 10 registerTool calls, same names, same order'
   );
 
   apiRegisterCalls.forEach(function (tool) {
@@ -396,9 +403,18 @@ async function main() {
     );
   });
 
-  // Issue #11's explicit matrix: untrusted-content hint TRUE exactly on
-  // the tools that return/echo stored or user-/agent-authored content.
-  ['get_chain', 'list_presets', 'save_preset'].forEach(function (name) {
+  // Issue #12: get_preset is a read tool that TAKES arguments (name +
+  // optional namespace) — its schema specifics are C8 below; here just
+  // the read-only hint, alongside the three no-arg reads.
+  check(
+    byName(apiRegisterCalls, 'get_preset').annotations.readOnlyHint === true,
+    'C1: get_preset publishes readOnlyHint: true (a read tool)'
+  );
+
+  // Issue #11's explicit matrix (+ #12's two preset tools): untrusted-
+  // content hint TRUE exactly on the tools that return/echo stored or
+  // user-/agent-authored content.
+  ['get_chain', 'list_presets', 'get_preset', 'load_preset', 'save_preset'].forEach(function (name) {
     check(
       byName(apiRegisterCalls, name).annotations.untrustedContentHint === true,
       'C1: ' + name + ' publishes untrustedContentHint: true (returns/echoes user- or agent-authored content)'
@@ -411,7 +427,7 @@ async function main() {
     );
   });
 
-  ['set_chain', 'add_node', 'remove_node', 'set_param', 'save_preset'].forEach(function (name) {
+  ['set_chain', 'add_node', 'remove_node', 'set_param', 'load_preset', 'save_preset'].forEach(function (name) {
     check(
       byName(apiRegisterCalls, name).annotations.readOnlyHint === false,
       'C2: ' + name + ' publishes readOnlyHint: false (a mutation tool)'
@@ -466,6 +482,26 @@ async function main() {
     'C7: save_preset\'s name carries the published 1-40 character bounds'
   );
 
+  // Issue #12: the two preset tools share one selector shape — name
+  // required, optional namespace enum ['factory', 'user'].
+  ['get_preset', 'load_preset'].forEach(function (name) {
+    var schema = byName(apiRegisterCalls, name).inputSchema;
+    check(
+      sameMembers(schema.required, ['name']),
+      'C8: ' + name + ' requires [name]'
+    );
+    check(
+      schema.properties.namespace &&
+        sameMembers(schema.properties.namespace.enum, ['factory', 'user']),
+      'C8: ' + name + '\'s namespace is the optional [factory, user] enum'
+    );
+    check(
+      schema.properties.namespace &&
+        schema.required.indexOf('namespace') === -1,
+      'C8: ' + name + '\'s namespace is OPTIONAL (required is [name] only)'
+    );
+  });
+
   // --------------------------------------------------------------------
   console.log('D. the registered execute functions run the REAL tools');
   // --------------------------------------------------------------------
@@ -500,6 +536,21 @@ async function main() {
     'D1: the registered remove_node resolves a structured NODE_NOT_FOUND result (errors are values, not throws)'
   );
 
+  // Issue #12's read tool through its wrapper: this sandbox loaded no
+  // factory library and no PresetStore, so get_preset honestly resolves
+  // the stable PRESET_NOT_FOUND refusal (available names both empty) —
+  // never a throw and never a layer fault.
+  var presetResult = await byName(apiRegisterCalls, 'get_preset').execute({ name: 'Classic Karaoke' });
+  check(
+    !!presetResult &&
+      presetResult.error === true &&
+      presetResult.code === 'PRESET_NOT_FOUND' &&
+      presetResult.available &&
+      Array.isArray(presetResult.available.factory) &&
+      Array.isArray(presetResult.available.user),
+    'D1: the registered get_preset resolves the structured PRESET_NOT_FOUND result in a bare harness (available names labelled by namespace)'
+  );
+
   // The load-time lifecycle: registration success flips the REAL
   // AgentUI's state to 'tools-ready' (mcp-tools.js's self-init callback).
   var stateEvents = domEvents.filter(function (e) {
@@ -530,7 +581,7 @@ async function main() {
 
   // --------------------------------------------------------------------
   if (failures.length === 0) {
-    console.log('PASS: all 8 WebMCP tools register with the intended schemas and annotations (issue #9)');
+    console.log('PASS: all 10 WebMCP tools register with the intended schemas and annotations (issues #9 + #12)');
     return 0;
   }
   console.log('FAIL: ' + failures.length + ' check(s) failed:');

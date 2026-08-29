@@ -36,8 +36,9 @@
 // =====================================================================
 //   1. Documented command that runs from a clean clone
 //        -> this file (`node tests/run.js`)
-//   2. All eight WebMCP tools register with intended schemas/annotations
-//        -> tests/test-tool-registration.js
+//   2. All ten WebMCP tools register with intended schemas/annotations
+//        -> tests/test-tool-registration.js (incl. issue #12's get_preset/
+//           load_preset; their behavior lives in test-preset-tools.js)
 //   3. Current chain + every factory preset round-trip set_chain
 //        -> tests/test-factory-presets-policy.js (issue #2)
 //   4. Same-ID type change creates the correct physical AudioNode
@@ -192,7 +193,7 @@ function main() {
     console.log('');
     console.log('Issue #9 acceptance coverage:');
     console.log('  1. documented clean-clone command ............ node tests/run.js (this runner)');
-    console.log('  2. 8 tools register, schemas + annotations ... tests/test-tool-registration.js');
+    console.log('  2. 10 tools register, schemas + annotations .. tests/test-tool-registration.js');
     console.log('  3. chain + factory presets round-trip ........ tests/test-factory-presets-policy.js');
     console.log('  4. same-ID type change -> right AudioNode .... tests/test-node-reuse-type-match.js');
     console.log('  5. limiter/after-limiter/ceiling refused ..... tests/test-safety-refusals.js');

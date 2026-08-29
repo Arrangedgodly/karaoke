@@ -17,7 +17,7 @@ Everything below works on the deployed site, no local setup, no Chrome flags.
 3. Ask for something unsafe: *"Remove the limiter."* The agent is refused by the app's built-in policy — you get a refusal toast showing what was asked versus what's allowed. The limiter stays.
 4. Safety stays human: the red **Bypass** button (or the **spacebar**) always works and no agent can touch it.
 
-**No agent handy?** Open **https://karaoke.arrangedgodly.com/?dev** — an **Agent Harness** panel appears where you can run all 8 WebMCP tools directly with example inputs and watch change summaries, refusals, and Undo live. Start with `get_capabilities`, then `set_chain` (prefilled with a valid example), then hit Undo.
+**No agent handy?** Open **https://karaoke.arrangedgodly.com/?dev** — an **Agent Harness** panel appears where you can run all 10 WebMCP tools directly with example inputs and watch change summaries, refusals, and Undo live. Start with `get_capabilities`, then `set_chain` (prefilled with a valid example), then hit Undo.
 
 ### Local / Chrome-only setup (secondary)
 
@@ -25,7 +25,7 @@ To drive the tools from desktop Chrome instead:
 
 1. Go to `chrome://flags/#enable-webmcp-testing`, set it to **Enabled**, and restart Chrome.
 2. Open the app as usual.
-3. Open DevTools (**F12**) → **Application** → **WebMCP** — you should see the app's 8 tools listed there, and you can run any of them by hand.
+3. Open DevTools (**F12**) → **Application** → **WebMCP** — you should see the app's 10 tools listed there, and you can run any of them by hand.
 4. To chat with a natural-language agent today: install the **Model Context Tool Inspector** Chrome extension (it's separate from Gemini) and prompt it there.
 
 **Honest status:** Gemini in Chrome does not yet talk to WebMCP tools (as of late August 2026 — Google says it's coming). Everything above works today with the DevTools pane and the Inspector extension; when Gemini support ships, the same steps apply. Worth re-checking [developer.chrome.com/docs/ai/webmcp](https://developer.chrome.com/docs/ai/webmcp) now and then.
@@ -37,7 +37,7 @@ To drive the tools from desktop Chrome instead:
 **An agent can:**
 - Read the current chain, the presets, and what the app is capable of.
 - Add, remove, and reorder effects, and set parameters — within published safety limits.
-- Save presets.
+- Retrieve and load presets (factory or saved), and save new ones.
 
 **An agent cannot (human-only):**
 - Touch **Bypass** — it works from the button or the **spacebar**, always.
@@ -50,7 +50,7 @@ To drive the tools from desktop Chrome instead:
 - A **watchdog** mutes the output if something starts to howl — restoring it is a human-only action.
 - Every agent mutation gets a change-summary toast with one-click **Undo** (or **Ctrl/Cmd+Z** while the toast is visible).
 
-## The eight WebMCP tools
+## The ten WebMCP tools
 
 Registered by the app for in-browser agents (see `src/mcp-tools.js`):
 
@@ -63,6 +63,8 @@ Registered by the app for in-browser agents (see `src/mcp-tools.js`):
 | `remove_node` | write | Remove one node — refused if it breaks a chain rule (e.g. the limiter). |
 | `set_param` | write | Set a single parameter with a policy-checked, param-only ramp. |
 | `list_presets` | read | Factory library plus the user's saved presets. |
+| `get_preset` | read | One listed preset's complete nodes, without loading it (namespace explicit when a name exists in both groups). |
+| `load_preset` | write | Load a listed preset as the live chain — same policy and visible UI path as `set_chain`, with summary toast and Undo. |
 | `save_preset` | write | Save the current chain as a named preset. |
 
 ## Shared-state architecture
@@ -75,7 +77,7 @@ Agent and human drive the **same model, UI, and audio graph** — agent mutation
 node tests/run.js
 ```
 
-Zero dependencies — needs only Node, works from a clean clone; exit code 0 means green. The suite covers: 8-tool registration, policy round-trips of all factory presets, safety refusals, the node-reuse type guard, watchdog tap/latch, mutation + undo, persistence honesty, and param-only ramps.
+Zero dependencies — needs only Node, works from a clean clone; exit code 0 means green. The suite covers: 10-tool registration, policy round-trips of all factory presets, safety refusals, the node-reuse type guard, watchdog tap/latch, mutation + undo, persistence honesty, param-only ramps, and the preset retrieve/load tools.
 
 **Honest boundaries:** automation does not prove the physical mic → PA path, audible DSP quality, or hidden-tab watchdog behavior. Those live in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 

@@ -19,7 +19,7 @@
 //     def.execute(parsedArgs) DIRECTLY — the real validation/enforcement
 //     path (MC-2..MC-5 machinery) with no WebMCP dependency. This is the
 //     portfolio agent-free demo path: the harness works identically with
-//     WebMCP absent. When WebMCP IS present the same 8 tools are also
+//     WebMCP absent. When WebMCP IS present the same 10 tools are also
 //     live in the DevTools WebMCP pane; the header states which world
 //     the panel itself is driving (McpServer.isAvailable()).
 //   - It never registers anything with McpServer (read-only
@@ -209,6 +209,16 @@
     },
     list_presets: function () {
       return {};
+    },
+    // Issue #12: the preset-retrieval pair. Both examples name a shipped
+    // factory preset, so they are valid invocation shapes out of the box
+    // (get_preset returns its nodes; load_preset applies it through the
+    // full policy + UI path with a summary toast and Undo).
+    get_preset: function () {
+      return { name: 'Warm Ballad' };
+    },
+    load_preset: function () {
+      return { name: 'Warm Ballad' };
     },
     save_preset: function () {
       return { name: 'Agent harness demo' };
