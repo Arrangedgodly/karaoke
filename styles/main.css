@@ -1747,6 +1747,22 @@ select.control {
   outline-color: var(--focus-ring-on-accent);
 }
 
+/* Issue #7 — the fallback-mode hidden-tab HINT. Same element pattern as
+   the trip alert above but deliberately NON-alarming: the calm accent
+   (amber) edge instead of safety-red, role="status" (not "alert"), no
+   button — the remedy is bringing the tab back, not a click. Shown
+   only when the audio-worklet watchdog could NOT load (rAF-only
+   fallback) and the page went hidden while the engine is live; removed
+   on visibilitychange back. */
+.watchdog-alert.watchdog-hint {
+  border-color: var(--accent);
+}
+
+.watchdog-alert.watchdog-hint .watchdog-alert-text {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 /* ===========================================================================
    MC-6 — dev test harness (agent simulator). src/mcp-harness.js creates
    #mcp-harness from JS only when location.search contains 'dev'

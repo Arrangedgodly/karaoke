@@ -86,7 +86,8 @@
 //     band-bin math survive — same context), and calls Meters.reset().
 //
 // =====================================================================
-// THE LOOP (one rAF for both meters AND the watchdog)
+// THE LOOP (rAF now drives ONLY the meters; watchdog detection moved
+// OFF the paint loop — issue #7)
 // =====================================================================
 //
 //   Per frame, per side: analyser.getFloatTimeDomainData(floatBuf) into
@@ -98,11 +99,13 @@
 //   silence frames (the meters' contract: they must be TOLD about
 //   silence; they do not infer it).
 //
-//   document.hidden: rAF auto-pauses when the tab is hidden (rq4's
-//   accepted limitation). No fallback timer exists by design — the
-//   meters fall/decay to dark via their own component-side loop, and
-//   the watchdog simply stops sampling while hidden (clip-while-hidden
-//   is invisible either way; documented limitation, same as VIS-5).
+//   document.hidden: rAF auto-pauses when the tab is hidden, so the
+//   METERS fall/decay to dark via their own component-side loop — that
+//   is fine (hidden means nothing to paint). Issue #7 removed the old
+//   "watchdog simply stops sampling while hidden" limitation: while
+//   visible, the frame ALSO runs the watchdog checks at full cadence
+//   (kept for issue #3 compatibility and immediacy), but the DECISIONS
+//   no longer depend on rAF — see the #7 section below.
 //
 //   analyserOut.smoothingTimeConstant is set to 0. rq4's "do not set"
 //   note concerns meter ballistics — smoothing applies to FREQUENCY
@@ -111,6 +114,64 @@
 //   band energy: with the default 0.8 smoothing a sustained howl's
 //   byte-quantized band average stops strictly rising after a handful
 //   of frames and the monotonicity detector below would never fire.
+//
+// =====================================================================
+// ISSUE #7 — protection stays live when the tab is HIDDEN
+// =====================================================================
+//
+//   The watchdog used to sample only inside the rAF loop; rAF stops
+//   when the tab is hidden while native Web Audio keeps running — the
+//   watchdog went blind exactly when an unattended rig could howl. The
+//   sampling now rides an AudioWorkletProcessor on the audio thread
+//   (src/watchdog-worklet.js, registered as 'watchdog-tap'), which
+//   never pauses for visibility:
+//
+//     WORKLET (audio thread): tapped off the output attenuator (the
+//     same final-output point as analyserOut — issue #3's tap
+//     semantics), computes per-block peak/RMS, posts a throttled
+//     {peak,...} message every ~21 ms. Wired as a SILENT side-tap:
+//     attenuator -> workletNode -> zero-gain -> destination (the
+//     processor passes input through to its output, the zero gain
+//     guarantees the destination never hears a duplicate; the
+//     destination edge is what keeps process() pulled).
+//
+//     INTERVAL LATCH (main thread): one setInterval
+//     (WATCH_INTERVAL_MS, 250 ms visible-intent). On each tick, IF the
+//     worklet is live AND the page is hidden (or the rAF loop has
+//     stalled > WATCHDOG_STALL_MS), the tick makes the trip decision
+//     from the LATEST worklet peak (message delivery is not rAF-bound)
+//     and from analyserOut's frequency buffer (the AUDIO thread keeps
+//     filling an AnalyserNode's buffers while hidden — a main-thread
+//     read on a timer still sees fresh data). While tripped, the tick
+//     also runs the defend-the-mute backstop. Browsers throttle
+//     background-tab intervals to >= ~1 s (pages PLAYING audio are
+//     exempt from intensive throttling, and this app is) — HONEST
+//     cadence disclosure: while hidden the peak rule evaluates at
+//     ~1 s granularity instead of ~16 ms, so a sustained hot signal
+//     trips in ~1–2 s instead of ~250 ms. Same thresholds, same
+//     latch, same human-only restore; only the sampling cadence drops.
+//
+//     HOWL while hidden: the monotonicity window is 60 frames at
+//     ~16 ms cadence (~1 s) — meaningless at 1 tick/s. The hidden bar
+//     is therefore HIDDEN_HOWL_MIN_RISING (8) strictly rising steps
+//     over the last HIDDEN_HOWL_WINDOW (10) ticks (~10 s of sustained
+//     monotonic 1–8 kHz rise, same −60 dB floor). A howl that
+//     saturates in <10 s parks the final output above the ceiling and
+//     is caught by the hidden peak rule at the same ~1 s cadence — the
+//     howl bar is the belt to that braces. Documented, deliberately
+//     reduced, never silently equivalent.
+//
+//     FALLBACK (rAF-only mode): if audioWorklet.addModule is missing
+//     or fails (old browser, file:// context), the watchdog stays on
+//     the old rAF-only sampling — hidden protection is NOT available —
+//   and the INTERIM MITIGATION from the issue fires: a
+//   visibilitychange listener surfaces a non-modal operator warning
+//   ("Keep this tab visible during the show — protection is reduced
+//   while hidden.") for exactly as long as the page is hidden while
+//   the engine is live, and docs/ACCEPTANCE.md §3 tells the operator
+//   to keep the tab visible in that mode. When the worklet is live
+//   there is NO warning (protection is active; only the cadence is
+//   reduced, disclosed in the docs instead).
 //
 // =====================================================================
 // WATCHDOG (rq3-loudness-policy.md §2 rule 8 — shares analyserOut)
@@ -152,7 +213,9 @@
 //       tripped — output muted (<reason>)', errorText: <threshold +
 //       duration>, nodeIds: []}) so agents/events observe the mute.
 //     - While latched, the loop DEFENDS the mute as a BACKSTOP (issue
-//       #3): buildGraph()'s un-duck and AudioBypass's disengage are
+//       #3) — and so does the #7 interval tick while the tab is hidden
+//       (worklet mode), when rAF is stopped: buildGraph()'s un-duck and
+//       AudioBypass's disengage are
 //       themselves latch-aware — they consult MeterTaps.isTripped() and
 //       leave the gate at the mute level instead of ramping up — but any
 //       foreign writer that still climbs the gate is caught here: if the
@@ -206,6 +269,25 @@
   var HOWL_MIN_INCREASING = 55; // >= 55 of the window's 59 steps rising
   var HOWL_FLOOR_DB = -60; // "meaningful magnitude" band-average floor
 
+  // ---- Issue #7: hidden-tab watchdog cadence / worklet wiring. ----
+  // The worklet module's URL — page-relative, matching every other
+  // src/*.js reference and the 'assets/ir/...' fetch convention.
+  var WORKLET_URL = 'src/watchdog-worklet.js';
+  // The interval latch's requested interval (250 ms, the peak sustain
+  // window). While HIDDEN, browsers clamp intervals to >= ~1 s; the
+  // detector code does not assume 250 — it measures elapsed time.
+  var WATCH_INTERVAL_MS = 250;
+  // A worklet peak older than this is stale (context suspended?) — the
+  // tick falls back to sampling analyserOut directly.
+  var WORKLET_FRESH_MS = 3000;
+  // While visible the rAF loop drives detection; the tick takes over
+  // only when the page is hidden or the loop stalled this long.
+  var WATCHDOG_STALL_MS = 500;
+  // Reduced hidden howl bar (see the #7 header section for the honest
+  // cadence math: ~1 tick/s, so 10 ticks ~= 10 s of monotonic rise).
+  var HIDDEN_HOWL_WINDOW = 10;
+  var HIDDEN_HOWL_MIN_RISING = 8;
+
   // setTargetAtTime reaches ~95% of target at 3 time constants: these
   // give the spec's ~20 ms mute ramp and ~50 ms restore ramp.
   var MUTE_TC_S = 0.02 / 3;
@@ -233,6 +315,19 @@
 
   var rafHandle = null;
   var loopRunning = false;
+
+  // ---- Issue #7 state: worklet tap, interval latch, fallback warning. ----
+  var engineLive = false; // onEngineStarted..onEngineStopped
+  var workletSetupDone = false; // setupWorklet runs at most once/session
+  var workletMode = false; // true once 'watchdog-tap' posts messages
+  var workletNode = null;
+  var workletTapTail = null; // zero-gain node: worklet -> tail -> destination
+  var workletPeakLinear = 0; // latest posted block-peak (linear)
+  var workletPeakAt = -Infinity; // when it arrived (performance/DAT ms)
+  var lastFrameAt = -Infinity; // last rAF watchdog pass (stall detection)
+  var watchTimerHandle = null;
+  var fallbackMode = false; // addModule missing/failed -> rAF-only + warning
+  var hiddenWarnEl = null;
 
   // Howl band bin indices (computed from the context sample rate).
   var bandBinLo = 1;
@@ -417,60 +512,298 @@
     lastSeenGain = v;
   }
 
-  /** The watchdog's per-frame OUT-side checks (detection only — mute
-   *  action lives in trip()). `t` is the rAF timestamp in ms. */
-  function watchOut(t, outStats) {
-    // Peak rule (threshold derived live from OUTPUT_CEILING_DBFS).
+  /** Peak rule (threshold derived live from OUTPUT_CEILING_DBFS). Same
+   *  threshold and sustain shape for the visible (rAF) and hidden
+   *  (#7 tick) callers — `hidden` only annotates the trip text, because
+   *  the honest difference is the sampling CADENCE (see the #7 header),
+   *  never the bar itself. `t` is ms on the now()/rAF clock. */
+  function peakCheck(t, peakDb, hidden) {
     var threshold = ceilingDb() + PEAK_OVERHEAD_DB;
-    if (outStats.peakDb > threshold) {
+    if (peakDb > threshold) {
       if (overSince === null) {
         overSince = t;
       } else if (t - overSince > PEAK_SUSTAIN_MS) {
         trip(
-          'output peak above ceiling',
-          'OUT peak ' + outStats.peakDb.toFixed(1) + ' dBFS > ' +
+          'output peak above ceiling' + (hidden ? ' (tab hidden)' : ''),
+          'OUT peak ' + peakDb.toFixed(1) + ' dBFS > ' +
             ceilingDb() + ' + ' + PEAK_OVERHEAD_DB + ' dB threshold for ' +
-            Math.round(t - overSince) + ' ms (> ' + PEAK_SUSTAIN_MS + ' ms)'
+            Math.round(t - overSince) + ' ms (> ' + PEAK_SUSTAIN_MS + ' ms)' +
+            (hidden ? ', sampled at the reduced hidden-tab cadence' : '')
         );
-        return;
       }
     } else {
       overSince = null;
     }
+  }
 
-    // Howl rule: raw per-frame band energy over a sliding 60-frame
-    // window (smoothingTimeConstant is 0 — see the header).
+  /** Read analyserOut's frequency buffer (the AUDIO thread keeps it
+   *  fresh even while the tab is hidden) and append ONE band-average
+   *  sample to the howl window (smoothingTimeConstant is 0 — see the
+   *  header). */
+  function howlSample() {
     analyserOut.getByteFrequencyData(freqBuf);
     var sum = 0;
     for (var i = bandBinLo; i <= bandBinHi; i++) {
       sum += freqBuf[i];
     }
-    var energy = sum / (bandBinHi - bandBinLo + 1);
-    howlWindow.push(energy);
+    howlWindow.push(sum / (bandBinHi - bandBinLo + 1));
     if (howlWindow.length > HOWL_WINDOW_FRAMES) {
       howlWindow.shift();
     }
-    if (howlWindow.length === HOWL_WINDOW_FRAMES) {
-      var rising = 0;
-      for (var s = 1; s < howlWindow.length; s++) {
-        if (howlWindow[s] > howlWindow[s - 1]) {
-          rising++;
-        }
-      }
-      if (rising >= HOWL_MIN_INCREASING && energy > howlFloorByte()) {
-        trip(
-          'howling feedback (1\u20138 kHz rise)',
-          '1\u20138 kHz band average rose in ' + rising + ' of ' +
-            (HOWL_WINDOW_FRAMES - 1) + ' consecutive frames (~1 s), band level above the ' +
-            HOWL_FLOOR_DB + ' dB floor'
-        );
+  }
+
+  /** Monotonic-rise check over the howl window. Visible cadence: the
+   *  full 60-frame / 55-rising rq3 rule. Hidden cadence (#7): the
+   *  reduced HIDDEN_* bar over the window's TAIL — at ~1 tick/s the
+   *  60-frame window would take a minute; 8 rising steps of the last
+   *  10 ticks is ~10 s of sustained rise, with the hidden peak rule as
+   *  the faster brace for howls that saturate (see the #7 header). */
+  function howlCheck(hidden) {
+    var win = howlWindow;
+    var windowLen = HOWL_WINDOW_FRAMES;
+    var minRising = HOWL_MIN_INCREASING;
+    var label = 'consecutive frames (~1 s)';
+    if (hidden) {
+      windowLen = HIDDEN_HOWL_WINDOW;
+      minRising = HIDDEN_HOWL_MIN_RISING;
+      label = 'consecutive samples at the reduced hidden-tab cadence (~10 s)';
+    }
+    if (howlWindow.length < windowLen) {
+      return;
+    }
+    var tail = howlWindow.slice(howlWindow.length - windowLen);
+    var rising = 0;
+    for (var s = 1; s < tail.length; s++) {
+      if (tail[s] > tail[s - 1]) {
+        rising++;
       }
     }
+    if (rising >= minRising && tail[tail.length - 1] > howlFloorByte()) {
+      trip(
+        'howling feedback (1\u20138 kHz rise)' + (hidden ? ' (tab hidden)' : ''),
+        '1\u20138 kHz band average rose in ' + rising + ' of ' +
+          (windowLen - 1) + ' ' + label + ', band level above the ' +
+          HOWL_FLOOR_DB + ' dB floor'
+      );
+    }
+  }
+
+  /** The watchdog's per-frame OUT-side checks (detection only — mute
+   *  action lives in trip()). `t` is the rAF timestamp in ms. */
+  function watchOut(t, outStats) {
+    peakCheck(t, outStats.peakDb, false);
+    howlSample();
+    howlCheck(false);
   }
 
   function resetDetectors() {
     overSince = null;
     howlWindow = [];
+  }
+
+  // ---------------------------------------------------------------------
+  // Issue #7 — the worklet tap, the interval latch, the fallback warning.
+  // ---------------------------------------------------------------------
+
+  /** True when the page is hidden. Defensive: a bare harness (or an
+   *  ancient browser) may not define document.hidden at all. */
+  function pageHidden() {
+    return typeof document !== 'undefined' && document && document.hidden === true;
+  }
+
+  /** The interval tick: the hidden/stalled-tab watchdog decision pass.
+   *  Runs ONLY in worklet mode (the fallback keeps the watchdog on rAF
+   *  alone, per the #7 ladder) and only when rAF is not already doing
+   *  the job (page hidden, or the loop stalled/failed). */
+  function watchTick() {
+    if (!workletMode || !engineLive || failed) {
+      return;
+    }
+    try {
+      var t = now();
+      if (tripped) {
+        // Backstop keeps working while hidden — rAF is stopped.
+        defendMute();
+        return;
+      }
+      if (!pageHidden() && t - lastFrameAt < WATCHDOG_STALL_MS) {
+        return; // the rAF loop is alive and visible — it decides
+      }
+
+      // Peak: prefer the worklet's audio-thread block peak (fresh from
+      // the message port); a stale one means the context itself went
+      // quiet — sample the analyser directly as the belt.
+      var peakLinear = workletPeakLinear;
+      if (t - workletPeakAt > WORKLET_FRESH_MS && analyserOut) {
+        analyserOut.getFloatTimeDomainData(floatBuf);
+        peakLinear = 0;
+        for (var i = 0; i < FFT_SIZE; i++) {
+          var a = floatBuf[i] < 0 ? -floatBuf[i] : floatBuf[i];
+          if (a > peakLinear) {
+            peakLinear = a;
+          }
+        }
+      }
+      var peakDb = peakLinear > 0
+        ? 20 * Math.log10(peakLinear > DB_FLOOR_LINEAR ? peakLinear : DB_FLOOR_LINEAR)
+        : -Infinity;
+      peakCheck(t, peakDb, true);
+      if (tripped) {
+        return;
+      }
+      howlSample();
+      howlCheck(true);
+    } catch (err) {
+      // Same one-diagnostic discipline as the rAF loop: a wedged tick
+      // stops the timer; the graph (and the rAF path) are untouched.
+      stopWatchTimer();
+      console.error(
+        'MeterTaps: hidden-tab watchdog tick failed — interval latch stopped; the rest of the app is unaffected.',
+        err
+      );
+    }
+  }
+
+  function startWatchTimer() {
+    if (watchTimerHandle !== null || typeof setInterval !== 'function') {
+      return;
+    }
+    watchTimerHandle = setInterval(watchTick, WATCH_INTERVAL_MS);
+  }
+
+  function stopWatchTimer() {
+    if (watchTimerHandle !== null) {
+      try {
+        if (typeof clearInterval === 'function') {
+          clearInterval(watchTimerHandle);
+        }
+      } catch (err) {
+        /* nothing to clear */
+      }
+      watchTimerHandle = null;
+    }
+  }
+
+  /** Attempt the worklet tap once per session. Any miss (no
+   *  audioWorklet, addModule rejection — old browser, file:// context)
+   *  drops to fallbackMode: rAF-only watchdog + the interim
+   *  visibilitychange warning. */
+  function setupWorklet() {
+    if (workletSetupDone) {
+      return;
+    }
+    workletSetupDone = true;
+    var ctx = window.AudioEngine && window.AudioEngine.audioContext;
+    var aw = ctx && ctx.audioWorklet;
+    if (!aw || typeof aw.addModule !== 'function') {
+      enableFallback();
+      return;
+    }
+    aw.addModule(WORKLET_URL)
+      .then(function () {
+        var node = new ctx.AudioWorkletNode(ctx, 'watchdog-tap', {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          outputChannelCount: [1]
+        });
+        node.port.onmessage = function (ev) {
+          if (ev && ev.data && ev.data.type === 'watchdog-block') {
+            workletPeakLinear = ev.data.peak > 0 ? ev.data.peak : 0;
+            workletPeakAt = now();
+          }
+        };
+        // Silent side-tap at the SAME final-output point as
+        // analyserOut: attenuator -> worklet (passthrough) -> zero-gain
+        // tail -> destination. The destination edge keeps process()
+        // pulled; the zero gain means the destination never hears the
+        // passthrough copy on top of the program.
+        var tail = ctx.createGain();
+        tail.gain.value = 0;
+        window.AudioGraph.getOutputAttenuator().connect(node);
+        node.connect(tail);
+        tail.connect(ctx.destination);
+        workletNode = node;
+        workletTapTail = tail;
+        workletMode = true;
+        hideHiddenWarning(); // protection active — no interim warning
+        if (engineLive) {
+          startWatchTimer();
+        }
+      })
+      .catch(function (err) {
+        console.warn(
+          'MeterTaps: audio worklet unavailable — watchdog falls back to rAF-only sampling with NO hidden-tab protection (issue #7 interim mitigation active).',
+          err
+        );
+        enableFallback();
+      });
+  }
+
+  /** Interim mitigation: watch visibility, and while the engine is live
+   *  in rAF-only mode, hold a non-modal operator warning on screen. */
+  function enableFallback() {
+    if (fallbackMode) {
+      return;
+    }
+    fallbackMode = true;
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
+      return; // bare harness — nothing to warn on, nothing breaks
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (pageHidden()) {
+        if (fallbackMode && engineLive && !tripped) {
+          showHiddenWarning();
+        }
+      } else {
+        hideHiddenWarning();
+      }
+    });
+  }
+
+  /** The warning element (JS-created, same creation pattern as the
+   *  trip alert; styled by .watchdog-alert.watchdog-hint — the calm
+   *  amber vocabulary, NOT the safety-red alert). Non-modal, no
+   *  button: the remedy is "bring the tab back", not a click. */
+  function showHiddenWarning() {
+    if (hiddenWarnEl && hiddenWarnEl.parentNode) {
+      return;
+    }
+    var canvasEl = document.getElementById('chain-canvas');
+    if (!canvasEl) {
+      return;
+    }
+    var el = document.createElement('div');
+    el.id = 'watchdog-hidden-warning';
+    el.className = 'watchdog-alert watchdog-hint';
+    el.setAttribute('role', 'status');
+    var text = document.createElement('span');
+    text.className = 'watchdog-alert-text';
+    text.textContent = 'Keep this tab visible during the show — protection is reduced while hidden.';
+    el.appendChild(text);
+    var note = document.getElementById('safe-output-note');
+    var anchors = canvasEl.querySelectorAll && canvasEl.querySelectorAll('.anchor');
+    var outAnchor = anchors && anchors.length ? anchors[anchors.length - 1] : null;
+    if (note && note.parentNode === canvasEl) {
+      canvasEl.insertBefore(el, note.nextSibling);
+    } else if (outAnchor && outAnchor.parentNode === canvasEl) {
+      canvasEl.insertBefore(el, outAnchor.nextSibling);
+    } else {
+      canvasEl.appendChild(el);
+    }
+    hiddenWarnEl = el;
+  }
+
+  function hideHiddenWarning() {
+    if (hiddenWarnEl) {
+      try {
+        if (hiddenWarnEl.parentNode) {
+          hiddenWarnEl.parentNode.removeChild(hiddenWarnEl);
+        }
+      } catch (err) {
+        /* already detached */
+      }
+      hiddenWarnEl = null;
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -595,6 +928,7 @@
         } else {
           watchOut(t, outStats);
         }
+        lastFrameAt = t; // #7: stall detection for the interval latch
       }
     } catch (err) {
       // House precedent (src/meters.js): log once and stop the loop — a
@@ -725,6 +1059,17 @@
         Meters.setEngineState(true);
       }
       startLoop();
+      // Issue #7: audio-thread watchdog tap (or the fallback ladder).
+      // Async by nature (addModule); the rAF path above covers the gap.
+      engineLive = true;
+      lastFrameAt = now();
+      setupWorklet();
+      if (workletMode) {
+        startWatchTimer();
+      }
+      if (fallbackMode && pageHidden()) {
+        showHiddenWarning(); // restarted while already hidden (rAF-only)
+      }
     });
   }
 
@@ -735,6 +1080,9 @@
       return;
     }
     stopLoop();
+    stopWatchTimer();
+    hideHiddenWarning(); // nothing to protect while stopped
+    engineLive = false;
     resetDetectors();
     var Meters = getMeters();
     if (Meters && typeof Meters.setEngineState === 'function') {

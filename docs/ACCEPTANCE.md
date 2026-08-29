@@ -85,28 +85,59 @@ PA. Start from the factory **Classic Karaoke** preset.
 - [ ] Reordering/removing nodes mid-signal: no pop, no dropped audio.
 - [ ] Date / operator / result: ____________
 
-## 3. Hidden-tab watchdog behavior (issue #7 — documented limitation)
+## 3. Hidden-tab watchdog behavior (issue #7 — protection active while hidden)
 
-Current documented behavior (src/meter-taps.js): the ONE rAF loop drives
-both meters and the watchdog, and **rAF auto-pauses when the tab is
-hidden** — while hidden, the meters decay to dark and the watchdog stops
-sampling. No fallback timer exists by design. Issue #7 will move watchdog
-detection onto the audio thread so protection continues in a hidden tab;
-until then, verify the limitation is exactly as documented:
+Issue #7 moved watchdog detection OFF the paint loop: an
+AudioWorkletProcessor (`src/watchdog-worklet.js`, 'watchdog-tap') samples
+the final output on the **audio thread** (which never pauses for tab
+visibility) and posts block peaks to the main thread, where a
+`setInterval` latch makes the trip decision whenever rAF cannot (tab
+hidden, or the frame loop stalled). rAF now drives only the meters — and
+the visible-cadence watchdog pass. Trip thresholds, the latch, and the
+human-only **Restore output** button are unchanged
+(`tests/test-hidden-tab-watchdog.js` proves the DSP/decision math
+headlessly, including the hidden sustained-peak and rising-howl trips).
+
+**Honest cadence disclosure (worklet mode):** browsers clamp background-tab
+timers to ≥ ~1 s (audio-playing tabs are exempt from intensive
+throttling, and this app plays audio). While hidden, the peak rule
+therefore evaluates at ~1 s granularity — a sustained hot signal trips in
+~1–2 s instead of ~250 ms, same threshold — and the howl rule uses a
+reduced bar (8 strictly rising band samples over the last 10 ticks ≈
+10 s of monotonic rise; a howl that saturates faster parks the output
+above the ceiling and is caught by the peak rule). Documented and
+deliberate; never silently equivalent.
+
+**Fallback mode (no `audioWorklet` / `addModule` fails — old browser,
+`file://` context):** the watchdog reverts to rAF-only sampling with NO
+hidden-tab protection, and the interim mitigation fires: a non-modal
+warning — *“Keep this tab visible during the show — protection is reduced
+while hidden.”* — appears for exactly as long as the page is hidden while
+the engine is live. **Operator rule in fallback mode: keep the tab
+visible (or on a second screen) during the event.** When the worklet is
+live there is no warning — protection is active, only the cadence is
+reduced (disclosed above).
+
+Physical walk (the stubs prove the math; this proves the real browser's
+schedulers and the real audio thread):
 
 - [ ] Start the engine, then switch to another tab/window for ~30 s with
       program running: on return, meters resume immediately, no stale
       readings, no error in the console.
-- [ ] With the tab visible, an above-ceiling sustained signal still trips
-      the watchdog and latches (automated for the DSP math by
-      `tests/test-watchdog-tap-and-latch.js`; this checks the real
-      browser's rAF cadence).
-- [ ] **Operator rule while #7 is open**: keep the karaoke tab visible
-      (or on a second screen) during an event; do not background it
-      behind a fullscreen lyrics window.
-- [ ] When issue #7 ships: replace this section with the hidden-tab
-      protection check (trip possible while hidden, restore still
-      human-only).
+- [ ] Console shows NO fallback warning was raised (the worklet loaded);
+      if it did appear, note the browser — you are in rAF-only mode and
+      the operator rule above applies.
+- [ ] **Sustained hot signal while hidden**: with the tab visible and an
+      above-ceiling test tone running, switch the tab away for ~10 s.
+      On return the watchdog has TRIPPED (alert visible, output muted)
+      and only the human **Restore output** button reopens it.
+- [ ] **Rising howl while hidden**: walk a mic toward the speakers until
+      a howl starts building, then switch tabs away. On return the
+      watchdog has tripped (howl or peak reason). Restore, then verify
+      the warning-free worklet mode again.
+- [ ] Fallback spot-check (optional, e.g. an old browser): confirm the
+      “Keep this tab visible” warning appears when the tab is hidden
+      with the engine live, and clears when the tab comes back.
 - [ ] Date / operator / result: ____________
 
 ## 4. Real-browser WebMCP exercise of all eight tools
