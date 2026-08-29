@@ -194,8 +194,8 @@ never swap roles.
 ### Hierarchy
 - **Title** (700, 0.75rem, tracked 0.08em, uppercase): the identity legend on the status strip; silkscreen register.
 - **Body** (400/600, 0.85–1rem, 1.5): prose values, button labels, toast summaries.
-- **Label** (700, 0.7rem / 0.625rem, 0.08em, uppercase): panel headers, param labels, readout labels, optgroup legends — the surface-wide micro-label.
-- **Readout** (mono, tabular-nums, 0.625–0.95rem): every machine value — sample rate, latency, node count, meter dB, preset name, param values.
+- **Label** (700, 0.7rem / 11.2px, 0.08em, uppercase): panel headers, param labels, readout labels, optgroup legends — the surface-wide micro-label.
+- **Readout** (mono, tabular-nums, 0.7–0.95rem): every machine value — sample rate, latency, node count, meter dB, preset name, param values.
 
 ### Named Rules
 **The Register Rule.** If a value is machine state, it renders in the mono readout register with tabular numerals; if it is a human label, it renders as a silkscreen legend. Nothing in between.

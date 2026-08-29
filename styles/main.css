@@ -274,7 +274,9 @@ body {
 }
 
 .readout-label {
-  font-size: 0.625rem;
+  /* 0.7rem silkscreen floor (11.2px) — these are the registers read from
+     across a dark venue; 0.625rem was below the declared 11px floor. */
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -294,11 +296,11 @@ body {
 /* Fixed value slots: mono + tabular numerals + a per-slot min-width, so
    '—' becoming '48.0 kHz' changes glyphs, never the strip's geometry. */
 #readout-sample-rate {
-  min-width: 7ch;
+  min-width: 8ch;
 }
 
 #readout-latency {
-  min-width: 6ch;
+  min-width: 7ch;
 }
 
 #readout-node-count {
@@ -760,7 +762,8 @@ select.control {
   border-radius: 3px;
   background: var(--chip-family, var(--line-strong));
   color: var(--on-accent);
-  font-size: 0.625rem;
+  /* 0.6875rem — the declared initials floor (matches the node-card chip). */
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -1386,7 +1389,8 @@ select.control {
    styling never carries meaning on its own. Uppercasing degrades to the
    markup's title case where a platform ignores text-transform here. */
 #preset-select optgroup {
-  font-size: 0.625rem;
+  /* 0.7rem — the .readout-label floor applies to the native popup too. */
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1848,7 +1852,7 @@ select.control {
 
 .mcp-harness-section-title {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--text-muted);
@@ -1885,7 +1889,7 @@ select.control {
   padding: 0.05rem 0.35rem;
   border: 1px solid var(--hairline);
   border-radius: 3px;
-  font-size: 0.62rem;
+  font-size: 0.6875rem;
   letter-spacing: 0.05em;
   color: var(--text-muted);
 }
@@ -1899,7 +1903,7 @@ select.control {
 
 .mcp-harness-param {
   font-family: var(--font-readout);
-  font-size: 0.66rem;
+  font-size: 0.6875rem;
   line-height: 1.6;
   color: var(--text-muted);
   white-space: nowrap;
@@ -1955,7 +1959,7 @@ select.control {
   border-radius: 4px;
   background: var(--bg-body);
   font-family: var(--font-readout);
-  font-size: 0.66rem;
+  font-size: 0.6875rem;
   line-height: 1.5;
   color: var(--text-primary);
   white-space: pre;
@@ -1989,7 +1993,7 @@ select.control {
   border-radius: 4px;
   background: var(--bg-body);
   font-family: var(--font-readout);
-  font-size: 0.66rem;
+  font-size: 0.6875rem;
   line-height: 1.7;
 }
 
@@ -2035,7 +2039,7 @@ select.control {
 
 .mcp-harness-undo-depth {
   font-family: var(--font-readout);
-  font-size: 0.66rem;
+  font-size: 0.6875rem;
   color: var(--text-muted);
 }
 
@@ -2043,7 +2047,7 @@ select.control {
   flex: 1 1 auto;
   min-width: 0;
   text-align: right;
-  font-size: 0.6rem;
+  font-size: 0.6875rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2099,7 +2103,9 @@ select.control {
    color the readout ever carries. */
 .meter-readout {
   font-family: var(--font-readout);
-  font-size: 0.625rem;
+  /* 0.7rem silkscreen floor (11.2px) — dB values are read at distance;
+     '−12.0' / 'CLIP' / '−∞' fit the 96px unit right-aligned at this size. */
+  font-size: 0.7rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   text-align: right;

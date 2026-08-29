@@ -21,8 +21,8 @@ No simulated answers (approval mode).
 | 1 | `$impeccable layout` | **[P1]** Default-state occlusion: `#chain-list` `min-height: 1.5rem` lets the list shrink below content in the bounded VIS-7 vertical canvas; overflowing cards paint over the OUT anchor/meter (50%) and the safe-output note (47%); watchdog Restore banner appends into the same buried region. Fix shrink + stacking; audit both flow modes. | **done** (user-approved 2026-08-28) |
 | 2 | `$impeccable clarify` | **[P1]** Engineer-only param vocabulary — no plain-language layer anywhere for the non-engineer operator (Marco). **[P2]** Pre-Start affordance dishonesty — "Drag an effect here…" hint while palette is pointer-locked until Start; ambiguous 0.55 dim. | **done** (user-approved 2026-08-28) |
 | 3 | `$impeccable harden` | **[P1]** Dead-end error states — "Failed to start (Permission denied)" names failures, teaches no recovery; map DOMException paths to operator-voice sentences + next action, technical string demoted to footnote. | **done** (user-approved 2026-08-28) |
-| 4 | `$impeccable typeset` | **[P2]** 10px text in the most distance-critical registers — RATE/LATENCY/NODES micro-labels and meter dB readouts (incl. CLIP) at 0.625rem, violating DESIGN.md's own 11px floor (DESIGN.md internally inconsistent — reconcile). Widen fixed slots. | queued |
-| 5 | `$impeccable polish` | **[user-included]** Canvas-level bypass indication — engaged Bypass currently changes nothing below the strip; a bypassed chain should read as bypassed at a glance (deferred scope promoted per user answer). Also the round's final finish pass. | queued |
+| 4 | `$impeccable typeset` | **[P2]** 10px text in the most distance-critical registers — RATE/LATENCY/NODES micro-labels and meter dB readouts (incl. CLIP) at 0.625rem, violating DESIGN.md's own 11px floor (DESIGN.md internally inconsistent — reconcile). Widen fixed slots. | **done-pending-approval** |
+| 5 | `$impeccable polish` | **[user-included]** Canvas-level bypass indication — engaged Bypass currently changes nothing below the strip; a bypassed chain should read as bypassed at a glance (deferred scope promoted per user answer). Also the round's final finish pass. | in-progress |
 
 Family-edge detector flags are **adjudicated keep** (ratified Touring Rack
 encoding, redundantly labeled) — not a refinement entry. Minor observations
@@ -315,3 +315,61 @@ stay in the snapshot as backlog.
   were exercised via a real change event on an injected second `<option>`
   (the fake-mic flag exposes exactly one input device); the handler and
   engine code paths are real, the device list length is environmental.
+
+### Entry 4 — `$impeccable typeset` (P2 sub-11px readouts) — **done-pending-approval**
+
+- **Files changed**: `styles/main.css` (9 font-size raises + 2 slot
+  min-widths + floor comments), `DESIGN.md` (hierarchy reconciliation),
+  `.impeccable/design.json` (ds-chip CSS string only). No markup, no JS,
+  no tokens, no id/class contracts touched.
+- **Raises (before → after)**:
+  - `.readout-label` (RATE/LATENCY/NODES) 0.625rem → **0.7rem** (10→11.2px),
+    same 700/0.08em/uppercase vocabulary — size only.
+  - `.meter-readout` (dB / CLIP latch) 0.625rem → **0.7rem** — fits the
+    96px unit right-aligned ('−12.0'/'CLIP'/'−∞' measured, no overflow;
+    `.meter-unit`/`.meter-canvas`/`src/meters.js` CANVAS_W 96 NOT changed,
+    lockstep comment intact).
+  - `#preset-select optgroup` (PS-4 legend, the detector's third flagged
+    instance) 0.625rem → **0.7rem**.
+  - `.node-chip::before` initials 0.625rem → **0.6875rem** (the declared
+    initials floor; matches the node-card chip; fits the 1.25rem square).
+  - MCP harness (dev-only, grep-proof floor): `.mcp-harness-section-title`
+    0.68rem, `.mcp-harness-badge` 0.62rem, `.mcp-harness-param` and
+    `.mcp-harness-params` 0.66rem, `.mcp-harness-undo-depth` 0.66rem,
+    `.mcp-harness-undo-hint` 0.6rem — all → **0.6875rem**.
+  - Fixed slots widened for headroom: `#readout-sample-rate` 7ch → **8ch**,
+    `#readout-latency` 6ch → **7ch** (`.readout-value` stays 0.95rem; node
+    count slot 3ch unchanged).
+- **DESIGN.md reconciliation**: Label hierarchy now reads
+  "(700, 0.7rem / 11.2px, …)" and Readout "0.7–0.95rem" — the 11px Floor
+  Rule's claim is now true of the tree. `.impeccable/design.json`'s only
+  size-quoting CSS string (ds-chip initials 0.625rem) updated to 0.6875rem;
+  typographyMeta purposes quote no sizes.
+- **Evidence** (playwright-core + system Chrome, temp server 8191/8192,
+  stopped; fake-mic flags, real Start → Live; zero page errors):
+  - Grep-proof: zero `font-size` declarations below 0.6875rem in
+    styles/main.css + index.html; the only sub-0.7rem survivors are the
+    0.6875rem initials floor (9 instances, all = the declared floor).
+  - Computed: all three `.readout-label` = 11.2px; `.meter-readout` =
+    11.2px inside the 96px unit.
+  - Slot containment: worst-case strings injected live — '48.0 kHz' 73px
+    ≤ 8ch slot, '47.8 ms' 64px ≤ 7ch slot, '8' 45px — no overflow/wrap;
+    meter readout '−12.0'/'CLIP'/'−∞' all fit 96px (scrollWidth ==
+    clientWidth, no clipping).
+  - One-row: topbar 65px at 1440×900 both default and Live states (equals
+    the entry-3 baseline). Width sweep 1440/1100/950/900/880 vs stashed
+    HEAD: identical wrap behavior at every width (1440 one-row; wrapped
+    below, +2px row height from the larger labels only) — no breakpoint
+    regression; entry-3 max-widths still hold.
+  - Detector (`detect.mjs --json index.html`): **0 findings** (regex-mode
+    degradation — parser modules unavailable, noted). On `styles/main.css`:
+    13 findings, all pre-existing advisories (0.8/0.9/0.95/1.05rem ramp,
+    rgba/`#FFFFFF` colors) — zero undersized-text findings.
+  - `node tests/run.js`: **14/14 files, 770 checks, all green**.
+- **Residuals (disclosed)**: the meter canvas's dB scale numerals
+  (−60/−40/−20/−6/0) are canvas-painted at 9px mono by `src/meters.js`
+  (`ctx.font = '9px …'`) — CSS cannot reach them and a repaint to 11px
+  risks label collision inside the fixed 96×26 grid, so they are left to
+  meter-component scope. They are redundant scale ticks (the DOM readout
+  at 0.7rem carries the value at distance), and the canvas contract
+  comment still says 9px truthfully.
