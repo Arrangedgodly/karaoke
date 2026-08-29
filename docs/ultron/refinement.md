@@ -22,7 +22,7 @@ No simulated answers (approval mode).
 | 2 | `$impeccable clarify` | **[P1]** Engineer-only param vocabulary — no plain-language layer anywhere for the non-engineer operator (Marco). **[P2]** Pre-Start affordance dishonesty — "Drag an effect here…" hint while palette is pointer-locked until Start; ambiguous 0.55 dim. | **done** (user-approved 2026-08-28) |
 | 3 | `$impeccable harden` | **[P1]** Dead-end error states — "Failed to start (Permission denied)" names failures, teaches no recovery; map DOMException paths to operator-voice sentences + next action, technical string demoted to footnote. | **done** (user-approved 2026-08-28) |
 | 4 | `$impeccable typeset` | **[P2]** 10px text in the most distance-critical registers — RATE/LATENCY/NODES micro-labels and meter dB readouts (incl. CLIP) at 0.625rem, violating DESIGN.md's own 11px floor (DESIGN.md internally inconsistent — reconcile). Widen fixed slots. | **done-pending-approval** |
-| 5 | `$impeccable polish` | **[user-included]** Canvas-level bypass indication — engaged Bypass currently changes nothing below the strip; a bypassed chain should read as bypassed at a glance (deferred scope promoted per user answer). Also the round's final finish pass. | in-progress |
+| 5 | `$impeccable polish` | **[user-included]** Canvas-level bypass indication — engaged Bypass currently changes nothing below the strip; a bypassed chain should read as bypassed at a glance (deferred scope promoted per user answer). Also the round's final finish pass. | **done-pending-approval** |
 
 Family-edge detector flags are **adjudicated keep** (ratified Touring Rack
 encoding, redundantly labeled) — not a refinement entry. Minor observations
@@ -373,3 +373,78 @@ stay in the snapshot as backlog.
   meter-component scope. They are redundant scale ticks (the DOM readout
   at 0.7rem carries the value at distance), and the canvas contract
   comment still says 9px truthfully.
+
+### Entry 5 — `$impeccable polish` (bypass canvas indication + finish pass) — **done-pending-approval**
+
+- **Files changed**:
+  - `src/main.js` +62/−10 — entry 5: lazily-resolved `.canvas-panel` handle
+    (lazily because the node test harnesses stub `document` without
+    `querySelector`); `setBypassButtonLabel()` now toggles `bypassed` on the
+    panel from the SAME `AudioBypass.isEngaged()` read that drives the strip
+    button; `surfaceLoss()` removes the class on lifecycle loss (#4 paths);
+    `recoverFromLoss()` re-syncs via `setBypassButtonLabel()`; the stale
+    UI-3 "deferred" comment replaced with a superseded-note. PLUS one
+    finish-pass defect fix (see below): `Array.prototype.forEach.call` over
+    `deviceSelect.children` (line ~356) — the direct `.forEach` threw on
+    every real-browser Start (HTMLCollection has no forEach), surfacing a
+    false "Could not start." after the mic was granted. Audio routing,
+    spacebar guards, entry-1–4 behaviors: untouched.
+  - `styles/main.css` +55/−0 — the entry-5 block at file end: 150ms ease
+    opacity transition on `.chain-list`/`.flow-toggle`; both to `opacity:
+    0.55` under `.canvas-panel.bypassed` (the engine-not-started gated
+    precedent value — no new token needed); a silkscreen `BYPASSED` state
+    line as `.chain-list::after` (pure CSS content — no markup, no
+    SortableJS child) in the panel-legend register (`--font-readout`,
+    0.7rem, 0.08em, `--text-muted`), with a horizontal-mode variant riding
+    the row after the last card. Tokens only; no raw hex; no keyframes.
+- **Indication design**: only the CHAIN recedes — node cards + flow toggle
+  to 0.55 with the BYPASSED silkscreen. Deliberately NOT de-emphasized:
+  both anchors + their meters, safe-output note, watchdog alert,
+  empty-hint (operator ground truth — the dry path is live while bypassed;
+  meters stay truthful), and the palette/presets flanks (the operator may
+  prep the next chain while bypassed). Verified in code: the OUT tap hangs
+  off the FINAL-output attenuator (post-chainGate), so while bypassed it
+  honestly reads the muted chain; the dry path itself is un-metered (see
+  residuals).
+- **Scan findings (one screenshot round: default, live, bypassed
+  [vertical+horizontal], all-collapsed, 900px wrap, ?dev harness)**:
+  - FIXED: the Start-path `HTMLCollection.forEach` crash above (triable as
+    tier-1: broken task + misleading state, found because the verification
+    harness exercises the REAL Start path).
+  - LEFT (pre-existing, by design or other entries' adjudicated scope):
+    horizontal mode owns an x-scroll with the OUT block at the scrollable
+    right end (entry-1 ratified behavior); meter-canvas 9px scale numerals
+    (entry-4 disclosed residual); family-edge borders + detent ticks +
+    font-stack (adjudicated keeps per the checklist preamble); bounded
+    vertical canvas scrolls internally with long chains (entry-1 ratified).
+- **Evidence** (playwright-core + system Chrome, fake-mic flags, real
+  Start → Live; temp server 8195, stopped; zero page errors):
+  - 91/91 checks across 5 scenarios (vertical/horizontal × 1440/900 +
+    collapsed + ?dev): pre-start no class; live chain opacity 1 + no tag;
+  - bypassed: class present, chain + flow toggle computed 0.55, MIC/OUT
+    anchors, meter, note, hint, palette, presets all computed 1 (asserted
+    differ); BYPASSED tag renders; occlusion guard 0px overlap in every
+    state WITH the new class present (entry-1 geometry re-measured);
+  - spacebar disengage restores (class gone, opacity 1, tag none);
+    spacebar re-engage; `forceStreamLoss('device')` → NO stuck bypassed
+    class; dev harness + agent toast render with zero page errors.
+  - Screenshot review: default/live/bypassed states inspected (chain
+    region visibly recedes, anchors at full strength, no overlap); the
+    ?dev-toast capture failed remote image analysis twice (format error)
+    — its layout is verified by the geometry/no-page-error checks only
+    (disclosed).
+  - `node --check src/main.js` clean; `node tests/run.js` **14/14 files,
+    770 checks, all green** (audio-bypass/watchdog semantics untouched —
+    no DOM assertions existed to extend).
+  - Detector: `detect.mjs --json index.html` self-degraded to regex mode
+    (`[]`, exit 0), same degradation as entries 1–4 — no new findings.
+- **Residuals (disclosed)**: (1) the OUT meter taps the chain path's
+  final-output attenuator, so during bypass it reads the muted chain
+  (≈−∞), not the dry path the room hears — honest w.r.t. the chain but
+  not a dry-path level readout; re-tapping the OUT analyser onto the dry
+  path is audio-graph surgery outside this entry (and would change what
+  the watchdog sees). (2) The BYPASSED tag's ::after box is a real flex
+  item — it adds ~21px of chain height when engaged; measured inside the
+  bounded canvas with the occlusion guard still at 0px overlap in all
+  states. (3) `recoverFromLoss` re-syncs the class but the strip button's
+  label too — both from the one read, so no drift path exists.

@@ -35,6 +35,19 @@ console.log('App scaffold loaded');
   var statusTextEl = document.getElementById('status-text');
   var startHintEl = document.getElementById('start-hint');
   var bypassButton = document.getElementById('bypass-toggle-button');
+  // Refinement entry 5: the canvas panel carrying the bypassed indication
+  // (class toggled in setBypassButtonLabel below, removed on lifecycle
+  // loss — see surfaceLoss). Resolved lazily, not at load: the node-side
+  // test harnesses stub `document` as a getElementById-only shim, and the
+  // panel is only needed once the engine is live anyway. Null-safe like
+  // every other element here.
+  var canvasPanel = null;
+  function getCanvasPanel() {
+    if (!canvasPanel && typeof document.querySelector === 'function') {
+      canvasPanel = document.querySelector('.canvas-panel');
+    }
+    return canvasPanel;
+  }
 
   if (!startButton || !deviceSelect) {
     // Top-bar markup isn't present (e.g. not yet built, or restructured
@@ -47,12 +60,18 @@ console.log('App scaffold loaded');
   // in styles/main.css — solid fill + glow, per px1-layout-spec.md) are
   // derived from the same AudioBypass.isEngaged() read, every time, so they
   // can never drift out of sync with each other or with the real audio
-  // routing state.
+  // routing state. Refinement entry 5: the same read now also toggles the
+  // canvas panel's `bypassed` class (the chain-region de-emphasis in
+  // styles/main.css), so strip button and canvas stay in lockstep too.
   function setBypassButtonLabel() {
+    var isEngaged = window.AudioBypass.isEngaged();
     if (bypassButton) {
-      var isEngaged = window.AudioBypass.isEngaged();
       bypassButton.textContent = 'Bypass: ' + (isEngaged ? 'ON' : 'OFF');
       bypassButton.classList.toggle('engaged', isEngaged);
+    }
+    var canvasPanel = getCanvasPanel();
+    if (canvasPanel) {
+      canvasPanel.classList.toggle('bypassed', isEngaged);
     }
   }
 
@@ -101,12 +120,16 @@ console.log('App scaffold loaded');
     });
   }
 
-  // UI-3 (deferred, out of scope here): dimming/desaturating the chain
-  // canvas while bypass is engaged, per px1-layout-spec.md's "Bypass
-  // engaged vs. normal" state row. Flagging as still-deferred rather than
-  // silently building it — the real canvas exists now (src/canvas.js), but
-  // this specific bypass-interaction visual wasn't part of UI-3's own task
-  // spec, so it isn't added here as an incidental side effect.
+  // UI-3 note (superseded by refinement entry 5, 2026-08-29): the
+  // dimming of the chain canvas while bypass is engaged — deferred here as
+  // out of UI-3's scope — now EXISTS as the `bypassed` class on the
+  // .canvas-panel, toggled by setBypassButtonLabel() above. Scope: only
+  // the chain region (.chain-list node cards + .flow-toggle) recedes, to
+  // the same 0.55 as the engine-not-started gate; anchors, meters, the
+  // safe-output note, the watchdog alert, the empty-hint, and the
+  // palette/presets flanks stay at full strength — the operator's ground
+  // truth (output health, dry-path meters) must stay readable while the
+  // dry path is what the room hears. See styles/main.css's entry-5 rules.
 
   // ---------------------------------------------------------------------
   // Refinement entry 3 ($impeccable harden, 2026-08-28) — operator-voice
@@ -330,7 +353,13 @@ console.log('App scaffold loaded');
         deviceSelect.children[0].selected = true;
       }
       var selOpt = null;
-      deviceSelect.children.forEach(function (o) {
+      // Refinement entry 5 (finish-pass defect fix): .children is an
+      // HTMLCollection, which has NO .forEach in the DOM spec — the direct
+      // call threw on every real-browser Start (the device list rebuild
+      // runs inside the Start success path), surfacing as a false "Could
+      // not start." after the mic was already granted. Array's generic
+      // forEach over the collection is the byte-minimal fix.
+      Array.prototype.forEach.call(deviceSelect.children, function (o) {
         if (o.selected) {
           selOpt = o;
         }
@@ -393,6 +422,17 @@ console.log('App scaffold loaded');
     if (bypassButton) {
       bypassButton.disabled = true; // no live source to bypass anymore
     }
+    // Refinement entry 5: the bypassed canvas indication must not outlive
+    // the session it described — with the engine down there is no dry path
+    // either, so a dimmed chain would be a stuck lie. The AudioBypass
+    // state itself is left untouched (the context may be suspended or
+    // closed; ramping it here is neither safe nor meaningful); if the
+    // session recovers, recoverFromLoss() re-syncs the class from the
+    // same single read below.
+    var canvasPanel = getCanvasPanel();
+    if (canvasPanel) {
+      canvasPanel.classList.remove('bypassed');
+    }
     if (window.MeterTaps) {
       window.MeterTaps.onEngineStopped(); // stops the loop; KEEPS the #3 latch
     }
@@ -406,6 +446,11 @@ console.log('App scaffold loaded');
     if (bypassButton) {
       bypassButton.disabled = false;
     }
+    // Refinement entry 5: re-sync the bypassed canvas indication from the
+    // same single-source read (if bypass was engaged when the session
+    // dropped, it is still engaged now — and the dry path is live again,
+    // so the dim honestly returns).
+    setBypassButtonLabel();
     if (window.MeterTaps) {
       window.MeterTaps.onEngineStarted();
     }

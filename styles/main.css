@@ -2190,3 +2190,58 @@ select.control {
   align-self: center;
   max-width: 22rem;
 }
+
+/* ===========================================================================
+   Refinement entry 5 ($impeccable polish, 2026-08-29) — BYPASS-ENGAGED
+   CANVAS INDICATION. src/main.js toggles `bypassed` on the .canvas-panel
+   from the SAME single-source read (AudioBypass.isEngaged()) that drives
+   the strip button's label/.engaged class, so the two can never drift.
+
+   What reads as bypassed: only the CHAIN — the node cards (.chain-list)
+   and the flow toggle recede to 0.55 opacity, the exact gated-region
+   precedent above (.layout.engine-not-started), so "out of the audio
+   path" and "locked before Start" share one house vocabulary. No glow,
+   no keyframes: a single 150ms ease opacity transition per the house
+   motion budget (and none at all under prefers-reduced-motion — the
+   global guard zeroes all transitions).
+
+   What must NOT recede (the operator's ground truth while bypassed — the
+   dry path is what the room hears, so output health stays readable):
+   both .anchor blocks with their meters, the safe-output note, the
+   watchdog alert, and the empty-hint. These are siblings of the
+   chain-list inside .canvas, so scoping the dim to .chain-list +
+   .flow-toggle leaves them at full strength. The palette/presets flanks
+   also stay live on purpose: the operator may prep the next chain while
+   bypassed. The silkscreen BYPASSED state line (chain-list::after) is
+   pure CSS content — no markup, no SortableJS child, no geometry change
+   beyond its own flex item box.
+   =========================================================================== */
+
+.canvas-panel .chain-list,
+.canvas-panel .flow-toggle {
+  transition: opacity 150ms ease;
+}
+
+.canvas-panel.bypassed .chain-list,
+.canvas-panel.bypassed .flow-toggle {
+  opacity: 0.55;
+}
+
+.canvas-panel.bypassed .chain-list::after {
+  content: 'BYPASSED';
+  flex: none;
+  align-self: center;
+  padding-top: 0.35rem;
+  font-family: var(--font-readout);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* Horizontal flow: the state line rides the row after the last card
+   instead of stacking beneath the column — same register, same tokens. */
+.canvas-panel.flow-horizontal.bypassed .chain-list::after {
+  align-self: center;
+  padding: 0 0 0 0.5rem;
+}
