@@ -533,3 +533,8 @@ names the three group legends, new Palette Group Label component
 round-trip OK, all 24 var(--…) refs resolve in styles/main.css, all 26
 narrative strings verbatim vs DESIGN.md. Cycle-3 finishing phase closed —
 cycle acceptance is the remaining gate.
+
+## Cycle 3 — Finishing COMPLETE (2026-08-30)
+Closing critique 36/40 (best score; no P2+ findings, no regressions),
+final document refresh landed, all work consolidated to main. Finishing
+phase closed per user gate. REMAINING: final cycle acceptance (user).
