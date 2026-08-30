@@ -402,3 +402,18 @@ Production complete + PR #17 reconciled. Phase: ultron-impeccable (approval
 mode) — document + critique passes over the ten-effect surface, then gated
 refinements. Surface artifacts exist from cycle 2 (PRODUCT.md,
 .impeccable/surfaces/index-html.md, .impeccable/design.json).
+
+### Finishing (2026-08-29): document pass done (DESIGN.md confirmed current;
+sidecar regenerated with cycle-3 colorMeta + badge/param-select components).
+Critique 32/40 (snapshot 2026-08-30T04-01-50Z__index-html.md; trend
+27→33→35→32, polish-layer dip). Gate answers: help-layer first · Drive/Tone
+normalize 0–100 · all issues. Checklist: refinement.md entries 1–5 queued.
+**Entry 1 (clarify, P2-1 help gap) landed 2026-08-29 — awaiting user
+approval**: 14 plain-language lines for gate/distortion/chorus/autotune in
+src/param-controls.js (28/28 params helped across all ten types, same
+mechanism/register/a11y as the cycle-2 layer; autotune Key line carries the
+experimental + accepted-20-ms disclosure). New help-completeness gate in
+tests/test-palette-cards-cycle3.js §H; suite 23/23 / 1823 green. Next:
+entry 2 (typeset, EXP badge 11px floor).
+
+### FIN-1 (clarify): APPROVED 2026-08-29. Next: entry 2 (typeset).

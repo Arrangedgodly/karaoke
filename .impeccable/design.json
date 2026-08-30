@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-28T23:59:00+02:00",
+  "generatedAt": "2026-08-29T21:43:13-06:00",
   "title": "Design System: Karaoke Chain Builder",
   "extensions": {
     "colorMeta": {
@@ -309,6 +309,66 @@
           "#f9ebf1"
         ]
       },
+      "family-distortion": {
+        "role": "tertiary",
+        "displayName": "Distortion Edge",
+        "canonical": "#C0CE97",
+        "tonalRamp": [
+          "#2d3418",
+          "#4f5c2b",
+          "#72833e",
+          "#94ab50",
+          "#acbf77",
+          "#c4d29e",
+          "#dce4c6",
+          "#f4f7ee"
+        ]
+      },
+      "family-chorus": {
+        "role": "tertiary",
+        "displayName": "Chorus Edge",
+        "canonical": "#9E9ED1",
+        "tonalRamp": [
+          "#191934",
+          "#2b2b5b",
+          "#3e3e83",
+          "#5151ab",
+          "#7777bf",
+          "#9f9fd1",
+          "#c6c6e4",
+          "#eeeef7"
+        ]
+      },
+      "family-gate": {
+        "role": "tertiary",
+        "displayName": "Noise Gate Edge",
+        "canonical": "#9AD5B2",
+        "tonalRamp": [
+          "#163623",
+          "#285f3e",
+          "#398859",
+          "#4ab274",
+          "#71c493",
+          "#9bd5b2",
+          "#c4e6d2",
+          "#edf8f1"
+        ]
+      },
+      "family-autotune": {
+        "role": "tertiary",
+        "displayName": "Autotune Edge",
+        "canonical": "#D19ED1",
+        "tonalRamp": [
+          "#341934",
+          "#5b2b5b",
+          "#833e83",
+          "#ab51ab",
+          "#bf77bf",
+          "#d19fd1",
+          "#e4c6e4",
+          "#f7eef7"
+        ]
+      },
       "status-live": {
         "role": "tertiary",
         "displayName": "Live Green",
@@ -494,9 +554,17 @@
       "name": "Node Module Card",
       "kind": "card",
       "refersTo": "card-module",
-      "description": "A channel-strip module: 3px family top edge, legend square, silkscreen label; collapses to the header-only slim row.",
+      "description": "A channel-strip module: 3px family top edge (data-family maps one of ten family tokens onto --card-family), legend square, silkscreen label; collapses to the header-only slim row.",
       "html": "<div class=\"ds-node-card\" data-family=\"eq\" data-initials=\"EQ\"><div class=\"ds-node-head\">EQ — 4-BAND</div><div class=\"ds-node-params\">…</div></div>",
-      "css": ".ds-node-card { position: relative; min-width: 190px; padding: 0.375rem 0.75rem; border: 1px solid var(--hairline); border-top: 3px solid var(--family-eq); border-radius: 8px; background: var(--bg-card); box-shadow: 0 1px 2px rgba(0,0,0,0.3); } .ds-node-card::before { content: attr(data-initials); position: absolute; top: 0.5625rem; left: 0.75rem; display: flex; align-items: center; justify-content: center; width: 1.125rem; height: 1.125rem; border-radius: 3px; background: var(--family-eq); color: var(--on-accent); font-size: 0.6875rem; font-weight: 700; line-height: 1; } .ds-node-head { min-height: 1.5rem; padding-left: 1.5rem; display: flex; align-items: center; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }"
+      "css": ".ds-node-card { position: relative; min-width: 190px; padding: 0.375rem 0.75rem; border: 1px solid var(--hairline); border-top: 3px solid var(--card-family, var(--line-strong)); border-radius: 8px; background: var(--bg-card); box-shadow: 0 1px 2px rgba(0,0,0,0.3); } .ds-node-card[data-family='gain'] { --card-family: var(--family-gain); } .ds-node-card[data-family='compressor'] { --card-family: var(--family-compressor); } .ds-node-card[data-family='eq'] { --card-family: var(--family-eq); } .ds-node-card[data-family='delay'] { --card-family: var(--family-delay); } .ds-node-card[data-family='reverb'] { --card-family: var(--family-reverb); } .ds-node-card[data-family='limiter'] { --card-family: var(--family-limiter); } .ds-node-card[data-family='distortion'] { --card-family: var(--family-distortion); } .ds-node-card[data-family='chorus'] { --card-family: var(--family-chorus); } .ds-node-card[data-family='gate'] { --card-family: var(--family-gate); } .ds-node-card[data-family='autotune'] { --card-family: var(--family-autotune); } .ds-node-card::before { content: attr(data-initials); position: absolute; top: 0.5625rem; left: 0.75rem; display: flex; align-items: center; justify-content: center; width: 1.125rem; height: 1.125rem; border-radius: 3px; background: var(--card-family, var(--line-strong)); color: var(--on-accent); font-size: 0.6875rem; font-weight: 700; line-height: 1; } .ds-node-card:hover { border-color: var(--line-strong); border-top-color: var(--card-family, var(--line-strong)); } .ds-node-head { min-height: 1.5rem; padding-left: 1.5rem; display: flex; align-items: center; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-primary); }"
+    },
+    {
+      "name": "Experimental Badge",
+      "kind": "chip",
+      "refersTo": "card-module",
+      "description": "A status tag, never a control — the full \"Experimental\" tag after the module label in the node-card header (a compact \"EXP\" twin pins right on the palette chip). Signal Amber 1px bezel + amber text on Module Card ground; mono silkscreen at 0.625rem/700, 0.06em tracking; deliberately no focus ring and no pointer affordance. Autotune only, driven by NodeTypes.isExperimental.",
+      "html": "<span class=\"ds-exp-badge\">Experimental</span>",
+      "css": ".ds-exp-badge { flex: none; padding: 0.1rem 0.3rem; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-card); color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }"
     },
     {
       "name": "Fader (Param Slider)",
@@ -504,7 +572,15 @@
       "refersTo": "card-module",
       "description": "Native range re-skinned as a console fader: hairline slot, detent ticks, center-unity notch, amber cap with ink position line.",
       "html": "<label class=\"ds-fader\"><span class=\"ds-fader-label\">THRESHOLD</span><span class=\"ds-fader-value\">−24.0 dB</span><input class=\"ds-fader-input\" type=\"range\" min=\"-60\" max=\"0\" value=\"-24\"></label>",
-      "css": ".ds-fader { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; padding: 0.25rem 0; } .ds-fader-label { flex: 1 1 auto; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); } .ds-fader-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--text-primary); } .ds-fader-input { order: 3; flex: 1 1 100%; height: 1.25rem; -webkit-appearance: none; appearance: none; background: transparent; } .ds-fader-input::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(90deg, transparent calc(50% - 1px), var(--line-strong) calc(50% - 1px), var(--line-strong) calc(50% + 1px), transparent calc(50% + 1px)), repeating-linear-gradient(90deg, var(--hairline) 0, var(--hairline) 1px, transparent 1px, transparent 12px), linear-gradient(90deg, transparent calc(50% - 1px), var(--hairline) calc(50% - 1px), var(--hairline) calc(50% + 1px), transparent calc(50% + 1px)); } .ds-fader-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 18px; margin-top: -5px; border: 1px solid var(--line-strong); border-radius: 3px; background-color: var(--accent); background-image: linear-gradient(90deg, transparent calc(50% - 1px), var(--on-accent) calc(50% - 1px), var(--on-accent) calc(50% + 1px), transparent calc(50% + 1px)); } .ds-fader-input::-webkit-slider-thumb:hover { background-color: var(--accent-hover); } .ds-fader-input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
+      "css": ".ds-fader { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; padding: 0.25rem 0; } .ds-fader-label { flex: 1 1 auto; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); } .ds-fader-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--text-primary); } .ds-fader-input { order: 3; flex: 1 1 100%; height: 1.25rem; -webkit-appearance: none; appearance: none; background: transparent; } .ds-fader-input::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(90deg, transparent calc(50% - 1px), var(--line-strong) calc(50% - 1px), var(--line-strong) calc(50% + 1px), transparent calc(50% + 1px)), repeating-linear-gradient(90deg, var(--hairline) 0, var(--hairline) 1px, transparent 1px, transparent 12px), linear-gradient(90deg, transparent calc(50% - 1px), var(--hairline) calc(50% - 1px), var(--hairline) calc(50% + 1px), transparent calc(50% + 1px)); } .ds-fader-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 18px; margin-top: -5px; border: 1px solid var(--line-strong); border-radius: 3px; background-color: var(--accent); background-image: linear-gradient(90deg, transparent calc(50% - 1px), var(--on-accent) calc(50% - 1px), var(--on-accent) calc(50% + 1px), transparent calc(50% + 1px)); transition: background-color 150ms ease; } .ds-fader-input::-webkit-slider-thumb:hover { background-color: var(--accent-hover); } .ds-fader-input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
+    },
+    {
+      "name": "Param Select (Discrete)",
+      "kind": "input",
+      "refersTo": "card-module",
+      "description": "Enumerated params (autotune's Key/Scale) render a native <select> in the fader's readout slot instead of a slider: Faceplate Umber ground, Bezel Line bezel, sm radius, mono readout at the 11px floor — the option text IS the value display, native semantics untouched.",
+      "html": "<div class=\"ds-param-row\"><label class=\"ds-param-label\" for=\"ds-param-key\">KEY</label><select class=\"ds-param-select\" id=\"ds-param-key\"><option selected>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option><option>F</option></select></div>",
+      "css": ".ds-param-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; padding: 0.25rem 0; } .ds-param-label { flex: 1 1 auto; min-width: 0; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); } .ds-param-select { flex: 0 0 auto; min-width: 5.5rem; margin-left: auto; padding: 0.15rem 0.4rem; border: 1px solid var(--line-strong); border-radius: 4px; background-color: var(--bg-panel); color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; font-variant-numeric: tabular-nums; } .ds-param-select:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
     },
     {
       "name": "Agent Toast",
@@ -517,17 +593,15 @@
   ],
   "narrative": {
     "northStar": "The Touring Rack",
-    "overview": "This is pro-audio rack gear built for the road, not for a studio shelf. Every surface answers three questions before it earns a pixel: can the operator read it from two meters away in a dark venue, does every lamp and silkscreen legend mean something, and will it still work when the show is already running. The console is warm industrial — brushed warm-charcoal steel, toolroom honesty, and one amber signal register that glows only where the machine speaks.\n\nThe visitor here is an operator mid-task, never a browse. Physical metaphors carry the whole vocabulary: module cards are channel strips with family color on their top edge the way real gear codes rack modules; sliders are faders with detent ticks, center-unity notches, and amber caps carrying an ink position line; the top bar is a status LCD strip whose mono readouts are machine registers. Depth is tonal first — a chassis → faceplate → module-card ground stack — and real shadows appear only when something physically lifts off the rack (a dragged card, a floating toast).\n\nThe one confirmed anti-reference: this is not a neon terminal, not a webfonts showcase, not a decorative-motion piece. No display fonts in UI, no invented brand imagery, no glow. Confidence comes from restraint and redundant encoding — color is never the only signal anywhere in the system.",
+    "overview": "This is pro-audio rack gear built for the road, not for a studio shelf. Every surface answers three questions before it earns a pixel: can the operator read it from two meters away in a dark venue, does every lamp and silkscreen legend mean something, and will it still work when the show is already running. The console is warm industrial — brushed warm-charcoal steel, toolroom honesty, and one amber signal register that glows only where the machine speaks. It is dense the way real consoles are dense: deliberately, with a label rhythm, not as noise.\n\nThe visitor here is an operator mid-task, never a browse. Physical metaphors carry the whole vocabulary: module cards are channel strips with family color on their top edge the way real gear codes rack modules; sliders are faders with detent ticks, center-unity notches, and amber caps carrying an ink position line; the top bar is a status LCD strip whose mono readouts are machine registers. Depth is tonal first — a chassis → faceplate → module-card ground stack — and real shadows appear only when something physically lifts off the rack (a dragged card, a floating toast).\n\nThe one confirmed anti-reference: this is not a neon terminal, not a webfonts showcase, not a decorative-motion piece. No display fonts in UI, no invented brand imagery, no glow. Confidence comes from restraint and redundant encoding — color is never the only signal anywhere in the system.",
     "keyCharacteristics": [
       "Warm charcoal three-ground tonal stack (chassis → faceplate → module card); depth by layering, shadows only on lift.",
       "One amber signal accent for action and machine attention; ink-on-amber fills, never amber-on-amber.",
       "Two type registers: silkscreen legends for humans, mono LCD/VFD readouts for machine values.",
       "Family color as edge marking (never fill) with always-present text labels — redundant encoding everywhere.",
       "Split-role safety red: the Bypass control outranks everything on the strip.",
-      "150–250 ms state transitions only; meter ballistics and the agent breath are functional, not decorative; prefers-reduced-motion respected throughout.",
-      "Console-grade density: 11 px text floor, tracked uppercase micro-labels, tabular numerals in every readout.",
-      "Pinned OUT footer: output ground truth is always visible without scrolling, never dimmed — including while bypassed.",
-      "No native browser dialogs anywhere: inline naming row, armed two-step delete, quiet refusal notes."
+      "150–250 ms state transitions only; meter ballistics and the agent breath are functional, not decorative; `prefers-reduced-motion` respected throughout.",
+      "Console-grade density: 11 px text floor, tracked uppercase micro-labels, tabular numerals in every readout."
     ],
     "rules": [
       {
@@ -562,11 +636,11 @@
       }
     ],
     "dos": [
-      "Do extend the token set — introduce no raw hex values; new colors enter as :root tokens in the rq5-verified vocabulary.",
+      "Do extend the token set — introduce no raw hex values; new colors enter as `:root` tokens in the rq5-verified vocabulary.",
       "Do keep color redundant: every family edge pairs with its legend square initials and a text label; every state change is copy + color.",
       "Do use tabular numerals and fixed min-widths in readouts so machine values never pump layout.",
       "Do draw focus rings with the global 2px token, switching to the dark inside-fill ring on amber surfaces.",
-      "Do keep state transitions at 150–250 ms and guard every motion addition with prefers-reduced-motion; meter ballistics stay live by drawing per-frame."
+      "Do keep state transitions at 150–250 ms and guard every motion addition with `prefers-reduced-motion`; meter ballistics stay live by drawing per-frame."
     ],
     "donts": [
       "Don't swap the safety red roles (edge ↔ fill) or put white text on edge red.",

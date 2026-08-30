@@ -112,12 +112,22 @@
    * label prefix: the row already silkscreens the label, the tooltip
    * anchors to that row, and screen readers announce the label[for] name
    * before this description — so the line spends its whole budget on the
-   * explanation. The five riskiest controls (compressor
-   * Threshold/Ratio, delay Feedback/Mix, limiter Ceiling — the ones whose
-   * mid-show misuse is most consequential) are outcome-framed with an
-   * explicit direction clause ("lower = …"). Lines describe only what the
-   * matching AudioParam in src/node-*.js actually does; no new factual
-   * claims, no marketing voice.
+   * explanation. The riskiest controls (compressor Threshold/Ratio, delay
+   * Feedback/Mix, limiter Ceiling — the ones whose mid-show misuse is most
+   * consequential) are outcome-framed with an explicit direction clause
+   * ("lower = …"). Lines describe only what the matching AudioParam in
+   * src/node-*.js actually does; no new factual claims, no marketing voice.
+   *
+   * Finishing entry 1 (cycle 3, $impeccable clarify — critique P2-1): the
+   * four cycle-3 families join the same layer with the same conventions
+   * (gate Threshold/Floor, distortion Drive/Output, autotune Retune Speed
+   * carry the outcome-framed direction clauses the critique named risky).
+   * Autotune's required experimental-status + accepted-20-ms-delay
+   * disclosure rides the Key line — the card's FIRST param row and first
+   * tab stop — so it is said once per card, not four times; the badge on
+   * the same card header (single-sourced from the type's registration)
+   * already carries the status visually and pre-add on the chip's
+   * aria-label. Operator wording follows README.md's own disclosures.
    */
   var PLAIN_LANGUAGE_HELP = {
     gain: {
@@ -145,6 +155,29 @@
     limiter: {
       ceiling: 'The loudest sound allowed through. Lower = quieter.',
       release: 'How fast the limiter lets go after a loud peak. Smaller = sooner.'
+    },
+    // Cycle-3 families (finishing entry 1) — palette/registration order.
+    distortion: {
+      drive: 'How much the voice is pushed into grit. Higher = more growl.',
+      tone: 'The brightness of the grit. Higher = brighter, lower = darker.',
+      output: 'How loud the grit comes out. Higher = louder, but never louder than the clean signal.'
+    },
+    chorus: {
+      depthMs: 'How far the doubled voices wander from the original. Higher = a wider sweep.',
+      rateHz: 'How fast the doubled voices wander. Higher = faster wobble.',
+      mix: 'How much doubled voice you hear. Higher = more.'
+    },
+    gate: {
+      threshold: 'How quiet a sound can be before the gate closes on it. Higher = the gate closes on more sounds.',
+      attack: 'How fast the gate opens when sound comes back. Smaller = catches the start of words.',
+      release: 'How fast the gate closes after sound stops. Bigger = word tails last longer.',
+      floor: 'How far down the mic goes while the gate is closed. Lower = quieter between phrases.'
+    },
+    autotune: {
+      key: 'The song\u2019s key. A wrong key makes every correction land wrong. Experimental: the newest engine, and it adds a fixed 20 ms delay (a fiftieth of a second) to the vocal.',
+      scale: 'Which notes count as in tune. Chromatic snaps to any note, Major and Minor follow the Key.',
+      retune: 'How fast off notes get pulled back in tune. Smaller = instant robot snap, bigger = a smoother glide.',
+      mix: 'How much of the corrected voice you hear. Higher = more correction.'
     }
   };
 

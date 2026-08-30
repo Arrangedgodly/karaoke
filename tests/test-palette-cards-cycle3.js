@@ -29,6 +29,12 @@
 //      — absent from the other three new cards and every existing type.
 //   G. LOADMODEL: preset/autosave restore rebuilds all four cards with
 //      exact ids + params (autotune selects restored to saved values).
+//   H. HELP LAYER (finishing entry 1, critique P2-1): every param row of
+//      ALL TEN types — the four cycle-3 families included — carries the
+//      plain-language line exactly the way the cycle-2 layer wires it
+//      (row + control title, .sr-only span, same-row aria-describedby);
+//      autotune's Key line additionally carries the experimental-status +
+//      fixed-20-ms-delay disclosure in operator terms.
 //
 // Browser-use inspection was not exercised in this worker (same honest
 // note as TEST-1/UI-1/DIST-1/...): these are DOM-construction checks on
@@ -708,6 +714,83 @@ check(
     afterAdd[0].attrs['data-family'] === 'autotune' &&
     afterAdd[1].attrs['data-family'] === 'limiter',
   'keyboard autotune add inserts before the terminal limiter'
+);
+
+// ----------------------------------------------------------------------
+// H. Help layer (finishing entry 1, critique P2-1) — the four cycle-3
+// families join the cycle-2 plain-language layer through the IDENTICAL
+// mechanism: render all ten types via loadModel, then verify every param
+// row for title wiring + the clip-hidden .sr-only description span +
+// same-row aria-describedby resolution. This doubles as the completeness
+// gate the closing critique asked about: a param row without help fails
+// here, so a future family can never silently ship without its lines.
+// ----------------------------------------------------------------------
+console.log('H. param help layer (finishing entry 1)');
+
+windowStub.ChainCanvas.loadModel(
+  allTypes.map(function (type, i) {
+    return { id: 'h' + i, type: type, params: {} };
+  })
+);
+var helpCards = cards();
+check(helpCards.length === 10, 'help-layer render builds all ten cards');
+
+var helpRowCount = 0;
+helpCards.forEach(function (card) {
+  var type = card.attrs['data-family'];
+  var nodeId = card.attrs['data-node-id'];
+  var inner = card.children[1].children[0];
+  var spec = windowStub.NodeTypes.getParamSpec(type);
+  inner.children.forEach(function (row, i) {
+    helpRowCount += 1;
+    var control = row.children[1];
+    var helpSpan = row.children[3];
+    check(
+      !!helpSpan &&
+        helpSpan.className === 'sr-only' &&
+        helpSpan.textContent.length > 0,
+      type + ' "' + spec[i].id + '" row carries a non-empty .sr-only help span'
+    );
+    check(
+      helpSpan && helpSpan.id === 'param-help-' + nodeId + '-' + spec[i].id,
+      type + ' "' + spec[i].id + '" help span id is the row-scoped convention'
+    );
+    check(
+      row.title === helpSpan.textContent && control.title === helpSpan.textContent,
+      type + ' "' + spec[i].id + '" title set on row AND control with the same line'
+    );
+    check(
+      control.attrs['aria-describedby'] === helpSpan.id,
+      type + ' "' + spec[i].id + '" aria-describedby resolves to the same-row span'
+    );
+  });
+});
+check(helpRowCount === 28, '28 param rows across all ten types, every one helped (14 original + 14 cycle-3)');
+
+// The critique-named risky controls are outcome-framed with direction
+// clauses (structural: the line contains an explicit "= " clause).
+[['gate', 'threshold'], ['gate', 'floor'], ['distortion', 'drive'],
+  ['distortion', 'output'], ['autotune', 'retune']].forEach(function (p) {
+  var idx = helpCards.map(function (c) { return c.attrs['data-family']; }).indexOf(p[0]);
+  var spec = windowStub.NodeTypes.getParamSpec(p[0]);
+  var row = helpCards[idx].children[1].children[0].children[
+    spec.map(function (s) { return s.id; }).indexOf(p[1])
+  ];
+  check(/ [=] /.test(row.title), p[0] + ' ' + p[1] + ' carries a direction clause');
+});
+
+// Autotune's first row (Key — first tab stop) additionally carries the
+// required operator disclosure: experimental status + the accepted fixed
+// 20 ms engine delay.
+var atIdx = helpCards.map(function (c) { return c.attrs['data-family']; }).indexOf('autotune');
+var atKeyRow = helpCards[atIdx].children[1].children[0].children[0];
+check(
+  /Experimental/.test(atKeyRow.title) && /20 ms/.test(atKeyRow.title),
+  'autotune Key line discloses experimental status + the fixed 20 ms delay'
+);
+check(
+  !/Experimental/.test(helpCards[atIdx].children[1].children[0].children[1].title),
+  'the status sentence rides the FIRST row only (said once per card)'
 );
 
 // ----------------------------------------------------------------------

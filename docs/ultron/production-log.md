@@ -1089,3 +1089,44 @@ no-bit-exact-neutral facts follow QA-1's accepted record (qa1-report.txt,
 LISTENING.md). DESIGN.md deliberately records no new named rules and
 changes no existing rule — the four tokens, one badge, one control enter
 through the documented extension points ("Do extend the token set").
+
+## FINISH-1 — Plain-language help for the four cycle-3 effects — `awaiting-approval`
+
+Refinement entry 1 (`$impeccable clarify`, critique P2-1): the four
+cycle-3 families (noise gate, distortion, chorus, autotune) shipped with
+zero plain-language param help while the original six had the cycle-2
+round-1 layer.
+
+**What changed** (`src/param-controls.js` +39/−6, nothing else in src/):
+
+1. `PLAIN_LANGUAGE_HELP` gains 14 lines (gate Threshold/Attack/Release/
+   Floor, distortion Drive/Tone/Output, chorus Depth/Rate/Mix, autotune
+   Key/Scale/Retune Speed/Mix) — 28 of 28 params across all ten types
+   now helped. Same map, same per-row mechanism (title on row + control,
+   `.sr-only` span, same-row `aria-describedby`), same operator register,
+   no label prefixes, no em-dashes, no markup/CSS/dialogs.
+2. The critique-named risky controls carry outcome-framed direction
+   clauses: gate Threshold ("How quiet a sound can be before the gate
+   closes on it. Higher = the gate closes on more sounds."), gate Floor,
+   distortion Drive, distortion Output ("…never louder than the clean
+   signal." — the unity cap in operator terms), autotune Retune Speed
+   ("Smaller = instant robot snap, bigger = a smoother glide."). Copy
+   substance follows README.md's own operator disclosures.
+3. Autotune's required disclosure — experimental status + the accepted
+   fixed 20 ms engine delay — rides the Key line (the card's first param
+   row / first tab stop): "Experimental: the newest engine, and it adds
+   a fixed 20 ms delay (a fiftieth of a second) to the vocal." Said once
+   per card, not four times; the card badge + chip aria-label (single
+   source `NodeTypes.isExperimental()`) remain the primary status
+   disclosure.
+
+**Evidence**: `tests/test-palette-cards-cycle3.js` +83 lines — new
+section H renders ALL TEN types through the real registry + real
+param-controls.js in the vm-DOM harness and checks per row: non-empty
+`.sr-only` span, row-scoped id convention, title on row AND control,
+resolvable same-row `aria-describedby`; risky-line direction clauses;
+the autotune Key disclosure; first-row-only status. Doubles as a
+help-completeness gate (a future family without lines fails the suite).
+Render-level spot check printed the verbatim gate + autotune card help
+wiring (titles/spans/describedby all match). Full suite 23/23 files /
+1823 checks green. Ledger: [refinement.md](refinement.md) entry 1.
