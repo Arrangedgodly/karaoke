@@ -645,3 +645,12 @@ first-dispatch after the element round lands.
 
 ### Rebrand follow-on: item 1b APPROVED (2026-08-30); VOXCHAIN name in
 the shipped Two-Deck build. Item 2 element round dispatched.
+
+## OVERLORD TAKEOVER (2026-08-30)
+converted: ultron-redesign (+ open cycle-4 ultron run) → ultron-overlord
+at phase=production-cycle-4 + redesign-execute, next task FEW-1.
+Clock: restarted at takeover (no prior overlord clock). Checkpoint
+committed pre-takeover (approved item 1 + adjustment + 1b + rebrand;
+item-2 switcher pending pick, suite 25 files green at stop). Element
+worker hard-stopped at ~4.9h overrun — wrap-up: variants preserved
+behind the page switcher, pick batched into the conversion sitting.
