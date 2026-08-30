@@ -381,3 +381,10 @@ Next: none — DOC-1 is the final cycle-3 task; cycle acceptance follows.
 ### DOC-1: APPROVED 2026-08-29 — all 13 cycle-3 tasks COMPLETE. Finishing
 phase deferred: user directs a PR first — brother submitted major changes to
 the project; reconcile discrepancies before $ultron-impeccable.
+
+### Production commit (2026-08-29): all cycle-3 work committed atomically on
+branch cycle-3-shelved-effects (3bf16c2, 66 files) and pushed to origin.
+PR to open: https://github.com/Arrangedgodly/karaoke/pull/new/cycle-3-shelved-effects
+BLOCKED on: brother's "submitted major changes" — not found on origin (no
+new commits on origin/main, no other branches, no forks visible). Awaiting
+user input on where they live (fork? patch? unpushed?) before reconciliation.
