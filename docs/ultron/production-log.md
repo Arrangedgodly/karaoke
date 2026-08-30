@@ -1231,3 +1231,59 @@ findings, byte-identical to the standing adjudicated set. Residual
 (disclosed): design.json sidecar's group labels await the planned
 post-loop document refresh. Ledger: [refinement.md](refinement.md)
 entry 3.
+
+## FINISH-4 — Distortion Drive/Tone readout normalized to 0–100 % — `awaiting-approval`
+
+Refinement entry 4 (`$impeccable polish`, critique P3-4): distortion's
+Drive and Tone read "0.25%"/"0.7%" — a 0–1 internal scale wearing a %
+suffix — against the surface's 0–100 % readout convention (Mix "30%");
+a non-engineer reads a quarter of a percent where the fader means a
+quarter of full drive. User-approved fix: normalize the DISPLAY to
+0–100.
+
+**What changed** (display-only; `src/param-controls.js` +
+`src/node-distortion.js` + test):
+
+1. Drive/Tone declare `displayScale: 100` in their paramSpec — a
+   UI-only field in the label/step family — and the generic mono-value
+   formatter multiplies ONLY the rendered string by it (rounded at 1e6
+   so binary float tails like 33.000000000000004 never print). The card
+   reads "25%"/"70%", the exact string shape Mix "30%" set, in the same
+   `.param-value` mono tabular register; README.md's own operator
+   disclosure ("25 % is a light warmth, 100 % is a full roar") already
+   spoke in 0–100 terms, so card and README now agree.
+2. Everything behind the string is byte-for-byte unchanged: slider
+   min/max/step/default stay 0..1, the parsed model value, AudioGraph
+   bookkeeping, preset serialization (a saved drive 0.25 still means the
+   same sound), the audio mapping (driveToGain/toneToHz untouched), and
+   the agent set_param contract — mcp-tools validates against the
+   unchanged 0..1 min/max and its capabilities readout keeps
+   truthfully publishing 0..1 (it states 0–1, so it stays truthful by
+   NOT changing); displayScale is deliberately not mirrored in the
+   MCP registry snapshot.
+3. Sweep of the critique's "other params" question: distortion
+   drive/tone were the ONLY 0–1-with-% mismatches. Delay
+   Feedback/Mix, reverb/chorus/autotune Mix are already 0–100
+   integer-%; gate threshold/floor (dB), attack/release (s), chorus
+   Depth (ms)/Rate (Hz), autotune Retune (ms), compressor ratio
+   (:1)/attack/release render in their documented units. The convention
+   is now suite-enforced: a future 0..1 % param without displayScale
+   (or a 0–100 % param with one) fails the new registry gate, and a
+   rendered ten-type scan fails any "0.X%" readout anywhere.
+
+**Evidence**: `tests/test-palette-cards-cycle3.js` section K (+34
+checks): defaults "25%"/"70%"/"-3 dB" with slider 0–1/0.01/0.25; human
+drags 0/0.5/1/back read "0%"/"50%"/"100%"/"25%" while committing model
+values exactly 0/0.5/1/0.25 (0.33 → reads "33%", commits 0.33); preset
+restore drive 0.42/tone 0.06 reads "42%"/"6%" with getCurrentModel
+unchanged; the agent set_param canvas half (ChainCanvas.
+updateNodeParam) applies 0.5 → span "50%", slider 0.5, model 0.5,
+autosave 0.5; MCP-side 0..1 semantics pinned by the existing
+test-mcp-tools-cycle3.js C8. Full suite 23/23 files / 1896 checks
+green. Render-level check (headless Chrome over http, real chip
+clicks): live card reads Drive "25%"/Tone "70%", input events
+"0%"/"50%"/"100%", updateNodeParam 0.5 → "50%"; chorus Mix "30%",
+Depth "3 ms", Rate "1.5 Hz"; the span's computed style still the mono
+readout register (ui-monospace, tabular-nums, 11.2px); every % readout
+on the live surface is 0.X-free. No residuals. Ledger:
+[refinement.md](refinement.md) entry 4.

@@ -175,9 +175,21 @@
   // signal to protect yet), same convention as the compressor.
   window.NodeTypes.register('distortion', {
     label: 'Distortion',
+    // Finishing entry 4 ($impeccable polish, critique P3-4): drive/tone
+    // carry `displayScale: 100` — a READOUT-ONLY field the generic
+    // formatter in src/param-controls.js multiplies into the mono value
+    // span so these two read "25%"/"70%" like every other % param on the
+    // surface (Mix "30%"), not "0.25%"/"0.7%". min/max/step/default above
+    // stay on the internal 0..1 scale EXACTLY as before — the slider, the
+    // model, AudioGraph bookkeeping, preset serialization (a saved drive
+    // 0.25 still means the same sound), and the agent set_param contract
+    // (mcp-tools validates against these min/max) are all unchanged. Like
+    // label/step, displayScale is UI-only and deliberately NOT mirrored in
+    // mcp-tools.js's NODE_REGISTRY_SNAPSHOT (its capabilities readout
+    // truthfully keeps publishing drive/tone as 0..1).
     paramSpec: [
-      { id: 'drive', label: 'Drive', min: 0, max: 1, default: 0.25, step: 0.01, unit: '%' },
-      { id: 'tone', label: 'Tone', min: 0, max: 1, default: 0.7, step: 0.01, unit: '%' },
+      { id: 'drive', label: 'Drive', min: 0, max: 1, default: 0.25, step: 0.01, unit: '%', displayScale: 100 },
+      { id: 'tone', label: 'Tone', min: 0, max: 1, default: 0.7, step: 0.01, unit: '%', displayScale: 100 },
       { id: 'output', label: 'Output', min: -24, max: 0, default: -3, step: 0.5, unit: 'dB' }
     ],
     applyParam: function (nodeInstance, paramId, value) {

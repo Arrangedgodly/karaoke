@@ -209,18 +209,38 @@
    * UI-1: discrete (enumerated) params carry no unit — their value IS the
    * display string (e.g. "C", "Chromatic"), so it renders verbatim.
    *
+   * Finishing entry 4 ($impeccable polish, critique P3-4): READOUT-ONLY
+   * display scale. A param whose internal model scale is 0..1 but whose
+   * unit is '%' (distortion Drive/Tone) declares `displayScale: 100` in
+   * its paramSpec; this formatter multiplies ONLY the rendered string by
+   * that factor so the mono readout follows the surface-wide 0-100 %
+   * convention (Mix "30%", Drive "25%") instead of reading "0.25%" — a
+   * quarter of a percent. Everything upstream of the string stays on the
+   * internal scale: the slider's min/max/step, the parsed model value,
+   * AudioGraph bookkeeping, preset serialization, and the agent set_param
+   * contract all keep the 0..1 numbers exactly as they were (a saved
+   * drive 0.25 still means the same sound). The round-trip kills binary
+   * float noise the multiply can introduce (0.33 * 100 ===
+   * 33.000000000000004) far below any readable display granularity.
+   *
    * @param {number|string} value
    * @param {string} unit
+   * @param {number} [displayScale] - spec-declared readout multiplier
+   *   (1/undefined = display the internal value verbatim).
    * @returns {string}
    */
-  function formatValue(value, unit) {
+  function formatValue(value, unit, displayScale) {
     if (!unit) {
       return String(value);
     }
-    if (unit === '%' || unit === ':1') {
-      return value + unit;
+    var shown = value;
+    if (typeof displayScale === 'number' && isFinite(displayScale) && displayScale !== 1) {
+      shown = Math.round(value * displayScale * 1e6) / 1e6;
     }
-    return value + ' ' + unit;
+    if (unit === '%' || unit === ':1') {
+      return shown + unit;
+    }
+    return shown + ' ' + unit;
   }
 
   /**
@@ -310,7 +330,7 @@
 
       var valueDisplay = document.createElement('span');
       valueDisplay.className = 'param-value';
-      valueDisplay.textContent = formatValue(initialValue, spec.unit);
+      valueDisplay.textContent = formatValue(initialValue, spec.unit, spec.displayScale);
 
       // Issue #5: register this row's external-value applier (see
       // renderedControls above). Closes over `input`, `valueDisplay` and
@@ -323,7 +343,7 @@
       renderedControls[modelEntry.id][spec.id] = {
         apply: function (externalValue) {
           input.value = externalValue;
-          valueDisplay.textContent = formatValue(externalValue, spec.unit);
+          valueDisplay.textContent = formatValue(externalValue, spec.unit, spec.displayScale);
           workingParams[spec.id] = externalValue;
         }
       };
@@ -345,7 +365,7 @@
         // slider's string value is parsed to a number as before.
         var newValue = Array.isArray(spec.values) ? input.value : parseFloat(input.value);
 
-        valueDisplay.textContent = formatValue(newValue, spec.unit);
+        valueDisplay.textContent = formatValue(newValue, spec.unit, spec.displayScale);
 
         // Issue #5: re-sync the working copy from the model entry FIRST,
         // overlaid on this render's defaults, before applying this row's

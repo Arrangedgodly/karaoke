@@ -456,3 +456,25 @@ entry 4 (polish, Drive/Tone 0–100 normalization).
 
 ### FIN-3 (layout): APPROVED 2026-08-29 (user inspected in live browser).
 Next: entry 4 (polish).
+
+**Entry 4 (polish, P3-4 Drive/Tone readout) landed 2026-08-29 — awaiting
+user approval**: distortion Drive/Tone now read "25%"/"70%" on the
+surface's 0–100 % convention (the Mix "30%" string shape, same mono
+tabular register) via a display-only `displayScale: 100` field on the
+two paramSpec entries that the generic formatter in
+src/param-controls.js multiplies into the rendered string ONLY — slider
+min/max/step, model values, AudioGraph bookkeeping, preset
+serialization (saved drive 0.25 = same sound), audio mapping, and the
+agent set_param 0..1 contract (capabilities readout keeps truthfully
+publishing 0..1) all unchanged. Sweep: distortion drive/tone were the
+only 0–1+% mismatches — all other % params are already 0–100 (delay
+Feedback/Mix, reverb/chorus/autotune Mix), and gate/chorus/autotune/
+compressor params render their documented units (dB, s, ms, Hz, :1);
+now suite-enforced by a registry gate + ten-type "0.X%" readout scan
+(new §K in tests/test-palette-cards-cycle3.js, +34 checks; headless-
+Chrome render check over http confirms the live card, drag values,
+agent-path 0.5 → "50%", and the mono register). Suite 23/23 / 1896
+green. No residuals. Next: entry 5 (harden, the two window.alerts +
+late-context-resume strip wedge).
+
+### FIN-4 (polish): APPROVED 2026-08-29. Next: entry 5 (harden).

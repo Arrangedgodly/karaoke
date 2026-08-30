@@ -54,6 +54,14 @@
 //      uppercase / 0.08em / muted — above the 11px floor), and the
 //      palette Sortable scopes its drag items to '.node-chip' so a
 //      header can never be grabbed.
+//   K. READOUT CONVENTION (finishing entry 4, critique P3-4): distortion
+//      Drive/Tone read on the surface's 0-100 % convention ("25%"/"70%",
+//      same string shape as Mix "30%") while the slider, the committed
+//      model value, the loadModel/preset restore, and the agent
+//      set_param canvas half (updateNodeParam) all keep the internal
+//      0..1 scale exactly as registered — plus a registry-wide gate (a
+//      0..1 % param MUST declare displayScale 100; a 0-100 % param MUST
+//      NOT) and a rendered ten-type sweep for any "0.X%" readout.
 //
 // Browser-use inspection was not exercised in this worker (same honest
 // note as TEST-1/UI-1/DIST-1/...): these are DOM-construction checks on
@@ -1139,6 +1147,251 @@ check(
   !!chainSortableInstance &&
     chainSortableInstance.opts.draggable === undefined,
   'chain Sortable keeps its default drag items (drag path untouched)'
+);
+
+// ----------------------------------------------------------------------
+// K. READOUT CONVENTION (finishing entry 4, critique P3-4) — distortion
+// Drive/Tone render on the surface's 0-100 % readout convention ("25%"/
+// "70%", the same string shape as Mix "30%") while EVERYTHING behind the
+// string keeps the internal 0..1 scale exactly as registered: the slider
+// min/max/step/default, the parsed model value a human drag commits, the
+// loadModel/preset restore path (a saved drive 0.25 still means the same
+// sound), and the agent set_param canvas half (ChainCanvas.updateNodeParam
+// — the exact call MCP's parameter-only fast path makes — still receives
+// and stores 0..1). Also a registry-wide gate: a % param on a 0..1 scale
+// MUST declare the displayScale 100 readout conversion, and a % param
+// already on 0..100 MUST NOT — so the next 0..1+% param of this family
+// fails here instead of shipping "0.25%".
+// ----------------------------------------------------------------------
+console.log('K. readout convention 0-100 % (finishing entry 4)');
+
+function cardById(id) {
+  var found = null;
+  cards().some(function (c) {
+    if (c.attrs['data-node-id'] === id) {
+      found = c;
+      return true;
+    }
+    return false;
+  });
+  return found;
+}
+
+function paramRow(card, paramId) {
+  var nodeId = card.attrs['data-node-id'];
+  var inner = card.children[1].children[0];
+  var found = null;
+  inner.children.some(function (row) {
+    if (row.children[1] && row.children[1].id === 'param-' + nodeId + '-' + paramId) {
+      found = row;
+      return true;
+    }
+    return false;
+  });
+  return found;
+}
+
+function rowValueSpan(card, paramId) {
+  var row = paramRow(card, paramId);
+  // Row anatomy: [label, control, .param-value span, (.sr-only help span)]
+  return row ? row.children[2] : null;
+}
+
+// K1. Defaults: the mono readout reads 0-100 %, the slider stays 0..1.
+windowStub.ChainCanvas.loadModel([
+  { id: 'k1', type: 'distortion', params: { drive: 0.25, tone: 0.7, output: -3 } },
+  { id: 'k2', type: 'chorus', params: { depthMs: 3, rateHz: 1.5, mix: 30 } }
+]);
+var kDist = cardById('k1');
+var kChorus = cardById('k2');
+check(
+  rowValueSpan(kDist, 'drive').textContent === '25%',
+  'distortion Drive readout is "25%" at the 0.25 default (was "0.25%")'
+);
+check(
+  rowValueSpan(kDist, 'tone').textContent === '70%',
+  'distortion Tone readout is "70%" at the 0.7 default (was "0.7%")'
+);
+check(
+  rowValueSpan(kDist, 'output').textContent === '-3 dB',
+  'distortion Output readout unchanged ("-3 dB" — non-% params untouched)'
+);
+check(
+  rowValueSpan(kChorus, 'mix').textContent === '30%',
+  'chorus Mix still reads "30%" (the convention reference, untouched)'
+);
+check(
+  rowValueSpan(kChorus, 'depthMs').textContent === '3 ms' &&
+    rowValueSpan(kChorus, 'rateHz').textContent === '1.5 Hz',
+  'chorus Depth/Rate still render their documented units (3 ms / 1.5 Hz)'
+);
+check(
+  rowValueSpan(kDist, 'drive').className === 'param-value' &&
+    rowValueSpan(kChorus, 'mix').className === 'param-value',
+  'both readouts ride the same .param-value mono register (tabular rhythm unchanged)'
+);
+var kDriveControl = paramRow(kDist, 'drive').children[1];
+check(
+  kDriveControl.min === 0 && kDriveControl.max === 1 &&
+    kDriveControl.step === 0.01 && kDriveControl.value === 0.25,
+  'Drive slider stays on the internal 0..1 scale (min/max/step/value untouched)'
+);
+
+// K2. Min/mid/max through the HUMAN slider path: the readout scales, the
+// committed model value does not.
+var kCapturedParams = null;
+windowStub.AudioGraph.updateNodeParams = function (id, params) {
+  if (id === 'k1') {
+    kCapturedParams = Object.assign({}, params);
+  }
+};
+windowStub.AudioGraph.getNodeInstance = function () {
+  // Distortion-shaped fake so the real NodeTypes.applyParam ramp call
+  // finds the internal nodes it addresses (driveGain/toneFilter/outGain).
+  return {
+    driveGain: { gain: {} },
+    toneFilter: { frequency: {} },
+    outGain: { gain: {} }
+  };
+};
+[
+  { raw: '0', display: '0%', model: 0 },
+  { raw: '0.5', display: '50%', model: 0.5 },
+  { raw: '1', display: '100%', model: 1 },
+  { raw: '0.25', display: '25%', model: 0.25 }
+].forEach(function (c) {
+  kDriveControl.value = c.raw;
+  kDriveControl.fire('input');
+  check(
+    rowValueSpan(kDist, 'drive').textContent === c.display,
+    'human drag to ' + c.raw + ' reads "' + c.display + '"'
+  );
+  check(
+    kCapturedParams && kCapturedParams.drive === c.model,
+    'human drag to ' + c.raw + ' commits the INTERNAL value ' + c.model + ' (scale unchanged)'
+  );
+});
+// Float-noise case: 0.33 * 100 === 33.000000000000004 in binary float —
+// the readout must round it away, the model must keep the exact 0.33.
+var kToneControl = paramRow(kDist, 'tone').children[1];
+kToneControl.value = '0.33';
+kToneControl.fire('input');
+check(
+  rowValueSpan(kDist, 'tone').textContent === '33%',
+  'tone 0.33 reads "33%" (no binary-float tails in the readout)'
+);
+check(
+  kCapturedParams && kCapturedParams.tone === 0.33,
+  'tone 0.33 commits the internal 0.33 verbatim'
+);
+
+// K3. Preset/autosave restore path: values from a saved preset render on
+// the 0-100 convention and the model serialization source is unchanged.
+windowStub.ChainCanvas.loadModel([
+  { id: 'k3', type: 'distortion', params: { drive: 0.42, tone: 0.06, output: -12 } }
+]);
+var kRestored = cardById('k3');
+check(
+  rowValueSpan(kRestored, 'drive').textContent === '42%' &&
+    rowValueSpan(kRestored, 'tone').textContent === '6%',
+  'restored preset drive 0.42 / tone 0.06 read "42%" / "6%"'
+);
+var kRestoredModel = windowStub.ChainCanvas.getCurrentModel();
+check(
+  kRestoredModel[0].params.drive === 0.42 && kRestoredModel[0].params.tone === 0.06,
+  'getCurrentModel (the persistence/preset read) still carries 0.42/0.06 — round-trip unchanged'
+);
+
+// K4. Agent set_param canvas half: ChainCanvas.updateNodeParam — the exact
+// call MCP's parameter-only fast path makes after AudioGraph/
+// NodeTypes.applyParam — still receives 0..1 and converts the readout the
+// same way. (The MCP-side 0..1 contract itself is pinned by
+// tests/test-mcp-tools-cycle3.js C8: set_param drive 0.9 -> model 0.9.)
+var kPersistBefore = calls.persist.length;
+check(
+  windowStub.ChainCanvas.updateNodeParam('k3', 'drive', 0.5) === true,
+  'updateNodeParam (set_param canvas half) applies drive 0.5'
+);
+check(
+  rowValueSpan(kRestored, 'drive').textContent === '50%',
+  'agent-written drive 0.5 reads "50%" on the card without a re-render'
+);
+check(
+  paramRow(kRestored, 'drive').children[1].value === 0.5,
+  'agent-written drive keeps the slider at the internal 0.5 position'
+);
+check(
+  windowStub.ChainCanvas.getCurrentModel()[0].params.drive === 0.5,
+  'agent-written drive stores the internal 0.5 in the model'
+);
+check(
+  calls.persist.length === kPersistBefore + 1 &&
+    calls.persist[calls.persist.length - 1][0].params.drive === 0.5,
+  'agent param edit autosaves the internal 0.5 (PS-2 persistence unchanged)'
+);
+
+// K5. Registry-wide convention gate: every % param either already lives on
+// 0-100 (no displayScale — renders raw, like Mix/Feedback) or declares
+// displayScale 100 for its 0..1 scale. A future 0..1+% param without the
+// scale fails here; a 0-100 % param that gains one fails here too.
+var kPercentSpecs = 0;
+allTypes.forEach(function (type) {
+  windowStub.NodeTypes.getParamSpec(type).forEach(function (s) {
+    if (s.unit === '%' && !Array.isArray(s.values)) {
+      kPercentSpecs += 1;
+      if (s.max <= 1) {
+        check(
+          s.displayScale === 100,
+          type + '.' + s.id + ' is a 0..1 % param and declares displayScale 100 (0-100 readout)'
+        );
+      } else {
+        check(
+          s.displayScale === undefined,
+          type + '.' + s.id + ' is already 0-100 % and renders raw (no displayScale)'
+        );
+      }
+    }
+  });
+});
+check(
+  kPercentSpecs === 7,
+  'seven % params across the ten types (delay x2, reverb, chorus, autotune, distortion x2)'
+);
+
+// K6. Rendered sweep over ALL TEN types at once: no % readout anywhere on
+// the surface matches the "0.X%" fraction pattern the critique flagged.
+windowStub.ChainCanvas.loadModel([
+  { id: 's1', type: 'gain', params: { gainDb: 0 } },
+  { id: 's2', type: 'compressor', params: { threshold: -24, ratio: 4, attack: 0.01, release: 0.25 } },
+  { id: 's3', type: 'eq', params: { lowGain: 0, midGain: 0, highGain: 0 } },
+  { id: 's4', type: 'delay', params: { timeMs: 300, feedback: 25, mix: 25 } },
+  { id: 's5', type: 'reverb', params: { mix: 20 } },
+  { id: 's6', type: 'limiter', params: { ceiling: -1, release: 50 } },
+  { id: 's7', type: 'distortion', params: { drive: 0.25, tone: 0.7, output: -3 } },
+  { id: 's8', type: 'chorus', params: { depthMs: 3, rateHz: 1.5, mix: 30 } },
+  { id: 's9', type: 'gate', params: { threshold: -50, attack: 0.005, release: 0.15, floor: -40 } },
+  { id: 's10', type: 'autotune', params: { key: 'C', scale: 'Chromatic', retune: 0, mix: 100 } }
+]);
+var kPercentReadouts = [];
+cards().forEach(function (card) {
+  var inner = card.children[1].children[0];
+  inner.children.forEach(function (row) {
+    var span = row.children[2];
+    if (span && /%$/.test(span.textContent)) {
+      kPercentReadouts.push(span.textContent);
+    }
+  });
+});
+check(
+  kPercentReadouts.length === 7 &&
+    kPercentReadouts.indexOf('25%') !== -1 &&
+    kPercentReadouts.indexOf('70%') !== -1 &&
+    kPercentReadouts.indexOf('100%') !== -1,
+  'all seven % readouts render across the ten mounted cards (Drive 25%, Tone 70%, autotune Mix 100%)'
+);
+check(
+  kPercentReadouts.every(function (t) { return !/^0\.\d/.test(t); }),
+  'no % readout anywhere matches the "0.X%" fraction pattern (critique P3-4)'
 );
 
 // ----------------------------------------------------------------------
