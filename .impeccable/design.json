@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-29T21:43:13-06:00",
+  "generatedAt": "2026-08-30T00:01:31-06:00",
   "title": "Design System: Karaoke Chain Builder",
   "extensions": {
     "colorMeta": {
@@ -538,9 +538,17 @@
       "name": "Palette Chip",
       "kind": "chip",
       "refersTo": "chip-palette",
-      "description": "A draggable module source AND a real button (keyboard add, aria-label \"Add X to chain\", disabled until Start): family legend square + silkscreen label; hover raises the bezel and a family top edge.",
+      "description": "A draggable module source AND a real button (keyboard add, aria-label \"Add X to chain\", disabled until Start): family legend square + silkscreen label; hover raises the bezel and a family top edge. The ten chips chunk under three non-interactive silkscreen group legends — \"Shape your voice\" / \"Polish your sound\" / \"Keep it safe\" (trailing fallback \"More effects\") — while staying flat direct-children buttons.",
       "html": "<button type=\"button\" class=\"ds-chip\" data-family=\"reverb\" data-initials=\"RV\" aria-label=\"Add Reverb to chain\">REVERB</button>",
       "css": ".ds-chip { width: 100%; font-family: inherit; text-align: left; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border: 1px solid var(--hairline); border-radius: 6px; background: var(--bg-card); color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; cursor: grab; transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease; } .ds-chip::before { content: attr(data-initials); flex: none; display: flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border-radius: 3px; background: var(--family-reverb); color: var(--on-accent); font-size: 0.6875rem; font-weight: 700; } .ds-chip:hover { border-color: var(--line-strong); color: var(--text-primary); box-shadow: inset 0 2px 0 var(--family-reverb); } .ds-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
+    },
+    {
+      "name": "Palette Group Label",
+      "kind": "custom",
+      "refersTo": "chip-palette",
+      "description": "Non-interactive silkscreen h3 that chunks the flat palette chip list into operator groups — \"Shape your voice\" / \"Polish your sound\" / \"Keep it safe\" — in the optgroup-legend register (0.7rem/700/uppercase/0.08em/muted); chips stay flat direct-children buttons, grouping is presentation only.",
+      "html": "<h3 class=\"ds-palette-group-label\">Shape your voice</h3>",
+      "css": ".ds-palette-group-label { margin: 0.9rem 0 0.35rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); } .ds-palette-group-label:first-child { margin-top: 0; }"
     },
     {
       "name": "Agent Chip",
@@ -562,7 +570,7 @@
       "name": "Experimental Badge",
       "kind": "chip",
       "refersTo": "card-module",
-      "description": "A status tag, never a control — the full \"Experimental\" tag after the module label in the node-card header (a compact \"EXP\" twin pins right on the palette chip). Signal Amber 1px bezel + amber text on Module Card ground; mono silkscreen at 0.6875rem/700 (the 11px floor, the legend-initials size), 0.06em tracking; deliberately no focus ring and no pointer affordance. Autotune only, driven by NodeTypes.isExperimental.",
+      "description": "A status tag, never a control — the full \"Experimental\" tag after the module label in the node-card header (a compact \"EXP\" twin pins right on the palette chip). Signal Amber 1px bezel + amber text on Module Card ground; mono silkscreen at 0.6875rem/700 (the 11px floor, the legend-initials size), 0.06em tracking, 0.35rem side padding (one shared rule — the chip override is margin-only, so the placements cannot drift); deliberately no focus ring and no pointer affordance. Autotune only, driven by NodeTypes.isExperimental. Detector exemption: the impeccable nested-cards heuristic flags the widened EXP tag (~100.6×16px) as a false positive — tag, not card; adjudicated keep 2026-08-30, do not re-triage.",
       "html": "<span class=\"ds-exp-badge\">Experimental</span>",
       "css": ".ds-exp-badge { flex: none; padding: 0.1rem 0.35rem; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-card); color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }"
     },

@@ -517,3 +517,19 @@ merged into main and pushed — main now carries cycle 3 (four effects),
 finishing refinements R1–R5, PR #17, and PR #18 together. Finishing phase
 still owes the closing critique (prior run cancelled by user mid-flight;
 scratch 2026-08-30T05-10-A remains) + final document refresh.
+
+### Final document refresh (2026-08-30): finishing phase COMPLETE. User
+closed the cycle at 36/40 — no trim to capabilities; badge geometry kept
+with a documented detector exemption (nested-cards flags the widened EXP
+tag ~100.6×16px as a false positive — tag, not card; adjudicated keep
+2026-08-30, recorded in DESIGN.md with the badge bullet). DESIGN.md
+refreshed in place, no regeneration: badge spec now states the R2 reality
+(0.6875rem both placements + 0.35rem side padding), the palette fallback
+group is named ("More effects"), and the R4 displayScale readout (0–100 %
+Drive/Tone, display-only) is documented. Sidecar synced: badge
+description/css carry 0.35rem + the exemption, Palette Chip description
+names the three group legends, new Palette Group Label component
+(ds-prefixed, from .palette-group-label), generatedAt bumped; JSON
+round-trip OK, all 24 var(--…) refs resolve in styles/main.css, all 26
+narrative strings verbatim vs DESIGN.md. Cycle-3 finishing phase closed —
+cycle acceptance is the remaining gate.
