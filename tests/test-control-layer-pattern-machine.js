@@ -40,13 +40,13 @@
 //          own) at the .node-card[data-family] rules — ONE derivation
 //          site, no per-control class, no raw hex — and .knob-ring's
 //          gradient consumes it, not the system accent.
-//   G. ITEM 2 LIVE VARIANT HOOKS — the three drag-feel modes read
-//      body[data-knob-variant] AT DRAG TIME (absent = the built
-//      ENCODER feel, so the harness default and the shipped page are
-//      untouched); dial = detent-proximity gain x velocity, vfd =
-//      24-detent stepped quantization (Shift = fine within step);
-//      every variant CSS rule is body-gated (un-picked variants never
-//      render).
+//   G. ITEM 2 BAKE (2026-08-30 pick: A ENCODER) — the round's variant
+//      machinery is GONE: body[data-knob-variant] has no writer anywhere
+//      (index.html switcher stripped, src reads nothing), the stylesheet
+//      carries zero variant-gated rules, and the picked variant's ONE
+//      refinement — the held knob's mono value line lifting to display
+//      amber — ships UNGATED; the drag feel is the built ENCODER linear
+//      map everywhere.
 //
 // Same committed-test convention as the rest of the suite: zero-dependency
 // Node harness, stub `window` + minimal DOM, load the REAL src files
@@ -994,21 +994,15 @@ check(
 );
 
 // ----------------------------------------------------------------------
-// G. Item 2 live variant hooks — drag FEEL per anatomy + the gated CSS.
+// G. Item 2 bake (2026-08-30 pick: A ENCODER) — variant machinery gone,
+//    the picked refinement shipped ungated, the built feel everywhere.
 // ----------------------------------------------------------------------
 console.log('');
-console.log('G. item 2 live variant hooks: feel modes + gated anatomy');
+console.log('G. item 2 bake: no variant machinery, encoder feel + amber value lift');
 
-// The feel switch is body[data-knob-variant], read AT DRAG TIME; absent
-// (the committed harness AND the shipped page until bake) = the built
-// ENCODER feel. A controllable body stub proves both the default safety
-// and each variant's math on the REAL gain knob (-24..24, step 0.5).
-var bodyVariant = null;
-documentStub.body = {
-  getAttribute: function (name) {
-    return name === 'data-knob-variant' ? bodyVariant : null;
-  }
-};
+// The feel switch is gone with the round's switcher (FEW-0): nothing in
+// src reads a body attribute anymore, so a plain body stub suffices.
+documentStub.body = {};
 
 // Fresh fixtures (section D re-rendered the canvas as one g4 gain
 // card): the CURRENT gain card's engine input + knob visual.
@@ -1045,171 +1039,49 @@ function setGain(v) {
   gInput2.value = String(v);
 }
 
-// G1. Default safety: no body attribute = the built linear feel, exactly
-// (60px up from 0: (60/150)*48 = 19.2 -> 19.0 on the 0.5 grid).
-bodyVariant = null;
+// G1. The built ENCODER linear feel, exactly (60px up from 0:
+// (60/150)*48 = 19.2 -> 19.0 on the 0.5 grid).
 setGain(0);
 dragKnob([{ dy: 60 }]);
 check(
   Number(gInput2.value) === 19,
-  'no variant attribute: the built ENCODER linear drag is untouched (60px -> 19 dB)'
+  'the built ENCODER linear drag is untouched (60px -> 19 dB)'
 );
-
-// G2. DIAL — angular-velocity mapping. Same 60px from 0 moves LESS
-// (13.824 -> 14.0: the 0.45 center-detent gain); a small push is FINER
-// at center than encoder (1.0 vs 1.5); a flick travels further than the
-// same distance slowly (angular momentum: 30px in one move = 7.0 vs
-// 3x10px = 6.0).
-bodyVariant = 'dial';
-setGain(0);
-dragKnob([{ dy: 60 }]);
-check(
-  Number(gInput2.value) === 14,
-  'DIAL: 60px from center commits 14 dB (0.45 detent-proximity gain x1.6 velocity), not the linear 19'
-);
-setGain(0);
-dragKnob([{ dy: 5 }]);
-var dialSmall = Number(gInput2.value);
-bodyVariant = 'encoder';
-setGain(0);
-dragKnob([{ dy: 5 }]);
-check(
-  dialSmall === 1 && Number(gInput2.value) === 1.5,
-  'DIAL: a 5px push at the center detent is FINER than encoder (1.0 vs 1.5 dB)'
-);
-bodyVariant = 'dial';
-setGain(0);
-dragKnob([{ dy: 30 }]);
-var dialFlick = Number(gInput2.value);
-setGain(0);
-dragKnob([{ dy: 10 }, { dy: 10 }, { dy: 10 }]);
-check(
-  dialFlick === 7 && Number(gInput2.value) === 6,
-  'DIAL: one 30px flick out-travels three 10px pushes (7.0 vs 6.0 dB — the velocity term)'
-);
-
-// G3. VFD — stepped detents. detentStep = round((48/24)/0.5)*0.5 = 2.0:
-// a 6px push snaps exactly one segment; a 1px push holds still (the
-// detent resists); Shift drops the quantizer (fine WITHIN the step —
-// 85px fine-drag lands 5.5, OFF the 2.0 grid but ON the 0.5 step grid);
-// wheel commits one DETENT per notch plain, one STEP with Shift.
-bodyVariant = 'vfd';
-setGain(0);
-dragKnob([{ dy: 6 }]);
-check(
-  Number(gInput2.value) === 2,
-  'VFD: a 6px push commits exactly one 2.0 dB detent (24-segment grid on the step grid)'
-);
-setGain(0);
-dragKnob([{ dy: 1 }]);
-check(
-  Number(gInput2.value) === 0,
-  'VFD: a sub-detent 1px push holds still (the detent resists)'
-);
-setGain(0);
-dragKnob([{ dy: 85, shift: true }]);
-check(
-  Number(gInput2.value) === 5.5,
-  'VFD: Shift = fine within the step (5.5 dB — off the detent grid, on the spec step grid)'
-);
-setGain(0);
-wheelKnob(-100, false);
-check(
-  Number(gInput2.value) === 2,
-  'VFD wheel: one notch = one detent (2.0 dB), not one spec step'
-);
-wheelKnob(-100, true);
-check(
-  Number(gInput2.value) === 2.5,
-  'VFD wheel + Shift: one spec step (0.5 dB fine)'
-);
-bodyVariant = null;
 setGain(0);
 wheelKnob(-100, false);
 check(
   Number(gInput2.value) === 0.5,
-  'encoder/dial wheel: unchanged one-spec-step-per-notch regression (0.5 dB)'
+  'wheel: unchanged one-spec-step-per-notch regression (0.5 dB)'
 );
 
-// G4. The three anatomies are GATED on body[data-knob-variant] — every
-// occurrence of the gate in the stylesheet is body-scoped, so nothing
-// renders unless a variant is active (the unpicked variants never ship).
+// G2. The variant machinery is GONE: body[data-knob-variant] appears
+// nowhere in the stylesheet, the page, or src (no writer, no reader,
+// no gated rules — the unpicked variants never ship, the picked one
+// needs no gate).
 var gateUses = RAW_CSS.split('data-knob-variant').length - 1;
-var bodyGatedUses = RAW_CSS.split('body[data-knob-variant=').length - 1;
+var RAW_HTML = '\n' + fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+var SRC_DIR = path.join(ROOT, 'src');
+var srcVariantUses = fs.readdirSync(SRC_DIR).filter(function (f) {
+  return /\.js$/.test(f);
+}).reduce(function (n, f) {
+  return n + (fs.readFileSync(path.join(SRC_DIR, f), 'utf8')
+    .split('data-knob-variant').length - 1);
+}, 0);
 check(
-  gateUses > 0 && gateUses === bodyGatedUses,
-  'every anatomy rule is gated behind body[data-knob-variant] (' + bodyGatedUses + ' rules; none un-gated)'
+  gateUses === 0 &&
+    RAW_HTML.split('data-knob-variant').length - 1 === 0 &&
+    RAW_HTML.split('item2-variant-switcher').length - 1 === 0 &&
+    srcVariantUses === 0,
+  'no data-knob-variant anywhere (css ' + gateUses + ', html/src 0) and no switcher in the served page'
 );
 
-// G5. DIAL anatomy: tick scale, NO arc; the NEEDLE carries family color.
-var dialRing = cssRule("body[data-knob-variant='dial'] .knob-ring");
-check(
-  dialRing !== null &&
-    dialRing.indexOf('repeating-conic-gradient') !== -1 &&
-    dialRing.indexOf('mask') !== -1 &&
-    dialRing.indexOf('var(--knob-arc') === -1,
-  'DIAL ring: repeating-conic tick scale, mask-confined, NO arc (the needle is the value)'
-);
-var dialNeedle = cssRule("body[data-knob-variant='dial'] .knob-pointer");
-check(
-  dialNeedle !== null &&
-    cssDecl(dialNeedle, 'background') === 'var(--knob-arc, var(--pm-print-hi))',
-  'DIAL needle: family color via the same --knob-arc cascade (family stays the value carrier)'
-);
-var dialLiveNeedle = cssRule("body[data-knob-variant='dial'] .knob[data-live='true'] .knob-pointer");
-check(
-  dialLiveNeedle !== null &&
-    cssDecl(dialLiveNeedle, 'background') === 'var(--knob-arc, var(--pm-print-hi))',
-  'DIAL needle stays family-colored while held (the amber pointer lift is overridden — the needle is the value, not a system state)'
-);
-var dialPad = cssRule("body[data-knob-variant='dial'] .pad[aria-checked='true']");
-check(
-  dialPad !== null &&
-    cssDecl(dialPad, 'background') === 'var(--knob-arc, var(--pm-accent))',
-  'DIAL pressed pad: family fill (the grammar rides the variant; chassis ink unchanged)'
-);
-
-// G6. VFD anatomy: chrome-less segmented dial + register-tier value
-// BESIDE the control.
-var vfdRing = cssRule("body[data-knob-variant='vfd'] .knob-ring");
-check(
-  vfdRing !== null &&
-    vfdRing.indexOf('repeating-conic-gradient') !== -1 &&
-    vfdRing.indexOf('mask') !== -1 &&
-    vfdRing.indexOf('background') === -1,
-  'VFD ring: the base family arc (one source, un-redeclared) MASKED into segments — mask + inset only'
-);
-var vfdPointer = cssRule("body[data-knob-variant='vfd'] .knob-pointer");
-check(
-  vfdPointer !== null && cssDecl(vfdPointer, 'display') === 'none',
-  'VFD: chrome-less — cap and pointer hidden (segments carry the value)'
-);
-var vfdUnit = cssRule("body[data-knob-variant='vfd'] .knob-unit");
-check(
-  vfdUnit !== null && cssDecl(vfdUnit, 'display') === 'grid',
-  'VFD: the knob-unit becomes a two-column grid (dial left, value+label beside)'
-);
-var vfdValue = cssRule("body[data-knob-variant='vfd'] .knob-unit .param-value");
-check(
-  vfdValue !== null &&
-    cssDecl(vfdValue, 'font-size') === '0.85rem' &&
-    cssDecl(vfdValue, 'color') === 'var(--pm-display)',
-  'VFD value: display-register tier (0.85rem) in display amber, BESIDE the control'
-);
-var vfdPad = cssRule("body[data-knob-variant='vfd'] .pad[aria-checked='true']");
-check(
-  vfdPad !== null &&
-    cssDecl(vfdPad, 'background') === 'var(--knob-arc, var(--pm-accent))' &&
-    cssDecl(vfdPad, 'border-radius') === '2px',
-  'VFD pressed pad: family fill, squared segment edge'
-);
-
-// G7. ENCODER refinement: the held knob's value line answers amber.
-var liveValue = cssRule("body[data-knob-variant='dial'] .knob[data-live='true'] ~ .param-value");
+// G3. The picked variant's ONE refinement, baked ungated: the held
+// knob's mono value line answers amber.
+var liveValue = cssRule(".knob[data-live='true'] ~ .param-value");
 check(
   liveValue !== null &&
     cssDecl(liveValue, 'color') === 'var(--pm-display)',
-  'the held knob\u2019s mono value line lifts to display amber (value tracking, encoder + dial)'
+  'the held knob\u2019s mono value line lifts to display amber (the picked A refinement, gate dropped)'
 );
 
 // ----------------------------------------------------------------------

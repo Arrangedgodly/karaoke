@@ -294,48 +294,11 @@
   var KNOB_WHEEL_FINE_MULT = 5;  // Shift-wheel = 5 steps per notch
 
   // ---------------------------------------------------------------------
-  // Item 2 live variants — DRAG FEEL per anatomy (docs/ultron/redesign.md
-  // item 2). The anatomy/feel switch is body[data-knob-variant], written
-  // by the round's switcher (index.html ITEM 2 LIVE scaffold) and mirrored
-  // from the live session's cycler; ABSENT = the built ENCODER anatomy and
-  // feel, so the committed tests and the shipped default are untouched.
-  // The mode is read AT DRAG TIME — switching variants needs no re-render:
-  // the same rendered knobs answer in whichever feel is active.
-  //
-  //   encoder — linear vertical drag (the built feel, the baseline anchor).
-  //   dial    — angular-velocity mapping: a detent-proximity ease (fine
-  //             near a bipolar center) times a velocity term (a faster
-  //             push spins the dial further — angular momentum).
-  //   vfd     — stepped: the drag target quantizes onto a 24-detent grid
-  //             aligned to the param's own step grid; Shift = fine within
-  //             the step; wheel = one detent per notch (Shift = one step).
+  // Item 2 (2026-08-30 bake, pick: A ENCODER): the round's B DIAL /
+  // C VFD drag-feel variants and the body-attribute variant switch they
+  // gated on were stripped (FEW-0); the built ENCODER feel below
+  // — linear vertical drag, Shift = fine — is the shipped anatomy.
   // ---------------------------------------------------------------------
-  var KNOB_VFD_SEGMENTS = 24;
-  var KNOB_DIAL_CENTER_GAIN = 0.45; // gain at a bipolar center (fine work)
-  var KNOB_DIAL_VELOCITY_MAX = 0.6; // extra response at a fast push
-  var KNOB_DIAL_VELOCITY_PX = 24;   // dy at which the velocity term maxes
-
-  /**
-   * The active control-anatomy feel mode. Guarded for the stripped test
-   * harnesses (no document.body, or no getAttribute): they get the built
-   * encoder feel, which is also the shipped default until bake.
-   *
-   * @returns {string} 'encoder' | 'dial' | 'vfd'
-   */
-  function knobFeelMode() {
-    try {
-      if (typeof document !== 'undefined' && document.body &&
-          typeof document.body.getAttribute === 'function') {
-        var mode = document.body.getAttribute('data-knob-variant');
-        if (mode === 'dial' || mode === 'vfd' || mode === 'encoder') {
-          return mode;
-        }
-      }
-    } catch (err) {
-      /* stripped harness — the built feel */
-    }
-    return 'encoder';
-  }
 
   // ---------------------------------------------------------------------
   // Stub-safe DOM helpers. The committed tests run this file inside vm
@@ -719,29 +682,6 @@
         return snapped;
       }
 
-      // Item 2 feel helpers (per-param; close over min/max/step/bipolar).
-
-      // DIAL detent-proximity ease: gain eases KNOB_DIAL_CENTER_GAIN at a
-      // bipolar center (value 0) up to 1 at the extremes, so the turn
-      // around unity arrives under the finger — fine work exactly where
-      // the param means something (0 dB flat). Unipolar params have no
-      // center: full gain everywhere.
-      function dialFeelGain(current) {
-        if (!bipolar) {
-          return 1;
-        }
-        var reach = Math.max(Math.abs(min), Math.abs(max)) || 1;
-        var dist = Math.min(Math.abs(current) / reach, 1);
-        return KNOB_DIAL_CENTER_GAIN + (1 - KNOB_DIAL_CENTER_GAIN) * dist;
-      }
-
-      // VFD detent grid: whole spec steps per visible segment, so drag
-      // commits stay on the SAME grid keyboard arrows use (a detent is
-      // always a legal step multiple, never a fractional one).
-      function vfdStepsPerDetent() {
-        return Math.max(1, Math.round((range / KNOB_VFD_SEGMENTS) / stepSize()));
-      }
-
       // The knob's visual state from the input's value — the single
       // source of truth (every path funnels through the input).
       var knobEl = null;
@@ -813,8 +753,6 @@
         // Vertical drag: 150 px = full sweep; Shift = fine (x0.2). Each
         // tick writes input.value and dispatches a REAL 'input' event —
         // the commit pipeline above cannot tell drag from keyboard.
-        // Item 2: the mapping itself is the variant's FEEL (see
-        // knobFeelMode above); encoder keeps the built linear map.
         var dragging = false;
         var lastY = 0;
 
@@ -853,31 +791,8 @@
           lastY = event.clientY;
           var fine = event.shiftKey ? KNOB_FINE_FACTOR : 1;
           var current = parseFloat(input.value);
-          var feel = knobFeelMode();
-          var next;
-
-          if (feel === 'vfd') {
-            // Stepped: the continuous target snaps onto the detent grid —
-            // sub-detent drags hold still (the detent resists), a crossing
-            // commits exactly one segment. Shift drops the quantizer for
-            // fine work WITHIN a step.
-            next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine;
-            if (!event.shiftKey) {
-              var detentStep = stepSize() * vfdStepsPerDetent();
-              next = min + Math.round((next - min) / detentStep) * detentStep;
-            }
-          } else if (feel === 'dial') {
-            // Angular-velocity mapping: the detent-proximity ease times a
-            // velocity term — a slow push moves the dial proportionally,
-            // a flick spins it further, like a massy potentiometer.
-            var velocity = 1 +
-              Math.min(Math.abs(dy) / KNOB_DIAL_VELOCITY_PX, 1) * KNOB_DIAL_VELOCITY_MAX;
-            next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine *
-              dialFeelGain(current) * velocity;
-          } else {
-            // ENCODER — the built linear vertical drag.
-            next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine;
-          }
+          // ENCODER — the built linear vertical drag.
+          var next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine;
           input.value = String(clampQuantize(next));
           fireInput(input);
         });
@@ -889,21 +804,14 @@
         knobEl.addEventListener('pointerup', endDrag);
         knobEl.addEventListener('pointercancel', endDrag);
 
-        // Wheel: the feel's coarse/fine pair. Encoder + dial: one spec
-        // step per notch (Shift = x5). VFD: one DETENT per notch, Shift =
-        // one spec step (fine within the detent).
+        // Wheel: one spec step per notch (Shift = x5).
         knobEl.addEventListener('wheel', function (event) {
           try {
             event.preventDefault();
           } catch (err) {
             /* stub event */
           }
-          var mult;
-          if (knobFeelMode() === 'vfd') {
-            mult = event.shiftKey ? 1 : vfdStepsPerDetent();
-          } else {
-            mult = event.shiftKey ? KNOB_WHEEL_FINE_MULT : KNOB_WHEEL_STEP_MULT;
-          }
+          var mult = event.shiftKey ? KNOB_WHEEL_FINE_MULT : KNOB_WHEEL_STEP_MULT;
           var dir = event.deltaY < 0 || event.deltaX > 0 ? 1 : -1;
           input.value = String(clampQuantize(parseFloat(input.value) + dir * stepSize() * mult));
           fireInput(input);

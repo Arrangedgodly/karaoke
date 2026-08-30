@@ -49,7 +49,22 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
 
 ### Frontend / interaction (owner: FE)
 
-**FEW-1 — Layout store seam + schema migration** · small · pending
+**FEW-0 — Strip unpicked item-2 control-variant machinery** · small · completed
+- The item-2 element round resolved: variant A (ENCODER, the current
+  anatomy) picked by the user (overlord sitting 2026-08-30). Remove the
+  `#item2-variant-switcher` scaffold in index.html (pill markup, its
+  `<style data-item2-variant-switcher>` block, its script — the ONLY
+  writer of `body[data-knob-variant]`), the B-DIAL/C-VFD gated CSS in
+  styles/main.css (ITEM 2 LIVE VARIANT LAYER), and the dial/vfd drag-feel
+  branches in src/param-controls.js. The default ENCODER anatomy (what
+  renders with no attribute set) stays untouched; `.impeccable/live/` and
+  decision payloads untouched (they are the round's record).
+- Owner: FE. Dependencies: none.
+- Acceptance: switcher absent from served page; `data-knob-variant` has
+  no writer anywhere in index.html/src; suite green; current anatomy
+  visually unchanged.
+
+**FEW-1 — Layout store seam + schema migration** · small · completed
 - Extend the autosave payload with `layout: { <nodeId>: {x, y, scale,
   flow} }` behind a schema version; legacy payloads (no layout)
   migrate by auto-layout (incumbent tidy stack). PresetStore/schema

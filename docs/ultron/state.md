@@ -654,3 +654,30 @@ committed pre-takeover (approved item 1 + adjustment + 1b + rebrand;
 item-2 switcher pending pick, suite 25 files green at stop). Element
 worker hard-stopped at ~4.9h overrun — wrap-up: variants preserved
 behind the page switcher, pick batched into the conversion sitting.
+
+### Overlord sitting (2026-08-30, batched) — answers recorded
+Item-2 control anatomy: A ENCODER (current) — unpicked variants to be
+stripped (FEW-0). Sheds accepted: items 5–7 (agent-side P3s) + item 3
+(chrome taste round) defer first; protected: cycle-4 M1–M4, item 4
+extract, finish phase. Auto-approval: ON with evidence paths; final
+acceptance stays user-owned. Clock started at sitting end.
+
+FEW-0 auto-approved (ultron-overlord) — evidence: production-log.md FEW-0 verify (grep-clean + suite exit 0) — budget 5:00, actual 4:24 + wrap-up verify
+
+### FEW-1 dispatched 2026-08-30 (production-overlord worker)
+**Active task: FEW-1 — status `awaiting-approval`** (layout store seam + schema
+migration: src/persistence.js autosave slot becomes a versioned envelope
+`{autosaveVersion: 2, chain: <PresetSchema wire form unchanged>, layout:
+{<nodeId>: {x, y, scale, flow}}}` under the SAME key; legacy slots (no
+envelope) migrate to the tidy-stack fallback `layout: {}` idempotently;
+sanitizeLayout prunes unknown node ids on save AND load and fails soft on
+hostile entries (a corrupt layout never rejects a valid chain);
+`saveCurrentChain(model, layout)` seam: object=pruned+normalized,
+undefined=carry-forward, null=explicit clear (TIDY); new
+`loadInitialLayout()` export, `loadInitialModel()` array contract
+unchanged; PresetStore/preset schema UNTOUCHED (presets chain-only — preset
+replacement leaves layout tidy via the prune rule); canvas consumer NOT
+wired (FEW-2). Evidence: 74-check tests/test-autosave-layout-store.js;
+suite 26/26 files / 2150 checks green.) Next unblocked: FEW-2 (after
+approval), QA-1 + DAT-1 parallel per M1.
+FEW-1 auto-approved (ultron-overlord) — evidence: tests/test-autosave-layout-store.js — budget 5:00, actual ~5:07 + verify

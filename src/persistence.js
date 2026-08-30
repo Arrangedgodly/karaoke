@@ -8,7 +8,8 @@
 // order.
 //
 // PS-2 scope: everything under the single localStorage key STORAGE_KEY
-// below ('karaoke-autosave-v1'). Two entry points:
+// below ('karaoke-autosave-v1'). Two entry points (plus FEW-1's layout
+// seam, described further down):
 //   - saveCurrentChain() serializes AudioGraph's current model (via
 //     PresetSchema.serialize()) and writes it to that key. It is called by
 //     src/canvas.js on EVERY change to the chain — structural (add/remove/
@@ -43,11 +44,152 @@
 
   var STORAGE_KEY = 'karaoke-autosave-v1';
 
+  // ---------------------------------------------------------------------
+  // FEW-1 (cycle 4): the LAYOUT seam. The autosave slot grows from a bare
+  // PresetSchema wire object to a versioned ENVELOPE of this module's own:
+  //
+  //   {
+  //     autosaveVersion: 2,                     // THIS module's envelope
+  //     chain: { schemaVersion: 1, name: '__autosave__', nodes: [...] },
+  //                                             // PresetSchema UNTOUCHED
+  //     layout: { <nodeId>: {x, y, scale, flow}, ... }
+  //   }
+  //
+  // Deliberate seams:
+  //   - PresetStore / preset schema are NOT extended (plan: "presets stay
+  //     chain-only" — a named preset never carries positions; loading one
+  //     leaves the board tidy). The chain half of the envelope is exactly
+  //     the same PresetSchema.serialize() wire form as before, so preset
+  //     data, byte-for-byte, is untouched by this change.
+  //   - The localStorage KEY stays 'karaoke-autosave-v1' (the rebrand
+  //     decision: keys are kept for data preservation). Versioning rides
+  //     the envelope's own `autosaveVersion` field instead.
+  //   - LEGACY payloads (everything saved before cycle 4) are the bare
+  //     `{schemaVersion, name, nodes}` preset shape — no envelope. They
+  //     are detected by the absence of `autosaveVersion` and MIGRATE on
+  //     load: chain loads as-is, layout resolves to `{}` — i.e. every
+  //     node takes the incumbent tidy vertical stack (the auto-layout
+  //     the canvas already computes when no explicit position exists).
+  //     No positions are synthesized here; "no entry" IS the tidy stack.
+  //     The migration is idempotent: loading a legacy payload twice
+  //     yields identical results, and the first save after such a load
+  //     rewrites the slot as a v2 envelope with `layout: {}` — the
+  //     steady state — which then loads through the v2 path forever.
+  //   - An `autosaveVersion` this build does not know (a future shape)
+  //     rejects exactly like an unsupported PresetSchema version: clear
+  //     error, default-chain fallback, never a misread.
+  //   - Layout entries: `x`/`y` finite numbers (px, canvas-panel
+  //     coordinates), `scale` finite number (default 1), `flow`
+  //     'vertical'|'horizontal' (default 'vertical'). sanitizeLayout()
+  //     normalizes every entry to exactly that shape, PRUNES entries for
+  //     node ids the accompanying chain does not contain (node removed —
+  //     pruning happens on both save and load), and drops hostile
+  //     entries (non-object, non-finite x/y) rather than throwing: a
+  //     corrupt layout must never take down an otherwise-valid chain.
+  // ---------------------------------------------------------------------
+  var AUTOSAVE_VERSION = 2;
+
+  /**
+   * FEW-1: normalize/prune a candidate layout map against the node ids
+   * the accompanying chain actually contains. Never throws — every
+   * failure mode degrades to dropping the offending entry (that node
+   * falls back to the tidy stack), and a wholesale-hostile `layout`
+   * (non-object, throwing getters, ...) degrades to `{}`.
+   *
+   * @param {*} layout - candidate layout map (any hostility).
+   * @param {string[]} knownIds - node ids of the chain being saved/loaded.
+   * @returns {Object<string, {x: number, y: number, scale: number, flow: string}>}
+   */
+  function sanitizeLayout(layout, knownIds) {
+    var clean = {};
+    try {
+      if (!layout || typeof layout !== 'object' || Array.isArray(layout)) {
+        return clean;
+      }
+      Object.keys(layout).forEach(function (nodeId) {
+        var entry;
+        try {
+          if (knownIds.indexOf(nodeId) === -1) {
+            return; // node no longer in the chain — pruned
+          }
+          entry = layout[nodeId];
+        } catch (err) {
+          return; // hostile getter on this key — drop just this entry
+        }
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          return; // hostile entry — dropped, node goes tidy
+        }
+        if (typeof entry.x !== 'number' || !isFinite(entry.x)) {
+          return;
+        }
+        if (typeof entry.y !== 'number' || !isFinite(entry.y)) {
+          return;
+        }
+        clean[nodeId] = {
+          x: entry.x,
+          y: entry.y,
+          scale:
+            typeof entry.scale === 'number' && isFinite(entry.scale)
+              ? entry.scale
+              : 1,
+          flow: entry.flow === 'horizontal' ? 'horizontal' : 'vertical'
+        };
+      });
+    } catch (err) {
+      // Throwing getters / prototype mischief — treat as no layout.
+      return {};
+    }
+    return clean;
+  }
+
+  /**
+   * FEW-1: fail-soft read of JUST the layout currently stored under
+   * STORAGE_KEY (any shape — legacy, envelope, corrupt). Used by
+   * saveCurrentChain()'s carry-forward default; never throws, never
+   * logs (a corrupt slot's diagnosis belongs to the load path).
+   * @returns {Object|null} the stored raw layout object, or null.
+   */
+  function readStoredLayoutRaw() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+      var parsed = JSON.parse(raw);
+      if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        Array.isArray(parsed) ||
+        parsed.autosaveVersion === undefined
+      ) {
+        return null; // legacy preset shape (or unparsable) — no layout
+      }
+      return parsed.layout && typeof parsed.layout === 'object' ? parsed.layout : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   /**
    * Serialize the current model and write it to localStorage under
    * STORAGE_KEY. Called by src/canvas.js after every structural change and
    * every param tweak (see file-level comment above) — never on its own
    * timer.
+   *
+   * FEW-1: the written payload is now the versioned ENVELOPE (see
+   * AUTOSAVE_VERSION above) — chain wire form unchanged, plus a pruned,
+   * normalized `layout` map. The optional second parameter is the layout
+   * seam FEW-2 will wire (positions/scale/flow per node id):
+   *   - `undefined` (the only form today's callers use): CARRY FORWARD
+   *     whatever layout is already stored, pruned against the model being
+   *     saved. Until FEW-2 wires real positions this is a no-op in
+   *     practice (nothing writes a layout yet), but it guarantees a
+   *     layout-less save — a param tweak, an agent rebuild — can never
+   *     silently wipe positions some other path stored.
+   *   - a layout object: normalized + pruned against the model's ids and
+   *     stored (entries for removed nodes never linger in the slot).
+   *   - `null`: an EXPLICIT clear — the stored layout becomes `{}` (every
+   *     node tidy), e.g. a future TIDY reset.
    *
    * @param {Array<{id: string, type: string, params: Object}>} [model] -
    *   optional. When omitted, falls back to window.AudioGraph.getModel().
@@ -67,7 +209,8 @@
    *   would never make it into the autosave slot at all unless some later,
    *   unrelated change happened to trigger another save afterward. The
    *   optional param exists so a future/standalone caller with no fresher
-   *   model already in hand still has a sane default to fall back on.
+   *   model already in hand still has a sane default to fall back to.
+   * @param {Object<string, {x: number, y: number, scale?: number, flow?: string}>|null} [layout]
    *
    * Wrapped in try/catch: localStorage.setItem() can throw (e.g. quota
    * exceeded, private-browsing mode in some browsers) and this must never
@@ -75,11 +218,29 @@
    * triggered the save. A failed save just means this particular change
    * isn't persisted — the live chain itself is completely unaffected.
    */
-  function saveCurrentChain(model) {
+  function saveCurrentChain(model, layout) {
     try {
       var modelToSave = model || window.AudioGraph.getModel();
       var serialized = window.PresetSchema.serialize('__autosave__', modelToSave);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+      var knownIds = modelToSave.map(function (entry) {
+        return entry.id;
+      });
+      var layoutToSave;
+      if (layout === undefined) {
+        layoutToSave = readStoredLayoutRaw(); // carry forward (null -> {})
+      } else if (layout === null) {
+        layoutToSave = {}; // explicit clear — everything tidy
+      } else {
+        layoutToSave = layout;
+      }
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          autosaveVersion: AUTOSAVE_VERSION,
+          chain: serialized,
+          layout: sanitizeLayout(layoutToSave, knownIds)
+        })
+      );
     } catch (err) {
       console.error('Persistence: failed to save chain to localStorage', err);
     }
@@ -127,39 +288,69 @@
   }
 
   /**
-   * Read and validate whatever is currently under STORAGE_KEY.
+   * Read and validate whatever is currently under STORAGE_KEY, migrating
+   * legacy payloads (FEW-1 — see AUTOSAVE_VERSION above).
    *
-   * @returns {Array<{id: string, type: string, params: Object}>|null} the
-   *   saved model, or null if there's nothing saved, the saved JSON is
-   *   unparsable, it fails PresetSchema.deserialize()'s structural
-   *   validation (including PRE-1's per-type param contracts for the
-   *   cycle-3 node types), or it names a node type the live registry does
-   *   not know (PRE-1 — see unregisteredNodeType). Never throws.
+   * Envelope v2: `chain` goes through PresetSchema.deserialize() +
+   * the unregistered-type guard exactly as before; `layout` goes through
+   * sanitizeLayout() against the loaded chain's ids — a hostile layout
+   * degrades to `{}` (tidy stack) WITHOUT rejecting the chain.
+   *
+   * Legacy shape (no `autosaveVersion`): the payload IS the preset wire
+   * object — validated through the same deserialize() path it always
+   * used, and layout resolves to `{}` (the tidy-stack migration; no
+   * positions are synthesized).
+   *
+   * @returns {{nodes: Array<{id: string, type: string, params: Object}>|null,
+   *            layout: Object<string, {x: number, y: number, scale: number, flow: string}>}}
+   *   nodes is null when nothing valid is saved (the caller falls back to
+   *   the default chain — whose layout is likewise `{}`). Never throws.
    */
-  function loadAutosavedModel() {
+  function readAutosave() {
     var raw;
     try {
       raw = localStorage.getItem(STORAGE_KEY);
     } catch (err) {
       console.error('Persistence: failed to read from localStorage', err);
-      return null;
+      return { nodes: null, layout: {} };
     }
     if (!raw) {
-      return null;
+      return { nodes: null, layout: {} };
     }
     try {
       var parsed = JSON.parse(raw);
-      var result = window.PresetSchema.deserialize(parsed);
+      var chainData = parsed;
+      var layoutData = null;
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        parsed.autosaveVersion !== undefined
+      ) {
+        if (parsed.autosaveVersion !== AUTOSAVE_VERSION) {
+          throw new Error(
+            'Persistence: unsupported autosave envelope version ' +
+              JSON.stringify(parsed.autosaveVersion) +
+              ' (expected ' + AUTOSAVE_VERSION + ').'
+          );
+        }
+        chainData = parsed.chain;
+        layoutData = parsed.layout;
+      }
+      var result = window.PresetSchema.deserialize(chainData);
       var unknownType = unregisteredNodeType(result.nodes);
       if (unknownType !== false) {
         throw new Error(
           'autosaved chain names unregistered node type "' + unknownType + '"'
         );
       }
-      return result.nodes;
+      var knownIds = result.nodes.map(function (entry) {
+        return entry.id;
+      });
+      return { nodes: result.nodes, layout: sanitizeLayout(layoutData, knownIds) };
     } catch (err) {
       console.error('Persistence: autosaved data was invalid/corrupt, falling back to default', err);
-      return null;
+      return { nodes: null, layout: {} };
     }
   }
 
@@ -172,20 +363,43 @@
    * (e.g. hand it straight to ChainCanvas.loadModel(), which will) without
    * risk of mutating the shared DEFAULT_PRESET data itself.
    *
+   * FEW-1: unchanged in shape and behavior — layout rides the SEPARATE
+   * loadInitialLayout() seam so this function's array contract (main.js,
+   * and the committed test suites that drive it) never shifts.
+   *
    * @returns {Array<{id: string, type: string, params: Object}>}
    */
   function loadInitialModel() {
-    var autosaved = loadAutosavedModel();
-    if (autosaved) {
-      return autosaved;
+    var autosaved = readAutosave();
+    if (autosaved.nodes) {
+      return autosaved.nodes;
     }
     return window.DEFAULT_PRESET.nodes.map(function (entry) {
       return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
     });
   }
 
+  /**
+   * FEW-1: the layout half of the same read — the pruned, normalized
+   * per-node position/scale/flow map for the autosaved chain, `{}` when
+   * there is no layout (nothing saved, LEGACY payload migrated, preset
+   * load's tidy state, or a hostile layout that failed soft). `{}` means
+   * "every node takes the incumbent tidy vertical stack" — the consumer
+   * (FEW-2, canvas) treats absence-of-entry as auto-layout; nothing here
+   * ever synthesizes tidy coordinates. The default-chain fallback (no
+   * valid autosave) likewise yields `{}`: the default chain has never
+   * carried positions. Re-reads the slot rather than caching, so a caller
+   * that runs it after loadInitialModel() sees the same payload both read.
+   *
+   * @returns {Object<string, {x: number, y: number, scale: number, flow: string}>}
+   */
+  function loadInitialLayout() {
+    return readAutosave().layout;
+  }
+
   window.Persistence = {
     saveCurrentChain: saveCurrentChain,
     loadInitialModel: loadInitialModel,
+    loadInitialLayout: loadInitialLayout,
   };
 })();
