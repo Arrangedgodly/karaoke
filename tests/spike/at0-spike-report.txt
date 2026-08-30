@@ -1,0 +1,152 @@
+AT-0 spike harness — SR=48000, quantum=2.667 ms
+
+A. YIN DETECTION ACCURACY (synthetic ground truth)
+  ok - detection: 2700 voiced block decisions across 9 steady tones
+METRIC: A.detect.med_abs_cents=0.0
+METRIC: A.detect.p95_abs_cents=0.1
+METRIC: A.detect.max_abs_cents=0.1
+METRIC: A.detect.octave_errors=0/2700
+METRIC: A.detect.false_unvoiced_blocks=0
+B. SCALE-SNAP CORRECTNESS (output f0 vs expected target)
+  ok - 265 Hz -> C4 (chromatic): got 261.9 Hz, expect 261.63 Hz (1.5 cents)
+METRIC: B.snap.265_Hz_C4_chromatic_=1.5cents
+  ok - 275 Hz -> C#4 (chromatic): got 276.5 Hz, expect 277.18 Hz (-4.2 cents)
+METRIC: B.snap.275_Hz_C_4_chromatic_=-4.2cents
+  ok - 275 Hz -> C4 (C major: C# forbidden): got 261.0 Hz, expect 261.63 Hz (-4.4 cents)
+METRIC: B.snap.275_Hz_C4_C_major_C_forbidden_=-4.4cents
+  ok - 310 Hz -> D4 (C major: D# forbidden): got 293.3 Hz, expect 293.66 Hz (-2.3 cents)
+METRIC: B.snap.310_Hz_D4_C_major_D_forbidden_=-2.3cents
+  ok - 239 Hz -> B3 (A minor: A# forbidden): got 246.8 Hz, expect 246.94 Hz (-1.3 cents)
+METRIC: B.snap.239_Hz_B3_A_minor_A_forbidden_=-1.3cents
+  ok - 113 Hz -> A2 (chromatic, lowest range): got 109.9 Hz, expect 110 Hz (-0.9 cents)
+METRIC: B.snap.113_Hz_A2_chromatic_lowest_range_=-0.9cents
+C. ADDED LATENCY (declared algorithmic delay D)
+  ok - declared latency: emission hold-back = 960 samples = 20.0 ms
+METRIC: C.latency.declared_ms=20.0
+  ok - unvoiced floor: impulse at input 14400 emerges at output 15360 → 20.0 ms added latency
+METRIC: C.latency.impulse_ms=20.0
+  ok - voiced alignment @110 Hz: corr lag 1317 = 27.4 ms (D=960 ± one period; corr 0.995)
+METRIC: C.latency.voiced_110Hz_ms=27.4
+  ok - voiced alignment @220 Hz: corr lag 713 = 14.9 ms (D=960 ± one period; corr 0.979)
+METRIC: C.latency.voiced_220Hz_ms=14.9
+  ok - voiced alignment @330 Hz: corr lag 880 = 18.3 ms (D=960 ± one period; corr 0.772)
+METRIC: C.latency.voiced_330Hz_ms=18.3
+  ok - voiced alignment @440 Hz: corr lag 716 = 14.9 ms (D=960 ± one period; corr 0.921)
+METRIC: C.latency.voiced_440Hz_ms=14.9
+D. TD-PSOLA ARTIFACT PROXIES (shifted steady tones)
+  ok - 239->A#3 (-44c): snap err -1.7c, AM depth 0.0 dB, worst-window SNR 8.3 dB (input floor 8.4 dB)
+METRIC: D.art.239_A_3_44c_.snap_cents=-1.7
+METRIC: D.art.239_A_3_44c_.am_db=0.0
+METRIC: D.art.239_A_3_44c_.snr_worst_db=8.3
+METRIC: D.art.239_A_3_44c_.snr_input_floor_db=8.4
+  ok - 239->A#3 (-44c): mix=0 is bit-exact dry passthrough (D-delayed)
+  ok - 225->A3 (-39c): snap err 2.8c, AM depth 0.0 dB, worst-window SNR 8.3 dB (input floor 8.5 dB)
+METRIC: D.art.225_A3_39c_.snap_cents=2.8
+METRIC: D.art.225_A3_39c_.am_db=0.0
+METRIC: D.art.225_A3_39c_.snr_worst_db=8.3
+METRIC: D.art.225_A3_39c_.snr_input_floor_db=8.5
+  ok - 225->A3 (-39c): mix=0 is bit-exact dry passthrough (D-delayed)
+  ok - 252->B3 (-35c): snap err 4.7c, AM depth 0.0 dB, worst-window SNR 8.3 dB (input floor 8.4 dB)
+METRIC: D.art.252_B3_35c_.snap_cents=4.7
+METRIC: D.art.252_B3_35c_.am_db=0.0
+METRIC: D.art.252_B3_35c_.snr_worst_db=8.3
+METRIC: D.art.252_B3_35c_.snr_input_floor_db=8.4
+  ok - 252->B3 (-35c): mix=0 is bit-exact dry passthrough (D-delayed)
+E. THE REAL TEST VOCAL (assets/test-vocal.mp3)
+  ok - decoded 1138501 samples = 23.7 s mono 48 kHz (ffmpeg pcm_f32le)
+  ok - reference contour: 1226/2369 frames voiced; f0 p2/p50/p98 = 115.7/232.7/350.5 Hz
+METRIC: E.vocal.f0_p2_hz=115.7
+METRIC: E.vocal.f0_p50_hz=232.7
+METRIC: E.vocal.f0_p98_hz=350.5
+METRIC: E.vocal.voiced_frame_ratio=0.518
+  ok - detector agreement (both voiced): 2258/2425 within 20 cents; 86 octave disagreements; 81 other >20c
+METRIC: E.detect.agree_within20c=0.931
+METRIC: E.detect.octave_disagree=86/2425
+--- E1. chromatic, retune 0 ms (hard-tune) ---
+METRIC: E.chromatic_0ms.emission_holdback_samples=960
+METRIC: E.chromatic_0ms.snap_residual_median_cents=2.5
+METRIC: E.chromatic_0ms.snap_residual_p95_cents=14.8
+METRIC: E.chromatic_0ms.snap_residual_lt10c_pct=90.9
+METRIC: E.chromatic_0ms.lost_voiced_frames=470/1226
+METRIC: E.chromatic_0ms.lost_but_audible_clar04=387/470
+METRIC: E.chromatic_0ms.lost_clar_median=0.687
+METRIC: E.chromatic_0ms.clar_p10_in=0.923
+METRIC: E.chromatic_0ms.clar_p10_out=0.834
+METRIC: E.chromatic_0ms.dropout_min_dip_db=-2.6
+METRIC: E.chromatic_0ms.dropout_p01_dip_db=-1.5
+METRIC: E.chromatic_0ms.windows_below_-20db=0/1469
+METRIC: E.chromatic_0ms.hf_ratio_in=0.117
+METRIC: E.chromatic_0ms.hf_ratio_out=0.114
+METRIC: E.chromatic_0ms.hf_ratio_out_over_in=0.974
+METRIC: E.chromatic_0ms.flux_p99_in=1.396
+METRIC: E.chromatic_0ms.flux_p99_out=1.491
+METRIC: E.chromatic_0ms.flux_out_over_in=1.068
+METRIC: E.chromatic_0ms.rms_step_max_in_db=6.5
+METRIC: E.chromatic_0ms.rms_step_max_out_db=8.1
+METRIC: E.chromatic_0ms.sustained_segments=14
+METRIC: E.chromatic_0ms.starved_voiced_samples=1284/1138501
+--- E2. chromatic, retune 250 ms (slow correction) ---
+METRIC: E.chromatic_250ms.emission_holdback_samples=960
+METRIC: E.chromatic_250ms.snap_residual_median_cents=7.7
+METRIC: E.chromatic_250ms.snap_residual_p95_cents=35.9
+METRIC: E.chromatic_250ms.snap_residual_lt10c_pct=59.4
+METRIC: E.chromatic_250ms.lost_voiced_frames=445/1226
+METRIC: E.chromatic_250ms.lost_but_audible_clar04=363/445
+METRIC: E.chromatic_250ms.lost_clar_median=0.696
+METRIC: E.chromatic_250ms.clar_p10_in=0.918
+METRIC: E.chromatic_250ms.clar_p10_out=0.852
+METRIC: E.chromatic_250ms.dropout_min_dip_db=-2.2
+METRIC: E.chromatic_250ms.dropout_p01_dip_db=-1.6
+METRIC: E.chromatic_250ms.windows_below_-20db=0/1469
+METRIC: E.chromatic_250ms.hf_ratio_in=0.117
+METRIC: E.chromatic_250ms.hf_ratio_out=0.114
+METRIC: E.chromatic_250ms.hf_ratio_out_over_in=0.977
+METRIC: E.chromatic_250ms.flux_p99_in=1.396
+METRIC: E.chromatic_250ms.flux_p99_out=1.489
+METRIC: E.chromatic_250ms.flux_out_over_in=1.066
+METRIC: E.chromatic_250ms.rms_step_max_in_db=6.5
+METRIC: E.chromatic_250ms.rms_step_max_out_db=6.8
+METRIC: E.chromatic_250ms.sustained_segments=14
+METRIC: E.chromatic_250ms.starved_voiced_samples=820/1138501
+--- E3. C major, retune 0 ms (scale snap) ---
+METRIC: E.cmajor_0ms.emission_holdback_samples=960
+METRIC: E.cmajor_0ms.snap_residual_median_cents=2.4
+METRIC: E.cmajor_0ms.snap_residual_p95_cents=17.4
+METRIC: E.cmajor_0ms.snap_residual_lt10c_pct=89.1
+METRIC: E.cmajor_0ms.lost_voiced_frames=483/1226
+METRIC: E.cmajor_0ms.lost_but_audible_clar04=389/483
+METRIC: E.cmajor_0ms.lost_clar_median=0.677
+METRIC: E.cmajor_0ms.clar_p10_in=0.919
+METRIC: E.cmajor_0ms.clar_p10_out=0.804
+METRIC: E.cmajor_0ms.dropout_min_dip_db=-2.5
+METRIC: E.cmajor_0ms.dropout_p01_dip_db=-1.7
+METRIC: E.cmajor_0ms.windows_below_-20db=0/1469
+METRIC: E.cmajor_0ms.hf_ratio_in=0.117
+METRIC: E.cmajor_0ms.hf_ratio_out=0.112
+METRIC: E.cmajor_0ms.hf_ratio_out_over_in=0.958
+METRIC: E.cmajor_0ms.flux_p99_in=1.396
+METRIC: E.cmajor_0ms.flux_p99_out=1.522
+METRIC: E.cmajor_0ms.flux_out_over_in=1.090
+METRIC: E.cmajor_0ms.rms_step_max_in_db=6.5
+METRIC: E.cmajor_0ms.rms_step_max_out_db=6.0
+METRIC: E.cmajor_0ms.sustained_segments=14
+METRIC: E.cmajor_0ms.starved_voiced_samples=1176/1138501
+F. CPU PER BLOCK
+METRIC: F.cpu.vocal_hard.mean_ms=0.099
+METRIC: F.cpu.vocal_hard.p50_ms=0.090
+METRIC: F.cpu.vocal_hard.p99_ms=0.337
+METRIC: F.cpu.vocal_hard.max_ms=2.726
+METRIC: F.cpu.vocal_hard.p99_pct_of_quantum=12.6
+METRIC: F.cpu.vocal_hard.cpu_ms_per_audio_s=37.6
+METRIC: F.cpu.tone440_hard.mean_ms=0.122
+METRIC: F.cpu.tone440_hard.p50_ms=0.134
+METRIC: F.cpu.tone440_hard.p99_ms=0.276
+METRIC: F.cpu.tone440_hard.max_ms=0.548
+METRIC: F.cpu.tone440_hard.p99_pct_of_quantum=10.4
+METRIC: F.cpu.tone440_hard.cpu_ms_per_audio_s=50.3
+
+Listening artifacts (for the user's ear, agent cannot audition):
+  tests/spike/out/at0-input.wav
+  tests/spike/out/at0-chromatic-0ms.wav
+  tests/spike/out/at0-chromatic-250ms.wav
+  tests/spike/out/at0-cmajor-0ms.wav

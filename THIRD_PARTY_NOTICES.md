@@ -32,6 +32,22 @@ the substitution and its verification are recorded in
 `docs/ultron/cycle-1/research/rq3-reverb-impulse-response.md`. Attribution is
 not legally required under CC0; it is given here as good practice.
 
+## Test vocal (CC0 1.0)
+
+- **Bundled at:** `assets/test-vocal.mp3`
+- **Source:** "female singing name of love.wav" by **Ehved**, Freesound —
+  https://freesound.org/people/Ehved/sounds/566926/
+- **License:** CC0 1.0 (public-domain dedication — copy, modify, distribute,
+  even commercially, no permission required; no attribution obligation).
+  License text: https://creativecommons.org/publicdomain/zero/1.0/
+
+The bundled file is the public HQ MP3 preview of the same CC0-licensed sound
+(23.7 s, 44.1 kHz stereo), downloaded without login rather than via the
+account-gated original WAV — the same substitution pattern as the reverb IR
+above. It serves as the fixed test vocal (universal acceptance input + demo
+reference) for cycle 3. Attribution is not legally required under CC0; it is
+given here as good practice.
+
 ## Everything else
 
 All other code, markup, styles, documentation, and assets in this repository

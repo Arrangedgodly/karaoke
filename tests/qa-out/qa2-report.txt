@@ -1,0 +1,46 @@
+QA-2 harness — cycle-3 regression renders (SR=48000)
+
+  ok - decoded TEST-1 (23.7 s) + reverb IR (1.0 s, energy-normalized in the convolver stub)
+A. LEGACY AUDIO IDENTITY — six-type chain, ten-module vs six-module registry
+METRIC: A.default_full.peak_dbfs=-21.9 rms_dbfs=-33.8
+METRIC: A.default_legacy.peak_dbfs=-21.9 rms_dbfs=-33.8
+  ok - DEFAULT six-node chain renders BIT-IDENTICAL with all ten modules loaded vs only the six legacy modules
+METRIC: A.default.bit_exact=true
+METRIC: A.stressed_full.peak_dbfs=-17.9 rms_dbfs=-36.4
+METRIC: A.stressed_legacy.peak_dbfs=-17.9 rms_dbfs=-36.4
+  ok - STRESSED (corner-params) six-node chain renders BIT-IDENTICAL ten-module vs six-module
+METRIC: A.stressed.bit_exact=true
+  ok - sensitivity: default vs stressed renders differ audibly (-32.0 dBFS) — the comparison bites
+  ok - sensitivity: both renders carry signal (peaks -21.9 / -17.9 dBFS)
+METRIC: A.stressed.peak_dbfs=-17.9 (post-attenuator; limiter at ceiling -12 + attenuator -6 => ~-18 class)
+
+B. CHAIN-LEVEL BYPASS — an ALL-TEN chain (QA-1 proved the four-new chain)
+  ok - chain-level bypass over the ALL-TEN chain (legacy + four new + terminal limiter) is BIT-EXACT vs the raw source
+METRIC: B.bypass_allten.bit_exact=true
+  ok - cited: QA-1 qa1-report.txt A.bypass_chain=true (four-new-effect chain, bit-exact)
+
+C. WATCHDOG + SAFETY NET — chains containing all four new effects
+  ok - C1: the OUT analyser taps the OUTPUT ATTENUATOR (final output) with the all-four chain built
+  ok - C2: valid program through the full TEN-node chain (limiter terminal) does NOT trip over 3 s of rendered vocal
+METRIC: C2.tenchain_tripped=false (last OUT meter feed peak -12.5 dBFS)
+METRIC: C2.render_peak_dbfs=-9.3
+  ok - C3: limiter-less hot chain containing ALL FOUR new nodes TRIPS the watchdog
+METRIC: C3.tripped=true (chain gate value after render: 0.000)
+  ok - C3: the watchdog alert was created (OUTPUT MUTED + Restore output)
+  ok - C3: the alert carries the human Restore output button
+  ok - C4-pre: the last 0.5 s of the trip render is exact silence (chain gate 0)
+  ok - C4: rebuilding the all-four chain while latched stays tripped and schedules NO upward chain-gate ramp
+  ok - C4: the rebuild un-duck actively targeted the mute level 0 (latch-aware, not Bypass-derived 1.0)
+METRIC: C4.rebuild_automation=["cancel:null","setValue:0","linearRamp:0.0001","cancel:null","setValue:0.0001","linearRamp:0"]
+  ok - C5: the latch HOLDS through 1 s of normal-level program (no auto-recover)
+  ok - C5: the human Restore output button alone reopened the chain (gate -> 1.00)
+  ok - C5: normal-level program through the restored limiter-terminal chain does NOT re-trip
+  ok - C5: audio flows again after restore (1.5 s render max |x| = 0.186)
+
+SUMMARY
+  suite (committed):            23/23 files, 1584 checks green (incl. test-regression-cycle3.js)
+  targeted leak checks:         tests/test-regression-cycle3.js (107 checks)
+  audio identity (A):           default true, stressed true
+  all-ten bypass (B):           true (four-new chain: QA-1, cited)
+  watchdog + safety net (C):    tripped=true, rebuild latch held, restore OK
+  limiter refusal policies:     tests/test-regression-cycle3.js part D (all-four chain)

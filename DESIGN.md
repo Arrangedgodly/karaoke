@@ -23,6 +23,10 @@ colors:
   family-delay: "#B18FDE"
   family-reverb: "#6FC2C8"
   family-limiter: "#DE8FB0"
+  family-distortion: "#C0CE97"
+  family-chorus: "#9E9ED1"
+  family-gate: "#9AD5B2"
+  family-autotune: "#D19ED1"
   status-live: "#7BD389"
   status-error: "#FF806E"
   meter-low: "#5CC06E"
@@ -160,7 +164,7 @@ red — every value WCAG-AA verified in its shipped pairing
 ### Secondary
 - **Safety Edge Red** (#E5484D): rings and bezels only — the Bypass halo, refusal-toast bezel, meter clip pin.
 - **Safety Fill Red** (#C93A32): solid fills with white text only (5.08) — the engaged Bypass state.
-- Six **family edges**: Gain (#D9C37A), Compressor (#8CC079), EQ (#82A9DE), Delay (#B18FDE), Reverb (#6FC2C8), Limiter (#DE8FB0). Used as chip legend-square fills (with on-accent initials, 7.06–9.82) and as 3px card top edges — never as text, never as large fills.
+- Ten **family edges**: the original six — Gain (#D9C37A), Compressor (#8CC079), EQ (#82A9DE), Delay (#B18FDE), Reverb (#6FC2C8), Limiter (#DE8FB0) — plus the cycle-3 four: Distortion (#C0CE97), Chorus (#9E9ED1), Noise Gate (#9AD5B2), Autotune (#D19ED1), chosen to the same rq5 rules (initials ink 6.74–10.22, ≥5.30 on the card ground, hue centers ≥25° clear of every existing family). Used as chip legend-square fills (with on-accent initials — 7.06–9.82 for the original six, 6.74–10.22 for the cycle-3 four) and as 3px card top edges — never as text, never as large fills.
 
 ### Tertiary
 - **Live Green** (#7BD389): the engine-state lamp. **Error Coral** (#FF806E): status-error register.
@@ -270,13 +274,15 @@ Tactile and confident: controls read as physical objects that answer within
 
 ### Cards / Containers
 - **Node card (channel-strip module):** lg radius (8px), Module Card ground, 1px hairline border + 3px family top edge, rest shadow, min-width 190px, 6px/12px padding. Header: legend square + silkscreen label + drag grip (whole label line is the hit area) + collapse chevron + remove ×. Params region collapses to nothing on chevron toggle — the collapsed card is exactly the slim header row.
+- **Experimental badge (cycle 3, autotune only):** a status tag, not a control — one factory, two placements. The full "Experimental" tag sits after the module label in the card header; a compact "EXP" tag pins to the right edge of the palette chip (same tag, abbreviated at chip density the way legend initials are). Signal Amber 1px bezel + amber text on Module Card ground (6.65), mono silkscreen tag at 0.625rem/700 with 0.06em tracking; no focus ring and no pointer affordance. Screen-reader access is by content — the tag text rides the card's header flow, and the chip's aria-label carries the status before the node is added. Driven by the type's own registration (`experimental: true`, read through `NodeTypes.isExperimental()`) — one source shared with the agent capabilities readout, so the visible badge and the agent-facing disclosure cannot drift.
 - **Drag states:** live clone lifts (0.85 opacity + lifted shadow); ghost is a 0.35-opacity dashed slot.
 
 ### Inputs / Fields
 - **Select (device, presets):** `.control` vocabulary — card ground, Bezel Line bezel, native dark rendering via root `color-scheme: dark`; optgroup labels read as silkscreen micro-legends. Long labels ellipsize against a max width.
 - **Inline preset naming (Save As):** no browser dialogs — the naming row opens under the select: text input in the `.control` vocabulary (sr-only label) over an ink-on-amber Save + plain Cancel. Enter commits, Escape cancels (scoped), blur never commits; focus returns to Save As… on close. Empty names answer with the quiet `.preset-note` line.
 - **Armed Delete:** two-step in-panel — first click relabels to "DELETE?" (announced) and raises a Safety Edge Red bezel (edge, never fill — fill red is BYPASS-only); a second click within 5s deletes; expiry, click-elsewhere, or Escape disarms.
-- **Faders (param sliders):** one native `input[type=range]` per param, re-skinned: 8px track (sm radius) painted as hairline slot + 1px detent ticks every 12px + 2px Bezel Line center-unity notch; 12×18px amber cap with Bezel Line bezel and a 2px Lamp Ink position line. Values read in the mono register right-aligned above.
+- **Faders (param sliders):** one native `input[type=range]` per continuous param (discrete params take the param select below), re-skinned: 8px track (sm radius) painted as hairline slot + 1px detent ticks every 12px + 2px Bezel Line center-unity notch; 12×18px amber cap with Bezel Line bezel and a 2px Lamp Ink position line. Values read in the mono register right-aligned above.
+- **Param select (discrete params, cycle 3):** enumerated params — autotune's Key/Scale (12 keys × Chromatic/Major/Minor) — render a native `<select>` instead of a fader: Faceplate Umber ground, Bezel Line bezel, sm radius, mono readout type at the 11px floor. The option text IS the value display, so the Register Rule holds with no separate value span, and native semantics (arrow keys, typeahead, screen-reader value announcement) stay untouched — appearance-only styling. The row keeps the fader's rhythm: silkscreen label left, control right.
 
 ### Navigation
 - **Status LCD strip (topbar):** the signature surface — one persistent full-width panel row reading as broadcast rack gear's status display, not a web header. Silkscreen identity legend · state lamp · fixed-width mono readouts (7ch/6ch/3ch slots) · controls · BYPASS.

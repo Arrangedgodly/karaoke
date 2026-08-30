@@ -160,7 +160,15 @@
     eq: 'EQ',
     delay: 'DL',
     reverb: 'RV',
-    limiter: 'LM'
+    limiter: 'LM',
+    // UI-2 (cycle 3): the four shelved effects, same label-initials
+    // convention as the six above (each value is the first letters of the
+    // DISPLAY label, not the type key — so the gate reads NG for its
+    // "Noise Gate" label, not GA).
+    distortion: 'DI',
+    chorus: 'CH',
+    gate: 'NG',
+    autotune: 'AU'
   };
 
   /**
@@ -176,6 +184,71 @@
    */
   function familyInitials(type) {
     return FAMILY_INITIALS[type] || type.slice(0, 2).toUpperCase();
+  }
+
+  // ---------------------------------------------------------------------
+  // EXPERIMENTAL TYPES (cycle 3) — the experimental status is declared at
+  // the type's OWN registration (`experimental: true` in
+  // NodeTypes.register — node-autotune.js, autotune only, per the
+  // cycle-3 scope "experimental badge on autotune only") and read through
+  // NodeTypes.isExperimental(): ONE source of truth shared with
+  // mcp-tools.js's agent capabilities readout (MCP-1), so the visible
+  // badge and the agent-facing disclosure can never drift. The map below
+  // is only the guarded FALLBACK for a registry that predates the
+  // isExperimental API (a bare harness with an old node-types.js); it
+  // must mirror the registrations and is drift-checked by
+  // isExperimentalType's live-first lookup below.
+  // ---------------------------------------------------------------------
+  var EXPERIMENTAL_TYPES = {
+    autotune: true
+  };
+
+  /**
+   * Does this type render the experimental badge? (Data source for both
+   * the card badge and the chip badge/aria status below.) The LIVE
+   * registry wins whenever it exposes isExperimental (MCP-1); the static
+   * map stands only as the pre-API fallback.
+   * @param {string} type
+   * @returns {boolean}
+   */
+  function isExperimentalType(type) {
+    try {
+      if (window.NodeTypes && typeof window.NodeTypes.isExperimental === 'function') {
+        return window.NodeTypes.isExperimental(type);
+      }
+    } catch (err) {
+      // Damaged registry object — the static fallback below stands.
+    }
+    return Object.prototype.hasOwnProperty.call(EXPERIMENTAL_TYPES, type) &&
+      !!EXPERIMENTAL_TYPES[type];
+  }
+
+  /**
+   * UI-2 (cycle 3): the formal experimental-badge component — one factory,
+   * two surfaces in the industrial label system:
+   *   - the NODE CARD: a full 'Experimental' silkscreen tag placed after
+   *     the module label inside the drag handle (same slot AT-1's minimal
+   *     hook used);
+   *   - the PALETTE CHIP: a compact 'EXP' abbreviation at chip density
+   *     (styles/main.css scopes the size variant to .node-chip context).
+   * Not a control: no focus, no pointer affordance — a status tag, so it
+   * is a <span>, never a button. Screen-reader access is by CONTENT, not
+   * title-only: on the card the badge's text sits in the header flow and
+   * is announced with the module name; on the chip the status is part of
+   * the chip's aria-label (renderPalette), so it is heard BEFORE the node
+   * is added. The title carries the why for sighted hover, as a bonus.
+   *
+   * @param {string} type - the node type (for the title's label).
+   * @param {boolean} compact - chip variant ('EXP') vs card ('Experimental').
+   * @returns {HTMLElement} the badge span.
+   */
+  function createExperimentalBadge(type, compact) {
+    var badge = document.createElement('span');
+    badge.className = 'node-experimental-badge';
+    badge.textContent = compact ? 'EXP' : 'Experimental';
+    badge.title = window.NodeTypes.getLabel(type) +
+      ' is experimental — new DSP, still under audio-quality review.';
+    return badge;
   }
 
   function renderPalette() {
@@ -200,7 +273,20 @@
       chip.setAttribute('data-family', type);
       chip.setAttribute('data-initials', familyInitials(type));
       chip.textContent = window.NodeTypes.getLabel(type);
-      chip.setAttribute('aria-label', 'Add ' + window.NodeTypes.getLabel(type) + ' to chain');
+      // R2-2 action-phrase name; UI-2 (cycle 3): an experimental type
+      // appends its status, so a screen-reader user hears it BEFORE the
+      // node enters the chain (the chip's visible 'EXP' tag is the
+      // sighted twin of this suffix — see createExperimentalBadge).
+      chip.setAttribute(
+        'aria-label',
+        'Add ' + window.NodeTypes.getLabel(type) + ' to chain' +
+          (isExperimentalType(type) ? ' (experimental)' : ''));
+      // UI-2: the chip-side experimental badge (autotune only) — compact
+      // 'EXP' silkscreen abbreviation after the visible label, same single
+      // data source and factory as the card's full tag.
+      if (isExperimentalType(type)) {
+        chip.appendChild(createExperimentalBadge(type, true));
+      }
       // Gating: chips ship DISABLED, mirroring the Start/Bypass
       // disabled-until-start pattern (the .engine-not-started panel gate
       // is pointer-events:none, which says nothing to a keyboard or a
@@ -391,6 +477,14 @@
 
     handle.appendChild(gripIcon);
     handle.appendChild(label);
+
+    // UI-2 (cycle 3): the formal experimental badge on the card of every
+    // type in EXPERIMENTAL_TYPES (autotune only, cycle-3 scope) — the
+    // amber tag after the silkscreen label. SR-visible by content (see
+    // createExperimentalBadge); title carries the why.
+    if (isExperimentalType(type)) {
+      handle.appendChild(createExperimentalBadge(type, false));
+    }
 
     // VIS-7: the collapse chevron — a real button (keyboard-operable for
     // free, announced by its aria-label) between the handle and the remove

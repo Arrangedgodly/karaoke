@@ -56,17 +56,23 @@ the combination (offline-safe live tool + agent-controllable) is the claim.
 
 ## Capabilities and Constraints
 
-Confirmed functionality: 6 node types (gain, compressor, EQ, delay, reverb,
-limiter) registered through a type registry; drag-and-drop build/reorder
-(vendored SortableJS 1.15.7); per-node param sliders; named presets +
-autosave (localStorage); emergency bypass (audio path + spacebar); gated
-disabled-until-started states.
+Confirmed functionality: 10 node types (gain, compressor, EQ, delay, reverb,
+limiter, plus cycle-3's noise gate, distortion, chorus, autotune — autotune
+flagged experimental in the UI and the agent capabilities readout) registered
+through a type registry; drag-and-drop build/reorder (vendored SortableJS
+1.15.7); per-node param sliders plus dropdown selects for discrete params
+(autotune's key/scale); named presets + autosave (localStorage); emergency
+bypass (audio path + spacebar); gated disabled-until-started states.
 
 Cycle-2 additions (approved scope): WebMCP server shim (feature-detected,
-silent no-op when unavailable), 8 tools (`get_capabilities`, `get_chain`,
+silent no-op when unavailable), 10 tools (`get_capabilities`, `get_chain`,
 `set_chain`, `add_node`, `remove_node`, `set_param`, `list_presets`,
-`save_preset`) with validation/loudness clamps; auto-apply + change summary
-+ one-click undo; agent-activity chip; input/output meters; status readouts.
+`save_preset`, plus `get_preset`/`load_preset`, which joined the planned
+eight during cycle-2 production) with validation/loudness clamps; auto-apply
++ change summary + one-click undo; agent-activity chip; input/output meters;
+status readouts. Cycle 3 extended the same tools to discrete string params
+(key/scale) and added the experimental badge to the capabilities readout —
+no new tools.
 
 Hard constraints (user-approved, cycle 1 & 2): vanilla JS, **no build step**;
 zero runtime internet dependency; localStorage persistence; no in-app LLM /

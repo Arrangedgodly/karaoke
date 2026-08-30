@@ -1,0 +1,143 @@
+QA-1 harness — per-effect acceptance renders on TEST-1 (SR=48000)
+
+  ok - decoded TEST-1: 1138501 samples = 23.7 s mono 48 kHz (ffmpeg pcm_f32le; decodeAudioData substitution)
+  ok - oracle contour: 1226/2369 frames voiced; f0 p2/p50/p98 = 115.7/232.7/350.5 Hz
+METRIC: E.vocal.f0_p50_hz=232.7
+  ok - natural-key histogram argmax: A# (648 frames); WRONG-key demo = E (tritone off, 22 frames)
+METRIC: E.vocal.natural_key=A#
+
+A. DRY REFERENCE + CHAIN-LEVEL BYPASS (buildGraph routing)
+WROTE: 00-dry.wav (1ch, 23.7 s)
+METRIC: A.dry.peak_dbfs=-20.1
+METRIC: A.dry.rms_dbfs=-35.3
+  ok - chain-level bypass (audio-bypass.js engage, 4-effect chain in place): render is BIT-EXACT vs the raw source (chain gate 0, dry tap 1)
+METRIC: A.bypass_chain.bit_exact=true
+
+B. GATE — renders + objective checks
+WROTE: 01-gate-default.wav (1ch, 23.7 s)
+WROTE: 01b-gate-musical.wav (1ch, 23.7 s)
+WROTE: 02-gate-extreme.wav (1ch, 23.7 s)
+  ok - bypass-clean: Floor=0 dB render is bit-exact vs dry delayed by the declared 5 ms look-ahead
+METRIC: B.gate.floor0_bit_exact_vs_dry_plus_5ms=true
+METRIC: B.gate.default_gaps=5 (4 with content above -70 dBFS)
+METRIC: B.gate.default_contentgap_attenuation_db_median=0.0
+  NOTE - gate residue in digital-silence gaps: max |out| = -101.7 dBFS — the input's own decay tail passing the closing gate (a gain <= 1 cannot add energy); inaudible
+METRIC: B.gate.default_tail400ms_delta_db_median=0.0 over 25/27 tails with content (0 dB = phrase tails pass untouched)
+METRIC: B.gate.extreme_tail400ms_delta_db_median=0.0 over 25/27 tails with content
+METRIC: B.gate.default_voiced_worst_dip_db=-15.8 (inset 100ms; span edges are legitimate release behavior)
+METRIC: B.gate.default_voiced_windows_below_-20db=0/1008
+METRIC: B.gate.default_onset10ms_delta_db_median=0.0 (0 dB = attack consonant fully preserved)
+METRIC: B.gate.default_peak_dbfs=-20.1
+
+C. DISTORTION — renders + objective checks
+WROTE: 03-dist-default.wav (1ch, 23.7 s)
+WROTE: 04-dist-extreme.wav (1ch, 23.7 s)
+  NOTE - bypass-clean: distortion has NO bit-exact neutral (fixed tanh curve is always in circuit by design — D3). Drive=0/Tone=0.7/Output=0 measures -37.9 dBFS difference vs dry; the operator-clean path is chain-level Bypass (bit-exact, section A)
+METRIC: C.dist.drive0_delta_vs_dry_db=-37.9
+  ok - output guard at Output=0 dB (max): outGain.gain capped at exactly 1 (never above unity on any write path)
+METRIC: C.dist.extreme_outgain_value=1
+  NOTE - measured post-tone-filter transient overshoot at Drive=1/Tone=1: node stage peaks 1.8 dBFS — Q=1 lowpass step ringing on near-square shaper output (~16% class), spec biquad behavior, not a gain-cap failure
+METRIC: C.dist.extreme_nodeoutput_peak_dbfs=1.8
+METRIC: C.dist.default_peak_dbfs=-13.7
+METRIC: C.dist.extreme_peak_dbfs=-4.2 (destination level — the not-slam-the-chain bar)
+METRIC: C.dist.default_voiced_worst_dip_db=6.2
+METRIC: C.dist.default_voiced_windows_below_-20db=0/1469
+METRIC: C.dist.default_flux_ratio=1.008 (spectral change is the effect working, not a glitch proxy failure)
+
+D. CHORUS — renders + objective checks
+WROTE: 05-chorus-default.wav (2ch, 23.7 s)
+WROTE: 06-chorus-extreme.wav (2ch, 23.7 s)
+  ok - chorus renders STEREO (2 channels out of a mono vocal — D4 width)
+  ok - bypass-clean: Mix=0 render (channel L) is bit-exact vs dry (dryGain=1, wetGain=0 — equal-power law has an exact neutral at Mix 0)
+METRIC: D.chorus.mix0_bit_exact=true
+METRIC: D.chorus.default_monosum_worst_dip_db=-4.5 (50ms windows, inset 60ms; near-constant total energy = phase-opposed)
+METRIC: D.chorus.extreme_monosum_worst_dip_db=-8.4
+METRIC: D.chorus.default_side_over_mid_db=-9.4
+METRIC: D.chorus.extreme_side_over_mid_db=-0.1
+METRIC: D.chorus.default_peak_dbfs=-19.9
+
+E. AUTOTUNE — renders + objective checks
+WROTE: 07-at-default.wav (1ch, 23.7 s)
+WROTE: 08-at-rightkey-major.wav (1ch, 23.7 s)
+WROTE: 09-at-wrongkey-major.wav (1ch, 23.7 s)
+WROTE: 10-at-slow-250ms.wav (1ch, 23.7 s)
+  ok - bypass-clean: Mix=0 render is bit-exact vs dry delayed by the declared 20 ms
+METRIC: E.at.mix0_bit_exact_vs_dry_plus_20ms=true
+  ok - wrong-key render snapped to the WRONG grid: 99.4% of output-voiced frames sit on E-major degrees (input: 61.6% already on them by chance)
+METRIC: E.at.rightkey_snap_median_c=2.3
+METRIC: E.at.rightkey_within10c_pct=91.2
+METRIC: E.at.rightkey_hist_on_scale_pct=99.2
+METRIC: E.at.wrongkey_snap_median_c=2.3
+METRIC: E.at.wrongkey_within10c_pct=90.0
+METRIC: E.at.wrongkey_hist_on_wrong_scale_pct=99.4
+METRIC: E.at.rightkey_voiced_worst_dip_db=-2.4
+METRIC: E.at.rightkey_voiced_windows_below_-20db=0/1469
+METRIC: E.at.rightkey_hf_ratio_out_over_in=0.971
+METRIC: E.at.rightkey_flux_out_over_in=1.064
+METRIC: E.at.default_peak_dbfs=-20.1
+METRIC: E.at.wrongkey_peak_dbfs=-20.1
+METRIC: E.at.diff_default_vs_wrong_db=-33.4
+METRIC: E.at.diff_right_vs_slow_db=-32.9
+
+F. PARAM REACTIVITY (8 s interior slice; one param min-vs-max per row)
+  ok - gate.threshold: diff -34.9 dBFS (-0.1 dB rel. to signal), worst 20ms-window delta 40.0 dB
+METRIC: F.react.gate.threshold.diff_db=-34.9
+METRIC: F.react.gate.threshold.worst_window_db=40.0
+  ok - gate.attack: diff -50.4 dBFS (-15.6 dB rel. to signal), worst 20ms-window delta 39.0 dB
+METRIC: F.react.gate.attack.diff_db=-50.4
+METRIC: F.react.gate.attack.worst_window_db=39.0
+  ok - gate.release: diff -85.8 dBFS (-51.0 dB rel. to signal), worst 20ms-window delta 39.4 dB
+METRIC: F.react.gate.release.diff_db=-85.8
+METRIC: F.react.gate.release.worst_window_db=39.4
+  ok - gate.floor: diff -84.7 dBFS (-49.9 dB rel. to signal), worst 20ms-window delta 60.0 dB
+METRIC: F.react.gate.floor.diff_db=-84.7
+METRIC: F.react.gate.floor.worst_window_db=60.0
+  ok - distortion.drive: diff -16.7 dBFS (16.7 dB rel. to signal), worst 20ms-window delta 20.0 dB
+METRIC: F.react.distortion.drive.diff_db=-16.7
+METRIC: F.react.distortion.drive.worst_window_db=20.0
+  ok - distortion.tone: diff -33.7 dBFS (-5.3 dB rel. to signal), worst 20ms-window delta 3.5 dB
+METRIC: F.react.distortion.tone.diff_db=-33.7
+METRIC: F.react.distortion.tone.worst_window_db=3.5
+  ok - distortion.output: diff -26.0 dBFS (23.4 dB rel. to signal), worst 20ms-window delta 24.0 dB
+METRIC: F.react.distortion.output.diff_db=-26.0
+METRIC: F.react.distortion.output.worst_window_db=24.0
+  ok - chorus.depthMs: diff -38.7 dBFS (-3.5 dB rel. to signal), worst 20ms-window delta 7.5 dB
+METRIC: F.react.chorus.depthMs.diff_db=-38.7
+METRIC: F.react.chorus.depthMs.worst_window_db=7.5
+  ok - chorus.rateHz: diff -38.9 dBFS (-3.6 dB rel. to signal), worst 20ms-window delta 5.8 dB
+METRIC: F.react.chorus.rateHz.diff_db=-38.9
+METRIC: F.react.chorus.rateHz.worst_window_db=5.8
+  ok - chorus.mix: diff -31.9 dBFS (2.9 dB rel. to signal), worst 20ms-window delta 263.1 dB
+METRIC: F.react.chorus.mix.diff_db=-31.9
+METRIC: F.react.chorus.mix.worst_window_db=263.1
+  ok - autotune.key: diff -32.3 dBFS (2.7 dB rel. to signal), worst 20ms-window delta 1.2 dB
+METRIC: F.react.autotune.key.diff_db=-32.3
+METRIC: F.react.autotune.key.worst_window_db=1.2
+  ok - autotune.scale: diff -33.2 dBFS (1.7 dB rel. to signal), worst 20ms-window delta 1.0 dB
+METRIC: F.react.autotune.scale.diff_db=-33.2
+METRIC: F.react.autotune.scale.worst_window_db=1.0
+  ok - autotune.retune: diff -32.2 dBFS (2.7 dB rel. to signal), worst 20ms-window delta 1.5 dB
+METRIC: F.react.autotune.retune.diff_db=-32.2
+METRIC: F.react.autotune.retune.worst_window_db=1.5
+  ok - autotune.mix: diff -32.0 dBFS (2.8 dB rel. to signal), worst 20ms-window delta 2.3 dB
+METRIC: F.react.autotune.mix.diff_db=-32.0
+METRIC: F.react.autotune.mix.worst_window_db=2.3
+  ok - live applyParam distortion.drive -> physical value 10 (expect 10)
+  ok - live applyParam chorus.rateHz -> physical value 4.5 (expect 4.5)
+  ok - live applyParam gate.threshold -> physical value -33 (expect -33)
+  ok - live applyParam autotune.key -> physical value 6 (expect 6)
+
+G. CLIPPING SWEEP (every listening render, destination peak)
+METRIC: G.clip.00-dry.peak_dbfs=-20.1
+METRIC: G.clip.01-gate-default.peak_dbfs=-20.1
+METRIC: G.clip.01b-gate-musical.peak_dbfs=-20.1
+METRIC: G.clip.02-gate-extreme.peak_dbfs=-20.1
+METRIC: G.clip.03-dist-default.peak_dbfs=-13.7
+METRIC: G.clip.04-dist-extreme.peak_dbfs=-4.2
+METRIC: G.clip.05-chorus-default.peak_dbfs=-19.9
+METRIC: G.clip.06-chorus-extreme.peak_dbfs=-20.1
+METRIC: G.clip.07-at-default.peak_dbfs=-20.1
+METRIC: G.clip.08-at-rightkey-major.peak_dbfs=-20.1
+METRIC: G.clip.09-at-wrongkey-major.peak_dbfs=-20.1
+METRIC: G.clip.10-at-slow-250ms.peak_dbfs=-20.1
+  ok - no render peaks above 0 dBFS (12 files; post -6 dB host attenuator, distortion guard measured pre-attenuator in C)

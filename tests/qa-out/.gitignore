@@ -1,0 +1,5 @@
+# QA-1 machine-local artifacts: listening WAVs + decoded PCM cache.
+# The harness (run-qa1.js), the metric dump (qa1-report.txt) and
+# LISTENING.md are committed evidence.
+*.wav
+*.f32

@@ -12,7 +12,7 @@ node tests/run.js        # zero-dependency regression gate (issue #9)
 
 | Automated gate (`node tests/run.js`) | Issue #9 criterion |
 |---|---|
-| `tests/test-tool-registration.js` | all eight WebMCP tools register with the intended schemas + annotations |
+| `tests/test-tool-registration.js` | all ten WebMCP tools register with the intended schemas + annotations |
 | `tests/test-factory-presets-policy.js` | the current chain and every factory preset round-trip `set_chain` (policy-conforming) |
 | `tests/test-node-reuse-type-match.js` | a same-ID type change creates the correct physical AudioNode |
 | `tests/test-safety-refusals.js` | limiter removal / a node after the limiter / an unsafe ceiling are refused, with nothing applied |
@@ -68,11 +68,18 @@ PA. Start from the factory **Classic Karaoke** preset.
       stays up front.
 - [ ] **Limiter**: with the ceiling at −3 dB the loudest notes stay clean
       (no crunch), and the OUT meter never exceeds the ceiling.
+- [ ] **The four cycle-3 effects** (Noise Gate, Distortion, Chorus,
+      Autotune): their guided listening protocol is
+      [`tests/qa-out/LISTENING.md`](../tests/qa-out/LISTENING.md) — render
+      the before/after files with `node tests/qa-out/run-qa1.js` (needs
+      Node + ffmpeg) and A/B them in the given order; Autotune additionally
+      gets one live pass through the mic so the 20 ms engine delay is heard
+      on a real voice before a show.
 - [ ] **Large-jump click check (issue #5 — ramps shipped, physical listen
       still required)**: the published policy (`get_capabilities` →
       `host-param-ramps`) promises every param change ramps over 10–20 ms
       with no instantaneous jump. The ramps ARE in the build now (every
-      live AudioParam write in the six node handlers is a scheduled 15 ms
+      live AudioParam write in all ten node handlers is a scheduled 15 ms
       ramp via `src/audio-param-ramp.js`, and `set_param` applies in place
       with no card rebuild and no chain-gate duck — both proven
       headlessly by `tests/test-param-only-mutation.js`, including a
@@ -80,8 +87,9 @@ PA. Start from the factory **Classic Karaoke** preset.
       the sound in the room. Walk it with LARGE jumps at event volume:
       `set_param` gain −24 → +12 dB, reverb mix 0 → 100, delay time
       300 → 750 ms, compressor threshold −8 → −40 — plus one full
-      min→max slider drag per effect — listening for any click, pop, or
-      zipper. **Any audible click on this line is a hard FAIL.**
+      min→max slider drag per effect (and, for Autotune's Key/Scale
+      dropdowns, a step through their values) — listening for any click,
+      pop, or zipper. **Any audible click on this line is a hard FAIL.**
 - [ ] Reordering/removing nodes mid-signal: no pop, no dropped audio.
 - [ ] Date / operator / result: ____________
 
@@ -140,19 +148,19 @@ schedulers and the real audio thread):
       with the engine live, and clears when the tab comes back.
 - [ ] Date / operator / result: ____________
 
-## 4. Real-browser WebMCP exercise of all eight tools
+## 4. Real-browser WebMCP exercise of all ten tools
 
 The committed registration/schema gate is automated
 (`tests/test-tool-registration.js`); this walks the REAL browser surface
 end to end. Chrome with `chrome://flags/#enable-webmcp-testing` Enabled.
 
-- [ ] DevTools → **Application → WebMCP**: all 8 tools listed —
+- [ ] DevTools → **Application → WebMCP**: all 10 tools listed —
       `get_capabilities`, `get_chain`, `set_chain`, `add_node`,
-      `remove_node`, `set_param`, `list_presets`, `save_preset` — each
-      showing its input schema.
+      `remove_node`, `set_param`, `list_presets`, `get_preset`,
+      `load_preset`, `save_preset` — each showing its input schema.
 - [ ] `get_capabilities` → the policy tables (nodeTypes, chainRules)
-      render; note the limiter ceiling range [−12, −3] dB for the next
-      step.
+      render, with autotune flagged experimental (cycle 3); note the
+      limiter ceiling range [−12, −3] dB for the next step.
 - [ ] `get_chain` → the live chain JSON, round-trips.
 - [ ] `set_chain` → apply a valid chain (e.g. the factory "Warm Ballad"
       nodes); toast appears, chain rebuilds audibly.
@@ -164,6 +172,12 @@ end to end. Chrome with `chrome://flags/#enable-webmcp-testing` Enabled.
       it. (Honest-failure reporting of storage failures is issue #8 —
       when it ships, add: fill localStorage, save, and confirm the tool
       reports the failure instead of success.)
+- [ ] `get_preset` / `load_preset` → retrieve a factory preset's nodes
+      by name (namespace explicit where a name exists in both groups),
+      then load one: same policy, toast, and Undo path as `set_chain`.
+- [ ] `set_param` with a discrete string (cycle 3, e.g. autotune key
+      `A` / scale `Minor`) → applies to the node; an illegal string
+      (key `H`) is refused with the allowed list inline.
 - [ ] Undo (toast button and Ctrl/Cmd+Z) after each applied mutation:
       chain and preset state return exactly (`get_chain` matches).
 - [ ] Date / operator / result: ____________

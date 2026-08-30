@@ -205,6 +205,30 @@
   <script src="src/node-delay.js"></script>
   <script src="src/node-reverb.js"></script>
   <script src="src/node-limiter.js"></script>
+  <script src="src/node-distortion.js"></script>
+  <script src="src/node-chorus.js"></script>
+  <!--
+    GATE-1: the noise gate's registration shim. Its DSP lives in
+    src/gate-worklet.js, which is NOT a script tag — it is fetched via
+    audioContext.audioWorklet.addModule('src/gate-worklet.js') from inside
+    src/node-gate.js (the same loading convention as the issue #7 watchdog
+    worklet). Palette chip appears automatically via
+    NodeTypes.getAllTypes() (src/canvas.js).
+  -->
+  <script src="src/node-gate.js"></script>
+  <!--
+    AT-1: the autotune's registration shim, on the AT-0 spike's HARD-TUNE
+    PASS verdict (research/at0-spike-result.md). Its DSP (YIN detection +
+    TD-PSOLA shifting + scale snap, one engine for hard-tune and slow
+    retune) lives in src/autotune-worklet.js, which is NOT a script tag —
+    it is fetched via audioContext.audioWorklet.addModule() from inside
+    src/node-autotune.js (the gate/watchdog worklet loading convention).
+    Key/Scale are UI-1's discrete string selects, mapped to the worklet's
+    numeric enums in node-autotune.js. Experimental per the cycle-3 scope:
+    the node card carries a badge (minimal version in src/canvas.js; the
+    formal badge component is UI-2's).
+  -->
+  <script src="src/node-autotune.js"></script>
   <script src="src/param-controls.js"></script>
   <script src="src/preset-schema.js"></script>
   <script src="src/default-preset.js"></script>

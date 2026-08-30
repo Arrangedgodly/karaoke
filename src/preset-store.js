@@ -286,13 +286,53 @@
   }
 
   /**
+   * PRE-1 (cycle 3): does `nodes` name a node type the LIVE registry does
+   * not know? Returns the first offending type name (truthy) or false.
+   * Same rationale and same degrade-to-lenient guard as src/persistence.js's
+   * copy (kept per-file on purpose — the two storage layers are independent
+   * modules; a shared helper would couple the autosave slot to the named
+   * store for ten lines of near-identical code, and the committed test
+   * exercises both copies): without it, a hand-edited preset naming a bogus
+   * type passes deserialize() (deliberately structural — see
+   * src/preset-schema.js) and then dies inside AudioGraph.buildGraph()'s
+   * synchronous unknown-type throw, mid-loadModel, with the canvas already
+   * half-cleared. Rejecting HERE takes the panel's existing quiet recovery
+   * ("Could not load that preset") instead.
+   *
+   * @param {Array<{id: string, type: string, params: Object}>} nodes
+   * @returns {string|false}
+   */
+  function unregisteredNodeType(nodes) {
+    try {
+      if (!window.NodeTypes || typeof window.NodeTypes.getAllTypes !== 'function') {
+        return false;
+      }
+      var known = window.NodeTypes.getAllTypes();
+      if (!known || known.length === 0) {
+        return false;
+      }
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i] && known.indexOf(nodes[i].type) === -1) {
+          return nodes[i].type;
+        }
+      }
+    } catch (err) {
+      return false;
+    }
+    return false;
+  }
+
+  /**
    * Load a named preset back out.
    *
    * @param {string} name
    * @returns {{name: string, nodes: Array<{id: string, type: string, params: Object}>}|null}
    *   null if `name` isn't in the store, or if what's stored under it fails
    *   PresetSchema.deserialize()'s structural validation (corrupt/malformed
-   *   — e.g. hand-edited localStorage). Never throws.
+   *   — e.g. hand-edited localStorage — including PRE-1's per-type param
+   *   contracts for the cycle-3 node types) or names a node type the live
+   *   registry does not know (PRE-1 — see unregisteredNodeType). Never
+   *   throws.
    */
   function load(name) {
     var store = readStore();
@@ -302,6 +342,12 @@
     }
     try {
       var result = window.PresetSchema.deserialize(entry);
+      var unknownType = unregisteredNodeType(result.nodes);
+      if (unknownType !== false) {
+        throw new Error(
+          'preset names unregistered node type "' + unknownType + '"'
+        );
+      }
       return { name: result.name, nodes: result.nodes };
     } catch (err) {
       console.error('PresetStore: stored preset ' + JSON.stringify(name) + ' was invalid/corrupt', err);

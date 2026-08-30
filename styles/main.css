@@ -62,6 +62,18 @@
   --family-delay: #B18FDE;
   --family-reverb: #6FC2C8;
   --family-limiter: #DE8FB0;
+  /* UI-2 (cycle 3) — the four shelved effects, chosen to rq5's family
+     rules (S 36–58 enamel band, L within the existing 61–72 family band,
+     on-accent ink 6.74–10.22 ≥ the shipped set's own 6.40 floor, ≥3:1 vs
+     every ground with the 1.7 headroom, hues at the centers of the four
+     widest gaps in the existing family wheel — nearest existing family
+     ≥25° away, muted S36 vs the neighbors' S54–58 for extra separation):
+     Distortion mustard, Gate spring green, Chorus periwinkle, Autotune
+     orchid. Verified numbers in docs/ultron/production-log.md (UI-2). */
+  --family-distortion: #C0CE97;
+  --family-chorus: #9E9ED1;
+  --family-gate: #9AD5B2;
+  --family-autotune: #D19ED1;
 
   /* Status + meter stops */
   --status-live: #7BD389;
@@ -623,6 +635,36 @@ select.control {
   background-color: var(--accent-hover);
 }
 
+/* UI-1 — discrete (enumerated) param rows: a native <select> renders in
+   the same readout slot the mono value span occupies (order 2), styled
+   as machine state to match --font-readout. The silkscreen .param-label
+   (order 1) pairs with it exactly as with a fader row; no separate value
+   span is needed — the select's own option text IS the value display,
+   which also keeps the screen reader's announced name = label and
+   announced value = selected option in one control. Hairline bezel +
+   panel face, accent focus ring: interactive elements get meaningful
+   outlines (palette-chip vocabulary), text sits at the 11px card floor.
+   Native select semantics (keyboard arrows, typeahead, SR value
+   announcement) are kept untouched — appearance-only styling. */
+.param-select {
+  order: 2;
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  margin-left: auto;
+  font-family: var(--font-readout);
+  font-size: 0.7rem;
+  color: var(--text-primary);
+  background-color: var(--bg-panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+}
+
+.param-select:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
 /* ===========================================================================
    Palette + chain canvas (UI-3). Layout unchanged from the approved PX-1
    mockup; colors from the VIS-1 tokens — panel faceplates separated by
@@ -802,6 +844,25 @@ select.control {
 
 .node-chip[data-family='limiter'] {
   --chip-family: var(--family-limiter);
+}
+
+/* UI-2 (cycle 3): the four shelved effects map onto their new family
+   tokens — same one-line mapping as the six above, so chips and cards
+   share one vocabulary. */
+.node-chip[data-family='distortion'] {
+  --chip-family: var(--family-distortion);
+}
+
+.node-chip[data-family='chorus'] {
+  --chip-family: var(--family-chorus);
+}
+
+.node-chip[data-family='gate'] {
+  --chip-family: var(--family-gate);
+}
+
+.node-chip[data-family='autotune'] {
+  --chip-family: var(--family-autotune);
 }
 
 /* Hover: the module answers — line-strong bezel, label to primary, a
@@ -1037,6 +1098,24 @@ select.control {
   --card-family: var(--family-limiter);
 }
 
+/* UI-2 (cycle 3): the four shelved effects' card edges — same mapping,
+   same tokens as the palette chips just above. */
+.node-card[data-family='distortion'] {
+  --card-family: var(--family-distortion);
+}
+
+.node-card[data-family='chorus'] {
+  --card-family: var(--family-chorus);
+}
+
+.node-card[data-family='gate'] {
+  --card-family: var(--family-gate);
+}
+
+.node-card[data-family='autotune'] {
+  --card-family: var(--family-autotune);
+}
+
 /* The header's legend square — the palette chip's ::before vocabulary at
    the VIS-7 density scale: 18px instead of the palette's 20px (the
    palette flank is the VIS-3 surface and stays untouched), same radius,
@@ -1129,6 +1208,48 @@ select.control {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* UI-2 (cycle 3) — the FORMAL experimental badge component (formalizing
+   AT-1's minimal card hook): one amber silkscreen tag, one typography,
+   two placements in the industrial label system — after the module label
+   on the node card, pinned right on the palette chip (rule below).
+   Autotune only, per the cycle-3 scope, driven by the single
+   EXPERIMENTAL_TYPES lookup in src/canvas.js (createExperimentalBadge).
+   Amber bezel + amber text on the module ground: a status tag, not a
+   control, so no focus ring and no pointer affordance. Screen-reader
+   access is by content, never title-only: the tag's text is announced in
+   the header flow on the card, and the chip's aria-label carries the
+   status pre-add. Text sits above the 11px card floor at 0.625rem because
+   it is an all-caps tag with 0.06em tracking (same micro-type rationale
+   as the legend initials); contrast is text-on-bg-card amber (6.65 per
+   rq5), above the muted-legend floor the card's own labels use. */
+.node-experimental-badge {
+  flex: none;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--accent);
+  background: var(--bg-card);
+  font-family: var(--font-readout);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The palette-chip placement of the same badge: identical tag anatomy
+   and typography (one component, one look — the 'EXP' abbreviation is
+   the only content difference, chosen at chip density the same way the
+   legend squares abbreviate), pinned to the chip's right edge so the
+   status closes the menu row instead of crowding the silkscreen name.
+   margin-left:auto is the only override — everything else inherits from
+   the rule above, so the two placements can never drift apart
+   typographically. */
+.node-chip .node-experimental-badge {
+  margin-left: auto;
 }
 
 /* Remove × — a real control: card ground + line-strong bezel + muted ×

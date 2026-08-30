@@ -56,12 +56,21 @@
   /**
    * Register UI-facing metadata for a node type.
    *
+   * MCP-1 (cycle 3): config.experimental (optional boolean) declares the
+   * type's experimental status HERE, at its own registration — the single
+   * source of truth every consumer reads via isExperimental() below
+   * (canvas.js's badge surfaces and mcp-tools.js's capabilities readout
+   * both consult it; each keeps only a static fallback mirror for
+   * harnesses that never load the node files).
+   *
    * @param {string} type - unique node type name, matching the same `type`
-   *   string used with AudioGraph.registerNodeType() (src/audio-graph.js).
-   * @param {{label: string, paramSpec: Array<Object>, applyParam: Function}} config
+   * string used with AudioGraph.registerNodeType() (src/audio-graph.js).
+   * @param {{label: string, paramSpec: Array<Object>, applyParam: Function, experimental?: boolean}} config
    *   - label: display name shown in the UI.
    *   - paramSpec: array of {id, label, min, max, default, step, unit}.
    *   - applyParam: (nodeInstance, paramId, value) => void.
+   *   - experimental: optional boolean (default false) — true renders the
+   *     experimental badge on the type's surfaces.
    */
   function register(type, config) {
     if (!type || typeof type !== 'string') {
@@ -80,6 +89,7 @@
       label: config.label || type,
       paramSpec: Array.isArray(config.paramSpec) ? config.paramSpec : [],
       applyParam: config.applyParam,
+      experimental: !!config.experimental,
     };
   }
 
@@ -143,11 +153,29 @@
     entry.applyParam(nodeInstance, paramId, value);
   }
 
+  /**
+   * MCP-1 (cycle 3): is this type registered as experimental? The
+   * registration itself is the source of truth (register's
+   * `experimental: true` — autotune only, cycle-3 scope), so the badge
+   * surfaces (canvas.js card/chip) and the agent capabilities readout
+   * (src/mcp-tools.js) can never disagree about a type's status.
+   *
+   * @param {string} type
+   * @returns {boolean} true only when the type is registered AND declared
+   *   experimental (unregistered types are honestly not-experimental —
+   *   they render nowhere to badge).
+   */
+  function isExperimental(type) {
+    var entry = registry[type];
+    return !!entry && !!entry.experimental;
+  }
+
   window.NodeTypes = {
     register: register,
     getLabel: getLabel,
     getParamSpec: getParamSpec,
     applyParam: applyParam,
     getAllTypes: getAllTypes,
+    isExperimental: isExperimental,
   };
 })();

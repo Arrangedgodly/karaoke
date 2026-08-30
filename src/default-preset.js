@@ -27,6 +27,16 @@
 // profile, cleared localStorage, or corrupt/invalid autosaved data), per
 // px3's own "First-run behavior" section — a first-run host gets an
 // immediately usable vocal chain rather than an empty canvas.
+//
+// PRE-1 decision (cycle 3, 2026-08-29): the default chain does NOT gain any
+// of the four cycle-3 effects (gate/distortion/chorus/autotune). This chain
+// is PX-3's committed first-run vocal sound — the fixed six-node chain above
+// — and every one of the four new effects is a CHARACTER effect that would
+// audibly change it (even the gate: its attack/release shaping is audible on
+// quiet passages). First-run sound stays exactly as shipped; the new effects
+// are palette additions the host opts into. The factory library
+// (src/factory-presets.js) carries the same decision note for its own
+// content.
 window.DEFAULT_PRESET = {
   name: 'Classic Karaoke',
   nodes: [

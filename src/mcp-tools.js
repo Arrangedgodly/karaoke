@@ -60,6 +60,22 @@
 // (MC-4's basic ones are retired); refused mutations additionally toast
 // { rejected: true } so the operator sees refusals, not just the agent.
 //
+// MCP-1 scope (docs/ultron/plan.md cycle 3): agent operability for the
+// four shelved effects (noise gate, distortion, chorus, autotune) through
+// the SAME tool surface — no new tools. Three additions, no behavior
+// change for the six legacy types: (1) DISCRETE string params (UI-1
+// `values` selects — autotune Key/Scale) are accepted by every
+// param-taking tool, validated against each type's legal value set with
+// the same problem/allowed error style (the raw 0..N enums preset-schema
+// documents are equally legal); previously checkSpecValue was
+// numeric-only and rejected autotune's Key/Scale outright. (2)
+// get_capabilities carries each type's EXPERIMENTAL badge — autotune
+// only — from the ONE source of truth (the registration's
+// `experimental: true`, read via NodeTypes.isExperimental(); static
+// snapshot fallback below). (3) The readout publishes the cycle-3 types'
+// param contracts (nominal ranges / value lists + agent treatment)
+// instead of the registry-drift placeholder note.
+//
 // =====================================================================
 // MCP-TOOLS LAYER — window.McpTools (AUTHORITATIVE)
 // =====================================================================
@@ -216,12 +232,16 @@
 //     (a caught internal failure of THIS layer — nothing was applied).
 //
 // Registry fidelity: the static NODE_REGISTRY_SNAPSHOT below mirrors the
-// six src/node-*.js paramSpec registrations verbatim (param ids, units,
-// nominal min/max) so this file works with zero dependencies (e.g. in
+// src/node-*.js paramSpec registrations verbatim (param ids, units,
+// nominal min/max, and — for the cycle-3 discrete params — the UI-1
+// `values` lists) so this file works with zero dependencies (e.g. in
 // Node test harnesses). At runtime the LIVE registry wins whenever it is
 // populated: window.NodeTypes.getAllTypes()/getParamSpec() — the snapshot
 // is only a fallback, and if the two ever drift the node files are the
-// source of truth and the snapshot must be re-mirrored.
+// source of truth and the snapshot must be re-mirrored. The experimental
+// status follows the same discipline (MCP-1): the LIVE
+// NodeTypes.isExperimental() — the type's own registration — wins, with
+// EXPERIMENTAL_TYPES_SNAPSHOT as the bare-harness fallback.
 //
 // Self-init at load: if window.McpServer exists, immediately
 // McpServer.registerTools(McpTools.getDefs()). The shim owns the
@@ -237,7 +257,12 @@
   // One entry per param: { id, unit, min, max, default } — the
   // paramSpec fields validation and get_capabilities' static fallback
   // need (label/step stay UI-only and are not mirrored; get_capabilities
-  // falls back to TYPE_INFO's labels instead).
+  // falls back to TYPE_INFO's labels instead). MCP-1 (cycle 3): params
+  // whose paramSpec declares DISCRETE `values` (UI-1 selects — autotune
+  // key/scale) are mirrored as { id, values, default } with NO min/max:
+  // validation accepts one of the strings (or its 0..values.length-1 raw
+  // enum — src/preset-schema.js's equally-legal enum contract), and the
+  // capabilities readout publishes the value list instead of a range.
   // Sources, in index.html script order:
   //   gain       <- src/node-gain.js        (gainDb)
   //   compressor <- src/node-compressor.js  (threshold, ratio, attack,
@@ -246,6 +271,12 @@
   //   delay      <- src/node-delay.js       (timeMs, feedback, mix)
   //   reverb     <- src/node-reverb.js      (mix)
   //   limiter    <- src/node-limiter.js     (ceiling, release)
+  //   distortion <- src/node-distortion.js  (drive, tone, output)
+  //   chorus     <- src/node-chorus.js      (depthMs, rateHz, mix)
+  //   gate       <- src/node-gate.js        (threshold, attack, release,
+  //                                          floor)
+  //   autotune   <- src/node-autotune.js    (key, scale, retune, mix;
+  //                                          key/scale discrete)
   // Ranges here are the app's OWN nominal slider ranges — NOT RQ-3's
   // tighter agent ranges (those are AGENT_PARAM_POLICY below and MC-4's
   // enforcement; e.g. delay feedback's nominal max is 90, RQ-3's agent
@@ -277,6 +308,36 @@
     limiter: [
       { id: 'ceiling', unit: 'dB', min: -12, max: 0, default: -1 },
       { id: 'release', unit: 'ms', min: 10, max: 500, default: 50 }
+    ],
+    distortion: [
+      { id: 'drive', unit: '%', min: 0, max: 1, default: 0.25 },
+      { id: 'tone', unit: '%', min: 0, max: 1, default: 0.7 },
+      { id: 'output', unit: 'dB', min: -24, max: 0, default: -3 }
+    ],
+    chorus: [
+      { id: 'depthMs', unit: 'ms', min: 0, max: 10, default: 3 },
+      { id: 'rateHz', unit: 'Hz', min: 0.1, max: 8, default: 1.5 },
+      { id: 'mix', unit: '%', min: 0, max: 100, default: 30 }
+    ],
+    gate: [
+      { id: 'threshold', unit: 'dB', min: -80, max: 0, default: -50 },
+      { id: 'attack', unit: 's', min: 0.001, max: 0.5, default: 0.005 },
+      { id: 'release', unit: 's', min: 0.01, max: 2, default: 0.15 },
+      { id: 'floor', unit: 'dB', min: -60, max: 0, default: -40 }
+    ],
+    autotune: [
+      {
+        id: 'key', unit: '',
+        values: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
+        default: 'C'
+      },
+      {
+        id: 'scale', unit: '',
+        values: ['Chromatic', 'Major', 'Minor'],
+        default: 'Chromatic'
+      },
+      { id: 'retune', unit: 'ms', min: 0, max: 500, default: 0 },
+      { id: 'mix', unit: '%', min: 0, max: 100, default: 100 }
     ]
   };
 
@@ -434,6 +495,40 @@
     }
     var snap = NODE_REGISTRY_SNAPSHOT[type];
     return snap ? snap : [];
+  }
+
+  /**
+   * @param {Object} spec
+   * @returns {boolean} true when this spec declares a DISCRETE param —
+   *   a UI-1 `values` select (autotune key/scale). Discrete specs carry
+   *   `values` (the legal strings) instead of min/max.
+   */
+  function isDiscreteSpec(spec) {
+    return !!spec && Array.isArray(spec.values) && spec.values.length > 0;
+  }
+
+  /**
+   * Is `value` legal for a discrete spec? One of the declared STRINGS
+   * (the canonical wire form the UI selects commit and presets persist),
+   * or the raw integer enum 0..values.length-1 the node factory maps
+   * (src/preset-schema.js's equally-legal enum contract, PRE-1). Both
+   * forms round-trip; anything else is illegal.
+   *
+   * @param {Object} spec - a discrete spec (isDiscreteSpec true).
+   * @param {*} value
+   * @returns {boolean}
+   */
+  function legalDiscreteValue(spec, value) {
+    if (typeof value === 'string') {
+      return spec.values.indexOf(value) !== -1;
+    }
+    return (
+      typeof value === 'number' &&
+      isFinite(value) &&
+      Math.floor(value) === value &&
+      value >= 0 &&
+      value <= spec.values.length - 1
+    );
   }
 
   /**
@@ -673,6 +768,31 @@
       label: 'Limiter',
       description:
         'SAFETY limiter — required in every chain and always terminal (last node, MIC IN to OUT; only upstream additions are allowed). ceiling is its threshold; only ceiling and release are addressable. Locked host-fixed aspects: ratio 20:1, attack (rq3 locks 1-3 ms; this app fixes 0 ms — the node\'s native minimum, even faster), and a 0 dB hard knee. The host-owned output attenuator sits after it and is not a param.'
+    },
+    // ---- cycle-3 types (MCP-1): rq3's loudness policy does not govern
+    // these — none adds linear gain above unity or a feedback loop — so
+    // the agent range equals the nominal range and out-of-range requests
+    // reject (the structural nominal check). Descriptions state what an
+    // agent needs: the param meanings + any latency/bypass caveat.
+    distortion: {
+      label: 'Distortion',
+      description:
+        'Vocal saturation: fixed tanh soft-clip curve (4x oversampled), Drive as a 1.0x-10x input pre-gain into it, Tone as a lowpass (1.5-12 kHz) over the saturated signal, Output as a post gain TRIM capped at 0 dB (it can only cut — it never adds gain toward the +12 dB budget). Drive 0 is the near-linear subtle end.'
+    },
+    chorus: {
+      label: 'Chorus',
+      description:
+        '2-voice stereo spread chorus (L/R phase-opposed LFO-modulated delays). Depth is the LFO excursion in ms, Rate the LFO frequency in Hz, Mix an equal-power dry/wet crossfade. All native nodes — no latency, no feedback path.'
+    },
+    gate: {
+      label: 'Noise Gate',
+      description:
+        'RMS-based noise gate in an AudioWorklet: Threshold opens/closes the gate, Attack/Release shape the ramps, Floor is the closed-level cut. Internals (6 dB hysteresis, 50 ms hold, 5 ms look-ahead) are fixed and not addressable. Set Threshold below the room noise and above the quietest sung note you want kept.'
+    },
+    autotune: {
+      label: 'Autotune',
+      description:
+        'EXPERIMENTAL pitch correction (YIN detection + TD-PSOLA shifting in one AudioWorklet): key/scale pick the snap grid (discrete strings — see their values lists; raw enums also accepted), Retune Speed 0 ms = hard-tune snap to larger = slow-correction glide, Mix blends corrected/dry. Declared internal delay exactly 20 ms on both legs. New DSP still under audio-quality review — expect to re-check settings by ear.'
     }
   };
 
@@ -765,6 +885,92 @@
         min: 50, max: 300, unit: 'ms', treatment: 'clamp',
         description:
           'Release in MILLISECONDS (the AudioParam is seconds; the app divides by 1000). rq3 agent range [0.05, 0.3] s = 50-300 ms; out-of-range values are clamped.'
+      }
+    },
+    // ---- cycle-3 types (MCP-1): NOT rq3-governed (no linear gain above
+    // unity, no feedback loops), so the agent range EQUALS the nominal
+    // range — published here so the readout states a real rule instead
+    // of the registry-drift fallback note. With agent == nominal there is
+    // no clamp window: out-of-range requests are already rejected by the
+    // structural nominal check before this policy is consulted.
+    distortion: {
+      drive: {
+        min: 0, max: 1, unit: '%', treatment: 'reject',
+        description:
+          'Saturation drive: maps to a 1.0x-10x (+20 dB) linear pre-gain into the FIXED tanh soft-clip curve (4x oversampled; the curve\'s worst-case output peak stays 1.0 regardless of drive). 0 is the near-linear subtle end. Out-of-range requests are rejected.'
+      },
+      tone: {
+        min: 0, max: 1, unit: '%', treatment: 'reject',
+        description:
+          'Post-saturation lowpass sweep, 0 (dark, ~1.5 kHz) to 1 (bright, ~12 kHz, exponential mapping). Out-of-range requests are rejected.'
+      },
+      output: {
+        min: -24, max: 0, unit: 'dB', treatment: 'reject',
+        description:
+          'Output trim in dB, capped at 0 dB — it can only CUT (the node guards every write path), so it never adds gain toward the +12 dB budget. Out-of-range requests are rejected.'
+      }
+    },
+    chorus: {
+      depthMs: {
+        min: 0, max: 10, unit: 'ms', treatment: 'reject',
+        description:
+          'LFO excursion depth in MILLISECONDS (each voice\'s delay sweeps +/- this around a 25 ms baseline). Out-of-range requests are rejected.'
+      },
+      rateHz: {
+        min: 0.1, max: 8, unit: 'Hz', treatment: 'reject',
+        description:
+          'Chorus LFO rate in HERTZ. Out-of-range requests are rejected.'
+      },
+      mix: {
+        min: 0, max: 100, unit: '%', treatment: 'reject',
+        description:
+          'Equal-power dry/wet crossfade in PERCENT (same construction as delay/reverb mix). Out-of-range requests are rejected.'
+      }
+    },
+    gate: {
+      threshold: {
+        min: -80, max: 0, unit: 'dB', treatment: 'reject',
+        description:
+          'Gate threshold in dB (RMS detector; internal 6 dB hysteresis means the close point sits 6 dB below this). Set it below room noise, above the quietest note to keep. Out-of-range requests are rejected.'
+      },
+      attack: {
+        min: 0.001, max: 0.5, unit: 's', treatment: 'reject',
+        description:
+          'Gate open ramp in SECONDS (an internal 5 ms look-ahead protects attack consonants). Out-of-range requests are rejected.'
+      },
+      release: {
+        min: 0.01, max: 2, unit: 's', treatment: 'reject',
+        description:
+          'Gate close ramp in SECONDS (an internal 50 ms hold runs before it). Out-of-range requests are rejected.'
+      },
+      floor: {
+        min: -60, max: 0, unit: 'dB', treatment: 'reject',
+        description:
+          'Closed-gate attenuation in dB (0 dB = never attenuate = bit-exact passthrough; -60 dB = deeply muted, not silent). Out-of-range requests are rejected.'
+      }
+    },
+    autotune: {
+      key: {
+        values: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
+        unit: '', treatment: 'reject',
+        description:
+          "DISCRETE param: the musical key of the snap grid — one of the 12 listed strings ('C'..'B'), or its raw 0..11 enum (0 = C). Any other value is rejected with the legal list. Experimental type."
+      },
+      scale: {
+        values: ['Chromatic', 'Major', 'Minor'],
+        unit: '', treatment: 'reject',
+        description:
+          'DISCRETE param: the snap scale — Chromatic (nearest semitone), Major or Minor in the selected key. One of the listed strings or its raw 0..2 enum; any other value is rejected with the legal list. Experimental type.'
+      },
+      retune: {
+        min: 0, max: 500, unit: 'ms', treatment: 'reject',
+        description:
+          'Retune speed in MILLISECONDS: 0 = hard-tune (snap within one epoch), larger values open a slow-correction glide on the same engine (250 ms is a natural gentle setting). Out-of-range requests are rejected. Experimental type.'
+      },
+      mix: {
+        min: 0, max: 100, unit: '%', treatment: 'reject',
+        description:
+          'Equal-power corrected/dry crossfade in PERCENT (default 100 = fully corrected). Out-of-range requests are rejected. Experimental type.'
       }
     }
   };
@@ -1457,10 +1663,45 @@
   }
 
   /**
+   * MCP-1 (cycle 3): the experimental-status lookup for
+   * get_capabilities. ONE source of truth — the type's OWN registration
+   * (`experimental: true` in NodeTypes.register; node-autotune.js,
+   * autotune only per the cycle-3 scope), read through
+   * NodeTypes.isExperimental(), which src/canvas.js's badge surfaces also
+   * read (so the operator-visible badge and the agent-facing readout can
+   * never disagree). The static map below is only the bare-harness
+   * FALLBACK (node files not loaded — same discipline as
+   * NODE_REGISTRY_SNAPSHOT); if the two ever drift the registrations are
+   * the source of truth and this map must be re-mirrored.
+   *
+   * @param {string} type
+   * @returns {boolean}
+   */
+  function isExperimentalType(type) {
+    try {
+      if (window.NodeTypes && typeof window.NodeTypes.isExperimental === 'function') {
+        return window.NodeTypes.isExperimental(type);
+      }
+    } catch (err) {
+      // Damaged registry object — the static fallback below stands.
+    }
+    return Object.prototype.hasOwnProperty.call(EXPERIMENTAL_TYPES_SNAPSHOT, type) &&
+      !!EXPERIMENTAL_TYPES_SNAPSHOT[type];
+  }
+
+  /** @type {Object<string, boolean>} mirrors the registrations (above). */
+  var EXPERIMENTAL_TYPES_SNAPSHOT = {
+    autotune: true
+  };
+
+  /**
    * get_capabilities' payload: the live node registry (falling back to
    * the static snapshot) enriched with the static rq3 agent ranges and
    * descriptions, plus the chain rules / order guidance / starters /
-   * safety notes.
+   * safety notes. MCP-1 (cycle 3): each type carries its EXPERIMENTAL
+   * badge (`experimental: true` + note) from the single-source lookup
+   * above, and DISCRETE params (autotune key/scale) publish their legal
+   * `values` list instead of a numeric range.
    *
    * @returns {Object}
    */
@@ -1470,6 +1711,27 @@
       var params = paramSpecsFor(type).map(function (spec) {
         var policy =
           (AGENT_PARAM_POLICY[type] && AGENT_PARAM_POLICY[type][spec.id]) || null;
+        if (isDiscreteSpec(spec)) {
+          // Discrete param: the value list IS the range. `agent` carries
+          // the same list with treatment 'reject' — an illegal string is
+          // rejected with this list inline.
+          return {
+            name: spec.id,
+            unit: spec.unit || '',
+            discrete: true,
+            values: spec.values.slice(),
+            accepts: 'one of the listed strings, or its raw 0..' +
+              (spec.values.length - 1) + ' enum',
+            default: spec.default,
+            agent: {
+              values: spec.values.slice(),
+              treatment: 'reject'
+            },
+            description: policy
+              ? policy.description
+              : 'Discrete param; the legal values are listed (registry drift — no agent policy entry).'
+          };
+        }
         return {
           name: spec.id,
           unit: spec.unit || '',
@@ -1504,12 +1766,21 @@
       } catch (err) {
         // Live label unavailable — static fallback stands.
       }
-      return {
+      var experimental = isExperimentalType(type);
+      var entry = {
         type: type,
         label: label,
         description: info.description || '',
+        experimental: experimental,
         params: params
       };
+      if (experimental) {
+        entry.experimentalNote =
+          label + ' is EXPERIMENTAL — new DSP still under audio-quality review. ' +
+          'It is fully operable (add/tune/persist like any type), but expect to verify ' +
+          'its sound by ear before relying on it mid-show.';
+      }
+      return entry;
     });
     // PS-4 / issue #12: one-line disclosure of the factory library plus
     // the preset-retrieval workflow. (The PS-4-era note said no load_preset
@@ -1532,7 +1803,7 @@
     return {
       app: 'karaoke-chain-builder',
       summary:
-        'Live-vocal effect chain builder for karaoke: gain, EQ, compressor, delay, reverb, and a required terminal safety limiter. Read chainRules before mutating — set_chain/add_node/remove_node/set_param validate every change against that loudness-safety policy, and each param\'s agent range is listed under nodeTypes.',
+        'Live-vocal effect chain builder for karaoke: gain, EQ, compressor, delay, reverb, plus noise gate, distortion, chorus, and autotune (experimental), around a required terminal safety limiter. Read chainRules before mutating — set_chain/add_node/remove_node/set_param validate every change against that loudness-safety policy, and each param\'s agent range (or discrete value list) is listed under nodeTypes.',
       nodeTypes: nodeTypes,
       chainRules: freshCopy(CHAIN_RULES),
       orderGuidance: freshCopy(ORDER_GUIDANCE),
@@ -1627,23 +1898,41 @@
 
   /**
    * A node entry's EFFECTIVE params: registered defaults overlaid with
-   * the finite numbers actually stored. Model entries may legitimately
-   * carry partial params (a preset node with only overrides), and every
+   * the values actually stored. Model entries may legitimately carry
+   * partial params (a preset node with only overrides), and every
    * cumulative rule (budget, boost sums) must reason about the value the
    * chain will really run with, not the sparse stored object.
+   *
+   * MCP-1 (cycle 3): a DISCRETE param's legal strings (autotune
+   * key/scale) overlay their default like numbers do — a raw enum number
+   * was already kept by the finite-number rule; without this, a
+   * key 'C' -> 'A' change would diff as no-change (both read back as the
+   * 'C' default). Anything else (illegal strings, booleans, null) still
+   * falls to the default, exactly as a non-number always did.
    *
    * @param {{id: string, type: string, params?: Object}} entry
    * @returns {Object} fresh params object, fully populated.
    */
   function effectiveParamsFor(entry) {
     var params = {};
-    paramSpecsFor(entry.type).forEach(function (spec) {
+    var specs = paramSpecsFor(entry.type);
+    specs.forEach(function (spec) {
       params[spec.id] = spec.default;
+    });
+    var specById = {};
+    specs.forEach(function (spec) {
+      specById[spec.id] = spec;
     });
     var provided = entry.params || {};
     Object.keys(provided).forEach(function (key) {
-      if (typeof provided[key] === 'number' && isFinite(provided[key])) {
-        params[key] = provided[key];
+      var value = provided[key];
+      if (typeof value === 'number' && isFinite(value)) {
+        params[key] = value;
+        return;
+      }
+      var spec = specById[key];
+      if (isDiscreteSpec(spec) && legalDiscreteValue(spec, value)) {
+        params[key] = value;
       }
     });
     return params;
@@ -1893,6 +2182,39 @@
   }
 
   /**
+   * Structured per-param reject for a DISCRETE param whose value is not
+   * one of the legal strings/enums (MCP-1, cycle 3 — rq3's numeric
+   * reject's string twin; same refusal vocabulary). Structural
+   * validation (checkSpecValue) catches these first on set_chain/
+   * add_node/set_param; this is the policy layer's defense for paths
+   * that skip it (load_preset applies preset-store nodes directly, and
+   * the stores' own deserialize validation is the outer net).
+   *
+   * @param {string} nodeId
+   * @param {string} type
+   * @param {string} param
+   * @param {Object} policy - the AGENT_PARAM_POLICY entry (carries values).
+   * @param {*} requested
+   * @returns {Object}
+   */
+  function paramIllegalValueResult(nodeId, type, param, policy, requested) {
+    return {
+      error: true,
+      code: 'PARAM_OUT_OF_RANGE',
+      node: nodeId,
+      param: param,
+      requested: requested,
+      allowed: { values: policy.values.slice(), unit: policy.unit || '' },
+      applied: null,
+      rule_id: paramRuleId(type, param),
+      reason: "Node '" + nodeId + "' param '" + param + "': requested " +
+        displayValue(requested) + ' is not one of the legal discrete values ' +
+        JSON.stringify(policy.values) + ' (nothing was applied).',
+      suggestion: 'Set ' + param + ' to one of: ' + policy.values.join(', ') + '.'
+    };
+  }
+
+  /**
    * Structured per-param reject (rq3 treatment 'reject'): nothing applied,
    * allowed range inline, plus remaining-budget numbers when the param
    * feeds a cumulative constraint (gain budget).
@@ -2055,6 +2377,19 @@
         var policy = policyFor(entry.type, key);
         if (!policy) {
           params[key] = value; // no policy registered (registry drift) — nominal bounds already held structurally
+          continue;
+        }
+        if (policy.values) {
+          // MCP-1: discrete param — membership replaces the numeric range
+          // compare (a string against min/max would silently pass).
+          if (!legalDiscreteValue({ values: policy.values }, value)) {
+            return {
+              nodes: appliedNodes,
+              clamped: clamped,
+              reject: paramIllegalValueResult(entry.id, entry.type, key, policy, value)
+            };
+          }
+          params[key] = value;
           continue;
         }
         if (value < policy.min || value > policy.max) {
@@ -2430,14 +2765,24 @@
         if (change) {
           return null; // More than one param value differs.
         }
-        if (typeof nextParams[key] !== 'number' || !isFinite(nextParams[key])) {
-          return null; // A deletion or non-numeric write — not this path.
+        // MCP-1 (cycle 3): a DISCRETE param's string value (autotune
+        // key/scale) is exactly as single-param as a number — the human
+        // select-commit path pushes the same string through these exact
+        // primitives (NodeTypes.applyParam maps it; ParamControls'
+        // row.apply sets the select), so the fast path is entitled to it
+        // too. Any other non-numeric write stays off this path.
+        var nextVal = nextParams[key];
+        var valOk =
+          (typeof nextVal === 'number' && isFinite(nextVal)) ||
+          typeof nextVal === 'string';
+        if (!valOk) {
+          return null; // A deletion or non-scalar write — not this path.
         }
         change = {
           id: next.id,
           type: next.type,
           param: key,
-          value: nextParams[key],
+          value: nextVal,
           params: nextParams
         };
       }
@@ -3171,7 +3516,16 @@
     var clamped = [];
     var finalValue = input.value;
     var policy = policyFor(entry.type, input.param);
-    if (policy && (input.value < policy.min || input.value > policy.max)) {
+    if (policy && policy.values) {
+      // MCP-1: discrete param — membership, not a numeric range. The
+      // structural layer already rejected non-members with the legal
+      // list; this re-check keeps the planner honest on its own.
+      if (!legalDiscreteValue({ values: policy.values }, input.value)) {
+        return {
+          error: paramIllegalValueResult(entry.id, entry.type, input.param, policy, input.value)
+        };
+      }
+    } else if (policy && (input.value < policy.min || input.value > policy.max)) {
       if (policy.treatment === 'reject') {
         // Budget context for the cumulative-feeding params: the would-be
         // candidate (requested value in place) so the agent sees the exact
@@ -3321,34 +3675,41 @@
     return true;
   }
 
-  function requireNumberOrBoolean(input, key, problems) {
-    if (input[key] === undefined) {
-      problems.push(problem(key, "'" + key + "' is required and was missing"));
-      return false;
-    }
-    var ok =
-      typeof input[key] === 'boolean' ||
-      (typeof input[key] === 'number' && isFinite(input[key]));
-    if (!ok) {
-      problems.push(
-        problem(key, "'" + key + "' must be a finite number (or boolean); got " + displayValue(input[key]))
-      );
-    }
-    return ok;
-  }
+  // (MCP-1, cycle 3: set_param's old requireNumberOrBoolean gate retired —
+  // discrete string params made a dedicated value branch inside
+  // validateSetParam the clearer home for the full number/boolean/string
+  // rule.)
 
   /**
    * Structural check of one param value against its spec: finite number
-   * within the app's NOMINAL range (the node file's own min/max). This is
-   * the loosest tier — RQ-3's tighter agent ranges/reject-clamp policy
-   * are MC-4's and intentionally NOT encoded here.
+   * within the app's NOMINAL range (the node file's own min/max), or —
+   * MCP-1, cycle 3 — for a DISCRETE spec (UI-1 `values` select, autotune
+   * key/scale) one of the declared strings or its raw integer enum
+   * (preset-schema's equally-legal forms). This is the loosest tier —
+   * RQ-3's tighter agent ranges/reject-clamp policy are MC-4's and
+   * intentionally NOT encoded here.
    *
-   * @param {Object} spec - {id, unit, min, max}.
+   * @param {Object} spec - {id, unit, min, max} or {id, unit, values}.
    * @param {*} value
    * @param {string} path
    * @param {Array<Object>} problems
    */
   function checkSpecValue(spec, value, path, problems) {
+    if (isDiscreteSpec(spec)) {
+      if (!legalDiscreteValue(spec, value)) {
+        problems.push(
+          problem(
+            path,
+            spec.id + ' is a discrete param: value must be one of ' +
+              JSON.stringify(spec.values) +
+              ' (or its raw 0..' + (spec.values.length - 1) + ' enum); got ' +
+              displayValue(value),
+            spec.values
+          )
+        );
+      }
+      return;
+    }
     if (typeof value !== 'number' || !isFinite(value)) {
       problems.push(
         problem(path, spec.id + ' must be a finite number' +
@@ -3624,12 +3985,16 @@
   }
 
   /**
-   * set_param: nodeId/param/value required (value finite number, or
-   * boolean for a future boolean param — none of the six committed types
-   * has one today). When the live chain resolves the node's type
-   * (read-only via ChainCanvas), the param name must be real for that
-   * type — the one runtime check the stub can make without touching app
-   * state. Range checks (nominal AND RQ-3) are deliberately MC-4's.
+   * set_param: nodeId/param/value required. Since MCP-1 (cycle 3) value
+   * may be a finite number, a boolean (future boolean param — none of
+   * the committed types has one today), or — for a DISCRETE param
+   * (autotune key/scale) — one of that param's legal strings (or its
+   * raw integer enum, preset-schema's equally-legal form). When the live
+   * chain resolves the node's type (read-only via ChainCanvas), the
+   * param name must be real for that type and the value must fit the
+   * param's kind — the one runtime check the stub can make without
+   * touching app state. Range checks (nominal AND RQ-3) are
+   * deliberately MC-4's.
    *
    * @param {*} input
    * @param {Array<Object>} problems
@@ -3641,7 +4006,21 @@
     }
     var nodeIdOk = requireString(inputObject, 'nodeId', problems);
     var paramOk = requireString(inputObject, 'param', problems);
-    var valueOk = requireNumberOrBoolean(inputObject, 'value', problems);
+
+    if (inputObject.value === undefined) {
+      problems.push(problem('value', "'value' is required and was missing"));
+    } else {
+      var v = inputObject.value;
+      var coarseOk =
+        (typeof v === 'number' && isFinite(v)) ||
+        typeof v === 'boolean' ||
+        typeof v === 'string';
+      if (!coarseOk) {
+        problems.push(
+          problem('value', "'value' must be a finite number, or a legal discrete string for params that have one (get_capabilities lists them); got " + displayValue(v))
+        );
+      }
+    }
 
     var nodeType = nodeIdOk ? resolveNodeType(inputObject.nodeId) : null;
     if (nodeType) {
@@ -3658,7 +4037,23 @@
                 "', which has no param '" + inputObject.param + "'", specIds(specs))
             );
           }
-        } else if (valueOk && typeof inputObject.value !== 'number') {
+        } else if (isDiscreteSpec(spec)) {
+          if (inputObject.value !== undefined && !legalDiscreteValue(spec, inputObject.value)) {
+            problems.push(
+              problem(
+                'value',
+                spec.id + ' is a discrete param: value must be one of ' +
+                  JSON.stringify(spec.values) +
+                  ' (or its raw 0..' + (spec.values.length - 1) + ' enum); got ' +
+                  displayValue(inputObject.value),
+                spec.values
+              )
+            );
+          }
+        } else if (
+          inputObject.value !== undefined &&
+          typeof inputObject.value !== 'number'
+        ) {
           problems.push(
             problem('value', spec.id + ' is numeric; value must be a finite number' +
               (spec.unit ? ' in ' + spec.unit : '') + '; got ' + displayValue(inputObject.value))
@@ -4113,10 +4508,11 @@
       description:
         "Set one parameter on one existing node: the node id from get_chain, the param's " +
         "real name for that node's type, and the new value in the param's own unit (dB, %, " +
-        'ms, s, or ratio — get_capabilities lists them). Param-name and value-type checks ' +
-        'are structural; the published agent range is enforced at apply time (out-of-range ' +
-        'values reject or clamp per the param\'s treatment, and the full chain — gain budget ' +
-        'included — is re-validated with the new value).',
+        'ms, s, or ratio — get_capabilities lists them). DISCRETE params (autotune key/scale) ' +
+        'take one of their listed strings (or its raw enum) instead of a number. Param-name ' +
+        'and value-type checks are structural; the published agent range is enforced at apply ' +
+        'time (out-of-range values reject or clamp per the param\'s treatment, and the full ' +
+        'chain — gain budget included — is re-validated with the new value).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4126,11 +4522,14 @@
           },
           param: {
             type: 'string',
-            description: "Real param name of that node's type, e.g. gainDb, threshold, timeMs, mix, ceiling."
+            description: "Real param name of that node's type, e.g. gainDb, threshold, timeMs, mix, ceiling, key, scale."
           },
           value: {
-            type: 'number',
-            description: 'New value as a number in the param\'s own unit (dB, %, ms, s, or ratio).'
+            type: ['number', 'string'],
+            description:
+              "New value in the param's own unit as a number; for DISCRETE params " +
+              "(get_capabilities marks them discrete and lists their values) one of the " +
+              'listed strings, e.g. key "A" or scale "Minor".'
           }
         },
         required: ['nodeId', 'param', 'value']

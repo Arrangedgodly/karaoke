@@ -2,7 +2,7 @@
 
 **Live: https://karaoke.arrangedgodly.com/**
 
-A live karaoke vocal chain in your browser: mic in → effects (reverb, delay, compression, EQ) → PA out. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
+A live karaoke vocal chain in your browser: mic in → effects (reverb, delay, compression, EQ, noise gate, distortion, chorus — even autotune) → PA out. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
 
 ![Karaoke Chain Builder — the dark pro-audio console: status strip on top, effects rack left, chain canvas middle, presets right](docs/screenshot.png)
 
@@ -77,7 +77,7 @@ Agent and human drive the **same model, UI, and audio graph** — agent mutation
 node tests/run.js
 ```
 
-Zero dependencies — needs only Node, works from a clean clone; exit code 0 means green. The suite covers: 10-tool registration, policy round-trips of all factory presets, safety refusals, the node-reuse type guard, watchdog tap/latch, mutation + undo, persistence honesty, param-only ramps, and the preset retrieve/load tools.
+Zero dependencies — needs only Node, works from a clean clone; exit code 0 means green. The suite covers: 10-tool registration, policy round-trips of all factory presets, safety refusals, the node-reuse type guard, watchdog tap/latch, mutation + undo, persistence honesty, param-only ramps, the preset retrieve/load tools, and the four newer effects (Noise Gate, Distortion, Chorus, Autotune) — their audio structure, palette cards, discrete key/scale params, agent string params, and preset round-trips.
 
 **Honest boundaries:** automation does not prove the physical mic → PA path, audible DSP quality, or hidden-tab watchdog behavior. Those live in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
@@ -103,11 +103,26 @@ Across the top, the status strip shows whether the engine is **Stopped** or **Li
 
 ### Building your sound
 
-- The left panel has your effects (Gain, Compressor, EQ, Delay, Reverb, Limiter). **Drag one into the middle column** to add it to the chain — or just click it (Tab to it and press Enter works too; new effects are added just before the limiter so it stays last). The chain flows top to bottom by default, mic in at the top and sound out at the bottom. Prefer the old left-to-right view? The **FLOW** button under the chain flips it back, and it remembers your choice.
+- The left panel has your effects — the originals (Gain, Compressor, EQ, Delay, Reverb, Limiter) plus four newer ones (Noise Gate, Distortion, Chorus, Autotune — see the next section). **Drag one into the middle column** to add it to the chain — or just click it (Tab to it and press Enter works too; new effects are added just before the limiter so it stays last). The chain flows top to bottom by default, mic in at the top and sound out at the bottom. Prefer the old left-to-right view? The **FLOW** button under the chain flips it back, and it remembers your choice.
 - The meters on the **MIC IN** and **OUT** bars show your incoming and outgoing levels at a glance, and the small **OUT** readout pinned at the bottom of the chain area shows your output level even when the chain is too long to fit on screen.
 - **Drag to reorder** — grab a card by its `⋮⋮` handle and drop it where you want.
 - Click the **×** on a card to remove it.
-- Use the sliders under each effect to tune it. Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
+- Use the sliders under each effect to tune it (Autotune's **Key** and **Scale** are dropdowns instead of sliders). Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
+
+### The four newer effects — what they're for
+
+**Noise Gate** — turns the mic down automatically whenever nobody is singing, and brings it straight back the moment someone does. Four controls: **Threshold** (how loud a sound must be to count as "singing" — raise it until the room stops getting through), **Attack** and **Release** (how fast the gate opens on a note and closes after it), and **Floor** (how far down it ducks between phrases — all the way down is fully muted). **Reach for it in noisy rooms** — bar chatter, fans, PA spill between songs — so the PA goes quiet between singers without you touching anything. The defaults are deliberately gentle; if it chops the ends off words, lengthen Release.
+
+**Distortion** — adds grit and edge: a saturated, growly, "turned-up-too-loud" character over the voice. **Drive** is the amount (25 % is a light warmth, 100 % is a full roar), **Tone** rolls the brightness from dark to bright, **Output** sets the level — capped so that even at maximum it can't boost past unity and slam the chain (your limiter still has the last word). **Reach for it on rock numbers.** One honest note: unlike the other effects, Distortion has no perfectly clean "zero" — Drive at 0 still colors the sound slightly by design; the truly clean comparison is **Bypass**.
+
+**Chorus** — thickens and widens the voice: two extra copies of the vocal, drifting slowly out of tune left and right around the original. **Depth** is how far they wander, **Rate** is how fast they wander, **Mix** is how much of the effect you hear. The defaults (Depth 3 ms, Rate 1.5 Hz, Mix 30 %) give a subtle widening; push Depth and Rate up for full seasick 80s warble. **Reach for it on ballads**, or to make one singer sound like two. It's a stereo effect — it shows best on headphones or a stereo PA — and it's built to stay safe even if the PA folds the signal down to mono.
+
+**Autotune — Experimental** — listens to the pitch of the vocal and pulls each note toward the key and scale you pick. **Key** and **Scale** are dropdowns (any of the 12 keys; Chromatic, Major, or Minor), **Retune Speed** sets the character — 0 ms is the instant hard-tune "robot" snap, higher values (up to half a second) glide gently toward the right notes instead — and **Mix** blends the corrected voice with the original. **Reach for it as a deliberate effect**, and pick the song's actual key — a wrong key gives the classic wrong-key robot sound (which is a choice, if you mean it). Two things to know:
+
+- It carries an **Experimental** badge — on its palette chip (as "EXP") and its card. It's the newest engine in the app and isn't in any factory preset yet; try it at rehearsal before a show.
+- It adds a fixed **20 ms delay** (a fiftieth of a second) to the vocal. You won't notice it while singing, but if you A/B it against the dry sound the corrected voice lands a hair late. That's the engine's declared latency — expected behavior, not a fault.
+
+**Want to hear all four before a show?** They were accepted on a fixed test vocal — `assets/test-vocal.mp3` (CC0; source credited in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)) — and you can reproduce exactly that demo yourself: with Node and ffmpeg installed, run `node tests/qa-out/run-qa1.js`, then follow the guided A/B listening order in [`tests/qa-out/LISTENING.md`](tests/qa-out/LISTENING.md). It renders before/after audio for every effect at default and extreme settings, offline, through the same node code the app runs live.
 
 ### Saving your setup
 

@@ -1,348 +1,322 @@
-# Cycle 2 Plan — Agent-Controlled Chains (WebMCP) + Console Re-skin
+# Cycle 3 Plan — Shelved Effects (Noise Gate, Distortion, Chorus, Autotune)
 
-Source of truth for cycle-2 tasks, dependencies, and status. Scope:
-[town-hall.md](town-hall.md) (approved 2026-08-27) · design brief:
-`.impeccable/surfaces/index-html.md` (confirmed 2026-08-27) · product truth:
-`PRODUCT.md`. Cycle-1 record: [cycle-1/](cycle-1/).
+Source: [town-hall.md](town-hall.md) (cycle 3, approved 2026-08-29).
+Coordinator: ultron-swarm. Statuses live in the task index below.
 
-Two tracks share this plan: **Track A (MCP)** and **Track B (console re-skin)**,
-merging for acceptance and a final committed polish task (Ultron UI rule).
+## Fixed by scope (do not re-litigate)
 
-Statuses: `pending` · `blocked` · `in-progress` · `awaiting-approval` ·
-`completed`. RQ-IDs are research questions delegated to `$deep-research`
-(mapped from town-hall OQ-1..OQ-8).
+- Four effects on the `registerNodeType()` contract (`src/audio-graph.js`),
+  conforming to the cycle-2 UI frame (vertical chain, collapse-only cards).
+- Param sets: Gate (Threshold/Attack/Release/Floor), Distortion
+  (Drive/Tone/Output), Chorus (Depth/Rate/Mix), Autotune (Key+Scale/Retune
+  Speed/Mix). Plain-language labels per existing param style.
+- Autotune: hard-tune only if RQ-2 feasibility bar passes (artifact-free on
+  the test vocal, latency within ~10–20 ms budget); otherwise slow
+  retune-speed correction — same engine, different retune parameter.
+  Experimental badge on autotune only.
+- Scales: Chromatic (default) / Major / Minor × 12 keys.
+- No new MCP tools; capabilities readout carries the badge.
+- Full preset round-trip for all four, including key/scale.
+- Fixed test vocal = universal acceptance input (TEST-1).
+- All cycle-2 non-goals carry over.
 
----
+## Research queue (→ deep-research-swarm)
 
-## Lane MC — MCP / agent integration (Track A)
+| RQ | Question (answerable, task-tied) | Ties to | Blocking? | Status |
+|----|----------------------------------|---------|-----------|--------|
+| RQ-1 | How should a noise gate be built in Web Audio with no native node — AudioWorklet vs scheduled GainNode automation vs hybrid — meeting the artifact-free/bypass-clean bar on the test vocal, and what topology best fits the existing worklet harness (`watchdog-worklet.js` pattern)? | GATE-1 | **yes** | COMMITTED (D1) 2026-08-29 |
+| RQ-2 | Can pitch detection + pitch shifting run in one AudioWorklet artifact-free on the test vocal within a ~10–20 ms latency budget, and which approach (autocorrelation/YPASS-family vs ML model like CREPE-tiny vs hybrid) passes the bar? Deliver the pass/fail verdict + chosen approach — this decides AT-1's outcome branch. | AT-1 | **yes** | COMMITTED (D2) 2026-08-29 |
+| RQ-3 | Which WaveShaper curve family and tone-stage design gives a musical vocal distortion with Drive/Tone/Output controls and no aliasing artifacts at max drive? | DIST-1 | informs | COMMITTED (D3) 2026-08-29 |
+| RQ-4 | Which chorus topology (single vs multi-tap LFO-modulated delay, stereo spread) best fits Depth/Rate/Mix on a mono vocal bus with the existing node contract? | CHOR-1 | informs | COMMITTED (D4) 2026-08-29 |
 
-### MC-0 — Live localhost spike *(medium)* — status: `completed` *(validated by user on flagged Chrome 2026-08-27: chip→AGENT READY, echo listed+run in DevTools WebMCP pane, plain-object result confirmed — RQ-1 contradiction resolved, A-1 confirmed. Inspector-extension NL drive deferred to MC-6/QA-3 where it is already planned)*
-Prove the loop before building on it: with RQ-1's enable path applied
-(`chrome://flags/#enable-webmcp-testing`), register one trivial `echo` tool
-via `document.modelContext.registerTool()` and invoke it through the
-**DevTools WebMCP pane** and the **Model Context Tool Inspector extension**
-(RQ-2: Gemini in Chrome does not consume WebMCP tools as of 2026-08-27);
-document exact enable steps + screenshots in the task record.
-- Owner: MCP. Journey: portfolio visit; de-risks entire track.
-- Depends: RQ-1, RQ-2. Parallel: none (critical path head).
-- Files: `src/mcp-server.js` (spike seed), `index.html` (script tag).
-- Accept: DevTools pane lists + runs the tool; Inspector drives it in NL;
-  result rendering verified (plain values vs content-wrapper — RQ-1
-  contradiction); steps reproducible from a fresh Chrome profile.
-  **If impossible → return to town-hall** (assumption A-1).
-- Risk: flag not present on current stable → CLI `--enable-features=WebMCP`.
+### Research outcomes (2026-08-29)
 
-### MC-1 — Shim + feature detection + registration *(small)* — status: `awaiting-approval`
-Harden the spike into the permanent shim: `window.McpServer` module,
-feature-detect `document.modelContext ?? navigator.modelContext` (RQ-1),
-**per-tool registration** (no server object exists), **silent no-op + one
-console diagnostic when absent**, emit lifecycle events (tools-ready /
-unavailable / acting-on-execute) on the FEW-1 event contract; re-register
-on every load.
-- Depends: MC-0. Parallel: FEW-1 (contract defined already).
-- Accept: app loads identically with WebMCP absent (zero errors, zero visual
-  change); tools listed in DevTools pane when enabled.
+- **D1 (RQ-1)**: Pure AudioWorklet gate — `src/gate-worklet.js` + `src/node-gate.js`;
+  RMS detector; Threshold/Attack/Release/Floor as real AudioParams; internal
+  constants 6 dB hysteresis, 50 ms hold, 5 ms look-ahead. GATE-1 unblocked.
+  Record: `research/rq1-noise-gate.md`.
+- **D2 (RQ-2)**: Conditional PASS for hard-tune — YIN + TD-PSOLA in one
+  AudioWorklet; AT-0 spike confirms on the test vocal before hard-tune AT-1
+  tasks run (two-outcome shape unchanged); slow-correction fallback
+  near-certainly feasible on the same engine. AT-0/AT-1 remain blocked until
+  TEST-1 + AT-0 respectively. Record: `research/rq2-autotune-feasibility.md`.
+  **Update 2026-08-29: AT-0 executed — hard-tune PASS empirically confirmed
+  on TEST-1 (record: `research/at0-spike-result.md`).**
+- **D3 (RQ-3)**: tanh soft-clip fixed curve, WaveShaperNode oversample '4x',
+  Drive via pre-GainNode, Tone via BiquadFilter lowpass (exponential
+  1.5–12 kHz), guarded Output GainNode. DIST-1 unblocked.
+  Record: `research/rq3-distortion-curves.md`.
+- **D4 (RQ-4)**: 2-voice L/R phase-opposed chorus — two DelayNodes + one sine
+  LFO with ±depth sign-flipped feeds, StereoPanner L/R, equal-power dry/wet,
+  ~12 native nodes, no worklet. CHOR-1 unblocked.
+  Record: `research/rq4-chorus-topology.md`.
 
-### MC-2 — Tool schema layer *(medium)* — status: `awaiting-approval`
-Define the 8 tool schemas (`get_capabilities`, `get_chain`, `set_chain`,
-`add_node`, `remove_node`, `set_param`, `list_presets`, `save_preset`) in
-the `ModelContextTool` shape (RQ-1): name rules, descriptions ≤500 chars /
-param descriptions ≤150, `inputSchema` JSON-Schema object,
-`readOnlyHint`/`untrustedContentHint` annotations, arg validation (reuse
-`src/preset-schema.js` patterns). **Errors returned as descriptive result
-text** (structured JSON-in-string per RQ-3 shape) — the API has no
-`isError` channel. No logic yet.
-- Depends: MC-1, RQ-1 (exact signature). 
-- Accept: schemas register; invalid args rejected with the RQ-3 error shape
-  visible in DevTools pane.
+## Tasks by role
 
-### MC-3 — Read tools *(small)* — status: `awaiting-approval`
-Implement `get_chain`, `list_presets`, and `get_capabilities` whose content
-encodes domain guidance (per-param unit/range/description, chain-order
-conventions, recommended starter chains) **plus the RQ-3 policy as stated
-rules** — limiter-required-terminal, +12 dB gain budget, boost/feedback
-caps, clamp ranges — so agents pre-comply instead of discovering limits by
-rejection. OQ-8 content owner.
-- Depends: MC-2. Parallel: VIS-* lanes.
-- Accept: harness (MC-6 stub or console) returns correct current state;
-  capabilities content reviewed against cycle-1 node registry (all 6 types,
-  every param) and consistent with rq3 table verbatim.
+### Audio DSP (frontend/audio lane)
 
-### MC-4 — Mutation tools + validation + clamps *(medium)* — status: `awaiting-approval`
-`set_chain`, `add_node`, `remove_node`, `set_param` wired through the same
-model APIs the UI uses (`ChainCanvas`/`AudioGraph` rebuild path); **RQ-3
-policy implemented verbatim** (per-param reject/clamp table, chain rules:
-limiter-required-terminal, +12 dB total-gain budget incl. estimated makeup,
-feedback ≤0.7, boost caps, compound-loop guard, ≤2 compressor nodes, 16-node
-cap, host ramps 10–20 ms); add the **host-owned post-limiter output
-attenuator** (persistent GainNode, −6 dBFS default, no tool can address it)
-with "Safe output" UI note; serialization rule (OQ-7: agent mutations queue
-behind an in-progress user drag).
-- Depends: MC-3, RQ-3. 
-- Accept: valid calls rebuild graph cleanly (no clicks beyond existing
-  rebuild behavior); every rq3 clamp/rule enforced and disclosed per its
-  reject/clamp treatment; concurrent-drag test passes; attenuator verified
-  with hot signals (square-wave −1 dBFS test input).
-- Risk: graph-rebuild-on-hot-path — reuse cycle-1 AE-2 reconnect strategy.
+- **TEST-1 — Fixed test vocal asset** *(small)* — status: `completed`
+  Source/commit one fixed test vocal (royalty-free or self-recorded, license
+  recorded in THIRD_PARTY_NOTICES.md if external) to `assets/`. Outcome:
+  every acceptance check and the demo reference this one file.
+  Acceptance: file loads in the app as chain input; license clean.
+  Deps: none. *(OQ-6 from the brief.)*
 
-### MC-5 — save_preset + change summaries + exact-state undo *(medium)* — status: `completed` *(approved 2026-08-28)*
-`save_preset` tool; every mutation emits a human-readable change summary and
-pushes a snapshot (nodes, order, params, preset-name/unsaved state — OQ-6
-snapshot decision) to a bounded undo stack exposed as one-click undo.
-- Depends: MC-4. 
-- Accept: any agent batch is undoable to byte-identical model state; undo of
-  a save removes the preset only if agent-created in same batch.
+- **DIST-1 — Distortion node** *(medium)* — status: `completed` (built 2026-08-29 per D3)
+  `node-distortion.js` on `registerNodeType()`: Drive/Tone/Output params,
+  output guarded (Output at max must not slam the chain; downstream limiter
+  untouched). Acceptance: audible, param-reactive, bypass-clean,
+  artifact-free on TEST-1 asset, presets round-trip.
+  Deps: TEST-1, RQ-3.
 
-### MC-6 — Dev test harness (agent simulator) *(medium)* — status: `completed` *(approved 2026-08-28)*
-Standalone dev surface (hidden route or `?dev` page) to list/invoke all 8
-tools with editable JSON args, view structured errors + emitted events;
-doubles as the portfolio agent-free demo.
-- Depends: MC-2 (schemas); useful from MC-3 on.
-- Accept: every tool callable; error paths displayable; no harness state
-  leaks into app localStorage keys.
+- **CHOR-1 — Chorus node** *(medium)* — status: `completed` (built 2026-08-29 per D4)
+  `node-chorus.js`: Depth/Rate/Mix per RQ-4 topology. Same acceptance bar.
+  Deps: TEST-1, RQ-4.
 
----
+- **GATE-1 — Noise Gate node** *(medium)* — status: `completed` (built 2026-08-29 per D1)
+  `node-gate.js` (+ worklet if RQ-1 says so): Threshold/Attack/Release/Floor.
+  Acceptance: gate opens on vocal onset without clipping the attack
+  consonant, closes on silence without chopping tails, bypass-clean,
+  artifact-free on TEST-1. Deps: TEST-1, RQ-1.
 
-## Lane VIS — console re-skin (Track B)
+- **AT-0 — Autotune feasibility spike** *(medium)* — status: `completed`
+  (executed 2026-08-29 — **verdict: HARD-TUNE PASS** on the D2 bar, measured
+  on TEST-1: latency exactly 20.0 ms all paths; p99 CPU 12.6% of quantum;
+  snap residual median 2.5 c / 90.9% within 10 c; AM depth 0.0 dB; 0 dropout
+  windows; slow-correction (250 ms) verified on the same engine. Record:
+  `research/at0-spike-result.md`; disposable prototype in `tests/spike/`,
+  nothing in src/ or index.html; suite still 18/18 green.)
+  Disposable prototype (not shipped): pitch detect + shift in one worklet,
+  measured latency and artifact review on TEST-1. Outcome: hard-tune
+  PASS/FAIL verdict recorded in plan + state.md → selects AT-1 branch.
+  Deps: TEST-1, RQ-2. Parallel with DIST/CHOR/GATE.
 
-### VIS-1 — Theme token foundation *(medium)* — RQ-5 resolved — status: `completed` *(approved 2026-08-27)*
-Adopt the **rq5 token table verbatim** as `:root` custom properties: warm
-charcoal neutrals (`#1B1917/#292623/#322E29`, hairline `#4C463E`
-decorative-only, `line-strong #857C6E` for meaningful outlines), amber
-accent set (`#F0A83C`/hover/active/`on-accent`), **split-role safety red**
-(`red-edge #E5484D` rings / `red-fill #C93A32`+white text — never swapped),
-focus tokens (incl. dark-on-amber variant), 6 family edges w/ silkscreen
-initials redundancy, status + meter stops. Refactor `styles/main.css`
-`:root`; no component rewrite.
-- Accept: tokens match rq5 values exactly; old light values fully replaced
-  (no orphan rules); no pairing uses a known-failing combination (rq5 §5).
+- **AT-1 — Autotune engine node** *(large, two-outcome)* — status: `completed` (built 2026-08-29 on the AT-0 hard-tune PASS verdict: `src/autotune-worklet.js` — the ported spike engine, YIN + TD-PSOLA in one AudioWorklet, telemetry-free, allocation-free per block — + `src/node-autotune.js` on the gate's async addModule pattern; Key/Scale flow as UI-1 discrete strings mapped to worklet enums; Retune 0–500 ms spans hard-tune default and slow correction on one engine; Mix 0–100 %; declared 20 ms delay; minimal experimental badge on the node card in `src/canvas.js` (formal badge is UI-2's); 100-check test `tests/test-autotune-node.js` incl. the four AT-0 lessons regress-tested and CPU re-measured (p99 9.8%/8.5% of quantum vs spike 12.6%/9.2%); suite 19/19 / 1069 checks green. Audio-quality artifact review on TEST-1 is user-judged in QA-1.)
+  `node-autotune.js` on the AT-0 verdict: hard-tune (retune fast, snap to
+  scale) or slow-correction (same engine, slow retune). Experimental badge
+  applies either way. Acceptance: pitched test vocal corrects toward the
+  selected scale audibly; bypass-clean; no dropouts on sustained notes;
+  artifact review on TEST-1. Deps: AT-0, UI-1.
 
-### VIS-2 — Topbar → status LCD strip *(medium)* — status: `awaiting-approval`
-Restructure topbar markup into the status strip: engine-state block, mono
-readouts (sample rate, latency, node count), agent chip slot, restyled
-Start/device controls; **Bypass as the loudest element** (safety red on
-steel, oversized target).
-- Depends: VIS-1. Parallel: MC-* lanes.
+### UI/UX lane
 
-### VIS-3 — Palette + presets panels *(medium)* — status: `awaiting-approval`
-Silkscreen label system, edge-coded palette items (color as edge, never
-fill; label always present), preset panel in the same vocabulary; all
-component states (hover/focus/active/disabled).
-- Depends: VIS-1.
+- **UI-1 — Discrete key/scale param control** *(medium)* — status: `completed`
+  New param-control type in `param-controls.js` (all 12 keys × Chromatic/
+  Major/Minor), keyboard operable, screen-reader labeled, styled to the
+  industrial label system. Acceptance: keyboard-only key change reaches
+  NodeTypes.applyParam; SR announces value. Deps: none. Parallel with DSP
+  lane. *(OQ-5.)*
 
-### VIS-4 — Node cards + param controls *(medium)* — status: `awaiting-approval`
-Channel-strip node cards: family edge coding, grip handles as physical
-grips, sliders as faders (detent feel via CSS only — no custom form
-controls), remove ×; every state incl. gated/not-started.
-- Depends: VIS-1, FEW-1 (pulse-on-change hook).
-- Accept: 6 card types + empty state visually complete; keyboard drag
-  behavior unchanged.
+- **UI-2 — Palette/card integration, all four effects** *(small)* — status:
+  `completed` (formal pass 2026-08-29: chips/cards were already
+  registry-driven, so the pass formalized the encoding — FAMILY_INITIALS
+  DI/CH/NG/AU per the label-initials convention; AT-1's minimal hook
+  formalized into `createExperimentalBadge()` (one factory, one
+  EXPERIMENTAL_TYPES source, two surfaces: full "Experimental" tag on the
+  autotune card + compact "EXP" tag on its palette chip with the
+  "…(experimental)" aria-label suffix; SR-by-content both places); four
+  new rq5-compliant family tokens + chip/card mappings (ink 6.74–10.22,
+  card ≥5.30, gap-center hues ≥25° from every existing family);
+  collapse inherited + verified per type; keyboard add + terminal-limiter
+  policy verified through the shared commit chokepoint; 152-check
+  tests/test-palette-cards-cycle3.js on the real ten-module registry;
+  suite 20/20 / 1221 checks green. Visual/badge placement is user-judged
+  in QA-1.)
+  Register labels/palettes; experimental badge component on the autotune
+  card; palette chips + collapse behavior inherited. Acceptance: each effect
+  addable via palette (mouse + keyboard + SR), badge visible on autotune.
+  Deps: each node task (DIST-1/CHOR-1/GATE-1/AT-1) as they land — may be
+  executed incrementally per effect.
 
-### VIS-5 — MIC IN / OUT meters *(medium)* — component only — status: `awaiting-approval`
-Meter visual components at the canvas anchors per RQ-4/5: **canvas**-rendered
-lamp bar (green −60…−20 / amber −20…−6 / red −6…0, rq5 stops) + RMS underlay
-+ peak-hold tick (1500 ms hold, 12 dB/s fall) + clip latch (≥3 samples
-@ |v|≥1.0, 2 s auto-clear), dB numerals in mono; silent-at-rest rendering;
-`role="meter"` + low-frequency `aria-valuenow`.
-- Depends: VIS-1, RQ-4 (resolved). Wiring = FEW-3.
+### Presets/Data lane
 
-### VIS-6 — Agent feedback + global states polish *(medium)* — status: `awaiting-approval`
-Toast/summary system styling, one-pulse-amber on agent-changed cards,
-agent chip visual states, taught empty state, adversarial-rejection toast,
-`prefers-reduced-motion` handling (pulses quiet, meters stay functional).
-- Depends: VIS-1..VIS-4, FEW-1 wired by MC-1/MC-4/MC-5 events.
+- **PRE-1 — Preset schema + round-trip, all four** *(medium)* — status:
+  `completed` (formal pass 2026-08-29: `preset-schema.js` gained
+  hand-mirrored per-type PARAM contracts for the four cycle-3 types —
+  exported as `TYPE_PARAM_CONTRACTS`, drift-checked against the live
+  registry in the test — and `deserialize()` now validates every PRESENT
+  param of a declared type: unknown param name, wrong type,
+  out-of-nominal-range number, or an autotune Key/Scale outside UI-1's
+  legal sets ('C'..'B' / 'Chromatic'/'Minor', or the raw 0..11 / 0..2
+  enums node-autotune.js documents as equally legal) is a specific
+  rejection feeding the store layers' pre-existing recovery paths;
+  undeclared types — the six legacy ones included — keep structure-only
+  treatment, so pre-cycle-3 presets load byte-unchanged. `persistence.js`
+  + `preset-store.js` load paths additionally consult the LIVE NodeTypes
+  registry so a hand-edited preset naming an unregistered type degrades
+  through the existing default-fallback / load-returns-null recovery
+  instead of throwing mid-buildGraph (the guard degrades to lenient when
+  the registry is absent/empty/broken). Decisions: default chain UNCHANGED
+  (first-run sound stays as shipped; every new effect is a character
+  effect — note in default-preset.js) and NO cycle-3 factory preset yet
+  (library provenance is user-accepted content pending QA-1, and
+  set_chain's numeric-only param validation — MCP-1's lane — would reject
+  autotune's string Key/Scale in the library's own conformance test; note
+  in factory-presets.js). Evidence: 171-check
+  tests/test-preset-cycle3.js — all-four + legacy 10-node exact
+  round-trips through PresetSchema, PresetStore, and Persistence (incl.
+  key/scale strings, retune, mix, and numeric-enum forms), boundary
+  min/max acceptance, legacy byte-unchanged loads, and 20 hostile-entry
+  recovery cases; full suite 21/21 / 1392 checks green.)
+  Extend `preset-schema.js` / `persistence.js` / `default-preset.js` /
+  factory presets: new types serialize (incl. key/scale), old presets
+  without them still load. Acceptance: save→reload→compare exact for a
+  chain containing all four; legacy preset load unaffected.
+  Deps: node tasks landed (can land per-effect incrementally).
 
----
+### Agent/MCP lane
 
-## Lane FEW — shared frontend wiring
+- **MCP-1 — Agent operability + capabilities badge** *(small)* — status:
+  `completed` (completed 2026-08-29: the 10-tool surface
+  unchanged — no new tools. (1) Discrete string params are legal through
+  every param-taking tool: checkSpecValue/validateSetParam accept a
+  UI-1 `values` param's legal strings AND preset-schema's raw 0..N enum
+  form (illegal values → the standard INVALID_ARGUMENTS problem with the
+  allowed list inline — PRE-1's documented numeric-only gap closed);
+  effectiveParamsFor keeps legal strings so diffs disclose key 'C'→'A'
+  correctly; the policy layer membership-checks discrete params
+  (defense on the load_preset path); the issue-#5 param-only fast path
+  rides string set_param writes through the human select-commit
+  primitives. (2) Experimental badge in the get_capabilities readout —
+  ONE source of truth: the type's own registration
+  (`experimental: true` on NodeTypes.register, set in node-autotune.js;
+  new NodeTypes.isExperimental() reads it; canvas.js's badge surfaces
+  consult the same lookup with its map demoted to a pre-API fallback;
+  mcp-tools keeps only a bare-harness snapshot mirror). Readout carries
+  per-type `experimental` + note (autotune only) and the summary names
+  it. (3) The four cycle-3 types publish real param contracts in the
+  readout (snapshot registry + TYPE_INFO + agent policies = nominal
+  ranges / value lists, replacing the registry-drift placeholder).
+  Evidence: 85-check tests/test-mcp-tools-cycle3.js driving the REAL
+  mutation pipeline with all ten node files — set_chain/add_node/set_param
+  for all four effects incl. key 'A'/'F#'/'D#' + scale 'Minor'/'Major'
+  strings verified into model AND worklet enums, raw-enum forms
+  round-trip, 10 illegal-value cases rejected cleanly with nothing
+  applied + no undo, badge in both live-registry and bare-harness
+  readouts; full suite 22/22 / 1477 checks green.)
+  Verify add/update of all four via existing 8-tool surface; capabilities
+  readout marks autotune experimental. Acceptance: agent script adds+tunes
+  each effect; readout shows badge. Deps: UI-2, PRE-1.
 
-### FEW-1 — Agent event contract + components *(small)* — **no deps** — status: `completed` *(approved by ordering redirect 2026-08-27: "lets do vis-1 first then test")*
-Define `window.AgentUI` event bus (lifecycle: **tools-ready / acting /
-unavailable** — RQ-1: no connection concept exists; acting = execute()
-invoked; mutation-summary; undo-stack API) as a written contract in
-`src/agent-ui.js` with DOM components for chip/toast/undo (unstyled
-skeletons). MC and VIS lanes code against this contract, enabling parallel
-work.
-- Accept: contract doc block in module; components render from synthetic
-  events; no MC dependency.
+### QA lane
 
-### FEW-2 — Status readouts wiring *(small)* — status: `awaiting-approval`
-Feed real values from `AudioEngine`/`AudioGraph` (sample rate, measured
-latency, live node count) into the VIS-2 readouts; update cadence bounded.
-- Depends: VIS-2.
+- **QA-1 — Per-effect acceptance runs** *(medium)* — status: `completed`
+  (user-PASSED 2026-08-29: gate clean onsets/tails; distortion both approved
+  as-is; chorus enthusiastically approved; autotune liked with slight A/B lag
+  recorded as the accepted 20 ms declared delay. Objective pass complete 2026-08-29: offline harness `tests/qa-out/run-qa1.js`
+  renders 12 listening WAVs + runs the earless checks through the REAL node
+  code — buildGraph-routed composites, real worklets. Bypass-clean: chain
+  bypass bit-exact vs source; gate Floor=0 bit-exact mod 5 ms look-ahead;
+  autotune Mix=0 bit-exact mod 20 ms; chorus Mix=0 bit-exact; distortion has
+  no bit-exact neutral by design (Drive=0 = −37.9 dB delta; clean path is
+  Bypass). Reactivity 14/14 params. Dropout proxies match AT-0 (autotune 0/1469
+  windows < −20 dB, flux 1.06). No render >0 dBFS; distortion unity guard
+  exactly 1.0 at max, destination −4.2 dBFS at max drive. Agent-operability +
+  preset round-trip cited from MCP-1/PRE-1 tests; suite 22/22 / 1477 green.
+  **The user's listening verdict on tests/qa-out/LISTENING.md completes this
+  acceptance — audio quality is user-judged, not yet given.**)
+  For each effect on TEST-1: audible / param-reactive / bypass-clean /
+  artifact-free / keyboard + agent operable / preset round-trip. User judges
+  audio quality (same user-judged bar as cycle 2 QA-3).
+  Deps: all node tasks, MCP-1.
 
-### FEW-3 — Meter wiring + watchdog *(medium)* — status: `awaiting-approval`
-Implement meters per RQ-4 (resolved): **2× AnalyserNode side-taps** — IN off
-`AudioEngine.sourceNode`, OUT off persistent `chainGate`, created once per
-session outside `buildGraph()` (verified rebuild-safe), float time-domain
-reads (`fftSize` 2048, reused buffers), one shared rAF loop with dirty-check,
-canvas per meter, IEC ballistics per VIS-5; **RQ-3 runtime watchdog** shares
-the OUT analyser: peak > ceiling+0.5 dB sustained >250 ms or ~1 s monotonic
-band rise → force master gain 0, UI alert, agent-visible error, human-only
-restore.
-- Depends: VIS-5, RQ-4 (resolved), MC-4 (attenuator/ceiling constants).
+- **QA-2 — Regression: existing six effects + safety net** *(medium)* — status:
+  `completed` (complete 2026-08-29. (1) Legacy six unchanged: full
+  suite green INCLUDING the new committed 107-check
+  `tests/test-regression-cycle3.js` (registry shape with legacy-only load;
+  legacy param rows still sliders with numeric parseFloat commits through
+  the real applyParam/AudioParamRamp conversions; preset-schema lenience
+  still scoped — hostile legacy presets load verbatim, same abuse on a
+  declared type rejects; DEFAULT_PRESET still the committed six-node chain;
+  legacy `--family-*` tokens byte-identical to cycle-2), plus the offline
+  render harness `tests/qa-out/run-qa2.js`: the shipped six-node chain AND
+  a corner-params variant render BIT-IDENTICAL with all ten modules loaded
+  vs only the six legacy modules (sensitivity-guarded) — report
+  `tests/qa-out/qa2-report.txt`. (2) Safety net: existing
+  watchdog/limiter tests green in-suite, and the harness runs the REAL
+  MeterTaps watchdog over chains containing all four new nodes — valid
+  ten-node program does not trip (3 s, OUT tap on the attenuator verified);
+  limiter-less hot all-four chain trips + latches (post-trip render exact
+  silence); rebuild-while-latched schedules no upward chain-gate ramp and
+  un-ducks to the mute level; latch holds through quiet program; only the
+  human Restore button reopens; restored chain does not re-trip. Agent
+  terminal-limiter refusals over an all-four chain verified in
+  test-regression-cycle3.js part D. (3) Bypass: QA-1's bit-exact
+  four-new-chain result cited (qa1-report.txt A.bypass_chain) and extended
+  to an ALL-TEN chain — bit-exact vs raw source. Suite 23/23 files / 1584
+  checks green; harness ALL CHECKS PASS, exit 0. No regressions found.)
+  Gain/EQ/comp/limiter/delay/reverb unchanged; watchdog + limiter behavior
+  intact with new nodes in chain; bypass still bypasses a chain containing
+  all four. Deps: QA-1.
 
----
+### Docs lane
 
-### VIS-7 — Vertical canvas + collapsible cards + density *(medium)* — status: `awaiting-approval` *(114/114; board all green; index.html + param-controls byte-identical)*
-Deliverables: (a) chain canvas flows top-down — MIC IN (top, w/ IN meter)
-→ stacked effect rows → OUT (bottom, w/ OUT meter + safe-output note),
-arrows reoriented, empty-hint adapted, SortableJS vertical drag verified;
-(b) collapsible FX cards — persistent header row (family chip + name +
-grip + chevron + ×), params section toggles via real button w/
-aria-expanded, default expanded, session-only state (rebuilds reset —
-documented); (c) density pass — ~90% card scale (tighter paddings,
-smaller chips/faders; text ≥11px, AA pairs and hit-targets unchanged);
-(d) harness board re-verified + ratchets dated; qa4 audit map re-run
-(throws on drift — tripwire).
-- Depends: VIS-4/5/6 ✓. Parallel: none (touches their surfaces).
-- Accept: vertical flow + collapse + density live; drag/keyboard/copy
-  unchanged; board green (ratchets dated); qa4 audit PASS on new DOM map.
-
-## Lane QA — acceptance
-
-### VIS-7b — Flow-direction toggle *(small)* — status: `awaiting-approval` *(2026-08-28 user direction at VIS-7 gate: "make it a toggle to swap left-right or top-bottom"; 30/30; board all green)*
-Vertical default + persisted horizontal fallback (karaoke-flow-orientation-v1); all orientation CSS scoped under .flow-horizontal; SortableJS untouched (auto-detects direction).
-
-### QA-1 — Zero-regression pass *(medium)* — status: `completed` *(user PASS both flag modes 2026-08-28)*
-Re-run the cycle-1 core QA script (chain build/reorder/remove, presets
-save/load/delete, autosave/restore, bypass + spacebar) twice: WebMCP absent,
-and present-but-idle. Both must be indistinguishable from cycle-1 behavior.
-- Depends: all MC + VIS + FEW complete.
-- Acceptance criterion source: town-hall success measure 3.
-
-### QA-2 — Adversarial tool matrix *(medium)* — status: `completed` *(220/220 + user console step peak 0.476 PASS, 2026-08-28)*
-Via MC-6 harness: out-of-range params, unknown node types, malformed
-chains, 5-limiter stacks, rapid-fire concurrent calls, calls mid-drag,
-undo-stack exhaustion, **watchdog triggers** (sustained hot signal → forced
-mute + alert; human restore path). Every case → structured error or clamped
-valid result per rq3 treatment; audio graph always valid; bypass never
-affected.
-- Depends: MC-5, MC-6, FEW-3. 
-- Source: town-hall measure 2.
-
-### QA-3 — Live-agent acceptance (5-prompt script) *(medium)* — status: `completed` *(5/5 PASS 2026-08-28; string-args finding + fingerprint-verified undo; rerun details in qa record)*
-**Retargeted per RQ-2/D2** (Gemini in Chrome does not consume WebMCP as of
-2026-08-27): run the fixed script (warm ballad / rock shout / phone-filter
-gag / big-room epic / clean speech) through the **Model Context Tool
-Inspector** NL agent (gemini-3-flash), with DevTools WebMCP pane as
-instrumentation; user rates each "usable without edits"; ≥4/5 gate; undo
-exact-state verified per prompt. **Gemini-in-Chrome live run = deferred
-gate**: before executing QA-3 and DOC-1, recheck
-developer.chrome.com/docs/ai/webmcp for a Gemini testing section; if
-shipped, run the same script there too and record both.
-- Depends: MC-5, MC-6, DOC-1, RQ-2, QA-2.
-- Source: town-hall measure 1 (amended by D2 at research gate).
-
-### PS-4 — Factory preset library *(medium)* — status: `completed` *(approved 2026-08-28)* *(2026-08-28 user-directed amendment 3: ship a small library of factory presets for non-technical users before initial release; QA-3's five chains volunteered as content)*
-Static FACTORY_PRESETS (Warm Ballad / Rock Night / Phone Call Gag / Big
-Room / Clean Speech + the Classic Karaoke default), grouped in the preset
-dropdown (Factory / Yours optgroups), factory entries load-only (Delete
-blocked + no shadowing), Save As… always creates user presets, MCP
-list_presets/get_capabilities disclose the factory set; harness coverage
-+ board re-run.
-- Depends: MC-5 ✓, VIS-3 ✓. Accept: dropdown shows grouped library;
-  factory Load works incl. via agent; Delete refuses factory entries;
-  fresh profile sees full library; QA-3 chains verbatim.
-
-### QA-4 — Accessibility verification *(small)* — status: `completed` *(automated PASS + user three-check PASS, 2026-08-28)*
-Contrast audit on the *rendered* surface (not tokens alone), keyboard-only
-pass (incl. spacebar bypass), focus visibility, reduced-motion check,
-distance-readability spot check.
-- Depends: VIS complete. Source: town-hall measure 4, design brief §7.
-
----
-
-## Lane DOC — documentation
-
-### DOC-1 — README agent section + demo script *(small)* — status: `completed` *(approved by progression 2026-08-28 — user proceeded to QA-3 using it)*
-"Agent control" README section: enable steps (from MC-0 record: flag +
-DevTools pane + Inspector extension), example prompts, harness demo path,
-**current honest status of Gemini-in-Chrome** (not yet consuming WebMCP as
-of 2026-08-27 + readiness checklist for when it ships, per RQ-2); manual
-path stays primary for events.
-- Depends: MC-0 record, MC-6, RQ-2. Source: town-hall measure 5 (amended by
-  D2: README reproduces the agent demo via Inspector/DevTools today).
-
----
-
-## POL-1 — Final polish/critique over assembled surface *(medium)*
-Ultron-mandated closer: full-surface critique against the design brief and
-direction (impeccable critique/audit/polish discipline), side-by-side with
-town-hall acceptance criteria; one bounded fix round; detector pass
-(`detect.mjs`) over changed targets; screenshots to `.impeccable/review/`.
-- Depends: QA-1..QA-4, DOC-1.
-- Accept: user accepts the delivered upgrade (town-hall measure 4) — this
-  is the cycle's final gate.
-
----
+- **DOC-1 — README/DESIGN refresh** *(small)* — status: `completed`
+  (completed 2026-08-29: (1) README operator section "The four newer
+  effects — what they're for" — per-effect plain-language what-it-does /
+  params / when-to-reach-for-it (gate for noisy rooms between singers,
+  distortion incl. the no-clean-zero → Bypass honesty note, chorus
+  stereo-best/mono-safe, autotune with the Experimental badge AND the
+  accepted 20 ms declared delay explained as expected behavior), plus the
+  demo pointer on the TEST-1 asset (CC0, source credited in
+  THIRD_PARTY_NOTICES.md) with the reproducible path
+  `node tests/qa-out/run-qa1.js` → tests/qa-out/LISTENING.md; intro
+  effect list, operator effects list, sliders claim (now selects for
+  Key/Scale), and the Verification coverage line all updated. (2) DESIGN.md
+  modest extension in the cycle-2 fold-in style — no redesign: the four
+  family tokens added to the frontmatter, "Six family edges" → "Ten"
+  (Distortion #C0CE97 / Chorus #9E9ED1 / Noise Gate #9AD5B2 /
+  Autotune #D19ED1 per rq5's rules), the experimental-badge treatment
+  documented under Cards, the discrete param select under Inputs/Fields,
+  and the faders bullet scoped to continuous params. (3) Stale claims
+  fixed: PRODUCT.md 6→10 node types, per-node sliders → sliders + selects,
+  8→10 tools (with the cycle-3 string-param/badge note);
+  docs/ACCEPTANCE.md eight→ten tools (registration table, §4 title and
+  tool list, plus new get_preset/load_preset and string-param walk
+  lines), six→ten node handlers, the slider-drag line gains the select
+  step, and §2 points the four cycle-3 effects at LISTENING.md. Docs
+  only — no src/, styles, or preset data touched.)
+  New effects in operator docs; autotune experimental note; demo pointer
+  using TEST-1. Deps: QA-1.
 
 ## Dependency-ordered task index
 
-| # | Task | Depends on | Blocked by research |
-|---|------|-----------|---------------------|
-| 1 | FEW-1 event contract | — | — |
-| 2 | MC-0 live spike | RQ-1, RQ-2 | yes |
-| 3 | MC-1 shim | MC-0 | — |
-| 4 | VIS-1 theme tokens | RQ-5 | yes |
-| 5 | MC-2 schemas | MC-1 | — |
-| 6 | VIS-2 status strip | VIS-1 | — |
-| 7 | VIS-3 panels | VIS-1 | — |
-| 8 | MC-3 read tools | MC-2 | — |
-| 9 | VIS-4 node cards | VIS-1, FEW-1 | — |
-| 10 | VIS-5 meters (component) | VIS-1, RQ-4 | yes |
-| 11 | MC-4 mutations + clamps | MC-3, RQ-3 | yes |
-| 12 | FEW-2 readout wiring | VIS-2 | — |
-| 13 | FEW-3 meter wiring | VIS-5, RQ-4 | yes |
-| 14 | MC-6 dev harness | MC-2 | — |
-| 15 | MC-5 save + summaries + undo | MC-4 | — |
-| 16 | VIS-6 agent feedback polish | VIS-2..4, FEW-1 (+MC events) | — |
-| 17 | DOC-1 README agent section | MC-0, MC-6, RQ-2 | — |
-| 18 | QA-1 zero-regression | all MC/VIS/FEW | — |
-| 19 | QA-2 adversarial matrix | MC-5, MC-6 | — |
-| 20 | QA-3 live 5-prompt acceptance | MC-5, MC-6, DOC-1, QA-2 | — |
-| 21 | QA-4 a11y verification | VIS complete | — |
-| 22 | POL-1 final polish/critique | QA-1..4, DOC-1 | — |
-
-Critical path: RQ-1/2 → MC-0 → MC-1 → MC-2 → MC-4 → MC-5 → QA-2 → QA-3 →
-POL-1. Track B runs parallel from RQ-5/VIS-1; merge at QA-1.
+| Order | Task | Deps | Size |
+|---|---|---|---|
+| 1 | TEST-1 | — | small |
+| 2 | UI-1 | — | medium |
+| 3 | DIST-1 | TEST-1, RQ-3 | medium |
+| 4 | CHOR-1 | TEST-1, RQ-4 | medium |
+| 5 | GATE-1 | TEST-1, RQ-1 | medium |
+| 6 | AT-0 | TEST-1, RQ-2 | medium |
+| 7 | AT-1 | AT-0, UI-1 | large |
+| 8 | UI-2 (per-effect) | node tasks | small |
+| 9 | PRE-1 (per-effect) | node tasks | medium |
+| 10 | MCP-1 | UI-2, PRE-1 | small |
+| 11 | QA-1 | all above | medium |
+| 12 | QA-2 | QA-1 | medium |
+| 13 | DOC-1 | QA-1 | small |
 
 ## Milestones
 
-- **M1 — Foundations proven**: RQ-1..5 decided; MC-0 spike passes (the
-  mistaken-assumption killer); FEW-1 contract + VIS-1 tokens exist.
-- **M2 — MCP functional core**: MC-2/3/4 + MC-6 harness demoing validated
-  mutations without a live agent.
-- **M3 — Agent UX complete**: MC-5 + VIS-6; prompted edits land with
-  summaries + exact-state undo end-to-end (harness-driven).
-- **M4 — Console assembled**: VIS-2..5 + FEW-2/3; full re-skin live.
-- **M5 — Acceptance**: QA-1..4 + DOC-1; all town-hall measures evidenced.
-- **M6 — Delivered**: POL-1 critique closed; user accepts.
-
-## Research queue — **resolved 2026-08-27 (records in `research/`)**
-
-RQ-1..RQ-5 all investigated and committed into task details above (API
-correction → MC-0/1/2; Gemini gap + retarget → QA-3/DOC-1; loudness policy
-→ MC-3/4 + FEW-3 watchdog; meter spec → VIS-5/FEW-3; palette table → VIS-1).
-Decision matrix + user dispositions: `research/summary.md`. D2 changed an
-acceptance criterion → whole-plan re-approval required at this gate.
+- **M1 — First effect end-to-end**: TEST-1 + UI-1 + DIST-1 (+UI-2/PRE-1 for
+  distortion) demoable. Exposes mistaken assumptions about param style,
+  worklet harness, and test-vocal workflow early.
+- **M2 — Gate + chorus landed**: three of four first-class effects live.
+- **M3 — Autotune verdict lands**: AT-0 outcome recorded; AT-1 in the
+  chosen branch; experimental badge visible.
+- **M4 — Closeout**: MCP-1, QA-1, QA-2, DOC-1; cycle acceptance.
 
 ## Handoff
 
-- **Build order**: M1 → (M2→M3 ∥ M4) → M5 → M6, per index above.
-- **Fixed by scope**: 8-tool surface; no bypass/engine/device tools;
-  auto-apply + undo; dark console world (design brief); 3-column layout and
-  all flows persist; no webfonts; copy verbatim; working title; Chrome-only;
-  no new effect nodes; no in-app LLM.
-- **Research (resolved)**: API = `document.modelContext.registerTool`;
-  loudness policy incl. host attenuator −6 dBFS + watchdog; AnalyserNode
-  side-tap meters w/ IEC ballistics; rq5 AA palette. D2 retarget of QA-3 is
-  the one acceptance-criteria change.
-- **Assumptions that return to town-hall if broken**: (A-1, amended by D1)
-  WebMCP per-tool registration is viable on localhost in the user's Chrome
-  (MC-0 falsifies or confirms via flag + DevTools/Inspector); (A-2, amended
-  by D2) an NL-agent validation path (Inspector) stands in for Gemini until
-  Google ships WebMCP consumption; (A-3) event setup time exists for the
-  prompted workflow.
-- **Approval needed now**: research decision matrix (D1–D5) + this revised
-  plan as a whole (D2 changed QA-3/DOC-1 + measure 1/5 wording).
+- **Build order**: as the index; DIST first (simplest DSP) to prove the
+  pattern, autotune spike runs parallel so its verdict doesn't gate the
+  easy wins.
+- **Fixed by scope**: listed above.
+- **Delegated to deep-research**: RQ-1..RQ-4 (RQ-1/RQ-2 blocking).
+- **Return-to-town-hall assumptions**: if RQ-2 fails *and* the slow-
+  correction fallback also proves infeasible (both branches die), autotune
+  scope reopens; if the test-vocal sourcing can't be done license-clean
+  (OQ-6), the acceptance bar changes and returns to town-hall.
+- **Approval needed before research begins**: approval of this plan (or
+  targeted changes), then RQ-1..RQ-4 go to deep-research-swarm.

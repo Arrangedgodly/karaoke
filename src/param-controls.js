@@ -173,11 +173,17 @@
    * the number, everything else (dB, ms, s, etc.) gets a space before the
    * unit.
    *
-   * @param {number} value
+   * UI-1: discrete (enumerated) params carry no unit — their value IS the
+   * display string (e.g. "C", "Chromatic"), so it renders verbatim.
+   *
+   * @param {number|string} value
    * @param {string} unit
    * @returns {string}
    */
   function formatValue(value, unit) {
+    if (!unit) {
+      return String(value);
+    }
     if (unit === '%' || unit === ':1') {
       return value + unit;
     }
@@ -238,13 +244,35 @@
       label.className = 'param-label';
       label.textContent = spec.label;
 
-      var input = document.createElement('input');
-      input.type = 'range';
+      var input;
+      if (Array.isArray(spec.values)) {
+        // UI-1 — discrete (enumerated) param: render a native <select>
+        // instead of a range slider. A native select is keyboard operable
+        // for free (Tab focus + arrow keys / typeahead), and screen readers
+        // announce the newly selected option text on change — exactly the
+        // value-announcement UI-1 requires, with zero custom ARIA to get
+        // wrong. Values are plain strings (e.g. 'C'..'B', 'Chromatic'),
+        // committed verbatim through the SAME pipeline as a slider move
+        // (AudioGraph.updateNodeParams model bookkeeping +
+        // NodeTypes.applyParam live write) — a type's applyParam simply
+        // receives a string paramId/value pair instead of a number.
+        input = document.createElement('select');
+        input.className = 'param-select';
+        spec.values.forEach(function (v) {
+          var option = document.createElement('option');
+          option.value = v;
+          option.textContent = v;
+          input.appendChild(option);
+        });
+      } else {
+        input = document.createElement('input');
+        input.type = 'range';
+        input.className = 'param-slider';
+        input.min = spec.min;
+        input.max = spec.max;
+        input.step = spec.step;
+      }
       input.id = inputId;
-      input.className = 'param-slider';
-      input.min = spec.min;
-      input.max = spec.max;
-      input.step = spec.step;
       input.value = initialValue;
 
       var valueDisplay = document.createElement('span');
@@ -280,7 +308,9 @@
         if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
           window.AgentUI.noteHumanEdit();
         }
-        var newValue = parseFloat(input.value);
+        // UI-1: a discrete select commits its string value verbatim; a
+        // slider's string value is parsed to a number as before.
+        var newValue = Array.isArray(spec.values) ? input.value : parseFloat(input.value);
 
         valueDisplay.textContent = formatValue(newValue, spec.unit);
 

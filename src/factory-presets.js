@@ -46,6 +46,24 @@
 // dropdown at RUNTIME, so a fresh profile sees all six with zero
 // localStorage seeding, and PresetStore's 'karaoke-presets-v1' store stays
 // exclusively the USER's namespace (PS-3 semantics untouched).
+//
+// PRE-1 decision (cycle 3, 2026-08-29): no cycle-3 showcase preset is added
+// yet. Three reasons, in force order:
+//   1. Provenance: every entry above is user-accepted material (PX-3's
+//      committed default; the QA-3 five, each rated 5/5 "usable without
+//      edits"). The four new effects' user-judged acceptance run is QA-1,
+//      which runs after MCP-1 — shipping unauditioned chains into the
+//      library would break the provenance discipline that file documents.
+//   2. Conformance gate: RESOLVED by MCP-1 (2026-08-29) — set_chain's
+//      param validation (checkSpecValue in src/mcp-tools.js) now accepts
+//      the discrete values-type params (autotune's canonical string
+//      Key/Scale and their raw enums are legal through every
+//      param-taking tool), so a preset carrying them passes the
+//      library's own conformance test. Only provenance (reason 1) keeps
+//      the showcase preset queued.
+//   3. Landing point: once QA-1 (effects user-accepted) is in, a showcase
+//      preset is a one-entry addition here plus the policy test's
+//      count/node-file update in the same edit.
 (function () {
   'use strict';
 

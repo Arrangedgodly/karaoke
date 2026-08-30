@@ -27,15 +27,17 @@
 //     docs/ultron/design/px3-default-chain-and-preset.md's "First-run
 //     behavior" section).
 //
-// Fails safe, always: a missing key, a JSON.parse() failure, or a
+// Fails safe, always: a missing key, a JSON.parse() failure, a
 // PresetSchema.deserialize() validation failure (corrupt/malformed/
 // wrong-schemaVersion data — e.g. hand-edited or from an old, incompatible
-// build) is caught right here, logged via console.error for debuggability,
-// and treated exactly like "nothing saved yet" — falling back to the
-// default preset. Nothing in this file ever throws up to its caller;
-// main.js's Start handler can call loadInitialModel() unconditionally, with
-// no try/catch of its own, and is guaranteed to get back a valid model
-// either way.
+// build — plus PRE-1's per-type param contracts for the cycle-3 node
+// types), or an autosave naming a node type the live registry does not know
+// (PRE-1, cycle 3 — see unregisteredNodeType below) is caught right here,
+// logged via console.error for debuggability, and treated exactly like
+// "nothing saved yet" — falling back to the default preset. Nothing in this
+// file ever throws up to its caller; main.js's Start handler can call
+// loadInitialModel() unconditionally, with no try/catch of its own, and is
+// guaranteed to get back a valid model either way.
 (function () {
   'use strict';
 
@@ -84,12 +86,55 @@
   }
 
   /**
+   * PRE-1 (cycle 3): does `nodes` name a node type the LIVE registry does
+   * not know? Returns the first offending type name (truthy) or false.
+   *
+   * deserialize() stays deliberately structural about which types exist
+   * (registry knowledge is not preset-schema's job — see that file's
+   * header), but WITHOUT this guard a hand-edited autosave naming a bogus
+   * type would sail through deserialize and then die inside
+   * AudioGraph.buildGraph()'s synchronous "unknown node type" throw —
+   * mid-loadModel, mid-Start, leaving the canvas half-cleared. Rejecting it
+   * HERE routes it through this module's existing recovery (default-chain
+   * fallback) instead. The check consults the LIVE NodeTypes registry (the
+   * same source of truth buildGraph resolves factories from — no second
+   * mirrored type list), and degrades to "all registered" (today's
+   * behavior) whenever the registry is absent or empty — a bare harness
+   * loading this file without the node files, where buildGraph's own
+   * unknown-type check remains the backstop.
+   *
+   * @param {Array<{id: string, type: string, params: Object}>} nodes
+   * @returns {string|false}
+   */
+  function unregisteredNodeType(nodes) {
+    try {
+      if (!window.NodeTypes || typeof window.NodeTypes.getAllTypes !== 'function') {
+        return false;
+      }
+      var known = window.NodeTypes.getAllTypes();
+      if (!known || known.length === 0) {
+        return false;
+      }
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i] && known.indexOf(nodes[i].type) === -1) {
+          return nodes[i].type;
+        }
+      }
+    } catch (err) {
+      return false;
+    }
+    return false;
+  }
+
+  /**
    * Read and validate whatever is currently under STORAGE_KEY.
    *
    * @returns {Array<{id: string, type: string, params: Object}>|null} the
    *   saved model, or null if there's nothing saved, the saved JSON is
-   *   unparsable, or it fails PresetSchema.deserialize()'s structural
-   *   validation. Never throws.
+   *   unparsable, it fails PresetSchema.deserialize()'s structural
+   *   validation (including PRE-1's per-type param contracts for the
+   *   cycle-3 node types), or it names a node type the live registry does
+   *   not know (PRE-1 — see unregisteredNodeType). Never throws.
    */
   function loadAutosavedModel() {
     var raw;
@@ -105,6 +150,12 @@
     try {
       var parsed = JSON.parse(raw);
       var result = window.PresetSchema.deserialize(parsed);
+      var unknownType = unregisteredNodeType(result.nodes);
+      if (unknownType !== false) {
+        throw new Error(
+          'autosaved chain names unregistered node type "' + unknownType + '"'
+        );
+      }
       return result.nodes;
     } catch (err) {
       console.error('Persistence: autosaved data was invalid/corrupt, falling back to default', err);
