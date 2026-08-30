@@ -396,3 +396,9 @@ agent-ui toast refactor) merged into cycle-3-shelved-effects (27e3f99).
 Only docs/ACCEPTANCE.md conflicted; resolved preserving both intents.
 Full suite 23/23 files / 1702 checks green post-merge. Branch pushed.
 Finishing phase ($ultron-impeccable) unblocked pending user go.
+
+## Cycle 3 — Finishing Phase (2026-08-29)
+Production complete + PR #17 reconciled. Phase: ultron-impeccable (approval
+mode) — document + critique passes over the ten-effect surface, then gated
+refinements. Surface artifacts exist from cycle 2 (PRODUCT.md,
+.impeccable/surfaces/index-html.md, .impeccable/design.json).
