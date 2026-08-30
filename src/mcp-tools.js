@@ -1142,9 +1142,18 @@
    * focused get_capabilities response so the normal policy index remains
    * below Chrome's preliminary 1.5K output guidance.
    */
+  var CAPABILITY_FOCUS = {
+    POLICY: 'policy',
+    SOUND_DESIGN: 'sound_design'
+  };
+  var CAPABILITY_FOCUS_VALUES = [
+    CAPABILITY_FOCUS.POLICY,
+    CAPABILITY_FOCUS.SOUND_DESIGN
+  ];
+
   var SOUND_DESIGN_GUIDE = {
     app: 'karaoke-chain-builder',
-    focus: 'sound_design',
+    focus: CAPABILITY_FOCUS.SOUND_DESIGN,
     workflow: {
       edit: 'Call get_chain first and preserve choices unless the user asks for a rebuild.',
       apply: 'Reuse an existing node with set_param; add_node only when that effect is missing.',
@@ -1745,7 +1754,7 @@
    * @returns {Object}
    */
   function buildCapabilitiesResult(input) {
-    if (input && input.focus === 'sound_design') {
+    if (input && input.focus === CAPABILITY_FOCUS.SOUND_DESIGN) {
       return freshCopy(SOUND_DESIGN_GUIDE);
     }
     var nodeTypes = {};
@@ -3889,12 +3898,14 @@
     if (problems.length > 0 || inputObject.focus === undefined) {
       return;
     }
-    if (inputObject.focus !== 'policy' && inputObject.focus !== 'sound_design') {
+    if (CAPABILITY_FOCUS_VALUES.indexOf(inputObject.focus) === -1) {
       problems.push(
-        problem('focus', "must be 'policy' or 'sound_design'; got " + displayValue(inputObject.focus), [
-          'policy',
-          'sound_design'
-        ])
+        problem(
+          'focus',
+          "must be '" + CAPABILITY_FOCUS_VALUES.join("' or '") + "'; got " +
+            displayValue(inputObject.focus),
+          CAPABILITY_FOCUS_VALUES.slice()
+        )
       );
     }
   }
@@ -4169,30 +4180,6 @@
   }
 
   /**
-   * get_preset's body (issue #12): the read-tool pattern, except the
-   * builder needs the VALIDATED input (the name + optional namespace the
-   * resolution runs against). Same contract otherwise: the builder
-   * guards its own reads (absent stores degrade honestly into the
-   * PRESET_NOT_FOUND result), never throws, and a caught crash really is
-   * a bug in THIS layer (SCHEMA_LAYER_FAULT).
-   *
-   * @param {*} input
-   * @returns {Promise<Object>}
-   */
-  function getPresetExecute(input) {
-    try {
-      var problems = [];
-      validatePresetSelector(input, problems);
-      if (problems.length > 0) {
-        return Promise.resolve(invalidArgumentsResult('get_preset', problems));
-      }
-      return Promise.resolve(buildGetPresetResult(input));
-    } catch (err) {
-      return Promise.resolve(schemaLayerFaultResult('get_preset', err));
-    }
-  }
-
-  /**
    * The mutation-tool body (MC-4 + MC-5): validate structurally, queue
    * behind any in-progress user drag, then plan against the LIVE model
    * (policy enforcement), snapshot the pre-apply state (MC-5), apply
@@ -4351,7 +4338,7 @@
         properties: {
           focus: {
             type: 'string',
-            enum: ['policy', 'sound_design'],
+            enum: CAPABILITY_FOCUS_VALUES.slice(),
             description: 'policy for ranges and rules; sound_design for adjective-to-effect guidance.'
           }
         },
@@ -4614,7 +4601,7 @@
       // whatever save_preset was given) — the untrusted-content hint is
       // true, like list_presets.
       annotations: { readOnlyHint: true, untrustedContentHint: true },
-      execute: getPresetExecute
+      execute: readExecute('get_preset', validatePresetSelector, buildGetPresetResult)
     };
   }
 
