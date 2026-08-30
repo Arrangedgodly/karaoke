@@ -1174,3 +1174,60 @@ set). Full suite 23/23 files / 1836 checks green. Residual (disclosed,
 pre-existing): below a ~680px window the squeezed card's badge overlaps
 the chevron — measured at the old 10px too. Ledger:
 [refinement.md](refinement.md) entry 2.
+
+## FINISH-3 — Palette grouped into three operator chunks — `awaiting-approval`
+
+Refinement entry 3 (`$impeccable layout`, critique P2-3): the add-a-node
+decision point had grown to ten flat, ungrouped chips (was six at design
+time) — a working-memory/chunking violation exactly where the operator
+stands under pre-show pressure.
+
+**What changed** (presentation seam; `src/canvas.js` +
+`styles/main.css` + DESIGN.md bullet + test):
+
+1. The ten chips chunk under three silkscreen group headers in
+   non-engineer operator language, derived from README/PRODUCT framing:
+   **Shape your voice** (EQ, Distortion, Chorus, Autotune — the voice's
+   own character), **Polish your sound** (Gain, Compressor, Delay,
+   Reverb — level, evenness, space), **Keep it safe** (Limiter, Noise
+   Gate — the two automatic guards). Headers follow the surface's
+   grouped-options legend register (the preset/device optgroup
+   precedent): 0.7rem = 11.2px (above the 11px floor), 700, uppercase,
+   0.08em tracking, muted; generous space above (0.9rem) / tight below
+   (0.35rem), first header's top margin dropped under the panel h2's
+   rule.
+2. Structure only, no new interactive layer: headers are real non-focus
+   `<h3>`s (h1 title → h2 Palette → h3 groups — SR users can navigate
+   the chunking) INTERLEAVED between chips; chips stay flat
+   direct-children `<button>`s in DOM order, so the cycle-2 R2-2
+   keyboard/SR node-addition flow, tab order, and aria-labels are
+   unchanged. Within-group order stays registration order; the group
+   map is a lookup (FAMILY_INITIALS discipline) with a trailing "More
+   effects" fallback so a future registration can never silently vanish
+   — and the test fails on any unmapped type, forcing an explicit
+   grouping decision.
+3. Limiter semantics preserved exactly: the "Keep it safe" header is
+   adjacent text, nothing more — the limiter chip keeps its button,
+   aria-label, gating, and human add path, and the terminal-limiter
+   policy (addNodeType's insert-before + the agent-side removal
+   refusal) is untouched. The palette Sortable gains
+   `draggable: '.node-chip'` so headers can never be grabbed (verified
+   against the vendored SortableJS 1.15.7 source: drag targets resolve
+   via closest(target, draggable, el); chip drag is unchanged).
+
+**Evidence**: `tests/test-palette-cards-cycle3.js` section J (+26
+checks): group structure/membership/order, header non-interactivity,
+flat interleaved child sequence, only-ten-buttons-focusable, limiter
+chip preserved byte-for-byte, keyboard adds from EACH group committing
+through the shared chokepoint, insert-before-terminal-limiter intact,
+the CSS legend register + rhythm, and the Sortable drag scoping. Full
+suite 23/23 files / 1862 checks green. Render-level check (headless
+Chrome, real app over http, 1440×900): at the production 200px flank —
+headers 11.2px single-line (1 client rect, scrollWidth === clientWidth
+167px), zero overflow anywhere, ten chips 167×38px (geometry identical
+to entry 2's record), 10 focusables all BUTTON; at a 220px-flank
+variant — same (187px, no wrap/overflow). Detector full-parser scan: 4
+findings, byte-identical to the standing adjudicated set. Residual
+(disclosed): design.json sidecar's group labels await the planned
+post-loop document refresh. Ledger: [refinement.md](refinement.md)
+entry 3.

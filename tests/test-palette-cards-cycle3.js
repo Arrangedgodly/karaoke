@@ -42,6 +42,18 @@
 //      quiet tag treatment intact (700 / 0.06em / widened side padding),
 //      and all three documentation sources (main.css, DESIGN.md,
 //      .impeccable/design.json) agreeing on the corrected value.
+//   J. GROUPING (finishing entry 3, critique P2-3): the ten chips chunk
+//      under three non-interactive silkscreen <h3> group headers in
+//      operator language (shape/polish/safe), interleaved in the FLAT
+//      palette list — chips stay direct-children <button>s in DOM order
+//      (R2-2 SR flow intact), within-group order stays registration
+//      order, every chip remains operative (keyboard add still commits
+//      through the shared chokepoint from EACH group), the limiter chip
+//      is byte-for-byte the chip it always was, the header rule in
+//      main.css matches the optgroup legend register (0.7rem / 700 /
+//      uppercase / 0.08em / muted — above the 11px floor), and the
+//      palette Sortable scopes its drag items to '.node-chip' so a
+//      header can never be grabbed.
 //
 // Browser-use inspection was not exercised in this worker (same honest
 // note as TEST-1/UI-1/DIST-1/...): these are DOM-construction checks on
@@ -380,11 +392,15 @@ NEW_TYPES.forEach(function (t) {
 check(
   allTypes.join(',') ===
     'gain,compressor,eq,delay,reverb,limiter,distortion,chorus,gate,autotune',
-  'registration order matches index.html script order (palette order)'
+  'registration order matches index.html script order (within-group chip order)'
 );
 check(
-  paletteListEl.children.length === 10,
+  paletteListEl.querySelectorAll('.node-chip').length === 10,
   'palette renders one chip per registered type (10)'
+);
+check(
+  paletteListEl.children.length === 13,
+  'flat palette list carries 10 chips + 3 group headers as direct children'
 );
 check(
   windowStub.Sortable.instances.length === 2,
@@ -468,8 +484,9 @@ console.log('D. keyboard add');
 
 windowStub.ChainCanvas.onEngineStarted();
 check(
-  paletteListEl.children.every(function (chip) { return chip.disabled === false; }),
-  'onEngineStarted() enables every chip (keyboard path goes live)'
+  paletteListEl.querySelectorAll('.node-chip')
+    .every(function (chip) { return chip.disabled === false; }),
+  'onEngineStarted() enables every chip across all three groups (keyboard path goes live)'
 );
 check(
   emptyHintEl.textContent ===
@@ -929,6 +946,199 @@ check(
   !!sidecar && sidecar.description.indexOf('0.6875rem') !== -1 &&
     sidecar.description.indexOf('0.625rem') === -1,
   'design.json sidecar description matches the stylesheet (0.6875rem)'
+);
+
+// ----------------------------------------------------------------------
+// J. Grouping (finishing entry 3, critique P2-3) — the ten chips chunk
+// under three operator-language silkscreen headers, INTERLEAVED in the
+// flat palette list. Everything the critique demanded is guarded here:
+// group structure + membership (registry-driven within groups), the
+// legend register of the header rule (the optgroup precedent), chips
+// staying direct-children buttons in DOM order (R2-2 keyboard/SR flow
+// unchanged, no new interactive layer), every chip still operative
+// through the shared commit chokepoint, the limiter chip preserved
+// exactly (terminal policy untouched), and the palette Sortable scoping
+// its drag items to '.node-chip' so headers are inert to the pointer.
+// This doubles as a grouping-completeness gate: a future type without a
+// group mapping falls into the 'more' fallback and FAILS the
+// exactly-3-headers check, forcing a deliberate grouping decision the
+// same way section H forces a help-lines decision.
+// ----------------------------------------------------------------------
+console.log('J. palette grouping (finishing entry 3)');
+
+var GROUP_HEADERS = [
+  { id: 'shape', label: 'Shape your voice', members: ['eq', 'distortion', 'chorus', 'autotune'] },
+  { id: 'polish', label: 'Polish your sound', members: ['gain', 'compressor', 'delay', 'reverb'] },
+  { id: 'safe', label: 'Keep it safe', members: ['limiter', 'gate'] }
+];
+
+var headerEls = paletteListEl.querySelectorAll('.palette-group-label');
+check(
+  headerEls.length === 3,
+  'exactly three group headers render (no fallback group — every type mapped)'
+);
+check(
+  headerEls.every(function (h) { return h.tagName === 'H3'; }),
+  'group headers are real <h3> elements (h1 title → h2 Palette → h3 groups)'
+);
+check(
+  headerEls.map(function (h) { return h.attrs['data-group']; }).join(',') ===
+    GROUP_HEADERS.map(function (g) { return g.id; }).join(','),
+  'group order is shape → polish → safe'
+);
+GROUP_HEADERS.forEach(function (g, gi) {
+  var h = headerEls[gi];
+  check(
+    h.textContent === g.label,
+    g.id + ' header reads "' + g.label + '" (operator language, CSS uppercases)'
+  );
+  check(
+    (h.listeners.click || []).length === 0 &&
+      !h.attrs.tabindex && !h.attrs.role,
+    g.id + ' header is non-interactive (no listener, no focus/role hooks)'
+  );
+});
+
+// Flat interleaving: the exact child sequence is header, its chips (in
+// registration order), header, ... — chips stay DIRECT children of the
+// palette list, so DOM order, tab order, and the SortableJS items are
+// the same flat chip flow R2-2 built.
+var childSequence = paletteListEl.children.map(function (child) {
+  if (child.className.split(/\s+/).indexOf('palette-group-label') !== -1) {
+    return 'H3:' + child.attrs['data-group'];
+  }
+  return child.attrs['data-node-type'];
+});
+var expectedSequence = [];
+GROUP_HEADERS.forEach(function (g) {
+  expectedSequence.push('H3:' + g.id);
+  expectedSequence = expectedSequence.concat(g.members);
+});
+check(
+  childSequence.join('|') === expectedSequence.join('|'),
+  'palette DOM is header-then-chips interleaved flat: ' + expectedSequence.join(', ')
+);
+check(
+  paletteListEl.children
+    .filter(function (c) { return c.tagName === 'BUTTON'; })
+    .length === 10,
+  'the only interactive palette elements are the ten chip buttons (no new layer)'
+);
+
+// Within-group order is registration order (section A's registry check):
+// each group's members appear in getAllTypes() order.
+GROUP_HEADERS.forEach(function (g) {
+  var regPositions = g.members.map(function (t) {
+    return allTypes.indexOf(t);
+  });
+  check(
+    regPositions.every(function (p, i) { return i === 0 || p > regPositions[i - 1]; }),
+    g.id + ' group preserves registration order within the group'
+  );
+});
+
+// The limiter chip is preserved EXACTLY: same button, same aria-label,
+// no badge, enabled post-Start — the grouping is presentational and the
+// terminal-limiter policy (addNodeType's insert-before + the agent-side
+// refusal) is untouched by it.
+var limiterChip = chipFor('limiter');
+check(
+  !!limiterChip &&
+    limiterChip.tagName === 'BUTTON' &&
+    limiterChip.attrs['aria-label'] === 'Add Limiter to chain' &&
+    limiterChip.findByClass('node-experimental-badge') === null &&
+    limiterChip.disabled === false,
+  'limiter chip in the safe group is byte-for-byte the chip it always was'
+);
+
+// Every chip remains operative through the shared chokepoint: one click
+// per group (eq from shape, gain from polish, gate from safe) commits
+// buildGraph + autosave + markModified + noteHumanEdit exactly like a
+// drag-add.
+windowStub.ChainCanvas.loadModel([]);
+var jGraphBefore = calls.buildGraph.length;
+var jPersistBefore = calls.persist.length;
+var jModifiedBefore = calls.markModified;
+var jHumanBefore = calls.noteHumanEdit;
+['eq', 'gain', 'gate'].forEach(function (type) {
+  chipFor(type).fire('click');
+});
+var jCards = cards();
+check(
+  jCards.length === 3 &&
+    jCards.map(function (c) { return c.attrs['data-family']; }).join(',') === 'eq,gain,gate',
+  'one keyboard add from EACH group builds its card (append policy)'
+);
+check(
+  calls.buildGraph.length === jGraphBefore + 3 &&
+    calls.persist.length === jPersistBefore + 3 &&
+    calls.markModified === jModifiedBefore + 3 &&
+    calls.noteHumanEdit === jHumanBefore + 3,
+  'keyboard adds from every group commit through the shared structural chokepoint'
+);
+
+// Limiter add policy unchanged with the grouping: a keyboard limiter add
+// against a terminal limiter still inserts BEFORE it (terminal stays
+// terminal) — the pre-existing addNodeType behavior, byte-identical.
+windowStub.ChainCanvas.loadModel([{ id: 'L', type: 'limiter', params: {} }]);
+chipFor('limiter').fire('click');
+var jAfterLimiter = cards();
+check(
+  jAfterLimiter.length === 2 &&
+    jAfterLimiter[0].attrs['data-family'] === 'limiter' &&
+    jAfterLimiter[1].attrs['data-family'] === 'limiter',
+  'keyboard limiter add still inserts before the terminal limiter (policy untouched)'
+);
+
+// The header rule follows the optgroup legend register (the in-house
+// grouped-options precedent, #preset-select optgroup): uppercase,
+// tracked, muted, 0.7rem = 11.2px — above the 11px floor.
+var groupLabelRule = cssRule('.palette-group-label');
+check(
+  groupLabelRule !== null,
+  'styles/main.css carries the .palette-group-label rule'
+);
+check(
+  groupLabelRule && cssDecl(groupLabelRule, 'font-size') === '0.7rem',
+  'group label font-size is 0.7rem (11.2px, the optgroup legend size — above the 11px floor)'
+);
+check(
+  groupLabelRule &&
+    cssDecl(groupLabelRule, 'font-weight') === '700' &&
+    cssDecl(groupLabelRule, 'text-transform') === 'uppercase' &&
+    cssDecl(groupLabelRule, 'letter-spacing') === '0.08em' &&
+    cssDecl(groupLabelRule, 'color') === 'var(--text-muted)',
+  'group label register matches the silkscreen legend (700 / uppercase / 0.08em / muted)'
+);
+check(
+  groupLabelRule && cssDecl(groupLabelRule, 'margin') === '0.9rem 0 0.35rem',
+  'group label rhythm: generous space above, tight below (craft floor)'
+);
+var firstHeaderRule = cssRule('.palette-group-label:first-child');
+check(
+  firstHeaderRule !== null &&
+    cssDecl(firstHeaderRule, 'margin-top') === '0',
+  'first group header drops its top margin (the panel h2 already separates it)'
+);
+
+// The palette Sortable scopes drag items to the chips: with headers
+// interleaved, the default '>*' would make a header grabbable. The chain
+// instance keeps its default (no draggable override).
+var paletteSortableInstance = null;
+var chainSortableInstance = null;
+windowStub.Sortable.instances.forEach(function (inst) {
+  if (inst.el === paletteListEl) { paletteSortableInstance = inst; }
+  if (inst.el === chainListEl) { chainSortableInstance = inst; }
+});
+check(
+  !!paletteSortableInstance &&
+    paletteSortableInstance.opts.draggable === '.node-chip',
+  'palette Sortable restricts drag items to .node-chip (headers are pointer-inert)'
+);
+check(
+  !!chainSortableInstance &&
+    chainSortableInstance.opts.draggable === undefined,
+  'chain Sortable keeps its default drag items (drag path untouched)'
 );
 
 // ----------------------------------------------------------------------

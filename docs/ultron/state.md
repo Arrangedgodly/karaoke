@@ -432,3 +432,27 @@ Residual (pre-existing, disclosed): sub-~680px-window card squeeze.
 Next: entry 3 (layout, palette grouping).
 
 ### FIN-2 (typeset): APPROVED 2026-08-29. Next: entry 3 (layout).
+
+**Entry 3 (layout, P2-3 palette chunking) landed 2026-08-29 — awaiting
+user approval**: the ten palette chips chunk under three operator-language
+silkscreen group headers — "Shape your voice" (EQ/Distortion/Chorus/
+Autotune), "Polish your sound" (Gain/Compressor/Delay/Reverb), "Keep it
+safe" (Limiter/Noise Gate) — in the optgroup legend register (0.7rem/700/
+uppercase/0.08em/muted), real non-focus h3s interleaved in the FLAT list:
+chips stay direct-children buttons (R2-2 keyboard/SR flow + DOM order
+unchanged, no new interactive layer), within-group order is registration
+order, and the group map carries a fallback so a future type can never
+vanish (unmapped type fails the new test gate). Limiter semantics
+preserved exactly (chip byte-identical; terminal-limiter policy untouched;
+"Keep it safe" is presentational). Palette Sortable scopes drag items to
+'.node-chip' so headers are pointer-inert (chip drag unchanged, verified
+against vendored SortableJS). New §J in tests/test-palette-cards-cycle3.js
+(+26 checks); headless-Chrome render check: headers single-line at 11.2px,
+zero overflow, chips 167×38px at the real 200px flank (187×38 at a 220px
+variant), 10 focusables all BUTTON. Detector 4 findings (standing
+adjudicated set, unchanged). Suite 23/23 / 1862 green. Residual:
+design.json group labels await the post-loop document refresh. Next:
+entry 4 (polish, Drive/Tone 0–100 normalization).
+
+### FIN-3 (layout): APPROVED 2026-08-29 (user inspected in live browser).
+Next: entry 4 (polish).

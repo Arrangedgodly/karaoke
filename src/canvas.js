@@ -187,6 +187,83 @@
   }
 
   // ---------------------------------------------------------------------
+  // PALETTE GROUPS (refinement entry 3, critique P2-3: the palette went
+  // 6 → 10 flat chips with no chunking at the add-a-node decision point).
+  // Presentation seam ONLY — the registry stays the single source of what
+  // renders (renderPalette still iterates getAllTypes()); these lookups
+  // only decide which silkscreen group header a chip rides under, in
+  // operator (non-engineer) language derived from README.md's own
+  // framing: "shape" = what the voice itself sounds like (tone, grit,
+  // width, pitch), "polish" = level/evenness/space, "safe" = the two
+  // automatic guards. Chips stay DIRECT children of #palette-list (flat
+  // DOM order preserved: R2-2 button semantics, tab order, and the
+  // SortableJS drag items are untouched); the headers are non-interactive
+  // <h3> legends interleaved between groups, never containers.
+  //
+  // Lookup discipline mirrors FAMILY_INITIALS above: an as-yet-unmapped
+  // future type falls back to a trailing catch-all group ("More
+  // effects") rather than disappearing or being mis-filed — the group
+  // map can never silently drop a registered type.
+  // ---------------------------------------------------------------------
+  var PALETTE_GROUPS = [
+    { id: 'shape', label: 'Shape your voice' },
+    { id: 'polish', label: 'Polish your sound' },
+    { id: 'safe', label: 'Keep it safe' }
+  ];
+
+  var PALETTE_FALLBACK_GROUP = { id: 'more', label: 'More effects' };
+
+  var PALETTE_TYPE_GROUP = {
+    // Shape your voice — the voice's own character (README: distortion
+    // "adds grit and edge", chorus "thickens and widens the voice",
+    // autotune "pulls each note toward the key"; EQ shapes tone).
+    eq: 'shape',
+    distortion: 'shape',
+    chorus: 'shape',
+    autotune: 'shape',
+    // Polish your sound — level, evenness, and space.
+    gain: 'polish',
+    compressor: 'polish',
+    delay: 'polish',
+    reverb: 'polish',
+    // Keep it safe — the automatic guards. Presentational grouping only:
+    // the limiter chip is exactly the chip it always was (same button,
+    // same aria-label, same enabled-after-Start gating, same human add
+    // path); the terminal-limiter policy lives in addNodeType() /
+    // mcp-tools.js and is deliberately untouched by this map.
+    limiter: 'safe',
+    gate: 'safe'
+  };
+
+  /**
+   * Which palette group does this type ride under? (Data source for
+   * renderPalette's interleaved headers.) Unmapped types fall back to
+   * the trailing catch-all group so a future registration always
+   * renders — same no-silent-drop discipline as familyInitials().
+   * @param {string} type
+   * @returns {string} group id
+   */
+  function paletteGroupId(type) {
+    return PALETTE_TYPE_GROUP[type] || PALETTE_FALLBACK_GROUP.id;
+  }
+
+  /**
+   * The display label for a group id (PALETTE_GROUPS first, then the
+   * fallback group — never throws, same defensive register as
+   * NodeTypes.getLabel).
+   * @param {string} id
+   * @returns {string}
+   */
+  function paletteGroupLabel(id) {
+    for (var i = 0; i < PALETTE_GROUPS.length; i++) {
+      if (PALETTE_GROUPS[i].id === id) {
+        return PALETTE_GROUPS[i].label;
+      }
+    }
+    return PALETTE_FALLBACK_GROUP.label;
+  }
+
+  // ---------------------------------------------------------------------
   // EXPERIMENTAL TYPES (cycle 3) — the experimental status is declared at
   // the type's OWN registration (`experimental: true` in
   // NodeTypes.register — node-autotune.js, autotune only, per the
@@ -254,59 +331,100 @@
   function renderPalette() {
     paletteListEl.innerHTML = '';
     var types = window.NodeTypes.getAllTypes();
+
+    // Refinement entry 3 (critique P2-3): bucket the registry's types by
+    // group, preserving REGISTRATION ORDER within each bucket (the
+    // registry stays the source of chip order; the group map only decides
+    // which header a chip rides under). Group order is the declared
+    // PALETTE_GROUPS order, with the fallback group appended last and
+    // rendered only if some type actually fell into it — an empty group
+    // never renders a header.
+    var buckets = {};
+    var groupOrder = PALETTE_GROUPS.map(function (g) { return g.id; });
     types.forEach(function (type) {
-      // R2-2 (a11y critique P2): the chip is a real <button>, not a div —
-      // tab-focusable in DOM order (palette before canvas), Enter/Space
-      // activates addNodeType() below, and the screen reader gets an
-      // action-phrase accessible name ("Add Reverb to chain") while the
-      // visible silkscreen label stays exactly as designed. SortableJS's
-      // drag wiring is element-agnostic (forceFallback on), so converting
-      // div→button does not touch the drag path.
-      var chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'node-chip';
-      chip.setAttribute('data-node-type', type);
-      // VIS-3: family edge-coding hooks — data-family maps the chip's
-      // legend square to its --family-* token in styles/main.css;
-      // data-initials is that square's silkscreen text (rendered via CSS
-      // attr(data-initials), never a second copy in the DOM text).
-      chip.setAttribute('data-family', type);
-      chip.setAttribute('data-initials', familyInitials(type));
-      chip.textContent = window.NodeTypes.getLabel(type);
-      // R2-2 action-phrase name; UI-2 (cycle 3): an experimental type
-      // appends its status, so a screen-reader user hears it BEFORE the
-      // node enters the chain (the chip's visible 'EXP' tag is the
-      // sighted twin of this suffix — see createExperimentalBadge).
-      chip.setAttribute(
-        'aria-label',
-        'Add ' + window.NodeTypes.getLabel(type) + ' to chain' +
-          (isExperimentalType(type) ? ' (experimental)' : ''));
-      // UI-2: the chip-side experimental badge (autotune only) — compact
-      // 'EXP' silkscreen abbreviation after the visible label, same single
-      // data source and factory as the card's full tag.
-      if (isExperimentalType(type)) {
-        chip.appendChild(createExperimentalBadge(type, true));
+      var groupId = paletteGroupId(type);
+      if (!buckets[groupId]) {
+        buckets[groupId] = [];
+        if (groupOrder.indexOf(groupId) === -1) {
+          groupOrder.push(groupId);
+        }
       }
-      // Gating: chips ship DISABLED, mirroring the Start/Bypass
-      // disabled-until-start pattern (the .engine-not-started panel gate
-      // is pointer-events:none, which says nothing to a keyboard or a
-      // screen reader — a focusable inert chip would be a focus trap of
-      // nothing-doing). A real disabled attribute removes the chip from
-      // the tab order and announces "unavailable" honestly;
-      // onEngineStarted() (below) enables them at the exact transition
-      // where dragging also unlocks. Note the #4 lifecycle-loss path
-      // deliberately does NOT re-gate the flanks (main.js's surfaceLoss
-      // leaves the panels un-dimmed; only Start/Bypass flip), so chips
-      // stay enabled after a loss — matching what the region already
-      // does today.
-      chip.disabled = true;
-      chip.addEventListener('click', function () {
-        // A disabled <button> never fires click, so this handler is only
-        // ever reachable post-Start — the same guarantee the SortableJS
-        // pointer path gets from the pointer-events:none panel gate.
-        addNodeType(type);
+      buckets[groupId].push(type);
+    });
+
+    groupOrder.forEach(function (groupId) {
+      var groupTypes = buckets[groupId];
+      if (!groupTypes || groupTypes.length === 0) {
+        return;
+      }
+
+      // The silkscreen group header — a real <h3> (h1 app title → h2
+      // Palette → h3 groups: a navigable heading outline for screen
+      // readers, the flat-list twin of the preset select's optgroup
+      // legends). NON-interactive by construction: no listener, no
+      // focus, no pointer affordance — grouping is visual/SR context
+      // only. Interleaved as a sibling BEFORE its chips so reading
+      // order and tab order both stay exactly chip-button flow.
+      var header = document.createElement('h3');
+      header.className = 'palette-group-label';
+      header.setAttribute('data-group', groupId);
+      header.textContent = paletteGroupLabel(groupId);
+      paletteListEl.appendChild(header);
+
+      groupTypes.forEach(function (type) {
+        // R2-2 (a11y critique P2): the chip is a real <button>, not a div —
+        // tab-focusable in DOM order (palette before canvas), Enter/Space
+        // activates addNodeType() below, and the screen reader gets an
+        // action-phrase accessible name ("Add Reverb to chain") while the
+        // visible silkscreen label stays exactly as designed. SortableJS's
+        // drag wiring is element-agnostic (forceFallback on), so converting
+        // div→button does not touch the drag path.
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'node-chip';
+        chip.setAttribute('data-node-type', type);
+        // VIS-3: family edge-coding hooks — data-family maps the chip's
+        // legend square to its --family-* token in styles/main.css;
+        // data-initials is that square's silkscreen text (rendered via CSS
+        // attr(data-initials), never a second copy in the DOM text).
+        chip.setAttribute('data-family', type);
+        chip.setAttribute('data-initials', familyInitials(type));
+        chip.textContent = window.NodeTypes.getLabel(type);
+        // R2-2 action-phrase name; UI-2 (cycle 3): an experimental type
+        // appends its status, so a screen-reader user hears it BEFORE the
+        // node enters the chain (the chip's visible 'EXP' tag is the
+        // sighted twin of this suffix — see createExperimentalBadge).
+        chip.setAttribute(
+          'aria-label',
+          'Add ' + window.NodeTypes.getLabel(type) + ' to chain' +
+            (isExperimentalType(type) ? ' (experimental)' : ''));
+        // UI-2: the chip-side experimental badge (autotune only) — compact
+        // 'EXP' silkscreen abbreviation after the visible label, same single
+        // data source and factory as the card's full tag.
+        if (isExperimentalType(type)) {
+          chip.appendChild(createExperimentalBadge(type, true));
+        }
+        // Gating: chips ship DISABLED, mirroring the Start/Bypass
+        // disabled-until-start pattern (the .engine-not-started panel gate
+        // is pointer-events:none, which says nothing to a keyboard or a
+        // screen reader — a focusable inert chip would be a focus trap of
+        // nothing-doing). A real disabled attribute removes the chip from
+        // the tab order and announces "unavailable" honestly;
+        // onEngineStarted() (below) enables them at the exact transition
+        // where dragging also unlocks. Note the #4 lifecycle-loss path
+        // deliberately does NOT re-gate the flanks (main.js's surfaceLoss
+        // leaves the panels un-dimmed; only Start/Bypass flip), so chips
+        // stay enabled after a loss — matching what the region already
+        // does today.
+        chip.disabled = true;
+        chip.addEventListener('click', function () {
+          // A disabled <button> never fires click, so this handler is only
+          // ever reachable post-Start — the same guarantee the SortableJS
+          // pointer path gets from the pointer-events:none panel gate.
+          addNodeType(type);
+        });
+        paletteListEl.appendChild(chip);
       });
-      paletteListEl.appendChild(chip);
     });
   }
 
@@ -628,9 +746,19 @@
   // order never changes via drag. onStart/onEnd maintain the MC-4 drag flag
   // (see `dragActive` above) — a palette drag is heading for the chain
   // list, so agent mutations must queue behind it too.
+  //
+  // Refinement entry 3: `draggable: '.node-chip'` scopes the drag ITEMS to
+  // the chips now that the palette list also carries interleaved group
+  // headers — SortableJS resolves the drag target with
+  // closest(target, options.draggable, el), so a press on a header matches
+  // nothing and never starts a drag, while a press on a chip resolves to
+  // exactly the element the default '>*' selector would have picked
+  // (chips are direct children). Chip drag behavior is unchanged; the
+  // headers are inert to the pointer.
   var paletteSortable = new window.Sortable(paletteListEl, {
     group: { name: 'chain-group', pull: 'clone', put: false },
     sort: false,
+    draggable: '.node-chip',
     forceFallback: true,
     animation: 150,
     onStart: function () { dragActive = true; },

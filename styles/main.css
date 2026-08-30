@@ -754,6 +754,30 @@ select.control {
   color: var(--text-muted);
 }
 
+/* Refinement entry 3 (critique P2-3) — palette group legends. The ten
+   chips chunk into three operator groups under micro-legend headers in
+   the SAME register the surface already uses for grouped options (the
+   preset/device selects' optgroup labels — the in-house precedent):
+   uppercase, tracked 0.08em, muted, 0.7rem = 11.2px above the 11px
+   floor. Real <h3>s (h1 title → h2 Palette → h3 groups) so screen
+   readers can navigate the chunking; non-interactive by construction —
+   no border, no pointer, proximity does the grouping (headers bind
+   tight to the chips below them, groups separate through the generous
+   space above each subsequent header; the first header needs no extra
+   top margin — the panel h2's rule already separates it). */
+.palette-group-label {
+  margin: 0.9rem 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.palette-group-label:first-child {
+  margin-top: 0;
+}
+
 /* VIS-3 — palette items as console modules. Anatomy: a 20px family
    legend square (the ONLY fill — color lives on the chip + a 2px top
    edge on hover/active, never on the item) beside the module's name as

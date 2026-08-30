@@ -9,7 +9,7 @@ first · distortion readout normalized 0–100 · all issues in scope.
 |---|---------|---------|--------|
 | 1 | `$impeccable clarify` | P2-1: four cycle-3 effects (gate, distortion, chorus, autotune) ship with zero plain-language param help — the wall cycle-2 round 1 tore down for the original six. | **done-pending-approval** |
 | 2 | `$impeccable typeset` | P2-2: EXP badge renders at 10px on both placements — below the 11px floor; CSS comment + DESIGN.md misstate it as compliant. | **done-pending-approval** |
-| 3 | `$impeccable layout` | P2-3: palette is 10 flat ungrouped chips (was 6) — chunking violation at the decision point. | queued |
+| 3 | `$impeccable layout` | P2-3: palette is 10 flat ungrouped chips (was 6) — chunking violation at the decision point. | **done-pending-approval** |
 | 4 | `$impeccable polish` | P3-4: distortion Drive/Tone read "0.25%"/"0.7%" (0–1 scale + %) vs surface 0–100% convention — user approved normalizing to 0–100. | queued |
 | 5 | `$impeccable harden` | P3-5 (partial): two latent `window.alert`s + late-context-resume can wedge the strip at "Stopped". The manual +24 dB / limiter-removal sovereignty finding stays recorded as deliberate design (backlog), per cycle-2 close. | queued |
 
@@ -116,3 +116,78 @@ document refresh required after the loop.
   pre-existing at the old 10px too (17.3px overlap vs 26.8px now; label
   ellipsization is the designed shrink path), a standing narrow-window
   edge outside this entry's appearance-only scope.
+
+### Entry 3 — `$impeccable layout` (P2-3 palette chunking) — done-pending-approval
+
+- **Files changed**: `src/canvas.js` (renderPalette restructured +
+  PALETTE_GROUPS lookups + one Sortable option; the per-chip
+  construction code is byte-identical), `styles/main.css` (one new rule
+  pair, `.palette-group-label` + its `:first-child`), `DESIGN.md`
+  (palette-chip bullet gains the grouping sentence), 
+  `tests/test-palette-cards-cycle3.js` (+~170: new section J, plus two
+  section-A/D checks re-pointed at chips-only queries). No changes to
+  chip add behavior, drag, or the terminal-limiter policy — addNodeType,
+  commitStructuralChange, the chain Sortable, and every node/preset/MCP
+  file are untouched.
+- **Mechanism**: the ten chips chunk under three operator-language
+  silkscreen group headers — **"Shape your voice"** (EQ, Distortion,
+  Chorus, Autotune — the voice's own character), **"Polish your sound"**
+  (Gain, Compressor, Delay, Reverb — level, evenness, space), **"Keep it
+  safe"** (Limiter, Noise Gate — the two automatic guards; presentational
+  grouping only, so the limiter chip stays byte-for-byte the chip it
+  always was: same button, same "Add Limiter to chain" aria-label, same
+  enabled-after-Start gating, same insert-before-terminal add policy —
+  the header reinforces rather than dilutes the README's "limiter has
+  the last word"). Names derive from README.md/PRODUCT.md operator
+  framing ("a sound the operator can shape", "the show comes first"),
+  not engineer vocabulary. Headers are real `<h3>`s (h1 title → h2
+  Palette → h3 groups) in the surface's existing grouped-options legend
+  register — the preset/device optgroup precedent: 0.7rem (11.2px, above
+  the 11px floor) / 700 / uppercase / 0.08em / muted, rhythm
+  generous-above (0.9rem) tight-below (0.35rem) per the craft floor,
+  first header's top margin dropped under the panel h2's rule.
+  **Structure is a presentation seam**: the registry stays the source
+  (renderPalette still iterates getAllTypes(); within-group order is
+  registration order; the group map is a lookup with a trailing
+  "More effects" fallback so an unmapped future type renders instead of
+  vanishing), and the headers are INTERLEAVED siblings, not containers —
+  chips stay direct-children `<button>`s in flat DOM order, so the R2-2
+  keyboard/SR node-addition flow is unchanged (headers announced in
+  reading order, never focusable, no new interactive layer). The one
+  Sortable change scopes the palette instance's drag items to
+  `draggable: '.node-chip'` — with headers now sharing the flat list,
+  the default '>*' would have made a header grabbable; SortableJS
+  resolves drag targets via closest(target, draggable, el), so chip drag
+  is unchanged and headers are pointer-inert (verified against the
+  vendored 1.15.7 source).
+- **Evidence**: `tests/test-palette-cards-cycle3.js` section J (26 new
+  checks): exactly 3 h3 headers in shape→polish→safe order with the
+  exact labels + data-group hooks; non-interactive (no listeners, no
+  tabindex/role); the full flat child sequence asserted
+  header-then-chips with the exact memberships; only the ten chip
+  buttons focusable; within-group registration order; limiter chip
+  preserved exactly; one keyboard add from EACH group commits through
+  the shared chokepoint (buildGraph/autosave/markModified/noteHumanEdit
+  ×3); keyboard limiter add still inserts before a terminal limiter;
+  the CSS rule matches the optgroup legend register + rhythm with the
+  first-child top-margin drop; palette Sortable draggable ===
+  '.node-chip' while the chain instance keeps its default. Doubles as a
+  grouping-completeness gate: a future unmapped type falls into the
+  fallback group and fails the exactly-3-headers check, forcing a
+  deliberate grouping decision (same pattern as section H's help gate).
+  Render-level check (headless Chrome, real index.html + stylesheet +
+  canvas.js over http, 1440×900): at the production 200px flank —
+  headers computed 11.2px, single line (1 client rect, scrollWidth ===
+  clientWidth 167px), margins 14.4px/5.6px rendering the
+  generous-above/tight-below rhythm, zero list or page overflow, ten
+  chips at 167×38px with zero overflow (geometry identical to entry 2's
+  recorded chips), exactly 10 focusable elements in the flank, all
+  BUTTON; at a 220px-flank variant — same, single-line headers at 187px,
+  chips 187×38, no overflow. Detector full-parser scan: 4 findings,
+  byte-identical to the standing adjudicated set (no new findings from
+  the grouping). Full suite **23/23 files / 1862 checks green**.
+- **Residuals (disclosed)**: the grouping is a static presentation map
+  (a future family needs an explicit one-line group decision — now
+  suite-enforced); the design.json sidecar does not yet carry the group
+  labels (it is regenerated by the planned post-loop document refresh,
+  per the closing-critique trigger note above).
