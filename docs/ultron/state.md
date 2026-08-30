@@ -388,3 +388,11 @@ PR to open: https://github.com/Arrangedgodly/karaoke/pull/new/cycle-3-shelved-ef
 BLOCKED on: brother's "submitted major changes" — not found on origin (no
 new commits on origin/main, no other branches, no forks visible). Awaiting
 user input on where they live (fork? patch? unpushed?) before reconciliation.
+
+### PR reconciliation (2026-08-29): brother's PR #17 (7 commits — truthful
+preset mutations/undo/storage-failure reporting, ordered tool registration,
+watchdog worklet protection restore, stale device-switch invalidation,
+agent-ui toast refactor) merged into cycle-3-shelved-effects (27e3f99).
+Only docs/ACCEPTANCE.md conflicted; resolved preserving both intents.
+Full suite 23/23 files / 1702 checks green post-merge. Branch pushed.
+Finishing phase ($ultron-impeccable) unblocked pending user go.
