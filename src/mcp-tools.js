@@ -4331,13 +4331,25 @@
    * with NONE of the success side effects: no undo entry, no dropdown
    * refresh, no current-preset display change, no unsaved-dot clear; the
    * refusal toast follows the same reportAgentRejection path every other
-   * refusal uses. The undo restores' own store calls are wrapped by the
-   * restores' never-throw contract (below), unchanged.
+   * refusal uses. Its undo restore lets persistence errors reach
+   * AgentUI.undo(), which retains the entry and reports a retryable undo
+   * failure instead of claiming success.
+   *
+   * Issue #10: save_preset accepts the same execution options as the
+   * other mutation tools. A pre-aborted call stops before validation,
+   * and a second check immediately before PresetStore.save() is the last
+   * safe cancellation boundary. Once save() returns, the persistence
+   * write is irreversible and the call reports its real outcome.
    *
    * @param {*} input
+   * @param {*} options
    * @returns {Promise<Object>}
    */
-  function savePresetExecute(input) {
+  function savePresetExecute(input, options) {
+    var signal = options ? options.signal : null;
+    if (signalAborted(signal)) {
+      return Promise.resolve(abortedResult('save_preset'));
+    }
     var problems = [];
     var name = '';
     try {
@@ -4400,6 +4412,9 @@
       // or throws the typed StorageError — and a failed save must be
       // reported as the stable refusal below, with NONE of the success
       // side effects (no undo entry, no display writes, no dot clear).
+      if (signalAborted(signal)) {
+        return Promise.resolve(abortedResult('save_preset'));
+      }
       try {
         window.PresetStore.save(name, model);
       } catch (err) {
@@ -4417,37 +4432,33 @@
 
       var undoLabel = 'save_preset "' + name + '"';
       pushUndoEntry(undoLabel, function () {
-        try {
-          if (!existed) {
-            // CREATED by this save: undo deletes it (the UI Delete flow's
-            // store call — remove() is already a no-op on a missing name).
-            window.PresetStore.remove(name);
-          } else if (priorContent) {
-            // OVERWROTE: undo restores the previously stored content
-            // through the same single persistence path.
-            window.PresetStore.save(name, priorContent.nodes);
-          } else {
-            // The prior entry existed but failed the store's own
-            // validation (corrupt localStorage) — its content cannot be
-            // re-saved; removing the agent's version is the honest
-            // restore. Unreachable short of hand-edited storage.
-            window.PresetStore.remove(name);
-          }
-          presetsUiRefreshPresetSelect(displayBefore.name);
-          presetsUiSetCurrentPreset(displayBefore.name);
-          if (displayBefore.unsaved === true) {
-            try {
-              if (window.PresetsUI && typeof window.PresetsUI.markModified === 'function') {
-                window.PresetsUI.markModified();
-              }
-            } catch (err) {
-              // Display-only.
+        if (!existed) {
+          // CREATED by this save: undo deletes it (the UI Delete flow's
+          // store call — remove() is already a no-op on a missing name).
+          window.PresetStore.remove(name);
+        } else if (priorContent) {
+          // OVERWROTE: undo restores the previously stored content
+          // through the same single persistence path.
+          window.PresetStore.save(name, priorContent.nodes);
+        } else {
+          // The prior entry existed but failed the store's own
+          // validation (corrupt localStorage) — its content cannot be
+          // re-saved; removing the agent's version is the honest
+          // restore. Unreachable short of hand-edited storage.
+          window.PresetStore.remove(name);
+        }
+        presetsUiRefreshPresetSelect(displayBefore.name);
+        presetsUiSetCurrentPreset(displayBefore.name);
+        if (displayBefore.unsaved === true) {
+          try {
+            if (window.PresetsUI && typeof window.PresetsUI.markModified === 'function') {
+              window.PresetsUI.markModified();
             }
-          } else if (displayBefore.unsaved === false) {
-            presetsUiClearModified();
+          } catch (err) {
+            // Display-only.
           }
-        } catch (err) {
-          // Same never-throw contract as the mutation restores.
+        } else if (displayBefore.unsaved === false) {
+          presetsUiClearModified();
         }
       });
 

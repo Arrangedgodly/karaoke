@@ -107,11 +107,57 @@ function makeElement(tag) {
     children: [],
     style: {},
     __listeners: {},
+    __attrs: {},
     __value: '',
     appendChild: function (child) {
       child.parentNode = el;
       el.children.push(child);
       return child;
+    },
+    insertBefore: function (child, ref) {
+      child.parentNode = el;
+      var index = el.children.indexOf(ref);
+      if (index === -1) {
+        el.children.push(child);
+      } else {
+        el.children.splice(index, 0, child);
+      }
+      return child;
+    },
+    removeChild: function (child) {
+      var index = el.children.indexOf(child);
+      if (index !== -1) {
+        el.children.splice(index, 1);
+      }
+      child.parentNode = null;
+      return child;
+    },
+    setAttribute: function (name, value) {
+      el.__attrs[name] = String(value);
+    },
+    getAttribute: function (name) {
+      return Object.prototype.hasOwnProperty.call(el.__attrs, name)
+        ? el.__attrs[name]
+        : null;
+    },
+    remove: function () {
+      if (el.parentNode) {
+        el.parentNode.removeChild(el);
+      }
+    },
+    querySelector: function (selector) {
+      var className = selector.charAt(0) === '.' ? selector.slice(1) : null;
+      for (var i = 0; i < el.children.length; i++) {
+        var child = el.children[i];
+        if (className && String(child.className).split(/\s+/).indexOf(className) !== -1) {
+          return child;
+        }
+        var nested = child.querySelector(selector);
+        if (nested) {
+          return nested;
+        }
+      }
+      return null;
     }
   };
   el.addEventListener = function (type, fn) {
@@ -150,6 +196,12 @@ function makeElement(tag) {
     },
     set: function (v) {
       el.__value = String(v);
+    }
+  });
+  Object.defineProperty(el, 'firstChild', {
+    configurable: true,
+    get: function () {
+      return el.children.length > 0 ? el.children[0] : null;
     }
   });
   return el;
@@ -249,17 +301,22 @@ function buildPanel() {
 // "no undo entry / no success toast" checks observe the real calls
 // mcp-tools makes.
 // ----------------------------------------------------------------------
-function createEnv() {
+function createEnv(options) {
+  options = options || {};
   var storage = createStorageStub();
   var panel = buildPanel();
+  var body = makeElement('body');
+  var domListeners = {};
   var env = {
     storage: storage,
     panel: panel,
+    body: body,
     promptCalls: [],
     promptResponse: '',
     confirmResponse: true,
     confirmCalls: 0,
-    consoleErrors: 0
+    consoleErrors: 0,
+    domEvents: []
   };
   var sandbox = {
     console: {
@@ -270,7 +327,11 @@ function createEnv() {
       }
     },
     setTimeout: function (fn, ms) {
-      return setTimeout(fn, ms);
+      var timer = setTimeout(fn, ms);
+      if (timer && typeof timer.unref === 'function') {
+        timer.unref();
+      }
+      return timer;
     },
     clearTimeout: function (id) {
       return clearTimeout(id);
@@ -287,7 +348,26 @@ function createEnv() {
       },
       createElement: function (tag) {
         return makeElement(tag);
-      }
+      },
+      querySelector: function () {
+        return null;
+      },
+      addEventListener: function (type, fn) {
+        (domListeners[type] = domListeners[type] || []).push(fn);
+      },
+      dispatchEvent: function (event) {
+        env.domEvents.push({ type: event.type, detail: event.detail });
+        (domListeners[event.type] || []).forEach(function (fn) {
+          fn(event);
+        });
+        return true;
+      },
+      activeElement: null,
+      body: body
+    },
+    CustomEvent: function CustomEvent(type, init) {
+      this.type = type;
+      this.detail = init && init.detail;
     },
     // src/node-reverb.js fetches its IR at module load; a never-settling
     // promise is the tolerated not-fetched-yet state (no live reverb is
@@ -311,7 +391,7 @@ function createEnv() {
   vm.createContext(sandbox);
   env.sandbox = sandbox;
 
-  [
+  var sourceFiles = [
     'src/audio-graph.js',
     'src/node-types.js',
     'src/audio-param-ramp.js', // issue #5: the ramp helper the node applyParam handlers call
@@ -326,7 +406,11 @@ function createEnv() {
     'src/preset-store.js',
     'src/presets-ui.js',
     'src/mcp-tools.js'
-  ].forEach(function (relPath) {
+  ];
+  if (options.realAgentUi) {
+    sourceFiles.unshift('src/agent-ui.js');
+  }
+  sourceFiles.forEach(function (relPath) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, relPath), 'utf8'), sandbox, {
       filename: relPath
     });
@@ -355,27 +439,42 @@ function createEnv() {
     }
   };
 
-  // AgentUI recorder — counts/records exactly what mcp-tools calls.
+  // AgentUI recorder: most storage cases need only the call seam. The
+  // transactional undo cases load the real module, then wrap its public
+  // methods so the same observations remain available.
   env.agentUi = { undoPushes: [], mutations: [] };
-  sandbox.AgentUI = {
-    pushUndo: function (entry) {
+  if (options.realAgentUi) {
+    var realPushUndo = sandbox.AgentUI.pushUndo;
+    var realReportMutation = sandbox.AgentUI.reportMutation;
+    sandbox.AgentUI.pushUndo = function (entry) {
       env.agentUi.undoPushes.push(entry);
-      return true;
-    },
-    canUndo: function () {
-      return env.agentUi.undoPushes.length > 0;
-    },
-    reportMutation: function (detail) {
+      return realPushUndo(entry);
+    };
+    sandbox.AgentUI.reportMutation = function (detail) {
       env.agentUi.mutations.push(detail);
-    },
-    undo: function () {
-      var entry = env.agentUi.undoPushes.pop() || null;
-      if (entry && typeof entry.restore === 'function') {
-        entry.restore();
+      return realReportMutation(detail);
+    };
+  } else {
+    sandbox.AgentUI = {
+      pushUndo: function (entry) {
+        env.agentUi.undoPushes.push(entry);
+        return true;
+      },
+      canUndo: function () {
+        return env.agentUi.undoPushes.length > 0;
+      },
+      reportMutation: function (detail) {
+        env.agentUi.mutations.push(detail);
+      },
+      undo: function () {
+        var entry = env.agentUi.undoPushes.pop() || null;
+        if (entry && typeof entry.restore === 'function') {
+          entry.restore();
+        }
+        return entry;
       }
-      return entry;
-    }
-  };
+    };
+  }
 
   return env;
 }
@@ -441,8 +540,8 @@ function noteElement(env) {
 // (unsaved dot visible — the exact state a phantom save would wrongly
 // clear), and leave it armed for the case to fault-inject.
 // ----------------------------------------------------------------------
-function freshSeededEnv() {
-  var env = createEnv();
+function freshSeededEnv(options) {
+  var env = createEnv(options);
   var sandbox = env.sandbox;
   var seeded = sandbox.PresetStore.save('Baseline', sandbox.DEFAULT_PRESET.nodes);
   check(
@@ -971,6 +1070,143 @@ async function main() {
       sandbox.PresetStore.load('Typed Name') !== null &&
         optionValues(env).filter(function (v) { return v === 'Typed Name'; }).length === 1,
       'J4: saving under an EXISTING name overwrites silently (prompt-era semantics kept)'
+    );
+  }
+
+  // ------------------------------------------------------------------
+  console.log('K. save_preset undo is retryable when persistence restore fails');
+  // ------------------------------------------------------------------
+  {
+    var env = freshSeededEnv({ realAgentUi: true });
+    var sandbox = env.sandbox;
+    var saved = await getTool(sandbox, 'save_preset').execute({ name: 'Retry Created' });
+    var toastRegion = env.body.querySelector('.agent-toast-region');
+    var toast = toastRegion && toastRegion.children[toastRegion.children.length - 1];
+    check(
+      !!saved && saved.applied === true && sandbox.AgentUI.canUndo() === true && !!toast,
+      'K1: a created preset has a real AgentUI undo entry and success toast'
+    );
+
+    env.storage.fault.setItemError = namedError(
+      'QuotaExceededError',
+      'The quota has been exceeded while deleting the created preset.'
+    );
+    var undoEventsBefore = env.domEvents.filter(function (event) {
+      return event.type === 'agentui:undo';
+    }).length;
+    var failedEventsBefore = env.domEvents.filter(function (event) {
+      return event.type === 'agentui:undo-failed';
+    }).length;
+    var failedUndo = sandbox.AgentUI.undo();
+    var failedNote = toast.querySelector('.agent-toast-undo-failed');
+    var failedEvents = env.domEvents.filter(function (event) {
+      return event.type === 'agentui:undo-failed';
+    });
+
+    check(
+      failedUndo === null && sandbox.AgentUI.canUndo() === true,
+      'K2 remove failure: undo returns null and RETAINS the entry for retry'
+    );
+    check(
+      storedNames(env).indexOf('Retry Created') !== -1,
+      'K2 remove failure: the created preset remains stored'
+    );
+    check(
+      toast.getAttribute('data-undone') !== 'true' &&
+        toast.querySelector('.agent-toast-undone') === null &&
+        !!toast.querySelector('.agent-toast-undo'),
+      'K2 remove failure: the toast is NOT marked Undone and keeps its Undo button'
+    );
+    check(
+      !!failedNote && failedNote.textContent.indexOf('Undo failed') !== -1 &&
+        failedNote.textContent.indexOf('quota has been exceeded') !== -1,
+      'K2 remove failure: the toast shows an explicit failure message with the storage cause'
+    );
+    check(
+      failedEvents.length === failedEventsBefore + 1 &&
+        failedEvents[failedEvents.length - 1].detail.label === 'save_preset "Retry Created"' &&
+        failedEvents[failedEvents.length - 1].detail.remaining === 1 &&
+        failedEvents[failedEvents.length - 1].detail.errorText.indexOf('quota has been exceeded') !== -1,
+      'K2 remove failure: one agentui:undo-failed event carries the label, stack depth, and cause'
+    );
+    check(
+      env.domEvents.filter(function (event) {
+        return event.type === 'agentui:undo';
+      }).length === undoEventsBefore,
+      'K2 remove failure: NO success agentui:undo event fired'
+    );
+
+    env.storage.fault.setItemError = null;
+    var retriedUndo = sandbox.AgentUI.undo();
+    check(
+      !!retriedUndo && retriedUndo.label === 'save_preset "Retry Created"' &&
+        sandbox.AgentUI.canUndo() === false &&
+        storedNames(env).indexOf('Retry Created') === -1,
+      'K3 remove retry: the same entry succeeds, is consumed, and removes the preset'
+    );
+    check(
+      toast.getAttribute('data-undone') === 'true' &&
+        toast.querySelector('.agent-toast-undone') !== null &&
+        toast.querySelector('.agent-toast-undo-failed') === null &&
+        toast.querySelector('.agent-toast-undo') === null,
+      'K3 remove retry: only success marks Undone and clears the prior failure message'
+    );
+    check(
+      env.domEvents.filter(function (event) {
+        return event.type === 'agentui:undo';
+      }).length === undoEventsBefore + 1,
+      'K3 remove retry: exactly one success agentui:undo event fired'
+    );
+  }
+
+  {
+    var env = freshSeededEnv({ realAgentUi: true });
+    var sandbox = env.sandbox;
+    var changed = sandbox.DEFAULT_PRESET.nodes.map(function (entry) {
+      return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+    });
+    changed[0].params.gainDb = 3;
+    env.installModel(changed);
+    var saved = await getTool(sandbox, 'save_preset').execute({ name: 'Baseline' });
+    var toastRegion = env.body.querySelector('.agent-toast-region');
+    var toast = toastRegion && toastRegion.children[toastRegion.children.length - 1];
+    check(
+      !!saved && saved.applied === true && saved.overwrote === true &&
+        sandbox.PresetStore.load('Baseline').nodes[0].params.gainDb === 3,
+      'K4: overwrite setup persisted the changed gain before undo'
+    );
+
+    env.storage.fault.setItemError = namedError(
+      'SecurityError',
+      'Storage access was denied while restoring overwritten content.'
+    );
+    var failedUndo = sandbox.AgentUI.undo();
+    var failedNote = toast.querySelector('.agent-toast-undo-failed');
+    check(
+      failedUndo === null && sandbox.AgentUI.canUndo() === true &&
+        sandbox.PresetStore.load('Baseline').nodes[0].params.gainDb === 3,
+      'K5 save failure: undo retains the entry and leaves the overwritten content intact'
+    );
+    check(
+      toast.getAttribute('data-undone') !== 'true' &&
+        !!failedNote && failedNote.textContent.indexOf('Storage access was denied') !== -1 &&
+        env.domEvents.filter(function (event) { return event.type === 'agentui:undo'; }).length === 0 &&
+        env.domEvents.filter(function (event) { return event.type === 'agentui:undo-failed'; }).length === 1,
+      'K5 save failure: the UI/event state reports failure, never success'
+    );
+
+    env.storage.fault.setItemError = null;
+    var retriedUndo = sandbox.AgentUI.undo();
+    check(
+      !!retriedUndo && sandbox.AgentUI.canUndo() === false &&
+        sandbox.PresetStore.load('Baseline').nodes[0].params.gainDb === 0,
+      'K6 save retry: the retained entry restores the prior preset content and is consumed'
+    );
+    check(
+      toast.getAttribute('data-undone') === 'true' &&
+        toast.querySelector('.agent-toast-undo-failed') === null &&
+        env.domEvents.filter(function (event) { return event.type === 'agentui:undo'; }).length === 1,
+      'K6 save retry: only the successful retry marks and emits undo success'
     );
   }
 
