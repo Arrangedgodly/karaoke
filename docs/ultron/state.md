@@ -538,3 +538,11 @@ cycle acceptance is the remaining gate.
 Closing critique 36/40 (best score; no P2+ findings, no regressions),
 final document refresh landed, all work consolidated to main. Finishing
 phase closed per user gate. REMAINING: final cycle acceptance (user).
+
+## Cycle 3 — ACCEPTED (2026-08-30)
+User accepted the delivered cycle (final gate passed): four effects incl.
+hard-tune autotune, user-passed QA, 36/40 closing critique, all work
+consolidated on main (97d6f6e). Cycle 3 is COMPLETE. Deferred work is
+recorded above and in the closing critique snapshot — no scope expansion.
+Artifacts stay in place; archive to cycle-3/ when cycle 4 opens (the
+cycle-1/2 convention). The ultron-swarm run for this cycle is finished.
