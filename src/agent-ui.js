@@ -500,6 +500,17 @@
     return typeof entry.revision === 'number' && entry.revision !== stateRevision;
   }
 
+  /** @returns {HTMLElement|null} the newest toast that has not been undone. */
+  function newestActiveToast() {
+    var toasts = liveToasts();
+    for (var i = toasts.length - 1; i >= 0; i--) {
+      if (toasts[i].getAttribute('data-undone') !== 'true') {
+        return toasts[i];
+      }
+    }
+    return null;
+  }
+
   /**
    * Issue #6: re-render the newest not-yet-undone toast as the undo
    * conflict's confirm step — a .agent-toast-conflict note asking the
@@ -515,14 +526,7 @@
    *   confirm affordance — the entry simply stays un-applied).
    */
   function showUndoConflict(label) {
-    var toasts = liveToasts();
-    var toastEl = null;
-    for (var i = toasts.length - 1; i >= 0; i--) {
-      if (toasts[i].getAttribute('data-undone') !== 'true') {
-        toastEl = toasts[i];
-        break;
-      }
-    }
+    var toastEl = newestActiveToast();
     if (!toastEl) {
       return false;
     }
@@ -632,14 +636,7 @@
    * @param {string} errorText
    */
   function showUndoFailure(label, errorText) {
-    var toasts = liveToasts();
-    var toastEl = null;
-    for (var i = toasts.length - 1; i >= 0; i--) {
-      if (toasts[i].getAttribute('data-undone') !== 'true') {
-        toastEl = toasts[i];
-        break;
-      }
-    }
+    var toastEl = newestActiveToast();
     if (!toastEl) {
       return;
     }
