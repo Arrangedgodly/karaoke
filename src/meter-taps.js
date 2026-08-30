@@ -685,9 +685,10 @@
   }
 
   /** Attempt the worklet tap once per session. Any miss (no
-   *  audioWorklet, addModule rejection — old browser, file:// context)
-   *  drops to fallbackMode: rAF-only watchdog + the interim
-   *  visibilitychange warning. */
+   *  audioWorklet, no window-global AudioWorkletNode constructor,
+   *  addModule rejection — old browser, file:// context) drops to
+   *  fallbackMode: rAF-only watchdog + the interim visibilitychange
+   *  warning. */
   function setupWorklet() {
     if (workletSetupDone) {
       return;
@@ -695,13 +696,16 @@
     workletSetupDone = true;
     var ctx = window.AudioEngine && window.AudioEngine.audioContext;
     var aw = ctx && ctx.audioWorklet;
-    if (!aw || typeof aw.addModule !== 'function') {
+    var AudioWorkletNodeCtor = typeof window.AudioWorkletNode === 'function'
+      ? window.AudioWorkletNode
+      : null;
+    if (!aw || typeof aw.addModule !== 'function' || !AudioWorkletNodeCtor) {
       enableFallback();
       return;
     }
     aw.addModule(WORKLET_URL)
       .then(function () {
-        var node = new ctx.AudioWorkletNode(ctx, 'watchdog-tap', {
+        var node = new AudioWorkletNodeCtor(ctx, 'watchdog-tap', {
           numberOfInputs: 1,
           numberOfOutputs: 1,
           outputChannelCount: [1]

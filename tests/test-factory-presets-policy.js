@@ -29,7 +29,7 @@
 //                             populated exactly as in index.html)
 //   src/default-preset.js    (the shipped default chain under test)
 //   src/factory-presets.js   (the shipped factory library under test)
-//   src/mcp-tools.js         (the 8 agent tools, incl. get_chain/set_chain)
+//   src/mcp-tools.js         (the 10 agent tools, incl. get_chain/set_chain)
 //
 // Budget extraction — why the "+12 dB probe": budgetBreakdown() is internal
 // to mcp-tools.js's IIFE and only surfaces on a REJECTION. So per preset

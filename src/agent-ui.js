@@ -85,19 +85,26 @@
 //     therefore do NOT bump the revision, so a pure-agent sequence of
 //     edits keeps undoing exactly as before.
 //   AgentUI.undo([confirm])
-//     Pops the NEWEST entry and calls its restore() — a throwing
-//     restore() is caught and logged, never propagated to the caller —
-//     fires event 'agentui:undo' on document with detail
+//     Calls the NEWEST entry's restore() and pops it only after restore
+//     succeeds. A throwing restore is caught and logged, but the entry
+//     stays on the stack for retry. The toast keeps its Undo button,
+//     shows an .agent-toast-undo-failed message, and fires
+//     'agentui:undo-failed' with detail
+//     { label, remaining, confirmed, errorText }. A successful restore
+//     marks the entry's associated toast undone (or creates a recovery
+//     status if the original expired), then fires event 'agentui:undo'
+//     on document with detail
 //     { label, remaining, confirmed } (remaining = stack depth after
-//     the pop), and marks the most recent toast undone (its Undo button
-//     removed, an "Undone — <label>" note appended). Returns the popped
-//     entry, or null when the stack was empty (no event fired in that
-//     case).
+//     the pop). The toast's Undo button is removed and an
+//     "Undone — <label>" note appended. Returns
+//     the popped entry, or null when the stack was empty, conflicted, or
+//     its restore failed.
 //     Issue #6 conflict rule: when the newest entry's recorded revision
 //     no longer matches the current state revision — i.e. a HUMAN edited
 //     the chain or presets after the agent mutation — undo() does NOT
-//     apply or pop anything. Instead it re-renders the newest
-//     not-yet-undone toast as a confirm step: a .agent-toast-conflict
+//     apply or pop anything. Instead it re-renders the entry's own toast
+//     (or a new recovery toast if the original expired) as a confirm
+//     step: a .agent-toast-conflict
 //     note ("You changed the chain or presets after this. Undo
 //     anyway?"), the button relabeled "Undo anyway" with
 //     data-confirm-undo="true", and an 'agentui:undo-conflict' event
@@ -106,16 +113,16 @@
 //     the explicit confirmation the conflict requires.
 //   AgentUI.canUndo() -> boolean (stack non-empty).
 //   AgentUI.clearUndo() — empties the stack. No event is fired.
-//   Undo affordances: a real "Undo" <button> on the MOST RECENT toast —
-//     present exactly while the undo stack is non-empty, so pushUndo()
-//     before OR after reportMutation() both yield the button (button
-//     visibility re-syncs on every push/clear/undo); only the newest
-//     not-yet-undone toast ever carries one — and the Ctrl/Cmd+Z
+//   Undo affordances: a real "Undo" <button> on the NEWEST entry's
+//     associated toast — present while that entry and toast are live, so
+//     pushUndo() immediately before OR after reportMutation() both yield
+//     the button (visibility re-syncs on every push/clear/undo); only the
+//     active entry's toast carries one — and the Ctrl/Cmd+Z
 //     shortcut. Issue #6: the shortcut consults the undo STACK, not the
 //     toasts, so the recovery path stays available beyond the 6 s toast
 //     lifetime; it performs an undo only when the newest entry is NOT
 //     conflicted (a conflicted entry needs the toast's explicit
-//     "Undo anyway" confirm, so with the toast gone the key simply
+//     "Undo anyway" confirm, so the key recreates that affordance but
 //     keeps its native meaning).
 //     Keyboard coexistence guarantee: src/main.js owns the global
 //     spacebar bypass shortcut; this module's document-level keydown
@@ -140,9 +147,9 @@
 //     div.agent-toast with role="status" aria-live="polite", containing
 //     a .agent-toast-summary, optional .agent-toast-clamped /
 //     .agent-toast-error / .agent-toast-conflict / .agent-toast-undone
-//     notes, and (per the undo rules above) a keyboard-reachable
-//     <button> labeled 'Undo' (relabeled 'Undo anyway' while a conflict
-//     confirm is pending — issue #6).
+//     / .agent-toast-undo-failed notes, and (per the undo rules above) a
+//     keyboard-reachable <button> labeled 'Undo' (relabeled 'Undo
+//     anyway' while a conflict confirm is pending — issue #6).
 //
 // Initialization
 //   AgentUI.init() — idempotent; builds the components and attaches the
@@ -162,6 +169,7 @@
   var STATE_EVENT = 'agentui:state';
   var MUTATION_EVENT = 'agentui:mutation';
   var UNDO_EVENT = 'agentui:undo';
+  var UNDO_FAILED_EVENT = 'agentui:undo-failed';
   var UNDO_CONFLICT_EVENT = 'agentui:undo-conflict';
 
   var TOAST_LIFETIME_MS = 6000;
@@ -203,6 +211,12 @@
   var currentState = 'unavailable';
   var initialized = false;
   var undoStack = [];
+  // A mutation normally pushes its undo entry immediately before it
+  // reports the matching toast. These one-turn handoff slots preserve
+  // that association while still supporting the documented reverse
+  // order (report first, push immediately afterwards).
+  var pendingUndoEntry = null;
+  var unclaimedMutationToast = null;
 
   /**
    * Fire a CustomEvent on document with the given detail object.
@@ -407,6 +421,7 @@
     }
 
     ensureToastRegion();
+    var toastEl = null;
     if (toastRegionEl) {
       // The toast only renders a subset of the detail; build that subset
       // here so the rendering path can never mutate the caller's object.
@@ -417,7 +432,27 @@
       if (typeof detail.errorText === 'string' && detail.errorText.length > 0) {
         renderDetail.errorText = detail.errorText;
       }
-      createToast(renderDetail);
+      toastEl = createToast(renderDetail);
+    }
+
+    if (toastEl && detail.rejected !== true) {
+      if (
+        pendingUndoEntry &&
+        undoStack.indexOf(pendingUndoEntry) !== -1
+      ) {
+        associateUndoEntryWithToast(pendingUndoEntry, toastEl);
+        pendingUndoEntry = null;
+      } else {
+        // Support reportMutation() immediately before pushUndo(). Do not
+        // leave an arbitrary toast claimable after the current turn.
+        unclaimedMutationToast = toastEl;
+        window.setTimeout(function () {
+          if (unclaimedMutationToast === toastEl) {
+            unclaimedMutationToast = null;
+          }
+        }, 0);
+      }
+      refreshUndoButtons();
     }
 
     emit(MUTATION_EVENT, detail);
@@ -456,13 +491,28 @@
     // the revision the mutation produced). A later human edit bumps the
     // counter past this value, which is exactly the conflict undo()
     // checks for.
-    undoStack.push({
+    var storedEntry = {
       label: entry.label,
       restore: entry.restore,
-      revision: typeof entry.revision === 'number' ? entry.revision : stateRevision
-    });
+      revision: typeof entry.revision === 'number' ? entry.revision : stateRevision,
+      toastEl: null,
+      hasToastAssociation: false
+    };
+    undoStack.push(storedEntry);
     if (undoStack.length > UNDO_CAP) {
       undoStack.shift();
+    }
+
+    if (isLiveToast(unclaimedMutationToast)) {
+      associateUndoEntryWithToast(storedEntry, unclaimedMutationToast);
+      unclaimedMutationToast = null;
+    } else {
+      pendingUndoEntry = storedEntry;
+      window.setTimeout(function () {
+        if (pendingUndoEntry === storedEntry) {
+          pendingUndoEntry = null;
+        }
+      }, 0);
     }
 
     refreshUndoButtons();
@@ -495,39 +545,104 @@
     return typeof entry.revision === 'number' && entry.revision !== stateRevision;
   }
 
+  /** @returns {HTMLElement|null} the newest toast that has not been undone. */
+  function newestActiveToast() {
+    var toasts = liveToasts();
+    for (var i = toasts.length - 1; i >= 0; i--) {
+      if (toasts[i].getAttribute('data-undone') !== 'true') {
+        return toasts[i];
+      }
+    }
+    return null;
+  }
+
+  /** @returns {boolean} whether toastEl is still attached to the live region. */
+  function isLiveToast(toastEl) {
+    return !!toastEl && liveToasts().indexOf(toastEl) !== -1;
+  }
+
+  /** Keep an undo entry bound to the toast that represents its mutation. */
+  function associateUndoEntryWithToast(entry, toastEl) {
+    if (!entry || !toastEl) {
+      return;
+    }
+    entry.toastEl = toastEl;
+    entry.hasToastAssociation = true;
+  }
+
+  /** @returns {HTMLElement|null} the entry's associated toast when still live. */
+  function liveToastForEntry(entry) {
+    if (
+      entry &&
+      entry.hasToastAssociation === true &&
+      isLiveToast(entry.toastEl) &&
+      entry.toastEl.getAttribute('data-undone') !== 'true'
+    ) {
+      return entry.toastEl;
+    }
+    return null;
+  }
+
   /**
-   * Issue #6: re-render the newest not-yet-undone toast as the undo
-   * conflict's confirm step — a .agent-toast-conflict note asking the
-   * question, and the toast's Undo button relabeled "Undo anyway" with
+   * Find the entry's own toast, or create a new status toast when its
+   * original notification expired. A never-associated legacy entry may
+   * claim the current Undo-button toast; an entry whose known toast died
+   * never falls through to an unrelated notification.
+   */
+  function ensureToastForEntry(entry, summary) {
+    var toastEl = liveToastForEntry(entry);
+    if (toastEl) {
+      return toastEl;
+    }
+
+    if (entry && entry.hasToastAssociation !== true) {
+      var candidate = newestActiveToast();
+      if (candidate && candidate.querySelector('.agent-toast-undo')) {
+        associateUndoEntryWithToast(entry, candidate);
+        return candidate;
+      }
+    }
+
+    ensureToastRegion();
+    if (!toastRegionEl) {
+      return null;
+    }
+    toastEl = createToast({ summary: summary });
+    associateUndoEntryWithToast(entry, toastEl);
+    refreshUndoButtons();
+    return toastEl;
+  }
+
+  /**
+   * Issue #6: re-render the entry's associated toast as the undo
+   * conflict's confirm step — or create a recovery toast when the
+   * original expired. A .agent-toast-conflict note asks the question,
+   * and the toast's Undo button is relabeled "Undo anyway" with
    * data-confirm-undo="true" (the button's click handler reads that
    * attribute, so its SECOND press is the explicit confirmation).
    * Extends the toast's content only; role/aria and the Escape/dismiss
    * behavior are untouched. The toast's own status/live semantics
    * announce the conflict text.
    *
-   * @returns {boolean} true when a live toast was found to carry the
-   *   conflict; false when no toast survives (the conflict then has no
-   *   confirm affordance — the entry simply stays un-applied).
+   * @returns {boolean} true when a live or recovery toast carries the
+   *   conflict; false only when the document has no toast region host.
    */
-  function showUndoConflict(label) {
-    var toasts = liveToasts();
-    var toastEl = null;
-    for (var i = toasts.length - 1; i >= 0; i--) {
-      if (toasts[i].getAttribute('data-undone') !== 'true') {
-        toastEl = toasts[i];
-        break;
-      }
-    }
+  function showUndoConflict(entry) {
+    var toastEl = ensureToastForEntry(
+      entry,
+      'Undo needs confirmation — ' + entry.label
+    );
     if (!toastEl) {
       return false;
     }
+    refreshUndoButtons();
     if (toastEl.getAttribute('data-conflict') !== 'true') {
       toastEl.setAttribute('data-conflict', 'true');
       var noteEl = document.createElement('div');
       noteEl.className = 'agent-toast-conflict';
       noteEl.textContent =
         'You changed the chain or presets after this. Undo anyway? ' +
-        'Confirming restores what was there before "' + label + '".';
+        'Confirming restores what was there before "' + entry.label + '".';
       toastEl.appendChild(noteEl);
     }
     var undoBtn = toastEl.querySelector('.agent-toast-undo');
@@ -543,21 +658,24 @@
   }
 
   /**
-   * Pop the newest undo entry and run its restore(). Errors thrown by
-   * restore() are caught and logged — the entry stays popped and the
-   * error never reaches the caller, so a bad restore can't take the app
-   * down with it.
+   * Run the newest undo entry's restore(), then pop it only after the
+   * restore succeeds. A thrown restore is caught so it cannot take down
+   * the app, but it is not converted into success: the entry remains
+   * available for retry, the toast reports the failure, and a distinct
+   * failure event fires.
    *
    * Issue #6: when the newest entry is conflicted (a human edited state
    * after the mutation that pushed it) and `confirm` is not true,
    * NOTHING is popped or applied — the conflict is surfaced on the
-   * newest toast (see showUndoConflict) and 'agentui:undo-conflict'
+   * entry's associated/recovery toast (see showUndoConflict) and
+   * 'agentui:undo-conflict'
    * fires. Only an explicit confirm applies a conflicted restore.
    *
    * @param {boolean} [confirm] - true to apply past a revision conflict
    *   (the toast's second "Undo anyway" press).
-   * @returns {Object|null} the popped entry, null when empty OR when a
-   *   conflict was surfaced instead (nothing consumed in that case).
+   * @returns {Object|null} the popped entry, null when empty, when a
+   *   conflict was surfaced, or when restore failed. Nothing is consumed
+   *   in any null-return case.
    */
   function undo(confirm) {
     if (undoStack.length === 0) {
@@ -568,7 +686,7 @@
     var conflicted =
       typeof entry.revision === 'number' && entry.revision !== stateRevision;
     if (conflicted && confirm !== true) {
-      showUndoConflict(entry.label);
+      showUndoConflict(entry);
       emit(UNDO_CONFLICT_EVENT, {
         label: entry.label,
         remaining: undoStack.length
@@ -576,17 +694,29 @@
       return null;
     }
 
-    undoStack.pop();
     try {
       entry.restore();
     } catch (err) {
+      var errorText = err && err.message ? err.message : String(err);
       console.error(
-        'AgentUI.undo: restore() threw for "' + entry.label + '" — entry stays popped; error not propagated.',
+        'AgentUI.undo: restore() failed for "' + entry.label + '"; the undo entry was retained for retry.',
         err
       );
+      showUndoFailure(entry, errorText);
+      resetUndoConfirmation(entry);
+      emit(UNDO_FAILED_EVENT, {
+        label: entry.label,
+        remaining: undoStack.length,
+        confirmed: conflicted,
+        errorText: errorText
+      });
+      refreshUndoButtons();
+      return null;
     }
 
-    markMostRecentToastUndone(entry.label);
+    undoStack.pop();
+    markUndoEntryToastUndone(entry);
+    refreshUndoButtons();
     emit(UNDO_EVENT, {
       label: entry.label,
       remaining: undoStack.length,
@@ -603,24 +733,88 @@
   /** Empty the undo stack. No event fires for this (see contract). */
   function clearUndo() {
     undoStack = [];
+    pendingUndoEntry = null;
     refreshUndoButtons();
   }
 
   /**
-   * Mark the most recent toast as undone: remove its Undo button, set
-   * data-undone="true" (so a second undo() with this toast still newest
-   * doesn't double-annotate), and append an "Undone — <label>" note.
-   * The toast's role="status" aria-live="polite" announces the change.
+   * Add or update the failure note on the entry's associated toast,
+   * recreating a recovery toast when the original expired. The undo
+   * entry and button remain available for retry.
    *
-   * @param {string} label - the undone entry's label.
+   * @param {Object} entry
+   * @param {string} errorText
    */
-  function markMostRecentToastUndone(label) {
-    var toasts = liveToasts();
-    if (toasts.length === 0) {
+  function showUndoFailure(entry, errorText) {
+    var toastEl = ensureToastForEntry(
+      entry,
+      'Undo needs attention — ' + entry.label
+    );
+    if (!toastEl) {
+      return;
+    }
+    var noteEl = toastEl.querySelector('.agent-toast-undo-failed');
+    if (!noteEl) {
+      noteEl = document.createElement('div');
+      noteEl.className = 'agent-toast-error agent-toast-undo-failed';
+      toastEl.appendChild(noteEl);
+    }
+    noteEl.textContent =
+      'Undo failed — ' + entry.label + '. ' + errorText + ' Fix the problem, then retry Undo.';
+  }
+
+  /**
+   * A failed confirmed restore consumes that confirmation attempt. Reset
+   * the visible token so every later try against conflicted state needs
+   * another explicit two-step confirmation.
+   */
+  function resetUndoConfirmation(entry) {
+    var toastEl = liveToastForEntry(entry);
+    if (!toastEl) {
       return;
     }
 
-    var toastEl = toasts[toasts.length - 1];
+    if (typeof toastEl.removeAttribute === 'function') {
+      toastEl.removeAttribute('data-conflict');
+    } else {
+      toastEl.setAttribute('data-conflict', 'false');
+    }
+    var conflictNote = toastEl.querySelector('.agent-toast-conflict');
+    if (conflictNote) {
+      conflictNote.remove();
+    }
+
+    var undoBtn = toastEl.querySelector('.agent-toast-undo');
+    if (undoBtn) {
+      undoBtn.textContent = 'Undo';
+      if (typeof undoBtn.removeAttribute === 'function') {
+        undoBtn.removeAttribute('data-confirm-undo');
+        undoBtn.removeAttribute('aria-label');
+      } else {
+        undoBtn.setAttribute('data-confirm-undo', 'false');
+        undoBtn.setAttribute('aria-label', 'Undo');
+      }
+    }
+  }
+
+  /**
+   * Mark the entry's associated toast as undone: remove its Undo button,
+   * set data-undone="true" (so a second call cannot double-annotate),
+   * and append an "Undone — <label>" note. If its original toast has
+   * expired, create and mark a new completion toast instead of touching
+   * an unrelated notification.
+   * The toast's role="status" aria-live="polite" announces the change.
+   *
+   * @param {Object} entry - the successfully restored undo entry.
+   */
+  function markUndoEntryToastUndone(entry) {
+    var toastEl = ensureToastForEntry(
+      entry,
+      'Undo completed — ' + entry.label
+    );
+    if (!toastEl) {
+      return;
+    }
     if (toastEl.getAttribute('data-undone') === 'true') {
       return;
     }
@@ -637,10 +831,14 @@
     if (conflictNote) {
       conflictNote.remove();
     }
+    var failedNote = toastEl.querySelector('.agent-toast-undo-failed');
+    if (failedNote) {
+      failedNote.remove();
+    }
 
     var noteEl = document.createElement('div');
     noteEl.className = 'agent-toast-undone';
-    noteEl.textContent = 'Undone — ' + label;
+    noteEl.textContent = 'Undone — ' + entry.label;
     toastEl.appendChild(noteEl);
   }
 
@@ -677,10 +875,18 @@
     var toasts = liveToasts();
 
     var targetIndex = -1;
-    for (var i = toasts.length - 1; i >= 0; i--) {
-      if (toasts[i].getAttribute('data-undone') !== 'true') {
-        targetIndex = i;
-        break;
+    if (undoStack.length > 0) {
+      var newestEntry = undoStack[undoStack.length - 1];
+      var associatedToast = liveToastForEntry(newestEntry);
+      if (associatedToast) {
+        targetIndex = toasts.indexOf(associatedToast);
+      } else if (newestEntry.hasToastAssociation !== true) {
+        for (var i = toasts.length - 1; i >= 0; i--) {
+          if (toasts[i].getAttribute('data-undone') !== 'true') {
+            targetIndex = i;
+            break;
+          }
+        }
       }
     }
 
@@ -716,8 +922,8 @@
    * a live toast — the recovery path stays available beyond the toast's
    * 6 s lifetime, with the same conflict rules as the toast button. A
    * CONFLICTED newest entry cannot be confirmed from the keyboard (the
-   * confirm affordance is the toast's "Undo anyway" button), so the
-   * key simply passes through untouched in that case.
+   * confirm affordance is the toast's "Undo anyway" button), so the key
+   * surfaces or recreates that button but passes through untouched.
    *
    * @param {KeyboardEvent} event
    */
@@ -740,7 +946,12 @@
       return;
     }
 
-    if (undoStack.length === 0 || newestEntryConflicted()) {
+    if (undoStack.length === 0) {
+      return;
+    }
+
+    if (newestEntryConflicted()) {
+      undo();
       return;
     }
 

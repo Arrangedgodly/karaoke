@@ -17,6 +17,9 @@
 //   - switchInputDevice() carries a request-GENERATION token: a
 //     completion whose generation is superseded has its stream stopped +
 //     discarded and rejects with a tagged {stale:true} AbortError.
+//   - a full session teardown also advances that generation, so a device
+//     replacement resolving after active-track loss cannot revive or
+//     reconnect the stopped engine; only a later Start creates a session.
 //   - src/main.js surfaces loss through the EXISTING entry-3 vocabulary
 //     (setErrorStatus + setStartHint + the re-enabled Start button),
 //     stops meters via MeterTaps.onEngineStopped() (#3 latch preserved),
@@ -284,6 +287,16 @@ function createSandbox() {
     }
   };
 
+  var audioBypass = {
+    reconnects: 0,
+    reconnectSource: function () {
+      audioBypass.reconnects += 1;
+    },
+    isEngaged: function () {
+      return false;
+    }
+  };
+
   var sandbox = {
     console: console,
     setTimeout: setTimeout,
@@ -317,12 +330,7 @@ function createSandbox() {
       }
     },
     AudioContext: makeAudioContext,
-    AudioBypass: {
-      reconnectSource: function () {},
-      isEngaged: function () {
-        return false;
-      }
-    },
+    AudioBypass: audioBypass,
     AudioGraph: {
       __builds: 0,
       buildGraph: function () {
@@ -385,6 +393,7 @@ async function main() {
   var els = sandbox.__els;
   var MT = sandbox.__meterTaps;
   var AE = sandbox.AudioEngine;
+  var AB = sandbox.AudioBypass;
   var startBtn = els['start-button'];
   var deviceSelect = els['input-device-select'];
   var statusWrap = els['status'];
@@ -551,34 +560,86 @@ async function main() {
   check(statusText(els) === liveNow && isLiveVisible(), 'F2: devicechange with the active device present keeps Live');
 
   // --------------------------------------------------------------------
-  console.log('G. failed switch keeps the old stream and snaps the selector back');
+  console.log('G. active-track loss invalidates a pending device switch');
+  // --------------------------------------------------------------------
+  // Leave a switch unresolved, then lose the ACTIVE track before that
+  // replacement arrives. The late replacement belongs to the dead session:
+  // it must be stopped/discarded and must never reconnect any audio path.
+  deviceList = [
+    { kind: 'audioinput', deviceId: 'd2', label: 'Mic Two' },
+    { kind: 'audioinput', deviceId: 'd3', label: 'Mic Three' }
+  ];
+  deviceSelect.value = 'd3';
+  deviceSelect.__fire('change');
+  check(gumQueue.length === 1 && requestedDeviceId(gumQueue[0]) === 'd3',
+    'G1: the replacement switch is pending when the active track is lost');
+
+  var activeBeforeLoss = AE.stream;
+  activeBeforeLoss.__track.__fire('ended');
+  await settle();
+
+  check(AE.stream === null && AE.sourceNode === null && AE.isStarted === false,
+    'G2: active-track loss tears the engine down while the switch is pending');
+  check(statusText(els) === 'Mic was unplugged.' && !isLiveVisible(),
+    'G2: the loss state remains visible while the switch is pending');
+
+  var buildsAfterLoss = sandbox.AudioGraph.__builds;
+  var bypassReconnectsAfterLoss = AB.reconnects;
+  var meterSwitchesAfterLoss = MT.switched.length;
+  resolveGumAt(0); // the dead session's d3 replacement arrives late
+  var staleReplacementTrack = lastCreatedTrack;
+  await settle();
+
+  check(staleReplacementTrack.__stopCalls === 1 && staleReplacementTrack.readyState === 'ended',
+    'G3: the late replacement stream is stopped and discarded');
+  check(AE.stream === null && AE.sourceNode === null && AE.isStarted === false,
+    'G3: the late replacement cannot revive the torn-down engine');
+  check(
+    sandbox.AudioGraph.__builds === buildsAfterLoss &&
+      AB.reconnects === bypassReconnectsAfterLoss &&
+      MT.switched.length === meterSwitchesAfterLoss,
+    'G3: the late replacement reconnects no graph, bypass, or meter path'
+  );
+  check(statusText(els) === 'Mic was unplugged.' && !isLiveVisible() && startBtn.disabled === false,
+    'G3: the operator stays stopped until explicitly pressing Start');
+
+  await startWith('d2');
+  check(AE.currentDeviceId === 'd2' && AE.isStarted === true && AE.isTrackLive === true,
+    'G4: explicit Start creates the next live session');
+  check(
+    sandbox.AudioGraph.__builds === buildsAfterLoss + 1 && AB.reconnects === bypassReconnectsAfterLoss + 1,
+    'G4: only explicit Start reconnects the graph and bypass path'
+  );
+
+  // --------------------------------------------------------------------
+  console.log('H. failed switch keeps the old stream and snaps the selector back');
   // --------------------------------------------------------------------
   deviceSelect.value = 'd1'; // not even in deviceList -> gUM rejects
   deviceSelect.__fire('change');
-  check(gumQueue.length === 1, 'G1: the failed switch is pending');
+  check(gumQueue.length === 1, 'H1: the failed switch is pending');
   var notFound = new Error('Requested device not found');
   notFound.name = 'NotFoundError';
   rejectGumAt(0, notFound);
   await settle();
 
-  check(AE.currentDeviceId === 'd2', 'G1: the old stream (d2) is untouched by the failed switch');
-  check(!isLiveVisible() === false, 'G1: the engine stays live (dot truthful)');
+  check(AE.currentDeviceId === 'd2', 'H1: the old stream (d2) is untouched by the failed switch');
+  check(!isLiveVisible() === false, 'H1: the engine stays live (dot truthful)');
   check(
     statusWrap.classList.contains('error') && statusText(els).indexOf('gone') !== -1,
-    'G1: entry-3 switch failure copy still surfaces'
+    'H1: entry-3 switch failure copy still surfaces'
   );
-  check(selectorValue(deviceSelect) === 'd2', 'G1: the selector snapped back to the ACTIVE device');
-  check(startBtn.disabled === true, 'G1: a failed switch never re-enables Start (engine still live)');
+  check(selectorValue(deviceSelect) === 'd2', 'H1: the selector snapped back to the ACTIVE device');
+  check(startBtn.disabled === true, 'H1: a failed switch never re-enables Start (engine still live)');
 
   // --------------------------------------------------------------------
-  console.log('H. no stale-visible-Live anywhere above (aggregate)');
+  console.log('I. no stale-visible-Live anywhere above (aggregate)');
   // --------------------------------------------------------------------
   // Re-checked end-to-end: after the worst case in this suite's flow
   // (live engine -> track end), the strip cannot read Live.
   lastCreatedTrack.__fire('ended');
   await settle();
-  check(statusText(els) === 'Mic was unplugged.' && !isLiveVisible(), 'H1: track end on the FINAL live session leaves no Live');
-  check(startBtn.disabled === false && MT.stopped > 0, 'H1: recovery (Start) and meters-stopped hold');
+  check(statusText(els) === 'Mic was unplugged.' && !isLiveVisible(), 'I1: track end on the FINAL live session leaves no Live');
+  check(startBtn.disabled === false && MT.stopped > 0, 'I1: recovery (Start) and meters-stopped hold');
 
   // --------------------------------------------------------------------
   if (failures.length === 0) {
