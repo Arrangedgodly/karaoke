@@ -1,56 +1,65 @@
-// Generic, data-driven parameter-control component for the Node-Based Web
-// Audio Chain Builder.
+// Pattern Machine control layer for the VOXCHAIN (redesign
+// item 1 — src/param-controls.js rewritten in the locked "Single Face
+// Chassis" world, docs/ultron/redesign.md).
 //
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project, exposing a single `window.ParamControls` namespace
-// with one `render` function.
+// with `render` and `updateControl`. The RENDER CONTRACT IS UNCHANGED: one
+// call per model entry ({id, type, params}), one control per paramSpec
+// entry, every commit riding the exact same pipeline the fader stack used —
+// only the CONTROL ANATOMY changed.
 //
-// UI-4 scope: render one labeled slider row per entry in a node type's
-// paramSpec (src/node-types.js), bound to one model entry (AE-2's
-// {id, type, params} shape, src/audio-graph.js). This is the reusable
-// rendering machinery the future per-node-type UI (AE-5 through AE-10, and
-// the drag-and-drop canvas, UI-3) plugs into — it never needs to know
-// anything about what a "gain" or "compressor" IS; it only reads the
-// generic {id, label, min, max, default, step, unit} shape from
-// NodeTypes.getParamSpec() and calls NodeTypes.applyParam() generically to
-// apply a change to the live node.
+// THE THREE CONTROL SHAPES (the direction contract's encoder field):
 //
-// Two side effects on every slider move, deliberately kept separate (see
-// the comments on AudioGraph.updateNodeParams() in src/audio-graph.js and
+//   KNOB (default for continuous params) — a rotary encoder visual driven
+//   by a NATIVE <input type="range"> kept in the DOM as the semantic
+//   engine: it keeps the id/min/max/step/value contract, the label[for]
+//   pairing, the aria-describedby help wiring, and ALL native keyboard
+//   behavior (arrows / Home / End / PageUp / PageDown) — it is visually
+//   clipped (opacity 0 over the knob's own box, pointer-events:none) and
+//   the knob visual beside it draws the focus ring when the input has
+//   :focus-visible. Pointer interaction lives on the knob visual:
+//   vertical drag (150 px = full sweep, Shift = fine x0.2), wheel (one
+//   spec step per notch, Shift = x5). Every drag/wheel tick WRITES
+//   input.value and dispatches a real 'input' event, so the existing
+//   commit pipeline (this file's input handler) runs unchanged. A center
+//   detent tick is printed where the param has a meaningful unity center
+//   (bipolar ranges: gainDb, the EQ band gains) and drag snaps to it.
+//
+//   PADS (paramSpec.values — discrete params) — autotune Key/Scale render
+//   as real <button> pads in a role="radiogroup" with roving tabindex
+//   (arrows move AND select, Home/End, Space/Enter native), committing
+//   their STRING value verbatim down the same pipeline (UI-1's contract:
+//   NodeTypes.applyParam receives 'A' / 'Minor' as strings).
+//
+//   TRIM (mini-slider) — the few wide linear ranges that demand throw
+//   precision rather than an arc: delay Time (10–1000 ms), autotune
+//   Retune (0–500 ms), gate Release (0.01–2 s). Same native range-input
+//   engine as the knob, rendered as a short horizontal instrument
+//   trimmer.
+//
+// Two side effects on every commit, deliberately kept separate (see the
+// comments on AudioGraph.updateNodeParams() in src/audio-graph.js and
 // NodeTypes.applyParam() in src/node-types.js for the full reasoning):
-//   - AudioGraph.updateNodeParams() — updates the MODEL's bookkeeping only.
-//     Never touches the live graph, never calls buildGraph().
-//   - NodeTypes.applyParam() — updates the LIVE AudioNode directly (a raw
-//     AudioParam write, or a very short click-avoiding ramp, entirely at
-//     the registered type's discretion). Never goes through buildGraph()
-//     either.
-// A continuous slider drag fires many `input` events per second; routing
-// either of these through buildGraph()'s duck/rebuild/un-duck machinery
-// would be both wasteful and audibly wrong (a rebuild-storm of tiny fades
-// instead of one smooth, glitch-free parameter change) — buildGraph() is
-// NEVER called from this file.
+//   - AudioGraph.updateNodeParams() — model bookkeeping only.
+//   - NodeTypes.applyParam() — the LIVE AudioNode write.
+// buildGraph() is NEVER called from this file — a continuous drag fires
+// many commits per second and must route through the click-safe ramp, not
+// the duck/rebuild machinery.
 //
-// Refinement entry 2 ($impeccable clarify, 2026-08-28) — the plain-language
-// layer: one help line per param for the non-engineer operator PRODUCT.md
-// declares as the at-risk live user (Threshold/Ratio/Attack-in-seconds and
-// friends previously had ZERO plain-language help anywhere — critique P1).
-// The layer is ADDITIVE only: the terse-technical silkscreen labels are
-// ratified design and stay verbatim, the mono value register is untouched,
-// and input semantics/wiring are exactly as before. Each line lives in the
-// PLAIN_LANGUAGE_HELP map below — the single source, keyed by node type +
-// param id, never duplicated across renderers — and reaches the user three
-// ways with no tooltip framework and no new deps:
-//   - hover / long-press: the native `title` attribute (row + slider —
-//     title tooltips inherit down the subtree);
-//   - keyboard: the same `title` on the slider (Chromium also surfaces the
-//     title tooltip of a keyboard-focused element);
-//   - screen readers: an .sr-only span wired via `aria-describedby` on the
-//     slider, so the line is ANNOUNCED WITH the control rather than
-//     replacing its label or interrupting the reading flow.
-// A param with no map entry renders exactly as it did before this entry.
-// Trade-off (deliberate, per the ratified "no tooltip framework" scope):
-// native title tooltips are not styleable and their delay is the OS's —
-// acceptable for this pass; the copy itself is ours and lives in one place.
+// THE DISPLAY REGISTER FEED: every commit, focus, and external write also
+// calls window.CanvasRegister.showParam(module, param, value, help) — the
+// accent-marked display line etched along the canvas panel's top edge
+// (built by src/canvas.js). Purely visual redundancy: the register is
+// aria-hidden, so the control's own semantics stay the announced truth.
+// The call is guarded (a bare test harness without the register simply
+// skips it), and the PLAIN_LANGUAGE_HELP map below stays the single
+// source of the help copy — the register reuses it, never duplicates it.
+//
+// Refinement entry 2 ($impeccable clarify, 2026-08-28) — the
+// plain-language help layer survives verbatim: the PLAIN_LANGUAGE_HELP
+// map, the title tooltips, and the .sr-only spans wired through
+// aria-describedby all ship exactly as before, one shape per control.
 
 (function () {
   'use strict';
@@ -58,36 +67,36 @@
   // ---------------------------------------------------------------------
   // Issue #5 — rendered-row registry (for updateControl below).
   //
-  // render() keeps each row's <input> and value <span> in closure scope,
-  // which is exactly right for the human drag path but leaves no way for
-  // an OUTSIDE writer (the agent set_param fast path, via
-  // ChainCanvas.updateNodeParam) to move the visible control without
-  // re-rendering the whole card. This map is the minimal bridge: render()
-  // registers, per model-entry id, one "apply an externally-set value"
-  // closure per param row (it updates the slider position, the mono value
-  // span, AND this render's workingParams copy — see the input-handler
-  // comment below for why that last one matters). Keyed by id and reset at
-  // the top of every render() for that id, so a rebuilt card can never
-  // leave stale rows behind for its own id.
+  // render() keeps each row's elements in closure scope, which is exactly
+  // right for the human path but leaves no way for an OUTSIDE writer (the
+  // agent set_param fast path, via ChainCanvas.updateNodeParam) to move
+  // the visible control without re-rendering the whole card. This map is
+  // the minimal bridge: render() registers, per model-entry id, one
+  // "apply an externally-set value" closure per param row (it moves the
+  // knob rotation / pad selection / trim cap, the mono value span, the
+  // display register, AND this render's workingParams copy). Keyed by id
+  // and reset at the top of every render() for that id, so a rebuilt card
+  // can never leave stale rows behind for its own id.
   // ---------------------------------------------------------------------
   var renderedControls = {};
 
   /**
    * Move ONE already-rendered param row's visible control to a new value —
-   * the slider position and the mono value span, never a re-render. Used
-   * by ChainCanvas.updateNodeParam (src/canvas.js) so an agent set_param
-   * applied through the parameter-only fast path (issue #5,
-   * src/mcp-tools.js) shows up on the card exactly like a human slider
-   * move would, without rebuilding any card.
+   * the knob rotation / pad selection / trim cap and the mono value span,
+   * never a re-render. Used by ChainCanvas.updateNodeParam (src/canvas.js)
+   * so an agent set_param applied through the parameter-only fast path
+   * (issue #5, src/mcp-tools.js) shows up on the section exactly like a
+   * human knob move would, without rebuilding any card.
    *
    * Purely presentational + bookkeeping on this render's working copy; it
    * deliberately does NOT touch AudioGraph or any live AudioNode (the
-   * caller owns the live write, same division of labor as the input
-   * handler below).
+   * caller owns the live write, same division of labor as the commit
+   * handler below) and does NOT commit (no onParamsChanged, no autosave).
    *
    * @param {string} modelEntryId - the id the card was rendered for.
    * @param {string} paramId - the param row to move.
-   * @param {number} value - the new value, in the param's own unit.
+   * @param {number|string} value - the new value (param's own unit/scale;
+   *   discrete params take their string value verbatim).
    * @returns {boolean} true when a rendered row was found and updated;
    *   false when this id/param has no rendered row (unknown node, param
    *   added after the card was rendered, or no card at all — e.g. a bare
@@ -109,14 +118,15 @@
   /**
    * Refinement entry 2: the plain-language help map — one line per param,
    * keyed `type -> paramId -> line`, in the README's operator voice. No
-   * label prefix: the row already silkscreens the label, the tooltip
-   * anchors to that row, and screen readers announce the label[for] name
+   * label prefix: the control already silkscreens the label, the tooltip
+   * anchors to that row, and screen readers announce the label name
    * before this description — so the line spends its whole budget on the
    * explanation. The riskiest controls (compressor Threshold/Ratio, delay
    * Feedback/Mix, limiter Ceiling — the ones whose mid-show misuse is most
    * consequential) are outcome-framed with an explicit direction clause
    * ("lower = …"). Lines describe only what the matching AudioParam in
-   * src/node-*.js actually does; no new factual claims, no marketing voice.
+   * src/node-*.js actually does; no new factual claims, no marketing
+   * voice.
    *
    * Finishing entry 1 (cycle 3, $impeccable clarify — critique P2-1): the
    * four cycle-3 families join the same layer with the same conventions
@@ -125,7 +135,7 @@
    * Autotune's required experimental-status + accepted-20-ms-delay
    * disclosure rides the Key line — the card's FIRST param row and first
    * tab stop — so it is said once per card, not four times; the badge on
-   * the same card header (single-sourced from the type's registration)
+   * the same section rail (single-sourced from the type's registration)
    * already carries the status visually and pre-add on the chip's
    * aria-label. Operator wording follows README.md's own disclosures.
    */
@@ -216,7 +226,7 @@
    * that factor so the mono readout follows the surface-wide 0-100 %
    * convention (Mix "30%", Drive "25%") instead of reading "0.25%" — a
    * quarter of a percent. Everything upstream of the string stays on the
-   * internal scale: the slider's min/max/step, the parsed model value,
+   * internal scale: the input's min/max/step, the parsed model value,
    * AudioGraph bookkeeping, preset serialization, and the agent set_param
    * contract all keep the 0..1 numbers exactly as they were (a saved
    * drive 0.25 still means the same sound). The round-trip kills binary
@@ -243,6 +253,146 @@
     return shown + ' ' + unit;
   }
 
+  // ---------------------------------------------------------------------
+  // Control-shape allocation (presentation ONLY — the param model, the
+  // commit pipeline, and the agent contract never see which shape
+  // rendered). Discrete params are pads by their spec shape; the rest are
+  // knobs EXCEPT the wide linear ranges whose precision demands throw,
+  // not arc — listed here by type.param with the reason on each line. A
+  // future param not listed is a knob by default (the safe default: the
+  // arc reads any range).
+  // ---------------------------------------------------------------------
+  var TRIM_PARAMS = {
+    // 10–1000 ms across a 99-step throw: timing set by ear against a
+    // rhythmic gap wants linear distance, not a shrinking arc.
+    'delay.timeMs': true,
+    // 0–500 ms glide: the robot-snap/smooth-glide boundary is the whole
+    // point of this param — a linear trimmer makes the low end reachable.
+    'autotune.retune': true,
+    // 0.01–2 s: two decades on one control; the arc would cram the
+    // musically useful 50–300 ms band into a few degrees.
+    'gate.release': true
+  };
+
+  function controlModeFor(type, spec) {
+    if (Array.isArray(spec.values)) {
+      return 'pads';
+    }
+    if (TRIM_PARAMS[type + '.' + spec.id]) {
+      return 'trim';
+    }
+    return 'knob';
+  }
+
+  // ---------------------------------------------------------------------
+  // Knob interaction constants (the direction contract's drag feel).
+  // ---------------------------------------------------------------------
+  var KNOB_SWEEP_DEG = 270;      // arc travel: -135deg .. +135deg from top
+  var KNOB_DRAG_RANGE_PX = 150;  // vertical px for the full sweep
+  var KNOB_FINE_FACTOR = 0.2;    // Shift-drag = 5x finer
+  var KNOB_WHEEL_STEP_MULT = 1;  // one spec step per wheel notch
+  var KNOB_WHEEL_FINE_MULT = 5;  // Shift-wheel = 5 steps per notch
+
+  // ---------------------------------------------------------------------
+  // Item 2 live variants — DRAG FEEL per anatomy (docs/ultron/redesign.md
+  // item 2). The anatomy/feel switch is body[data-knob-variant], written
+  // by the round's switcher (index.html ITEM 2 LIVE scaffold) and mirrored
+  // from the live session's cycler; ABSENT = the built ENCODER anatomy and
+  // feel, so the committed tests and the shipped default are untouched.
+  // The mode is read AT DRAG TIME — switching variants needs no re-render:
+  // the same rendered knobs answer in whichever feel is active.
+  //
+  //   encoder — linear vertical drag (the built feel, the baseline anchor).
+  //   dial    — angular-velocity mapping: a detent-proximity ease (fine
+  //             near a bipolar center) times a velocity term (a faster
+  //             push spins the dial further — angular momentum).
+  //   vfd     — stepped: the drag target quantizes onto a 24-detent grid
+  //             aligned to the param's own step grid; Shift = fine within
+  //             the step; wheel = one detent per notch (Shift = one step).
+  // ---------------------------------------------------------------------
+  var KNOB_VFD_SEGMENTS = 24;
+  var KNOB_DIAL_CENTER_GAIN = 0.45; // gain at a bipolar center (fine work)
+  var KNOB_DIAL_VELOCITY_MAX = 0.6; // extra response at a fast push
+  var KNOB_DIAL_VELOCITY_PX = 24;   // dy at which the velocity term maxes
+
+  /**
+   * The active control-anatomy feel mode. Guarded for the stripped test
+   * harnesses (no document.body, or no getAttribute): they get the built
+   * encoder feel, which is also the shipped default until bake.
+   *
+   * @returns {string} 'encoder' | 'dial' | 'vfd'
+   */
+  function knobFeelMode() {
+    try {
+      if (typeof document !== 'undefined' && document.body &&
+          typeof document.body.getAttribute === 'function') {
+        var mode = document.body.getAttribute('data-knob-variant');
+        if (mode === 'dial' || mode === 'vfd' || mode === 'encoder') {
+          return mode;
+        }
+      }
+    } catch (err) {
+      /* stripped harness — the built feel */
+    }
+    return 'encoder';
+  }
+
+  // ---------------------------------------------------------------------
+  // Stub-safe DOM helpers. The committed tests run this file inside vm
+  // sandboxes whose element stubs carry a plain-object `style` and no
+  // Event constructor — every visual-only mechanism below degrades to a
+  // no-op there instead of throwing (the pipeline itself is what the
+  // harness asserts, never the paint).
+  // ---------------------------------------------------------------------
+
+  /** Set a CSS custom property if the runtime supports it; silently skip
+   *  in a stripped harness (the knob visual is paint, not state). */
+  function setVar(el, name, value) {
+    try {
+      if (el && el.style && typeof el.style.setProperty === 'function') {
+        el.style.setProperty(name, value);
+      }
+    } catch (err) {
+      /* visual-only */
+    }
+  }
+
+  /** Dispatch a real 'input' event on the range input so the EXISTING
+   *  commit handler runs (drag/wheel feel identical to keyboard). Falls
+   *  back to nothing in a harness without event constructors — tests
+   *  drive the handler through their own fire() convention. */
+  function fireInput(input) {
+    try {
+      if (typeof window.Event === 'function') {
+        input.dispatchEvent(new window.Event('input', { bubbles: true }));
+        return;
+      }
+    } catch (err) {
+      /* fall through to the legacy path */
+    }
+    try {
+      if (typeof document !== 'undefined' && typeof document.createEvent === 'function') {
+        var evt = document.createEvent('Event');
+        evt.initEvent('input', true, true);
+        input.dispatchEvent(evt);
+      }
+    } catch (err) {
+      /* stripped harness — nothing to dispatch with */
+    }
+  }
+
+  /** Feed the display register (guarded: absent in bare harnesses, and
+   *  never load-bearing — the register is redundant display). */
+  function registerShow(moduleLabel, paramLabel, valueText, helpLine) {
+    try {
+      if (window.CanvasRegister && typeof window.CanvasRegister.showParam === 'function') {
+        window.CanvasRegister.showParam(moduleLabel, paramLabel, valueText, helpLine);
+      }
+    } catch (err) {
+      /* display-only */
+    }
+  }
+
   /**
    * Render the parameter controls for one model entry into `container`,
    * replacing whatever was there before.
@@ -253,13 +403,24 @@
    * legitimately render a container before every node type it might show
    * has been registered.
    *
+   * Row anatomy per shape (styles in main.css's Pattern Machine block):
+   *   .param-row.knob-row  [label-in-unit] input.knob-input (clipped
+   *                        engine, first so :focus-visible can style the
+   *                        knob via the sibling selector) +
+   *                        .knob-unit(.knob ring/cap/pointer +
+   *                        .param-value + label.param-label)
+   *   .param-row.pad-row   label.param-label + .pad-group(button.pad per
+   *                        value) — no value span: the pressed pad IS the
+   *                        value display
+   *   .param-row.trim-row  label + input.trim-slider + .param-value
+   * Every row keeps: the .sr-only help span, the row+control title
+   * tooltips, and aria-describedby wiring from refinement entry 2.
+   *
    * @param {HTMLElement} container
    * @param {{id: string, type: string, params: Object}} modelEntry
-   * @param {(updatedParams: Object) => void} [onParamsChanged] - optional;
-   *   called with the full updated params object after every slider move.
-   *   A future caller (e.g. UI-3's canvas) may use this to mark an
-   *   "unsaved changes" indicator — this component doesn't do anything
-   *   with it beyond making it available.
+   * @param {(updatedParams: Object) => void} [onParamsChanged] - called
+   *   with the full updated params object after every commit. UI-3's
+   *   canvas uses it for autosave + the unsaved dot.
    */
   function renderParamControls(container, modelEntry, onParamsChanged) {
     container.innerHTML = '';
@@ -269,16 +430,18 @@
       return;
     }
 
+    var moduleLabel = window.NodeTypes.getLabel(modelEntry.type);
+
     // Issue #5: fresh row registry for this id (a re-render replaces every
     // row, so the previous render's entries for this id are stale by
     // definition — see renderedControls above).
     renderedControls[modelEntry.id] = {};
 
     // Working copy of this entry's params — shallow-copied once up front,
-    // then updated in place (one field at a time) as sliders move, so each
-    // row's `input` handler always builds its updatedParams object from the
-    // latest state of every OTHER slider in this render too, not just its
-    // own.
+    // then updated in place (one field at a time) as controls move, so
+    // each row's commit always builds its updatedParams object from the
+    // latest state of every OTHER control in this render too, not just
+    // its own.
     var workingParams = Object.assign({}, modelEntry.params || {});
 
     paramSpec.forEach(function (spec) {
@@ -288,84 +451,49 @@
       workingParams[spec.id] = initialValue;
 
       var inputId = 'param-' + modelEntry.id + '-' + spec.id;
+      var helpText = lookupHelpLine(modelEntry.type, spec.id);
 
       var row = document.createElement('div');
       row.className = 'param-row';
 
-      var label = document.createElement('label');
-      label.setAttribute('for', inputId);
-      label.className = 'param-label';
-      label.textContent = spec.label;
-
-      var input;
-      if (Array.isArray(spec.values)) {
-        // UI-1 — discrete (enumerated) param: render a native <select>
-        // instead of a range slider. A native select is keyboard operable
-        // for free (Tab focus + arrow keys / typeahead), and screen readers
-        // announce the newly selected option text on change — exactly the
-        // value-announcement UI-1 requires, with zero custom ARIA to get
-        // wrong. Values are plain strings (e.g. 'C'..'B', 'Chromatic'),
-        // committed verbatim through the SAME pipeline as a slider move
-        // (AudioGraph.updateNodeParams model bookkeeping +
-        // NodeTypes.applyParam live write) — a type's applyParam simply
-        // receives a string paramId/value pair instead of a number.
-        input = document.createElement('select');
-        input.className = 'param-select';
-        spec.values.forEach(function (v) {
-          var option = document.createElement('option');
-          option.value = v;
-          option.textContent = v;
-          input.appendChild(option);
-        });
-      } else {
-        input = document.createElement('input');
-        input.type = 'range';
-        input.className = 'param-slider';
-        input.min = spec.min;
-        input.max = spec.max;
-        input.step = spec.step;
+      // Shared help wiring (refinement entry 2): the .sr-only span is
+      // clip-hidden (zero layout footprint) and every interactive element
+      // in the row carries the aria-describedby id; the title tooltips
+      // ride the row and the control for hover / keyboard.
+      var helpSpan = null;
+      if (helpText) {
+        helpSpan = document.createElement('span');
+        helpSpan.id = 'param-help-' + modelEntry.id + '-' + spec.id;
+        helpSpan.className = 'sr-only';
+        helpSpan.textContent = helpText;
+        row.title = helpText;
       }
-      input.id = inputId;
-      input.value = initialValue;
 
-      var valueDisplay = document.createElement('span');
-      valueDisplay.className = 'param-value';
-      valueDisplay.textContent = formatValue(initialValue, spec.unit, spec.displayScale);
+      // The display-register feed for THIS row at its CURRENT value —
+      // fired on commit, on focus (a focused control answers on the
+      // register even before it moves), and on external writes.
+      function feedRegister(valueText) {
+        registerShow(moduleLabel, spec.label, valueText, helpText || '');
+      }
 
-      // Issue #5: register this row's external-value applier (see
-      // renderedControls above). Closes over `input`, `valueDisplay` and
-      // this render's `workingParams` so an agent param write surfaced
-      // through updateControl() keeps the slider, the mono span, AND the
-      // working copy a later human slider move builds from all in agreement
-      // — without it, the next `input` event on a sibling row would build
-      // its updatedParams from a stale copy and silently REVERT the agent's
-      // value in the model.
-      renderedControls[modelEntry.id][spec.id] = {
-        apply: function (externalValue) {
-          input.value = externalValue;
-          valueDisplay.textContent = formatValue(externalValue, spec.unit, spec.displayScale);
-          workingParams[spec.id] = externalValue;
-        }
-      };
-
-      // Fires continuously while dragging (not just on release) — that's
-      // exactly the point: a host tuning by ear expects to hear the change
-      // live as the slider moves, not only once they let go.
-      input.addEventListener('input', function () {
-        // Issue #6: a HUMAN slider move — mark the state revision so a
-        // stale agent Undo entry can no longer auto-apply over it. The
-        // agent set_param fast path deliberately does NOT fire this
-        // handler (it writes through AudioGraph/NodeTypes/
-        // ChainCanvas.updateNodeParam directly), so agent edits keep
-        // today's pure-agent undo semantics.
+      // -----------------------------------------------------------------
+      // The ONE commit pipeline (unchanged in behavior from the fader
+      // stack): human-edit bump -> value display -> working-copy re-sync
+      // -> AudioGraph bookkeeping -> live applyParam -> onParamsChanged.
+      // Called by the input's 'input' handler (knob/trim: native + our
+      // drag/wheel dispatches) and by pad selection (UI-1 string values
+      // verbatim).
+      // -----------------------------------------------------------------
+      function commitValue(newValue) {
         if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
           window.AgentUI.noteHumanEdit();
         }
-        // UI-1: a discrete select commits its string value verbatim; a
-        // slider's string value is parsed to a number as before.
-        var newValue = Array.isArray(spec.values) ? input.value : parseFloat(input.value);
 
-        valueDisplay.textContent = formatValue(newValue, spec.unit, spec.displayScale);
+        var valueText = formatValue(newValue, spec.unit, spec.displayScale);
+        if (valueDisplay) {
+          valueDisplay.textContent = valueText;
+        }
+        feedRegister(valueText);
 
         // Issue #5: re-sync the working copy from the model entry FIRST,
         // overlaid on this render's defaults, before applying this row's
@@ -374,18 +502,13 @@
         // updateNodeParam's agent writes), so this makes an agent-written
         // sibling param immune to being reverted by the next human move —
         // belt-and-suspenders alongside the workingParams update inside
-        // updateControl's apply() closure above.
+        // updateControl's apply() closure below.
         workingParams = Object.assign({}, workingParams, modelEntry.params || {});
         workingParams[spec.id] = newValue;
         var updatedParams = Object.assign({}, workingParams);
 
-        // Model bookkeeping only — no live-graph/buildGraph() involvement.
         window.AudioGraph.updateNodeParams(modelEntry.id, updatedParams);
 
-        // Live audio side effect — a click-safe scheduled ramp onto the
-        // real node, via the type's own registered applyParam. Deliberately
-        // NOT routed through AudioGraph.buildGraph() — see file-level
-        // comment above.
         window.NodeTypes.applyParam(
           modelEntry.type,
           window.AudioGraph.getNodeInstance(modelEntry.id),
@@ -396,29 +519,425 @@
         if (typeof onParamsChanged === 'function') {
           onParamsChanged(updatedParams);
         }
+      }
+
+      var valueDisplay = null;
+      var mode = controlModeFor(modelEntry.type, spec);
+
+      if (mode === 'pads') {
+        // ---------------------------------------------------------------
+        // PAD SELECTOR — discrete values as real buttons (radio group +
+        // roving tabindex). A native combobox was rejected here: the pads
+        // are the visible control, so they must also be the focusable
+        // control — a hidden select would put keyboard focus somewhere
+        // the eye is not. Arrows move AND select (the radiogroup
+        // convention), Home/End jump, Space/Enter activate natively, Tab
+        // leaves the group from exactly one tab stop (the selected pad).
+        // ---------------------------------------------------------------
+        row.className += ' pad-row';
+
+        var labelId = 'param-label-' + modelEntry.id + '-' + spec.id;
+        var padLabel = document.createElement('label');
+        padLabel.id = labelId;
+        padLabel.className = 'param-label';
+        padLabel.textContent = spec.label;
+
+        var padGroup = document.createElement('div');
+        padGroup.className = 'pad-group';
+        padGroup.setAttribute('role', 'radiogroup');
+        padGroup.setAttribute('aria-labelledby', labelId);
+        if (helpText) {
+          padGroup.title = helpText;
+        }
+
+        var padButtons = [];
+        var selectedIndex = -1;
+
+        function renderPadState(index) {
+          selectedIndex = index;
+          padButtons.forEach(function (pad, i) {
+            var on = i === index;
+            pad.setAttribute('aria-checked', on ? 'true' : 'false');
+            pad.setAttribute('tabindex', on ? '0' : '-1');
+          });
+        }
+
+        function valueIndex(value) {
+          for (var i = 0; i < spec.values.length; i++) {
+            if (String(spec.values[i]) === String(value)) {
+              return i;
+            }
+          }
+          return -1;
+        }
+
+        function selectPad(index, options) {
+          if (index < 0 || index >= padButtons.length) {
+            return;
+          }
+          renderPadState(index);
+          // The commit: the STRING value verbatim down the shared
+          // pipeline (UI-1) — applyParam receives 'A', not an index.
+          commitValue(spec.values[index]);
+          if (options && options.focus) {
+            try {
+              if (typeof padButtons[index].focus === 'function') {
+                padButtons[index].focus();
+              }
+            } catch (err) {
+              /* stripped harness */
+            }
+          }
+        }
+
+        spec.values.forEach(function (v, i) {
+          var pad = document.createElement('button');
+          pad.type = 'button';
+          pad.className = 'pad';
+          pad.textContent = v;
+          pad.setAttribute('role', 'radio');
+          if (helpSpan) {
+            pad.setAttribute('aria-describedby', helpSpan.id);
+          }
+          pad.setAttribute('tabindex', '-1');
+          pad.addEventListener('click', function () {
+            selectPad(i);
+          });
+          pad.addEventListener('focus', function () {
+            feedRegister(String(spec.values[i]));
+          });
+          padGroup.appendChild(pad);
+          padButtons.push(pad);
+        });
+
+        // Roving-tabindex keyboard travel: arrows/Home/End move the tab
+        // stop AND select (radiogroup semantics — the operator hears and
+        // sees each candidate as the pointer rides over it).
+        padGroup.addEventListener('keydown', function (event) {
+          var key = event.key;
+          var delta = 0;
+          if (key === 'ArrowRight' || key === 'ArrowDown') {
+            delta = 1;
+          } else if (key === 'ArrowLeft' || key === 'ArrowUp') {
+            delta = -1;
+          } else if (key === 'Home') {
+            selectPad(0, { focus: true });
+            event.preventDefault();
+            return;
+          } else if (key === 'End') {
+            selectPad(padButtons.length - 1, { focus: true });
+            event.preventDefault();
+            return;
+          } else {
+            return;
+          }
+          event.preventDefault();
+          var next = selectedIndex < 0 ? 0 : (selectedIndex + delta + padButtons.length) % padButtons.length;
+          selectPad(next, { focus: true });
+        });
+
+        // Initial state (and the external-write applier below) — the
+        // value display is the pressed pad itself. NOTE: rendering does
+        // NOT feed the display register (building ten cards in a
+        // loadModel sweep must not spray the register with first-param
+        // lines) — only focus, a human commit, or an external write does.
+        var initialIndex = valueIndex(initialValue);
+        renderPadState(initialIndex < 0 ? 0 : initialIndex);
+
+        renderedControls[modelEntry.id][spec.id] = {
+          apply: function (externalValue) {
+            var index = valueIndex(externalValue);
+            if (index !== -1) {
+              renderPadState(index);
+            }
+            workingParams[spec.id] = externalValue;
+            feedRegister(String(spec.values[selectedIndex]));
+          }
+        };
+
+        row.appendChild(padLabel);
+        row.appendChild(padGroup);
+        if (helpSpan) {
+          row.appendChild(helpSpan);
+        }
+        container.appendChild(row);
+        return;
+      }
+
+      // -----------------------------------------------------------------
+      // Continuous params — one native <input type="range"> as the
+      // semantic engine for BOTH shapes (knob + trim): focusable,
+      // announced, native arrow/Home/End/PageUp/PageDown, label[for],
+      // aria-describedby, and the 'input' event contract every existing
+      // consumer (canvas fast path, undo-conflict tests, agent tooling)
+      // already speaks.
+      // -----------------------------------------------------------------
+      var input = document.createElement('input');
+      input.type = 'range';
+      // Shape class for main.css (knob rows clip the input to the knob's
+      // box; trim rows style it as the visible trimmer track).
+      input.className = mode === 'knob' ? 'knob-input' : 'trim-slider';
+      input.min = spec.min;
+      input.max = spec.max;
+      input.step = spec.step;
+      input.id = inputId;
+      input.value = initialValue;
+
+      var label = document.createElement('label');
+      label.setAttribute('for', inputId);
+      label.className = 'param-label';
+      label.textContent = spec.label;
+
+      valueDisplay = document.createElement('span');
+      valueDisplay.className = 'param-value';
+      valueDisplay.textContent = formatValue(initialValue, spec.unit, spec.displayScale);
+
+      var min = parseFloat(spec.min);
+      var max = parseFloat(spec.max);
+      var range = max - min;
+      // A meaningful unity center exists exactly where the range is
+      // bipolar (gainDb, the EQ band gains): 0 dB = flat, printed as the
+      // detent tick at 12 o'clock and snapped to during drag.
+      var bipolar = min < 0 && max > 0;
+
+      function stepSize() {
+        var s = parseFloat(spec.step);
+        if (!isFinite(s) || s <= 0) {
+          return range / 100;
+        }
+        return s;
+      }
+
+      function clampQuantize(v) {
+        var snapped = min + Math.round((v - min) / stepSize()) * stepSize();
+        snapped = Math.round(snapped * 1e6) / 1e6; // kill float tails
+        if (bipolar && Math.abs(snapped) < stepSize() / 2) {
+          snapped = 0; // detent snap
+        }
+        if (snapped < min) { snapped = min; }
+        if (snapped > max) { snapped = max; }
+        return snapped;
+      }
+
+      // Item 2 feel helpers (per-param; close over min/max/step/bipolar).
+
+      // DIAL detent-proximity ease: gain eases KNOB_DIAL_CENTER_GAIN at a
+      // bipolar center (value 0) up to 1 at the extremes, so the turn
+      // around unity arrives under the finger — fine work exactly where
+      // the param means something (0 dB flat). Unipolar params have no
+      // center: full gain everywhere.
+      function dialFeelGain(current) {
+        if (!bipolar) {
+          return 1;
+        }
+        var reach = Math.max(Math.abs(min), Math.abs(max)) || 1;
+        var dist = Math.min(Math.abs(current) / reach, 1);
+        return KNOB_DIAL_CENTER_GAIN + (1 - KNOB_DIAL_CENTER_GAIN) * dist;
+      }
+
+      // VFD detent grid: whole spec steps per visible segment, so drag
+      // commits stay on the SAME grid keyboard arrows use (a detent is
+      // always a legal step multiple, never a fractional one).
+      function vfdStepsPerDetent() {
+        return Math.max(1, Math.round((range / KNOB_VFD_SEGMENTS) / stepSize()));
+      }
+
+      // The knob's visual state from the input's value — the single
+      // source of truth (every path funnels through the input).
+      var knobEl = null;
+      function syncKnobVisual(v) {
+        if (!knobEl) {
+          return;
+        }
+        var frac = range > 0 ? (v - min) / range : 0;
+        if (frac < 0) { frac = 0; }
+        if (frac > 1) { frac = 1; }
+        setVar(knobEl, '--knob-pos', frac.toFixed(4));
+        setVar(knobEl, '--knob-rot', (frac * KNOB_SWEEP_DEG - KNOB_SWEEP_DEG / 2).toFixed(2) + 'deg');
+      }
+
+      // The 'input' handler — the ONE commit path for both shapes, fired
+      // natively (keyboard) and by our drag/wheel dispatches.
+      input.addEventListener('input', function () {
+        var newValue = parseFloat(input.value);
+        syncKnobVisual(newValue);
+        commitValue(newValue);
       });
 
-      row.appendChild(label);
-      row.appendChild(input);
-      row.appendChild(valueDisplay);
+      // A focused control answers on the register before it moves.
+      input.addEventListener('focus', function () {
+        feedRegister(formatValue(parseFloat(input.value), spec.unit, spec.displayScale));
+      });
 
-      // Refinement entry 2: attach the plain-language line (see
-      // PLAIN_LANGUAGE_HELP above) — title for hover/long-press/keyboard,
-      // aria-describedby for screen readers. The help span is .sr-only
-      // (position:absolute, clip-hidden — zero layout footprint), so the
-      // row's flex order stack (label 1 / value 2 / slider 3) and its
-      // geometry are bit-for-bit what they were without it.
-      var helpText = lookupHelpLine(modelEntry.type, spec.id);
+      // Issue #5: the external-value applier (agent set_param fast path).
+      // Moves the ENGINE + the visual + the mono span + the register AND
+      // the working copy a later human commit builds from — without it,
+      // the next 'input' on a sibling row would build its updatedParams
+      // from a stale copy and silently REVERT the agent's value.
+      renderedControls[modelEntry.id][spec.id] = {
+        apply: function (externalValue) {
+          input.value = externalValue;
+          syncKnobVisual(parseFloat(externalValue));
+          valueDisplay.textContent = formatValue(externalValue, spec.unit, spec.displayScale);
+          workingParams[spec.id] = externalValue;
+          feedRegister(valueDisplay.textContent);
+        }
+      };
+
+      if (mode === 'knob') {
+        // ---------------------------------------------------------------
+        // ROTARY KNOB — the input is clipped to the knob's own box
+        // (opacity 0 + pointer-events none: still focusable, still the
+        // announced control); the .knob visual is the pointer surface.
+        // ---------------------------------------------------------------
+        row.className += ' knob-row';
+
+        var knobUnit = document.createElement('div');
+        knobUnit.className = 'knob-unit';
+
+        knobEl = document.createElement('div');
+        knobEl.className = 'knob';
+        knobEl.setAttribute('data-detent', bipolar ? 'true' : 'false');
+        knobEl.setAttribute('aria-hidden', 'true');
+
+        var ring = document.createElement('div');
+        ring.className = 'knob-ring';
+        var cap = document.createElement('div');
+        cap.className = 'knob-cap';
+        var pointer = document.createElement('div');
+        pointer.className = 'knob-pointer';
+        knobEl.appendChild(ring);
+        knobEl.appendChild(cap);
+        knobEl.appendChild(pointer);
+
+        // Vertical drag: 150 px = full sweep; Shift = fine (x0.2). Each
+        // tick writes input.value and dispatches a REAL 'input' event —
+        // the commit pipeline above cannot tell drag from keyboard.
+        // Item 2: the mapping itself is the variant's FEEL (see
+        // knobFeelMode above); encoder keeps the built linear map.
+        var dragging = false;
+        var lastY = 0;
+
+        knobEl.addEventListener('pointerdown', function (event) {
+          dragging = true;
+          lastY = event.clientY;
+          try {
+            if (typeof knobEl.setPointerCapture === 'function' && event.pointerId != null) {
+              knobEl.setPointerCapture(event.pointerId);
+            }
+          } catch (err) {
+            /* pointer capture unavailable — drag tracks over the knob */
+          }
+          try {
+            event.preventDefault();
+          } catch (err) {
+            /* stub event */
+          }
+          // Hand focus to the engine (keyboard resumes from here); script
+          // focus does not trip :focus-visible for pointer users.
+          try {
+            if (typeof input.focus === 'function') {
+              input.focus();
+            }
+          } catch (err) {
+            /* stripped harness */
+          }
+          knobEl.setAttribute('data-live', 'true');
+        });
+
+        knobEl.addEventListener('pointermove', function (event) {
+          if (!dragging) {
+            return;
+          }
+          var dy = lastY - event.clientY;
+          lastY = event.clientY;
+          var fine = event.shiftKey ? KNOB_FINE_FACTOR : 1;
+          var current = parseFloat(input.value);
+          var feel = knobFeelMode();
+          var next;
+
+          if (feel === 'vfd') {
+            // Stepped: the continuous target snaps onto the detent grid —
+            // sub-detent drags hold still (the detent resists), a crossing
+            // commits exactly one segment. Shift drops the quantizer for
+            // fine work WITHIN a step.
+            next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine;
+            if (!event.shiftKey) {
+              var detentStep = stepSize() * vfdStepsPerDetent();
+              next = min + Math.round((next - min) / detentStep) * detentStep;
+            }
+          } else if (feel === 'dial') {
+            // Angular-velocity mapping: the detent-proximity ease times a
+            // velocity term — a slow push moves the dial proportionally,
+            // a flick spins it further, like a massy potentiometer.
+            var velocity = 1 +
+              Math.min(Math.abs(dy) / KNOB_DIAL_VELOCITY_PX, 1) * KNOB_DIAL_VELOCITY_MAX;
+            next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine *
+              dialFeelGain(current) * velocity;
+          } else {
+            // ENCODER — the built linear vertical drag.
+            next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine;
+          }
+          input.value = String(clampQuantize(next));
+          fireInput(input);
+        });
+
+        function endDrag() {
+          dragging = false;
+          knobEl.setAttribute('data-live', 'false');
+        }
+        knobEl.addEventListener('pointerup', endDrag);
+        knobEl.addEventListener('pointercancel', endDrag);
+
+        // Wheel: the feel's coarse/fine pair. Encoder + dial: one spec
+        // step per notch (Shift = x5). VFD: one DETENT per notch, Shift =
+        // one spec step (fine within the detent).
+        knobEl.addEventListener('wheel', function (event) {
+          try {
+            event.preventDefault();
+          } catch (err) {
+            /* stub event */
+          }
+          var mult;
+          if (knobFeelMode() === 'vfd') {
+            mult = event.shiftKey ? 1 : vfdStepsPerDetent();
+          } else {
+            mult = event.shiftKey ? KNOB_WHEEL_FINE_MULT : KNOB_WHEEL_STEP_MULT;
+          }
+          var dir = event.deltaY < 0 || event.deltaX > 0 ? 1 : -1;
+          input.value = String(clampQuantize(parseFloat(input.value) + dir * stepSize() * mult));
+          fireInput(input);
+        }, { passive: false });
+
+        syncKnobVisual(parseFloat(input.value));
+
+        knobUnit.appendChild(knobEl);
+        knobUnit.appendChild(valueDisplay);
+        knobUnit.appendChild(label);
+
+        row.appendChild(input);
+        row.appendChild(knobUnit);
+      } else {
+        // ---------------------------------------------------------------
+        // TRIM — a short horizontal instrument trimmer: the native input
+        // stays visible (styled in main.css), label above, mono value at
+        // the label line's right end.
+        // ---------------------------------------------------------------
+        row.className += ' trim-row';
+
+        var trimUnit = document.createElement('div');
+        trimUnit.className = 'trim-unit';
+        trimUnit.appendChild(label);
+        trimUnit.appendChild(valueDisplay);
+        trimUnit.appendChild(input);
+
+        row.appendChild(trimUnit);
+      }
+
       if (helpText) {
-        var helpSpan = document.createElement('span');
-        helpSpan.id = 'param-help-' + modelEntry.id + '-' + spec.id;
-        helpSpan.className = 'sr-only';
-        helpSpan.textContent = helpText;
-        row.appendChild(helpSpan);
-
-        row.title = helpText;
         input.title = helpText;
         input.setAttribute('aria-describedby', helpSpan.id);
+        row.appendChild(helpSpan);
       }
 
       container.appendChild(row);

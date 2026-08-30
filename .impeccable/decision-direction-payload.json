@@ -1,0 +1,208 @@
+{
+  "title": "Choose the visual world",
+  "question": "The roll assigned Pattern Machine. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Pattern Machine",
+      "kicker": "THE ROLL",
+      "lineage": "Elektron/MPC groovebox panels",
+      "thesis": "The vocal chain as a hardware groovebox's encoder field: knob clusters per module, pad selectors, one display line that answers the control under your hand.",
+      "palette": [
+        "#131316",
+        "#232330",
+        "#9EA4B8",
+        "#FF6B35",
+        "#FFD75E"
+      ],
+      "materials": [
+        "matte instrument plastic",
+        "silkscreen panel print",
+        "dot-matrix display"
+      ],
+      "viewport": "The chain canvas becomes the instrument face: mic in and out as silkscreened jacks, each effect a knob section, the touched knob's exact value on one LCD line.",
+      "risk": "Grid-instrument density can outrun a non-engineer's confidence, and rotary drag must feel excellent or knobs read cheaper than faders.",
+      "raised": [
+        {
+          "from": "cloud-quarry",
+          "raise": "Modules carry physical mass: weighted slabs with cut faces, never floating panels."
+        },
+        {
+          "from": "streetwear-quotes",
+          "raise": "One unambiguous disabled texture and literal label honesty — every control called exactly what it is."
+        },
+        {
+          "from": "gameboy",
+          "raise": "Palette economy: the accent is the only bright thing on the chassis; one blink marks the live control."
+        },
+        {
+          "from": "streaming-wall",
+          "raise": "The touched module lifts a hair while its neighbors recede — focus theater at operator scale."
+        }
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "The Pedalboard",
+      "kicker": "IMPECCABLE'S PICK",
+      "lineage": "velcro-board stompbox chains",
+      "thesis": "The chain as a pedalboard: one pedal per effect, knob-per-function, LED status, jacks implying the signal path down the board.",
+      "palette": [
+        "#1A1A17",
+        "#3A3A35",
+        "#E8E3D5",
+        "#FFB000",
+        "#C0504B"
+      ],
+      "materials": [
+        "powder-coat enamel",
+        "silkscreened legends",
+        "gaffer tape"
+      ],
+      "viewport": "A pedalboard column: mic in at the top jack, pedals stacked in chain order, each with its knob cluster and a dry-marker name tape.",
+      "risk": "The most familiar FX-on-the-web reference — familiar and effective, but a portfolio viewer has seen pedal UIs; committing flat-print, never photoreal."
+    },
+    {
+      "id": "challenger-onebit",
+      "label": "One-Bit Desktop",
+      "verdict": "competitive",
+      "lineage": "1984 one-bit desktops",
+      "thesis": "The console as a one-bit desktop: each effect a window with a title bar, dithered tone steps, marching-ants reorder ghosts.",
+      "palette": [
+        "#000000",
+        "#FFFFFF"
+      ],
+      "materials": [
+        "ordered dither",
+        "1px window chrome"
+      ],
+      "viewport": "Module windows on a dithered ground: checkmark menus for key and scale, meters as dithered bars, selections inverted.",
+      "case": "Fuses cleanly — windows map to cards and desk affordances are universal; loses identification: a desk OS is not the venue's world.",
+      "risk": "Retro pastiche dates a portfolio fast, and dithered tones fight meter precision.",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-one-bit-desktop-hero.webp"
+    },
+    {
+      "id": "challenger-teletext",
+      "label": "Teletext Broadcast",
+      "verdict": "competitive",
+      "lineage": "broadcast teletext magazines",
+      "thesis": "The show as a broadcast index: the chain a numbered page of block-mosaic module rows, help waiting behind REVEAL.",
+      "palette": [
+        "#0000C0",
+        "#FFFF00",
+        "#00C000",
+        "#FFFFFF",
+        "#C00000"
+      ],
+      "materials": [
+        "40x24 cell grid",
+        "block mosaic"
+      ],
+      "viewport": "A P100-style page: MIC IN header row, chain as numbered module rows, the OUT meter a mosaic bar, presets as three-digit page numbers.",
+      "case": "Karaoke's own screen lineage — CD+G descends from it, so identification holds; loses clarity: knobs do not exist in a sixel world.",
+      "risk": "The cell grid makes every control text; continuous sweeps and meters suffer.",
+      "hero": "https://impeccable.style/worlds/cards/broadcast-programming-teletext-service-hero.webp"
+    },
+    {
+      "id": "challenger-quarry",
+      "label": "Cloud Quarry",
+      "verdict": "declined",
+      "lineage": "surreal impossible worlds",
+      "thesis": "Effects as cut blocks of weather assembled into transient architecture.",
+      "palette": [
+        "#E9EDF2",
+        "#7FA8D9",
+        "#30343B"
+      ],
+      "materials": [
+        "cumulus mass",
+        "cut faces"
+      ],
+      "case": "Fuses poorly: no karaoke or live-sound resonance, and dissolving architecture fights a show that must not break.",
+      "kept": "Physical mass — modules as weighted slabs with cut faces."
+    },
+    {
+      "id": "challenger-quotes",
+      "label": "Quote Grammar",
+      "verdict": "declined",
+      "lineage": "industrial streetwear labels",
+      "thesis": "Every zone labeled with its literal quoted name; hazard diagonals for the disabled.",
+      "palette": [
+        "#F4F4F0",
+        "#111111",
+        "#FF5A1F"
+      ],
+      "materials": [
+        "cotton and nylon",
+        "hazard stripes"
+      ],
+      "case": "Stockroom culture is not venue culture; the bright ground fights a dark-stage eye.",
+      "kept": "State coding with one unwavering grammar and literal label honesty."
+    },
+    {
+      "id": "challenger-gameboy",
+      "label": "Four Greens",
+      "verdict": "declined",
+      "lineage": "handheld four-shade fields",
+      "thesis": "The whole console in four greens, one tile grid, one blinking cursor.",
+      "palette": [
+        "#9BBC0F",
+        "#8BAC0F",
+        "#306230",
+        "#0F380F"
+      ],
+      "materials": [
+        "tile grid",
+        "chunky dither"
+      ],
+      "case": "Four shades cannot carry ten family colors plus meters without losing redundant encoding.",
+      "kept": "Palette economy and the single blinking focus mark."
+    },
+    {
+      "id": "challenger-wall",
+      "label": "Poster Wall",
+      "verdict": "declined",
+      "lineage": "streaming catalog walls",
+      "thesis": "Effects as poster tiles that expand on focus and reveal their controls.",
+      "palette": [
+        "#101014",
+        "#2A2A33",
+        "#4CC2FF"
+      ],
+      "materials": [
+        "poster tiles",
+        "focus expansion"
+      ],
+      "case": "Browsing theater is the opposite of an operate console; hidden-until-focus fights mid-show glanceability.",
+      "kept": "The quiet focus lift — one card rises while neighbors recede."
+    }
+  ],
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "buildPath": {
+    "value": "code",
+    "toggle": false
+  },
+  "canon": true,
+  "canonCard": {
+    "label": "The standard web-audio console",
+    "thesis": "What this category ships, executed impeccably.",
+    "palette": [
+      "#0F1115",
+      "#1C1F26",
+      "#3B82F6",
+      "#E5E7EB"
+    ],
+    "materials": [
+      "clean grid",
+      "standard sliders and dropdowns"
+    ],
+    "viewport": "A tidy dark console any audio web app would recognize, at full craft.",
+    "risk": "Indistinguishable from the competition by design."
+  },
+  "steer": true
+}

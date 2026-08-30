@@ -88,7 +88,7 @@ Explicitly undecided product facts (recorded, not invented):
 
 ## Brand Commitments
 
-- Product name (chosen by the user 2026-08-29): **"Karaoke Chain Builder"**
+- Product name (chosen by the user 2026-08-29): **"VOXCHAIN"**
   — shown in the top bar and README.
 - No logo, mark, or visual brand assets exist. **Absence is real: do not
   fabricate brand imagery, testimonials, users, or metrics.**
@@ -134,3 +134,12 @@ Explicitly undecided product facts (recorded, not invented):
   a nicety.
 - Natural-language (agent) control is recognized as an accessibility win
    for non-technical operators (approved framing).
+
+## Brand (user decision, 2026-08-30)
+
+The product name is **VOXCHAIN** (displayed uppercase in the silkscreen
+identity register). Prior working title "Karaoke Chain Builder" retired.
+Deliberately unchanged: localStorage keys (`karaoke-*-v1` — renaming
+would orphan saved chains/presets), the GitHub repo + Pages domain
+(karaoke.arrangedgodly.com — infra rename is the owner's call), and the
+genre word "karaoke" in prose.

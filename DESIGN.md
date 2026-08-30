@@ -1,5 +1,5 @@
 ---
-name: Karaoke Chain Builder
+name: VOXCHAIN
 description: A dark pro-audio touring rack in the browser — karaoke vocal chains built live, legible from two meters, safe by construction.
 colors:
   bg-body: "#1B1917"
@@ -113,7 +113,7 @@ components:
     width: "340px"
 ---
 
-# Design System: Karaoke Chain Builder
+# Design System: VOXCHAIN
 
 ## Overview
 

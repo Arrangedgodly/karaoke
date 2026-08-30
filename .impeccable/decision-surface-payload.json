@@ -1,0 +1,121 @@
+{
+  "title": "Compose the chain canvas",
+  "question": "The roll assigned Single Face Chassis — the canvas as one continuous instrument faceplate. Keep it, take an alternate composition, or re-roll.",
+  "options": [
+    {
+      "id": "single-face-chassis",
+      "label": "Single Face Chassis",
+      "kicker": "THE ROLL",
+      "lineage": "modular synth faceplates and console chassis",
+      "thesis": "The canvas is one continuous instrument faceplate: mic in and out as silkscreened jacks, each effect a panel-print section separated by a machined groove — never a floating card.",
+      "palette": [
+        "#131316",
+        "#232330",
+        "#9EA4B8",
+        "#FF6B35",
+        "#FFD75E"
+      ],
+      "materials": [
+        "matte instrument plastic",
+        "silkscreen panel print",
+        "machined groove dividers"
+      ],
+      "viewport": "One chassis face top to bottom: in jack at top-left with its meter, knob-cluster sections in chain order each with a print label block, out jack and the VU corner at bottom-right, the display register etched along the top edge.",
+      "risk": "With no card edges, drag-to-reorder and remove must read as explicit panel parts, and the touched section's lift has to carry focus without a shadow to lean on.",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "DISPLAY REGISTER (etched top edge)", "x": 0, "y": 0, "w": 12, "h": 1, "accent": true },
+          { "label": "MIC IN jack + in meter (top-left print)", "x": 0, "y": 1, "w": 12, "h": 1 },
+          { "label": "SECTION 01 · family print block", "x": 0, "y": 2, "w": 3, "h": 2 },
+          { "label": "SECTION 01 · encoder field (knobs + pads)", "x": 3, "y": 2, "w": 9, "h": 2 },
+          { "label": "SECTION 02 · family print block", "x": 0, "y": 4, "w": 3, "h": 2 },
+          { "label": "SECTION 02 · encoder field", "x": 3, "y": 4, "w": 9, "h": 2 },
+          { "label": "SECTION 03 · family print block", "x": 0, "y": 6, "w": 3, "h": 2 },
+          { "label": "SECTION 03 · encoder field", "x": 3, "y": 6, "w": 9, "h": 2 },
+          { "label": "SECTION 04 collapsed (folded to a groove line)", "x": 0, "y": 8, "w": 12, "h": 1 },
+          { "label": "OUT jack + VU corner (bottom-right print)", "x": 0, "y": 9, "w": 12, "h": 1 }
+        ]
+      }
+    },
+    {
+      "id": "one-u-rack-row",
+      "label": "1U Rack Rows",
+      "lineage": "1U rack processors racked in order",
+      "thesis": "Every effect is a single rack line: grip, family print, and all one-to-four controls inline across one row, so the chain reads like outboard gear racked top to bottom.",
+      "palette": [
+        "#131316",
+        "#232330",
+        "#9EA4B8",
+        "#FF6B35",
+        "#FFD75E"
+      ],
+      "materials": [
+        "matte instrument plastic",
+        "silkscreen panel print",
+        "dot-matrix display"
+      ],
+      "viewport": "In jack at top, then one line per module with encoders, pads, and mini-sliders inline, out with the VU corner at the foot, the touched control's exact value on the pinned display line.",
+      "risk": "A single line leaves no room to grow: a module that ever needs more than four controls or a long-throw precision slider forces a pop-down tray, adding a second chrome state.",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "DISPLAY LINE (pinned, dot-matrix)", "x": 0, "y": 0, "w": 12, "h": 1, "accent": true },
+          { "label": "MIC IN jack + in meter", "x": 0, "y": 1, "w": 12, "h": 1 },
+          { "label": "UNIT 01 · grip + family print + inline encoders", "x": 0, "y": 2, "w": 12, "h": 1 },
+          { "label": "UNIT 02 · grip + inline pads (key/scale) + encoders", "x": 0, "y": 3, "w": 12, "h": 1 },
+          { "label": "UNIT 03 · grip + inline encoders", "x": 0, "y": 4, "w": 12, "h": 1 },
+          { "label": "UNIT 04 · grip + inline encoders", "x": 0, "y": 5, "w": 12, "h": 1 },
+          { "label": "UNIT 05 collapsed (print line only)", "x": 0, "y": 6, "w": 12, "h": 1 },
+          { "label": "UNIT 06 · grip + inline mini-slider + encoders", "x": 0, "y": 7, "w": 12, "h": 1 },
+          { "label": "UNIT 07 · grip + inline encoders", "x": 0, "y": 8, "w": 12, "h": 1 },
+          { "label": "OUT anchor + VU corner", "x": 0, "y": 9, "w": 12, "h": 1 }
+        ]
+      }
+    },
+    {
+      "id": "rack-focus-drawer",
+      "label": "Rack and Drawer",
+      "lineage": "groovebox track control, one page at a time",
+      "thesis": "The rail is a rack of closed module spines; the touched module alone pulls out as a full knob drawer, so the hand works one module at a time while its neighbors recede.",
+      "palette": [
+        "#131316",
+        "#232330",
+        "#9EA4B8",
+        "#FF6B35",
+        "#FFD75E"
+      ],
+      "materials": [
+        "matte instrument plastic",
+        "silkscreen panel print",
+        "dot-matrix display"
+      ],
+      "viewport": "In jack at top, closed numbered spines down the rack, the selected spine open as one drawer carrying its whole knob cluster and pad bank, out and VU at the foot, display line pinned on top.",
+      "risk": "Only one module's controls are visible at once — twisting a distant module mid-show costs a selection first, and closed spines must keep their controls keyboard-reachable and agent-addressable.",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "DISPLAY LINE (pinned, dot-matrix)", "x": 0, "y": 0, "w": 12, "h": 1, "accent": true },
+          { "label": "MIC IN jack + in meter", "x": 0, "y": 1, "w": 12, "h": 1 },
+          { "label": "SPINE 01 · numeral + family print (closed)", "x": 0, "y": 2, "w": 12, "h": 1 },
+          { "label": "DRAWER header · open module + collapse + remove", "x": 0, "y": 3, "w": 12, "h": 1 },
+          { "label": "DRAWER knob field (encoders)", "x": 0, "y": 4, "w": 8, "h": 3 },
+          { "label": "DRAWER pad bank (key/scale pads)", "x": 8, "y": 4, "w": 4, "h": 3 },
+          { "label": "SPINE 03 · numeral + family print (closed)", "x": 0, "y": 7, "w": 12, "h": 1 },
+          { "label": "SPINE 04 · numeral + family print (closed)", "x": 0, "y": 8, "w": 12, "h": 1 },
+          { "label": "OUT anchor + VU corner", "x": 0, "y": 9, "w": 12, "h": 1 }
+        ]
+      }
+    }
+  ],
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "steer": true
+}

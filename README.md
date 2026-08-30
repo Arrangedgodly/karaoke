@@ -1,10 +1,10 @@
-# Karaoke Chain Builder
+# VOXCHAIN
 
 **Live: https://karaoke.arrangedgodly.com/**
 
 A live karaoke vocal chain in your browser: mic in → effects (reverb, delay, compression, EQ, noise gate, distortion, chorus — even autotune) → PA out. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
 
-![Karaoke Chain Builder — the dark pro-audio console: status strip on top, effects rack left, chain canvas middle, presets right](docs/screenshot.png)
+![VOXCHAIN — the dark pro-audio console: status strip on top, effects rack left, chain canvas middle, presets right](docs/screenshot.png)
 
 The console's dark pro-audio look — amber lamps, legible from two meters — as it sits before you press Start, with the default chain ready to go.
 

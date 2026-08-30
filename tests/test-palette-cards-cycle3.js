@@ -384,6 +384,58 @@ function cards() {
 }
 
 // ----------------------------------------------------------------------
+// Redesign item 1 (Single Face Chassis) structural finders — the section
+// anatomy is rail (.section-rail: handle/code/label/badge/foot) + field
+// (.section-main: .node-params > .node-params-inner > rows), and a param
+// row's control is an <input> (knob rows carry it directly; trim rows
+// inside .trim-unit) or a .pad-group (discrete rows). These finders keep
+// the assertions below ABOUT BEHAVIOR (commits, aria, help wiring,
+// restore) independent of exact child indexes.
+// ----------------------------------------------------------------------
+function deepFind(el, pred) {
+  if (pred(el)) {
+    return el;
+  }
+  var found = null;
+  (el.children || []).some(function (child) {
+    found = deepFind(child, pred);
+    return !!found;
+  });
+  return found;
+}
+
+function rowControlInput(row, nodeId, paramId) {
+  return deepFind(row, function (el) {
+    return el.tagName === 'INPUT' && el.id === 'param-' + nodeId + '-' + paramId;
+  });
+}
+
+function sectionRail(card) {
+  return deepFind(card, function (el) {
+    return String(el.className).split(/\s+/).indexOf('section-rail') !== -1;
+  });
+}
+
+function sectionFoot(card) {
+  return deepFind(card, function (el) {
+    return String(el.className).split(/\s+/).indexOf('section-foot') !== -1;
+  });
+}
+
+function paramRows(card) {
+  var inner = deepFind(card, function (el) {
+    return String(el.className).split(/\s+/).indexOf('node-params-inner') !== -1;
+  });
+  return inner ? inner.children : [];
+}
+
+function rowOfClass(row, cls) {
+  return deepFind(row, function (el) {
+    return String(el.className).split(/\s+/).indexOf(cls) !== -1;
+  });
+}
+
+// ----------------------------------------------------------------------
 // A. Registry + palette construction.
 // ----------------------------------------------------------------------
 console.log('A. registry + palette');
@@ -561,10 +613,14 @@ NEW_TYPES.forEach(function (t) {
     t.type + ' card edge-codes initials "' + t.initials + '"'
   );
 
-  var header = card.children[0];
-  var handle = header.children[0];
+  // Redesign item 1 anatomy: family print rail (grip, code, label, foot)
+  // + encoder field. The handle is the ONLY drag surface (the SortableJS
+  // grip zone), the foot carries the header-zone controls.
+  var rail = sectionRail(card);
+  var handle = rail.children[0];
   var grip = handle.children[0];
-  var labelEl = handle.children[1];
+  var codeEl = rail.children[1];
+  var labelEl = rail.children[2];
   check(
     grip.className === 'node-drag-icon' &&
       grip.attrs['aria-hidden'] === 'true',
@@ -574,9 +630,16 @@ NEW_TYPES.forEach(function (t) {
     labelEl.className === 'node-label' && labelEl.textContent === t.label,
     t.type + ' card label reads "' + t.label + '"'
   );
+  check(
+    codeEl.className === 'section-code' &&
+      codeEl.textContent === t.initials,
+    t.type + ' family print block codes "' + t.initials + '"'
+  );
 
-  var collapseBtn = header.children[1];
-  var removeBtn = header.children[2];
+  var foot = sectionFoot(card);
+  var footButtons = foot.children;
+  var collapseBtn = footButtons[0];
+  var removeBtn = footButtons[1];
   check(
     collapseBtn.tagName === 'BUTTON' &&
       collapseBtn.className === 'node-collapse' &&
@@ -593,9 +656,10 @@ NEW_TYPES.forEach(function (t) {
     t.type + ' remove aria-label names the module'
   );
 
-  // Params: VIS-7 wrap present, one row per paramSpec entry, at spec
-  // defaults; autotune's Key/Scale are UI-1 selects.
-  var paramsEl = card.children[1];
+  // Params: collapse wrapper present, one row per paramSpec entry, at
+  // spec defaults; autotune's Key/Scale are UI-1 pad groups with 12/3
+  // pads.
+  var paramsEl = card.children[1].children[0];
   var inner = paramsEl.children[0];
   check(
     paramsEl.className === 'node-params' &&
@@ -609,21 +673,49 @@ NEW_TYPES.forEach(function (t) {
     t.type + ' renders one row per paramSpec entry (' + t.params + ')'
   );
   inner.children.forEach(function (row, i) {
-    var control = row.children[1];
     var expected = spec[i].default;
-    check(
-      control.value === expected,
-      t.type + ' "' + spec[i].id + '" control starts at spec default (' +
-        expected + ')'
-    );
-    check(
-      row.children[0].attrs['for'] === control.id,
-      t.type + ' "' + spec[i].id + '" label[for] binds the control (SR name)'
-    );
+    if (Array.isArray(spec[i].values)) {
+      var group = rowOfClass(row, 'pad-group');
+      var pressed = group.children.filter(function (pad) {
+        return pad.attrs['aria-checked'] === 'true';
+      });
+      check(
+        group.children.length === spec[i].values.length &&
+          pressed.length === 1 &&
+          pressed[0].textContent === String(expected),
+        t.type + ' "' + spec[i].id + '" pad group selects the spec default (' +
+          expected + ')'
+      );
+    } else {
+      var control = rowControlInput(row, card.attrs['data-node-id'], spec[i].id);
+      check(
+        !!control && control.value === expected,
+        t.type + ' "' + spec[i].id + '" control starts at spec default (' +
+          expected + ')'
+      );
+    }
+    var rowControl = rowControlInput(row, card.attrs['data-node-id'], spec[i].id);
+    if (Array.isArray(spec[i].values)) {
+      var padLabel = row.children[0];
+      var padGroupEl = rowOfClass(row, 'pad-group');
+      check(
+        row.children[0].tagName === 'LABEL' &&
+          padGroupEl.attrs['aria-labelledby'] === padLabel.id,
+        t.type + ' "' + spec[i].id + '" pad group is named by its label (radiogroup SR name)'
+      );
+    } else {
+      var boundLabel = deepFind(row, function (el) {
+        return el.tagName === 'LABEL' && el.attrs['for'] === rowControl.id;
+      });
+      check(
+        !!boundLabel,
+        t.type + ' "' + spec[i].id + '" label[for] binds the control (SR name)'
+      );
+    }
   });
 
   // Collapse inherited: toggle hides params (class + aria state; the
-  // visual 0fr collapse is CSS driven by exactly this class).
+  // visual 0fr fold is CSS driven by exactly this class).
   collapseBtn.fire('click');
   check(
     card.classList.contains('collapsed') &&
@@ -638,25 +730,29 @@ NEW_TYPES.forEach(function (t) {
   );
 });
 
-// Autotune specifics: Key/Scale rows are the UI-1 discrete selects with
-// the full 12-key / 3-scale option sets, restored on the card.
+// Autotune specifics: Key/Scale rows are the UI-1 discrete pad groups
+// with the full 12-key / 3-scale sets, at registered defaults.
 var autotuneCard = builtCards.filter(function (c) {
   return c.attrs['data-family'] === 'autotune';
 })[0];
-var atInner = autotuneCard.children[1].children[0];
-var keySelect = atInner.children[0].children[1];
-var scaleSelect = atInner.children[1].children[1];
+var atRows = paramRows(autotuneCard);
+var keyGroup = rowOfClass(atRows[0], 'pad-group');
+var scaleGroup = rowOfClass(atRows[1], 'pad-group');
 check(
-  keySelect.tagName === 'SELECT' && keySelect.children.length === 12,
-  'autotune Key row renders the UI-1 select with all 12 keys'
+  keyGroup.children.length === 12 &&
+    keyGroup.children.every(function (p) { return p.tagName === 'BUTTON'; }),
+  'autotune Key row renders the UI-1 pad group with all 12 key pads'
 );
 check(
-  scaleSelect.tagName === 'SELECT' && scaleSelect.children.length === 3,
-  'autotune Scale row renders the UI-1 select with 3 scales'
+  scaleGroup.children.length === 3,
+  'autotune Scale row renders 3 scale pads'
 );
 check(
-  keySelect.value === 'C' && scaleSelect.value === 'Chromatic',
-  'autotune selects start at the registered defaults (C / Chromatic)'
+  keyGroup.children[0].textContent === 'C' &&
+    keyGroup.children[0].attrs['aria-checked'] === 'true' &&
+    scaleGroup.children[0].textContent === 'Chromatic' &&
+    scaleGroup.children[0].attrs['aria-checked'] === 'true',
+  'autotune pads start at the registered defaults (C / Chromatic)'
 );
 
 // ----------------------------------------------------------------------
@@ -678,8 +774,8 @@ check(
   'card badge title names the module and the reason'
 );
 check(
-  autotuneBadge && autotuneBadge.parentNode.className === 'node-drag-handle',
-  'card badge sits in the header handle, after the module label'
+  autotuneBadge && autotuneBadge.parentNode.className === 'section-rail',
+  'card badge sits in the family print rail, after the module label'
 );
 var badgeCount = cards().filter(function (c) {
   return c.findByClass('node-experimental-badge') !== null;
@@ -724,11 +820,17 @@ check(
     restored[2].findByClass('node-experimental-badge') === null,
   'badge presence follows the type through a load (autotune only)'
 );
-var restoredKey = restored[3].children[1].children[0].children[0].children[1];
-var restoredScale = restored[3].children[1].children[0].children[1].children[1];
+var restoredRows = paramRows(restored[3]);
+function pressedPad(group) {
+  var pressed = group.children.filter(function (pad) {
+    return pad.attrs['aria-checked'] === 'true';
+  });
+  return pressed.length === 1 ? pressed[0].textContent : null;
+}
 check(
-  restoredKey.value === 'A' && restoredScale.value === 'Minor',
-  'autotune selects restore saved Key/Scale (A / Minor)'
+  pressedPad(rowOfClass(restoredRows[0], 'pad-group')) === 'A' &&
+    pressedPad(rowOfClass(restoredRows[1], 'pad-group')) === 'Minor',
+  'autotune pads restore saved Key/Scale (A / Minor)'
 );
 var lastPersist = calls.persist[calls.persist.length - 1];
 check(
@@ -771,12 +873,11 @@ var helpRowCount = 0;
 helpCards.forEach(function (card) {
   var type = card.attrs['data-family'];
   var nodeId = card.attrs['data-node-id'];
-  var inner = card.children[1].children[0];
+  var rows = paramRows(card);
   var spec = windowStub.NodeTypes.getParamSpec(type);
-  inner.children.forEach(function (row, i) {
+  rows.forEach(function (row, i) {
     helpRowCount += 1;
-    var control = row.children[1];
-    var helpSpan = row.children[3];
+    var helpSpan = rowOfClass(row, 'sr-only');
     check(
       !!helpSpan &&
         helpSpan.className === 'sr-only' &&
@@ -788,13 +889,26 @@ helpCards.forEach(function (card) {
       type + ' "' + spec[i].id + '" help span id is the row-scoped convention'
     );
     check(
-      row.title === helpSpan.textContent && control.title === helpSpan.textContent,
-      type + ' "' + spec[i].id + '" title set on row AND control with the same line'
+      row.title === helpSpan.textContent,
+      type + ' "' + spec[i].id + '" title set on the row with the same line'
     );
-    check(
-      control.attrs['aria-describedby'] === helpSpan.id,
-      type + ' "' + spec[i].id + '" aria-describedby resolves to the same-row span'
-    );
+    if (Array.isArray(spec[i].values)) {
+      // Pads: every pad button carries the aria-describedby wiring.
+      var group = rowOfClass(row, 'pad-group');
+      check(
+        group.children.every(function (pad) {
+          return pad.attrs['aria-describedby'] === helpSpan.id;
+        }),
+        type + ' "' + spec[i].id + '" every pad aria-describedby resolves to the same-row span'
+      );
+    } else {
+      var control = rowControlInput(row, nodeId, spec[i].id);
+      check(
+        control.title === helpSpan.textContent &&
+          control.attrs['aria-describedby'] === helpSpan.id,
+        type + ' "' + spec[i].id + '" title + aria-describedby set on the control'
+      );
+    }
   });
 });
 check(helpRowCount === 28, '28 param rows across all ten types, every one helped (14 original + 14 cycle-3)');
@@ -804,10 +918,9 @@ check(helpRowCount === 28, '28 param rows across all ten types, every one helped
 [['gate', 'threshold'], ['gate', 'floor'], ['distortion', 'drive'],
   ['distortion', 'output'], ['autotune', 'retune']].forEach(function (p) {
   var idx = helpCards.map(function (c) { return c.attrs['data-family']; }).indexOf(p[0]);
+  var rows = paramRows(helpCards[idx]);
   var spec = windowStub.NodeTypes.getParamSpec(p[0]);
-  var row = helpCards[idx].children[1].children[0].children[
-    spec.map(function (s) { return s.id; }).indexOf(p[1])
-  ];
+  var row = rows[spec.map(function (s) { return s.id; }).indexOf(p[1])];
   check(/ [=] /.test(row.title), p[0] + ' ' + p[1] + ' carries a direction clause');
 });
 
@@ -815,13 +928,13 @@ check(helpRowCount === 28, '28 param rows across all ten types, every one helped
 // required operator disclosure: experimental status + the accepted fixed
 // 20 ms engine delay.
 var atIdx = helpCards.map(function (c) { return c.attrs['data-family']; }).indexOf('autotune');
-var atKeyRow = helpCards[atIdx].children[1].children[0].children[0];
+var atKeyRow = paramRows(helpCards[atIdx])[0];
 check(
   /Experimental/.test(atKeyRow.title) && /20 ms/.test(atKeyRow.title),
   'autotune Key line discloses experimental status + the fixed 20 ms delay'
 );
 check(
-  !/Experimental/.test(helpCards[atIdx].children[1].children[0].children[1].title),
+  !/Experimental/.test(paramRows(helpCards[atIdx])[1].title),
   'the status sentence rides the FIRST row only (said once per card)'
 );
 
@@ -886,9 +999,12 @@ check(
   'chip-scoped rule adds no font-size (both placements share the 11px size)'
 );
 
-// The floor precedent: the legend initials (.node-card::before /
-// .node-chip::before) are the declared 0.6875rem floor the badge joins.
- ['.node-card::before', '.node-chip::before'].forEach(function (sel) {
+// The floor precedent: the palette chip's ::before legend initials are
+// the declared 0.6875rem floor the badge joins. (The old node-card ::before
+// legend square is gone in the Single Face Chassis — the family code is a
+// real .section-code element at 1.25rem; the chip placement carries the
+// floor precedent alone now.)
+['.node-chip::before'].forEach(function (sel) {
   var initials = cssRule(sel);
   check(
     initials !== null && cssDecl(initials, 'font-size') === '0.6875rem',
@@ -910,9 +1026,9 @@ check(
   'side padding widened to 0.35rem (proportions held at the larger size)'
 );
 check(
-  badgeRule && cssDecl(badgeRule, 'color') === 'var(--accent)' &&
-    cssDecl(badgeRule, 'background') === 'var(--bg-card)',
-  'amber text on Module Card ground unchanged (no new loudness)'
+  badgeRule && cssDecl(badgeRule, 'color') === 'var(--pm-display)' &&
+    cssDecl(badgeRule, 'background') === 'transparent',
+  'display-amber silkscreen on transparent — item 1b unified both placements in the Pattern Machine register (no new loudness)'
 );
 
 // The DOM end of the same guarantee: both live placements wear the one
@@ -1115,8 +1231,8 @@ check(
     cssDecl(groupLabelRule, 'font-weight') === '700' &&
     cssDecl(groupLabelRule, 'text-transform') === 'uppercase' &&
     cssDecl(groupLabelRule, 'letter-spacing') === '0.08em' &&
-    cssDecl(groupLabelRule, 'color') === 'var(--text-muted)',
-  'group label register matches the silkscreen legend (700 / uppercase / 0.08em / muted)'
+    cssDecl(groupLabelRule, 'color') === 'var(--pm-print)',
+  'group label register matches the silkscreen legend (700 / uppercase / 0.08em / pm-print — item 1b re-tokened the zone)'
 );
 check(
   groupLabelRule && cssDecl(groupLabelRule, 'margin') === '0.9rem 0 0.35rem',
@@ -1179,10 +1295,11 @@ function cardById(id) {
 
 function paramRow(card, paramId) {
   var nodeId = card.attrs['data-node-id'];
-  var inner = card.children[1].children[0];
+  var rows = paramRows(card);
   var found = null;
-  inner.children.some(function (row) {
-    if (row.children[1] && row.children[1].id === 'param-' + nodeId + '-' + paramId) {
+  rows.some(function (row) {
+    var control = rowControlInput(row, nodeId, paramId);
+    if (control) {
       found = row;
       return true;
     }
@@ -1191,10 +1308,21 @@ function paramRow(card, paramId) {
   return found;
 }
 
+function rowControl(card, paramId) {
+  var nodeId = card.attrs['data-node-id'];
+  var found = null;
+  paramRows(card).some(function (row) {
+    found = rowControlInput(row, nodeId, paramId);
+    return !!found;
+  });
+  return found;
+}
+
 function rowValueSpan(card, paramId) {
   var row = paramRow(card, paramId);
-  // Row anatomy: [label, control, .param-value span, (.sr-only help span)]
-  return row ? row.children[2] : null;
+  // The .param-value span rides the control's unit (inside .knob-unit or
+  // .trim-unit — redesign item 1's row anatomy).
+  return row ? rowOfClass(row, 'param-value') : null;
 }
 
 // K1. Defaults: the mono readout reads 0-100 %, the slider stays 0..1.
@@ -1230,7 +1358,7 @@ check(
     rowValueSpan(kChorus, 'mix').className === 'param-value',
   'both readouts ride the same .param-value mono register (tabular rhythm unchanged)'
 );
-var kDriveControl = paramRow(kDist, 'drive').children[1];
+var kDriveControl = rowControl(kDist, 'drive');
 check(
   kDriveControl.min === 0 && kDriveControl.max === 1 &&
     kDriveControl.step === 0.01 && kDriveControl.value === 0.25,
@@ -1273,7 +1401,7 @@ windowStub.AudioGraph.getNodeInstance = function () {
 });
 // Float-noise case: 0.33 * 100 === 33.000000000000004 in binary float —
 // the readout must round it away, the model must keep the exact 0.33.
-var kToneControl = paramRow(kDist, 'tone').children[1];
+var kToneControl = rowControl(kDist, 'tone');
 kToneControl.value = '0.33';
 kToneControl.fire('input');
 check(
@@ -1317,7 +1445,7 @@ check(
   'agent-written drive 0.5 reads "50%" on the card without a re-render'
 );
 check(
-  paramRow(kRestored, 'drive').children[1].value === 0.5,
+  rowControl(kRestored, 'drive').value === 0.5,
   'agent-written drive keeps the slider at the internal 0.5 position'
 );
 check(
@@ -1374,9 +1502,8 @@ windowStub.ChainCanvas.loadModel([
 ]);
 var kPercentReadouts = [];
 cards().forEach(function (card) {
-  var inner = card.children[1].children[0];
-  inner.children.forEach(function (row) {
-    var span = row.children[2];
+  paramRows(card).forEach(function (row) {
+    var span = rowOfClass(row, 'param-value');
     if (span && /%$/.test(span.textContent)) {
       kPercentReadouts.push(span.textContent);
     }

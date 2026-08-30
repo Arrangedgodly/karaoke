@@ -1,35 +1,33 @@
 // Test for cycle-3 UI-1 — discrete (enumerated) param controls: Key/Scale.
+// (Rewritten for redesign item 1: the discrete shape is a PAD SELECTOR —
+// real <button> pads in a role="radiogroup" with roving tabindex — where
+// it was a native <select>. The BEHAVIOR contract is unchanged.)
 //
-// UI-1 adds a second param-control shape to src/param-controls.js: a spec
-// entry carrying `values: [...]` renders a native <select> (one <option>
-// per value) instead of a range slider, and commits its STRING value
-// through the exact same pipeline a slider move uses —
-// AudioGraph.updateNodeParams (model bookkeeping) + NodeTypes.applyParam
-// (live write). No autotune node exists yet, so this validates against a
-// throwaway `test-keys` type registered only inside this script (same
-// precedent as UI-4's throwaway `test-gain`).
+// A spec entry carrying `values: [...]` renders one pad per value and
+// commits its STRING value through the exact same pipeline a knob move
+// uses — AudioGraph.updateNodeParams (model bookkeeping) +
+// NodeTypes.applyParam (live write). No autotune node exists yet, so
+// this validates against a throwaway `test-keys` type registered only
+// inside this script (same precedent as UI-4's throwaway `test-gain`).
 //
 // Checked here, on the REAL src/param-controls.js + src/node-types.js
 // loaded into a vm sandbox with a minimal fake DOM:
-//   A. RENDER: a `values` spec renders a <select> with one <option> per
-//      value, a label[for] bound to its id (SR name), and NO unit
-//      formatting on the value display; a sibling numeric spec still
-//      renders a range slider (no regression).
-//   B. COMMIT: firing the select's `input` handler after a keyboard-style
-//      value change reaches NodeTypes.applyParam with the STRING value
-//      ('A'), updates the model via AudioGraph.updateNodeParams, and
-//      reports through onParamsChanged with the full params object.
+//   A. RENDER: a `values` spec renders a pad group of real buttons (one
+//      per value, aria-checked on the spec default), named by its label
+//      through the radiogroup's aria-labelledby (SR name), with roving
+//      tabindex (exactly the selected pad is tabbable); a sibling
+//      numeric spec still renders a range input (no regression).
+//   B. COMMIT: firing a pad's `click` handler (the keyboard Enter/Space
+//      twin) reaches NodeTypes.applyParam with the STRING value ('A'),
+//      updates the model via AudioGraph.updateNodeParams, and reports
+//      through onParamsChanged with the full params object.
 //   C. EXTERNAL WRITE: ParamControls.updateControl (the agent set_param
-//      fast path's bridge) moves the select and its working copy in place
-//      — a later human change on the sibling slider does not revert it.
-//   D. A11y shape (structural, per the committed-test convention):
-//      element is a native <select> (keyboard arrows + SR value
-//      announcement are native semantics, not custom ARIA) and each
-//      option's text is the announced value verbatim.
-//
-// Browser-use inspection was not available in this worker (same as
-// TEST-1's precedent); the DOM-structure + pipeline checks below are the
-// committed evidence.
+//      fast path's bridge) moves the pad selection and its working copy
+//      in place — a later human change on the sibling control does not
+//      revert it.
+//   D. A11y shape (structural, per the committed-test convention): the
+//      pads are real native buttons (keyboard activation for free) and
+//      each pad's text is the announced value verbatim.
 //
 // Same committed-test convention as the rest of the suite: zero-dependency
 // Node harness, stub `window` + minimal DOM, load the REAL src files
@@ -63,7 +61,7 @@ function check(cond, label) {
 // ----------------------------------------------------------------------
 function makeElement(tagName) {
   var el = {
-    tagName: String(tagName).toUpperCase(),
+    tagName: String(tagName),
     children: [],
     listeners: {},
     className: '',
@@ -87,9 +85,14 @@ function makeElement(tagName) {
   el.setAttribute = function (name, val) {
     el['attr_' + name] = val;
   };
+  el.getAttribute = function (name) {
+    return Object.prototype.hasOwnProperty.call(el, 'attr_' + name)
+      ? el['attr_' + name]
+      : null;
+  };
   el.fire = function (evt) {
     (el.listeners[evt] || []).forEach(function (fn) {
-      fn();
+      fn({ preventDefault: function () {}, stopPropagation: function () {} });
     });
   };
   return el;
@@ -161,6 +164,19 @@ windowStub.NodeTypes.register('test-keys', {
   }
 });
 
+function padGroupOf(row) {
+  return row.children.filter(function (c) {
+    return c.className === 'pad-group';
+  })[0];
+}
+
+function pressedPad(group) {
+  var pressed = group.children.filter(function (p) {
+    return p.getAttribute('aria-checked') === 'true';
+  });
+  return pressed.length === 1 ? pressed[0] : null;
+}
+
 // ----------------------------------------------------------------------
 // A. Render.
 // ----------------------------------------------------------------------
@@ -178,50 +194,84 @@ check(rows.length === 3, 'one row per paramSpec entry (3)');
 check(container.innerHTML === '', 'container cleared before render');
 
 var keyRow = rows[0];
-var keySelect = keyRow.children[1];
+var keyGroup = padGroupOf(keyRow);
 var keyLabel = keyRow.children[0];
 check(
-  keySelect.tagName === 'SELECT',
-  'values spec renders a native <select>, not a range input'
+  !!keyGroup,
+  'values spec renders a .pad-group, not a range input'
 );
-check(keySelect.className === 'param-select', 'select carries the .param-select class');
-check(keySelect.children.length === 12, 'key select has all 12 options (C..B)');
 check(
-  keySelect.children.every(function (o, i) {
-    return o.value === KEYS[i] && o.textContent === KEYS[i];
+  keyGroup.children.length === 12,
+  'key group has all 12 pads (C..B)'
+);
+check(
+  keyGroup.children.every(function (p, i) {
+    return p.tagName === 'button' && p.textContent === KEYS[i];
   }),
-  'each option value+text is the announced value verbatim (C, C#, ... B)'
+  'each pad is a native button whose text is the announced value verbatim (C, C#, ... B)'
 );
-check(keySelect.value === 'C', 'select initial value is the spec default (C)');
 check(
-  keyLabel.tagName === 'LABEL' && keyLabel['attr_for'] === keySelect.id,
-  'label[for] binds to the select id (SR accessible name)'
+  pressedPad(keyGroup) === keyGroup.children[0] &&
+    pressedPad(keyGroup).textContent === 'C',
+  'the spec default (C) is the one pressed pad'
+);
+check(
+  keyGroup.getAttribute('role') === 'radiogroup' &&
+    keyGroup.getAttribute('aria-labelledby') === keyLabel.id &&
+    keyLabel.getAttribute('for') === null,
+  'the radiogroup is named by its label via aria-labelledby (SR accessible name)'
+);
+check(
+  keyGroup.children.every(function (p) {
+    return p.type === 'button';
+  }),
+  'pads are type=button (no form submission)'
 );
 
-var scaleSelect = rows[1].children[1];
-check(scaleSelect.children.length === 3, 'scale select has 3 options (Chromatic/Major/Minor)');
-check(scaleSelect.value === 'Chromatic', 'scale default is Chromatic');
-
-var mixInput = rows[2].children[1];
+// Roving tabindex: exactly the pressed pad is tabbable.
+var tabbable = keyGroup.children.filter(function (p) {
+  return p.getAttribute('tabindex') === '0';
+});
 check(
-  mixInput.tagName === 'INPUT' && mixInput.type === 'range',
-  'sibling numeric spec still renders a range slider (no regression)'
+  tabbable.length === 1 && tabbable[0] === pressedPad(keyGroup),
+  'roving tabindex — exactly the selected pad is tabbable'
 );
+
+var scaleGroup = padGroupOf(rows[1]);
+check(scaleGroup.children.length === 3, 'scale group has 3 pads (Chromatic/Major/Minor)');
 check(
-  rows[2].children[2].textContent === '50%',
+  pressedPad(scaleGroup).textContent === 'Chromatic',
+  'scale default is Chromatic'
+);
+
+var mixInput = rows[2].children.filter(function (c) {
+  return c.tagName === 'input';
+})[0];
+check(
+  !!mixInput && mixInput.type === 'range',
+  'sibling numeric spec still renders a range input (no regression)'
+);
+var mixSpan = rows[2].children.filter(function (c) {
+  return c.className === 'knob-unit';
+})[0].children.filter(function (c) {
+  return c.className === 'param-value';
+})[0];
+check(
+  mixSpan.textContent === '50%',
   'numeric value display still unit-formatted (50%)'
 );
 
 // ----------------------------------------------------------------------
-// B. Commit — keyboard-style select change reaches applyParam as a string.
+// B. Commit — pad activation reaches applyParam as a string.
 // ----------------------------------------------------------------------
 console.log('B. commit');
 
-// A keyboard user changes Key C -> A: the select's value moves, then the
-// browser fires `input` (and `change`). param-controls listens on the
-// same `input` event the slider path uses.
-keySelect.value = 'A';
-keySelect.fire('input');
+// A keyboard user lands on Key's A pad: Enter/Space fires the button's
+// native click. param-controls commits on the same 'click' event.
+var keyPadA = keyGroup.children.filter(function (p) {
+  return p.textContent === 'A';
+})[0];
+keyPadA.fire('click');
 
 check(applied.length === 1, 'one applyParam call for the change');
 check(
@@ -247,9 +297,14 @@ check(
   onParamsChangedCalls.length === 1 && onParamsChangedCalls[0].key === 'A',
   'onParamsChanged fired with the updated params object'
 );
+check(
+  pressedPad(keyGroup) === keyPadA,
+  'the activated pad is now the pressed pad'
+);
 
-scaleSelect.value = 'Major';
-scaleSelect.fire('input');
+scaleGroup.children
+  .filter(function (p) { return p.textContent === 'Major'; })[0]
+  .fire('click');
 check(
   applied.length === 2 && applied[1].paramId === 'scale' && applied[1].value === 'Major',
   'scale change reaches applyParam with STRING value "Major"'
@@ -264,7 +319,14 @@ check(
   windowStub.ParamControls.updateControl('n1', 'key', 'E') === true,
   'updateControl finds the rendered key row and reports success'
 );
-check(keySelect.value === 'E', 'updateControl moves the select to E in place');
+check(
+  pressedPad(keyGroup).textContent === 'E',
+  'updateControl moves the pad selection to E in place'
+);
+check(
+  applied.length === 2,
+  'updateControl commits nothing itself (the caller owns the live write)'
+);
 check(
   windowStub.ParamControls.updateControl('n1', 'nope', 'X') === false,
   'updateControl returns false for an unknown param'
@@ -274,14 +336,14 @@ check(
   'updateControl returns false for an unknown node id'
 );
 
-// A later HUMAN move on the sibling slider must not revert the agent's
-// key write (the workingParams re-sync the slider handler does).
+// A later HUMAN move on the sibling control must not revert the agent's
+// key write (the workingParams re-sync the commit handler does).
 mixInput.value = '75';
 mixInput.fire('input');
 var lastModel = calls.updateNodeParams[calls.updateNodeParams.length - 1];
 check(
   lastModel.params.key === 'E' && lastModel.params.mix === 75,
-  'later human slider move keeps the externally-set key (E) and applies mix 75'
+  'later human control move keeps the externally-set key (E) and applies mix 75'
 );
 
 // ----------------------------------------------------------------------

@@ -3,32 +3,97 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Karaoke Chain Builder</title>
+  <title>VOXCHAIN</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%2316191d'/%3E%3Cpath d='M35 18h30v43a15 15 0 0 1-30 0zm-9 40h8a16 16 0 0 0 32 0h8a24 24 0 0 1-20 23.7V91h14v8H32v-8h14v-9.3A24 24 0 0 1 26 58z' fill='%23e4a72b'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
   <!--
     ================================================================
+    DIRECTION CONTRACT — Pattern Machine / Single Face Chassis
+    (redesign 2026-08-30; docs/ultron/redesign.md)
+
+    THESIS: a groovebox's encoder field — knob clusters per module,
+    pads for discrete choices, one display line answering the held
+    control.
+
+    OWN-WORLD: matte near-black chassis; silkscreen print; signal orange
+    reserved for system states (register marks, focus, live blink, Start)
+    — knob arcs carry each section's family color (item 1 adjustment,
+    amending the one-accent economy to family-coded controls); dot-matrix
+    register; family print; one disabled texture (hatch); the touched
+    section lifts — never glow.
+
+    STORY: the operator plays the chain as an instrument face; every
+    touch answers on the display line and in the PA; plain-language
+    help survives verbatim.
+
+    FIRST VIEWPORT (item 1b, Two-Deck Stack): one full-width instrument
+    — a slim SYSTEM DECK (identity print, engine lamp, RATE/LAT/NODES
+    dot-matrix etch, agent reporter, the one orange Start key, BYPASS as
+    the red-ringed end key) joined by a MACHINED SEAM — the deepest cut
+    on the page — to the VOICE DECK, one faceplate whose palette strip,
+    chain face (display register top edge; MIC IN jack print top-left;
+    sections split by machined grooves; OUT jack + VU corner
+    bottom-right) and presets strip read as printed zones split by the
+    same grooves. Below 900px the etch wraps to a second row and the
+    voice deck stacks palette | face | presets.
+
+    FORM: Pattern Machine; direction seed 2a361f1b; surface deal seed
+    2e642e38, dealt 4/7/3, locked Single Face Chassis; code-led.
+
+    FINISH: unreviewed and undocumented is unfinished; this build ends
+    with the finish review, the verdict, DESIGN.md, and every shipping
+    raster carrying its provenance.
+    ================================================================
+  -->
+  <!--
+    ================================================================
+    ITEM 1b — the TWO-DECK STACK (redesign item 1b; locked card
+    `two-deck-stack`, .impeccable/decision-surface-1b-payload.json).
+    The whole viewport is ONE instrument: .instrument is the outer
+    chassis shell; the SYSTEM DECK is the old VIS-2 status strip
+    re-cast as the upper slab (class .topbar retained verbatim — it is
+    src/agent-ui.js's chip mount); .deck-seam is the machined joint
+    between the two slabs (dark cut under a light lip — the deepest
+    cut on the page, deeper and wider than the section grooves); the
+    VOICE DECK is #chain-layout re-cast as the lower slab (class
+    .voice-deck added alongside .layout), one faceplate whose palette
+    zone, chain face and presets zone are printed zones split by the
+    same groove grammar the canvas sections use. Structure-only
+    additions: .instrument, .deck-seam, .system-etch (the deck's
+    dot-matrix etch wrapping the lamp + RATE/LAT/NODES readouts so the
+    <900px rule can wrap that group — and only that group — to a
+    second row). No element was removed, renamed, or reordered.
+
+    All wiring contracts below survive byte-for-byte: .topbar +
+    #bypass-toggle-button as its DIRECT last child (the agent chip's
+    insertion point), every id the three UI scripts resolve, the
+    persistence keys, the SortableJS lists, and the engine-not-started
+    gate class on #chain-layout.
+    ================================================================
+  -->
+  <!--
+    ================================================================
     VIS-2 — the topbar as the console's STATUS LCD STRIP, per
     .impeccable/surfaces/index-html.md (the committed world: status-strip
-    discipline donated by broadcast rack gear's dense status displays)
-    and the rq5 palette (docs/ultron/research/rq5-palette.md).
+    discipline donated by broadcast rack gear's dense status displays).
+    Restyled by item 1b into the Pattern Machine SYSTEM DECK (see the
+    block above; styles/main.css owns the current vocabulary).
 
-    Restructure of UI-1's real top bar into one persistent strip, left
-    to right: identity legend (h1, copy verbatim) · engine-state block ·
-    machine readout group (sample rate / latency / node count) · Start +
-    device controls · Bypass at the far right. The readout ids
+    One persistent full-width strip, left to right: identity legend
+    (h1, copy verbatim) · engine-state block · machine readout group
+    (sample rate / latency / node count) · Start + device controls ·
+    Bypass at the far right. The readout ids
     (#readout-sample-rate / #readout-latency / #readout-node-count) are
-    reserved for FEW-2's wiring — values read '—' until then; their
-    labels (RATE / LATENCY / NODES) are new terse-technical copy on new
-    elements, not changes to existing copy.
+    wired by FEW-2; their labels (RATE / LATENCY / NODES) are new
+    terse-technical copy on new elements, not changes to existing copy.
 
     Every pre-existing id/class survives verbatim (.topbar, .app-title,
     #status + #status-dot/#status-text, .control, #start-button, the
     sr-only label + #input-device-select, #bypass-toggle-button /
     .bypass-btn), so src/main.js wiring needed no change; the
-    .topbar-section / .readout wrappers below are structural ADDITIONS
+    .topbar-section / .readout wrappers are structural ADDITIONS
     only — no element was removed or renamed.
 
     UI-2's emergency Bypass contract is honored unchanged: audio
@@ -36,16 +101,18 @@
     `engaged` class + "Bypass: ON/OFF" text stay toggled in lockstep by
     src/main.js, and the button stays a DIRECT child of .topbar (the
     last one), so FEW-1's agent chip (src/agent-ui.js) still inserts
-    immediately before it. VIS-2's CSS makes it the strip's single
-    loudest element (rq5 split-role safety red on steel — see
-    styles/main.css).
+    immediately before it. The CSS keeps it the deck's single loudest
+    element (split-role safety red: red-edge ring at rest, red-fill +
+    white when engaged — see styles/main.css).
     ================================================================
   -->
-  <header class="topbar">
+  <div class="instrument">
+  <header class="topbar system-deck">
     <div class="topbar-section topbar-identity">
-      <h1 class="app-title">Karaoke Chain Builder</h1>
+      <h1 class="app-title">VOXCHAIN</h1>
     </div>
 
+    <div class="system-etch">
     <div class="topbar-section topbar-status">
       <!--
         Refinement entry 3 ($impeccable harden, 2026-08-28): the strip's
@@ -76,6 +143,7 @@
         <span class="readout-value" id="readout-node-count">—</span>
       </span>
     </div>
+    </div>
 
     <div class="topbar-section topbar-controls">
       <!--
@@ -102,34 +170,46 @@
     <button id="bypass-toggle-button" class="bypass-btn" type="button" disabled>Bypass: OFF</button>
   </header>
 
+  <!-- The machined deck seam (item 1b): the joint that bolts the two
+       slabs into one chassis — a 1px light lip over a deep dark cut,
+       deeper and wider than any section groove on the voice deck.
+       Purely decorative geometry; aria-hidden, no focus, no content. -->
+  <div class="deck-seam" aria-hidden="true"></div>
+
   <!--
     ================================================================
-    UI-3 — real palette + chain canvas, per
-    docs/ultron/design/px1-layout-spec.md and the approved visual reference
-    docs/ultron/design/px1-mockup.html (its .palette/.canvas/.node-card/
-    .anchor classes are the styling source of truth — see styles/main.css).
+    UI-3 — palette + chain canvas, restructured by redesign item 1 into
+    the SINGLE FACE CHASSIS (the direction contract comment above is the
+    binding world; src/canvas.js + src/param-controls.js + the Pattern
+    Machine block of styles/main.css build it).
 
-    Replaces the old temporary #ae5-test-harness section (AE-5) — this is
-    the real, permanent way to add/reorder/remove node instances, wired up
-    by src/canvas.js (SortableJS-based drag-and-drop, per the committed
-    RQ-2 research decision). The palette list is populated at load time
-    from NodeTypes.getAllTypes() — never a hardcoded type list here; today
-    that's just "gain", and it will grow automatically as AE-6 through
-    AE-10 each register a new type the same way src/node-gain.js already
-    does. The presets column from the PX-1 mockup's 3-column layout was
-    UI-3's deliberate scope cut — added for real below by PS-3.
+    The .canvas markup below is the FLOW SEQUENCE (unchanged DOM): MIC IN
+    anchor → arrow → #chain-list → #empty-hint → arrow → OUT anchor. The
+    chrome around it is JS-built panel furniture: the DISPLAY REGISTER
+    (src/canvas.js, panel's first child — the accent-marked top-edge
+    line) and the pinned OUT footer mirror + VU corner (src/meters.js,
+    the base plate). Each chain entry is a panel-print SECTION built by
+    src/canvas.js (family print rail + encoder field, split by machined
+    grooves — see that file's createNodeCard block); its controls (knob
+    clusters, pad selectors, trim sliders) are src/param-controls.js.
 
-    The whole region starts visually gated (`engine-not-started` class,
-    see styles/main.css) until AudioEngine.start() succeeds — mirrors the
-    same disabled-until-started pattern already used for the Bypass button
-    and the old test button. src/canvas.js's own onEngineStarted() (called
-    from src/main.js's Start success handler) removes this class; its
-    onSort/remove handlers separately guard on window.AudioEngine.isStarted
-    before ever calling AudioGraph.buildGraph(), so no drag completed before
-    Start can throw an uncaught error either way.
+    VIS-5/FEW-3 contract preserved verbatim: src/meters.js finds the two
+    .anchor elements by their EXACT text ("MIC IN" / "OUT") and mounts
+    the meter units inside them — the anchors below must stay text-only.
+
+    The whole region starts visually gated (`engine-not-started` class —
+    the hatch + recede grammar in main.css) until AudioEngine.start()
+    succeeds; src/canvas.js's onEngineStarted() removes the class, flips
+    the empty-hint copy, and wakes the display register, while its
+    onSort/remove handlers separately guard on
+    window.AudioEngine.isStarted before ever calling AudioGraph.build
+    Graph(), so no drag completed before Start can throw either way.
     ================================================================
   -->
-  <div class="layout engine-not-started" id="chain-layout">
+  <!-- VOICE DECK (item 1b): #chain-layout re-cast as the lower slab —
+       class .voice-deck added alongside .layout; the engine-not-started
+       gate class and id are the wiring contracts, unchanged. -->
+  <div class="layout voice-deck engine-not-started" id="chain-layout">
     <div class="panel palette">
       <h2>Palette</h2>
       <div class="palette-list" id="palette-list"></div>
@@ -184,6 +264,185 @@
       </div>
     </div>
   </div>
+  </div>
+
+  <!--
+    ================================================================
+    ITEM 2 LIVE ROUND — CONTROL-ANATOMY VARIANT SWITCHER (REMOVE ON
+    BAKE; docs/ultron/redesign.md item 2). NOT product UI: it exists so
+    the operator can cycle the three live control anatomies —
+      A ENCODER  built position arc + pointer + detent; linear drag;
+                 the held knob's value line answers amber
+      B DIAL     tick ring + family needle, no arc; angular-velocity
+                 drag (fine near center, flicks spin)
+      C VFD      chrome-less dial + 24-segment family ring; stepped
+                 drag (Shift = fine within step); register-tier value
+                 beside the control
+    — on the REAL default preset, dragging real knobs (Start the engine
+    to hear them). The three anatomies live in styles/main.css's ITEM 2
+    LIVE VARIANT LAYER and the three feels in src/param-controls.js,
+    both gated on body[data-knob-variant]; this block is the ONLY
+    writer of that attribute. When the pick lands, the chosen variant
+    is baked (gate dropped) and this whole block — pill, style, script
+    — is deleted with it.
+    ================================================================
+  -->
+  <style data-item2-variant-switcher="true">
+    #item2-variant-switcher {
+      position: fixed;
+      left: 1rem;
+      bottom: 1rem;
+      z-index: 8000;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--pm-key-edge);
+      border-radius: 6px;
+      background: var(--pm-key);
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.55);
+    }
+
+    #item2-variant-switcher .i2v-legend {
+      margin: 0 0.35rem 0 0.4rem;
+      font-family: var(--font-readout);
+      font-size: 0.6875rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--pm-print);
+    }
+
+    #item2-variant-switcher .i2v-key {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid var(--pm-key-edge);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--pm-print);
+      font-family: var(--font-readout);
+      font-size: 0.6875rem;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      padding: 0.45rem 0.6rem;
+      cursor: pointer;
+    }
+
+    #item2-variant-switcher .i2v-key:hover {
+      border-color: var(--pm-print);
+      color: var(--pm-print-hi);
+    }
+
+    #item2-variant-switcher .i2v-key[aria-pressed='true'] {
+      background: var(--pm-accent);
+      border-color: var(--pm-accent);
+      color: var(--pm-ink);
+      font-weight: 700;
+    }
+
+    #item2-variant-switcher .i2v-key:focus-visible {
+      outline: 2px solid var(--pm-accent);
+      outline-offset: 2px;
+    }
+  </style>
+  <div id="item2-variant-switcher" aria-label="Control anatomy variant (live round)">
+    <span class="i2v-legend">Item 2</span>
+  </div>
+  <script data-item2-variant-switcher="true">
+    (function () {
+      'use strict';
+      var VARIANTS = ['encoder', 'dial', 'vfd'];
+      var LABELS = {
+        encoder: 'A ENCODER',
+        dial: 'B DIAL',
+        vfd: 'C VFD'
+      };
+      var TITLES = {
+        encoder: 'Built anatomy: position arc + pointer + center detent; linear vertical drag (Shift = fine); the held knob\u2019s value line answers amber.',
+        dial: 'Potentiometer dial: tick ring + family-color needle, no filled arc; angular-velocity drag \u2014 fine near the center detent, flicks spin the dial (Shift = fine).',
+        vfd: 'Display-driven: chrome-less dial + 24-segment family ring; stepped drag \u2014 the value snaps per segment (Shift = fine within the step); register-tier value beside the control.'
+      };
+      var root = document.getElementById('item2-variant-switcher');
+      if (!root || !document.body) {
+        return;
+      }
+      var buttons = {};
+
+      function paint(active) {
+        VARIANTS.forEach(function (name) {
+          buttons[name].setAttribute('aria-pressed', name === active ? 'true' : 'false');
+        });
+      }
+
+      function setVariant(name) {
+        document.body.setAttribute('data-knob-variant', name);
+        paint(name);
+      }
+
+      VARIANTS.forEach(function (name) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'i2v-key';
+        b.textContent = LABELS[name];
+        b.title = TITLES[name];
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('click', function () {
+          setVariant(name);
+        });
+        root.appendChild(b);
+        buttons[name] = b;
+      });
+
+      setVariant('encoder');
+
+      // Deep link for the round: ?knob-variant=dial|vfd|encoder applies
+      // on load (shareable comparisons; removed with this block).
+      try {
+        var m = /[?&]knob-variant=(encoder|dial|vfd)\b/.exec(
+          window.location.search
+        );
+        if (m) {
+          setVariant(m[1]);
+        }
+      } catch (err) {
+        /* cosmetic */
+      }
+
+      // Mirror the live session's variant cycler: the global bar's
+      // prev/next rewrite the #impeccable-variant-state stylesheet with
+      // the shown variant (1 = A, 2 = B, 3 = C); keep the app's anatomy
+      // in lockstep so the live bar and the pill cycle the same thing.
+      var LIVE_VARIANT_RE = /\[data-impeccable-variant="([123])"\][^{}]*\{[^}]*display:\s*block/;
+
+      function syncFromLiveCycler() {
+        try {
+          var st = document.getElementById('impeccable-variant-state');
+          if (!st || !st.textContent) {
+            return;
+          }
+          var m = st.textContent.match(LIVE_VARIANT_RE);
+          if (m) {
+            setVariant(VARIANTS[Number(m[1]) - 1]);
+          }
+        } catch (err) {
+          /* mirroring is cosmetic */
+        }
+      }
+
+      try {
+        if (typeof MutationObserver !== 'undefined' && document.head) {
+          new MutationObserver(syncFromLiveCycler).observe(document.head, {
+            childList: true,
+            subtree: true,
+            characterData: true
+          });
+        }
+      } catch (err) {
+        /* observer unavailable */
+      }
+      setInterval(syncFromLiveCycler, 800);
+    })();
+  </script>
 
   <script src="src/audio-engine.js"></script>
   <script src="src/audio-graph.js"></script>
@@ -341,5 +600,8 @@
   -->
   <script src="src/status-readouts.js"></script>
   <script src="src/main.js"></script>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js?token=ff754d30-76f8-417f-ae5c-209f190c0c99"></script>
+<!-- impeccable-live-end -->
 </body>
 </html>

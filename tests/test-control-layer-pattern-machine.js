@@ -1,0 +1,1225 @@
+// Test for redesign item 1 — the PATTERN MACHINE CONTROL LAYER
+// (docs/ultron/redesign.md, structure "Single Face Chassis").
+//
+// Covers the new control surface the redesign shipped, on the REAL
+// src/param-controls.js + src/canvas.js loaded into a vm sandbox:
+//   A. KNOB COMPONENT WIRING, BOTH DIRECTIONS — a human commit through
+//      the native range input's 'input' event and an agent write through
+//      ChainCanvas.updateNodeParam (the set_param fast path) move the
+//      SAME state: the engine input, the mono .param-value span, the
+//      canvas model, and the display register. Plus the committed
+//      control-shape allocation (knob vs trim vs pads) and the detent
+//      grammar (bipolar params only).
+//   B. DISCRETE PAD COMMITS — string values verbatim down the pipeline
+//      (AudioGraph.updateNodeParams + NodeTypes.applyParam) from a real
+//      pad click, and updateControl moving the pressed pad WITHOUT a
+//      commit or a re-render.
+//   C. DISPLAY REGISTER CONTRACT — built by canvas.js as the canvas
+//      panel's first child, aria-hidden (purely visual redundancy); at
+//      rest it carries the ENGINE STATE (boot: STOPPED, live: count);
+//      a control event switches it to MODULE · PARAM · VALUE + the
+//      plain-language help line (reused from param-controls' map, not
+//      duplicated), where it is sticky; the CSS pins fixed geometry so
+//      it can never pump layout.
+//   D. SECTION FOLD — the collapse button toggles .collapsed + its own
+//      aria-expanded; the CSS fold is the 0fr grid with visibility
+//      hidden (rows leave the tab order), session-only (rebuild
+//      re-expands).
+//   E. DRAG-HANDLE SCOPING — the chain Sortable's handle is the explicit
+//      grip zone (.node-drag-handle in the family print rail) and NO
+//      interactive control (input/button) lives inside it, so knobs,
+//      pads, chevron and remove can never start a drag.
+//   F. ADJUSTMENT ROUND (gate verdict ADJUST, 2026-08-30) —
+//      F1. the VALUE-DISPLAY LADDER: every value/state readout on the
+//          canvas surface renders at ONE per-control mono size
+//          (0.75rem, tabular numerals, min-width slots), with the
+//          display register keeping its own larger instrument tier
+//          (0.85rem) and its help line joining the mono face;
+//      F2. the knob ARC carries the section's FAMILY color: --knob-arc
+//          derives from the rq5 --family-* tokens (the palette flank's
+//          own) at the .node-card[data-family] rules — ONE derivation
+//          site, no per-control class, no raw hex — and .knob-ring's
+//          gradient consumes it, not the system accent.
+//   G. ITEM 2 LIVE VARIANT HOOKS — the three drag-feel modes read
+//      body[data-knob-variant] AT DRAG TIME (absent = the built
+//      ENCODER feel, so the harness default and the shipped page are
+//      untouched); dial = detent-proximity gain x velocity, vfd =
+//      24-detent stepped quantization (Shift = fine within step);
+//      every variant CSS rule is body-gated (un-picked variants never
+//      render).
+//
+// Same committed-test convention as the rest of the suite: zero-dependency
+// Node harness, stub `window` + minimal DOM, load the REAL src files
+// (fs.readFileSync + vm.runInContext).
+//
+// Run from a clean clone:  node tests/test-control-layer-pattern-machine.js
+// (or via the runner:      node tests/run.js pattern-machine)
+// Exits 0 on pass, 1 on any failure.
+
+'use strict';
+
+var fs = require('fs');
+var path = require('path');
+var vm = require('vm');
+
+var ROOT = path.join(__dirname, '..');
+
+var failures = [];
+
+function check(cond, label) {
+  if (cond) {
+    console.log('  ok - ' + label);
+  } else {
+    failures.push(label);
+    console.log('  FAIL - ' + label);
+  }
+}
+
+// ----------------------------------------------------------------------
+// Minimal fake DOM (the palette-cards harness shape: DOM-honest moves,
+// class-selector queries, DOM-honest textContent reads).
+// ----------------------------------------------------------------------
+function FakeElement(tagName) {
+  this.tagName = String(tagName).toUpperCase();
+  this.children = [];
+  this.listeners = {};
+  this.className = '';
+  this.id = '';
+  this.type = '';
+  this.value = '';
+  this.title = '';
+  this.disabled = false;
+  this.style = {};
+  this.attrs = {};
+  this.parentNode = null;
+  this._text = '';
+  var self = this;
+
+  this.classList = {
+    add: function (c) {
+      if (!self.classList.contains(c)) {
+        self.className = (self.className ? self.className + ' ' : '') + c;
+      }
+    },
+    remove: function (c) {
+      var parts = self.className.split(/\s+/).filter(function (p) {
+        return p && p !== c;
+      });
+      self.className = parts.join(' ');
+    },
+    toggle: function (c) {
+      if (self.classList.contains(c)) {
+        self.classList.remove(c);
+        return false;
+      }
+      self.classList.add(c);
+      return true;
+    },
+    contains: function (c) {
+      return self.className.split(/\s+/).indexOf(c) !== -1;
+    }
+  };
+}
+
+Object.defineProperty(FakeElement.prototype, 'textContent', {
+  get: function () {
+    return this._text +
+      this.children.map(function (c) { return c.textContent; }).join('');
+  },
+  set: function (v) {
+    this._text = String(v);
+    this.children = [];
+  }
+});
+
+Object.defineProperty(FakeElement.prototype, 'innerHTML', {
+  get: function () { return ''; },
+  set: function () {
+    this.children = [];
+    this._text = '';
+  }
+});
+
+function detachFromParent(child) {
+  if (child.parentNode) {
+    var siblings = child.parentNode.children;
+    var idx = siblings.indexOf(child);
+    if (idx !== -1) {
+      siblings.splice(idx, 1);
+    }
+  }
+}
+
+FakeElement.prototype.appendChild = function (child) {
+  detachFromParent(child);
+  child.parentNode = this;
+  this.children.push(child);
+  return child;
+};
+
+FakeElement.prototype.insertBefore = function (child, ref) {
+  detachFromParent(child);
+  child.parentNode = this;
+  var idx = ref ? this.children.indexOf(ref) : -1;
+  if (idx === -1) {
+    this.children.push(child);
+  } else {
+    this.children.splice(idx, 0, child);
+  }
+  return child;
+};
+
+FakeElement.prototype.setAttribute = function (name, val) {
+  this.attrs[name] = String(val);
+};
+
+FakeElement.prototype.getAttribute = function (name) {
+  return Object.prototype.hasOwnProperty.call(this.attrs, name)
+    ? this.attrs[name]
+    : null;
+};
+
+FakeElement.prototype.addEventListener = function (evt, fn) {
+  (this.listeners[evt] = this.listeners[evt] || []).push(fn);
+};
+
+var STUB_EVENT = {
+  stopPropagation: function () {},
+  preventDefault: function () {}
+};
+
+FakeElement.prototype.fire = function (evt, ev) {
+  (this.listeners[evt] || []).forEach(function (fn) {
+    fn(ev || STUB_EVENT);
+  });
+};
+
+FakeElement.prototype.querySelectorAll = function (sel) {
+  var cls = sel.replace(/^\./, '');
+  var out = [];
+  this.children.forEach(function (child) {
+    if (child.className.split(/\s+/).indexOf(cls) !== -1) {
+      out.push(child);
+    }
+    out = out.concat(child.querySelectorAll(sel));
+  });
+  return out;
+};
+
+FakeElement.prototype.findByClass = function (cls) {
+  var found = null;
+  this.children.some(function (child) {
+    if (child.className.split(/\s+/).indexOf(cls) !== -1) {
+      found = child;
+      return true;
+    }
+    found = child.findByClass(cls);
+    return !!found;
+  });
+  return found;
+};
+
+function deepFind(el, pred) {
+  if (pred(el)) {
+    return el;
+  }
+  var found = null;
+  el.children.some(function (child) {
+    found = deepFind(child, pred);
+    return !!found;
+  });
+  return found;
+}
+
+var paletteListEl = new FakeElement('div');
+var chainListEl = new FakeElement('div');
+var emptyHintEl = new FakeElement('div');
+var layoutEl = new FakeElement('div');
+var canvasEl = new FakeElement('div');
+var panelEl = new FakeElement('div');
+panelEl.className = 'canvas-panel';
+
+var documentStub = {
+  createElement: function (tag) { return new FakeElement(tag); },
+  getElementById: function (id) {
+    if (id === 'palette-list') { return paletteListEl; }
+    if (id === 'chain-list') { return chainListEl; }
+    if (id === 'empty-hint') { return emptyHintEl; }
+    if (id === 'chain-layout') { return layoutEl; }
+    return null;
+  },
+  // The display register + flow toggle need it — canvas.js guards with
+  // typeof checks, so the palette-cards harness (without querySelector)
+  // simply skips them; THIS harness provides one selector.
+  querySelector: function (sel) {
+    if (sel === '.canvas-panel') { return panelEl; }
+    return null;
+  }
+};
+
+// ----------------------------------------------------------------------
+// Stub collaborators + call log.
+// ----------------------------------------------------------------------
+var calls = {
+  buildGraph: [],
+  persist: [],
+  markModified: 0,
+  noteHumanEdit: 0,
+  updateNodeParams: [],
+  applyParam: []
+};
+
+function snapshotModel(model) {
+  return model.map(function (e) {
+    return { id: e.id, type: e.type, params: Object.assign({}, e.params) };
+  });
+}
+
+var fakeInstance = { marker: 'fake-live-node' };
+
+var windowStub = {
+  document: documentStub,
+  AudioGraph: {
+    registerNodeType: function () {},
+    buildGraph: function (model) { calls.buildGraph.push(snapshotModel(model)); },
+    updateNodeParams: function (id, params) {
+      calls.updateNodeParams.push({ id: id, params: params });
+    },
+    getNodeInstance: function () { return fakeInstance; }
+  },
+  AudioParamRamp: { schedule: function () {} },
+  AudioEngine: { isStarted: true },
+  Persistence: {
+    saveCurrentChain: function (model) { calls.persist.push(snapshotModel(model)); }
+  },
+  PresetsUI: {
+    markModified: function () { calls.markModified += 1; }
+  },
+  AgentUI: {
+    noteHumanEdit: function () { calls.noteHumanEdit += 1; }
+  },
+  Sortable: function SortableStub(el, opts) {
+    SortableStub.instances.push({ el: el, opts: opts });
+  }
+};
+windowStub.Sortable.instances = [];
+
+var sandbox = {
+  window: windowStub,
+  document: documentStub,
+  console: console
+};
+sandbox.window.window = windowStub;
+vm.createContext(sandbox);
+
+function loadSrc(file) {
+  vm.runInContext(
+    fs.readFileSync(path.join(ROOT, 'src', file), 'utf8'),
+    sandbox,
+    { filename: file }
+  );
+}
+
+// Real sources in index.html order (gain + delay carry the knob/trim
+// allocation under test; autotune carries the discrete pad shapes).
+loadSrc('node-types.js');
+loadSrc('param-controls.js');
+loadSrc('node-gain.js');
+loadSrc('node-delay.js');
+loadSrc('node-autotune.js');
+loadSrc('canvas.js');
+
+// Record at the REGISTRY BOUNDARY (the committed convention): override
+// NodeTypes.applyParam after load so commits are captured without
+// needing each type's real AudioNode composite — param-controls resolves
+// window.NodeTypes.applyParam at COMMIT time, so the override holds.
+windowStub.NodeTypes.applyParam = function (type, node, paramId, value) {
+  calls.applyParam.push({ type: type, node: node, paramId: paramId, value: value });
+};
+
+// ----------------------------------------------------------------------
+// Helpers over the section anatomy.
+// ----------------------------------------------------------------------
+function cards() {
+  return chainListEl.querySelectorAll('.node-card');
+}
+
+function paramRows(card) {
+  var inner = deepFind(card, function (el) {
+    return el.className.split(/\s+/).indexOf('node-params-inner') !== -1;
+  });
+  return inner ? inner.children : [];
+}
+
+function rowFor(card, paramId) {
+  var nodeId = card.attrs['data-node-id'];
+  var found = null;
+  paramRows(card).some(function (row) {
+    found = deepFind(row, function (el) {
+      return el.tagName === 'INPUT' &&
+        el.id === 'param-' + nodeId + '-' + paramId;
+    });
+    return !!found;
+  });
+  return found;
+}
+
+function rowByParam(card, paramId) {
+  var nodeId = card.attrs['data-node-id'];
+  var rowFound = null;
+  paramRows(card).some(function (row) {
+    var has = deepFind(row, function (el) {
+      return el.tagName === 'INPUT' &&
+        el.id === 'param-' + nodeId + '-' + paramId;
+    });
+    if (has) {
+      rowFound = row;
+    }
+    return !!has;
+  });
+  return rowFound;
+}
+
+function rowClass(row, cls) {
+  return deepFind(row, function (el) {
+    return el.className.split(/\s+/).indexOf(cls) !== -1;
+  });
+}
+
+function registerSpan(cls) {
+  return deepFind(panelEl, function (el) {
+    return el.className.split(/\s+/).indexOf(cls) !== -1;
+  });
+}
+
+// CSS structural guards (the section-I convention from
+// test-palette-cards-cycle3.js: parse the REAL stylesheet, comments
+// stripped, declarations only).
+var RAW_CSS = '\n' + fs.readFileSync(path.join(ROOT, 'styles', 'main.css'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
+
+function cssRule(selector) {
+  var idx = RAW_CSS.indexOf('\n' + selector + ' {');
+  if (idx === -1) { return null; }
+  var open = RAW_CSS.indexOf('{', idx);
+  var depth = 1;
+  var i = open + 1;
+  while (i < RAW_CSS.length && depth > 0) {
+    if (RAW_CSS[i] === '{') { depth += 1; }
+    else if (RAW_CSS[i] === '}') { depth -= 1; }
+    i += 1;
+  }
+  return depth === 0 ? RAW_CSS.slice(open + 1, i - 1) : null;
+}
+
+function cssDecl(body, prop) {
+  var m = body.match(new RegExp('(?:^|[;\\s])' + prop + '\\s*:\\s*([^;]+)'));
+  return m ? m[1].trim() : null;
+}
+
+// ----------------------------------------------------------------------
+// A. Knob component wiring, both directions.
+// ----------------------------------------------------------------------
+console.log('A. knob wiring (human path + agent fast path)');
+
+windowStub.ChainCanvas.loadModel([
+  { id: 'g0', type: 'gain', params: { gainDb: 0 } }
+]);
+// Structural refresh of the state line happens in STATE mode (before any
+// touch): 1 module, then 2 after a second load.
+var stateAfterFirstLoad = registerSpan('register-module').textContent;
+windowStub.ChainCanvas.loadModel([
+  { id: 'g1', type: 'gain', params: { gainDb: 0 } },
+  { id: 'd1', type: 'delay', params: { timeMs: 300, feedback: 25, mix: 25 } }
+]);
+// Captured BEFORE any control event: at rest (nothing touched yet) the
+// register carries the ENGINE STATE line — asserted in section C.
+var stateModuleAtRest = registerSpan('register-module').textContent;
+var stateValueAtRest = registerSpan('register-value').textContent;
+
+var gainCard = cards().filter(function (c) {
+  return c.attrs['data-node-id'] === 'g1';
+})[0];
+var gainRow = rowByParam(gainCard, 'gainDb');
+var gainInput = rowFor(gainCard, 'gainDb');
+var gainKnob = rowClass(gainRow, 'knob');
+var gainValueSpan = rowClass(gainRow, 'param-value');
+
+check(
+  !!gainKnob && !!gainInput && gainInput.type === 'range',
+  'a continuous param renders the native range engine + a .knob visual'
+);
+check(
+  gainInput.className === 'knob-input' &&
+    gainKnob.children.length === 3 &&
+    !!rowClass(gainRow, 'knob-ring') &&
+    !!rowClass(gainRow, 'knob-cap') &&
+    !!rowClass(gainRow, 'knob-pointer'),
+  'knob anatomy: ring + cap + pointer over the clipped engine input'
+);
+check(
+  gainKnob.getAttribute('data-detent') === 'true',
+  'bipolar param (gainDb -24..24) prints the unity detent (data-detent true)'
+);
+
+// Delay allocation: Time is the committed TRIM; Feedback/Mix are knobs.
+var delayCard = cards().filter(function (c) {
+  return c.attrs['data-node-id'] === 'd1';
+})[0];
+check(
+  rowFor(delayCard, 'timeMs').className === 'trim-slider' &&
+    rowClass(rowByParam(delayCard, 'timeMs'), 'trim-unit') !== null,
+  'delay Time renders the TRIM shape (wide linear range demands throw)'
+);
+check(
+  rowFor(delayCard, 'feedback').className === 'knob-input' &&
+    rowFor(delayCard, 'mix').className === 'knob-input',
+  'delay Feedback/Mix render KNOBs'
+);
+check(
+  rowClass(rowByParam(delayCard, 'feedback'), 'knob').getAttribute('data-detent') === 'false',
+  'unipolar param (feedback 0..90) has NO detent'
+);
+
+// A1. HUMAN PATH: keyboard-style value change on the engine input
+// commits through the pipeline and moves the visible span.
+calls.applyParam.length = 0;
+calls.updateNodeParams.length = 0;
+gainInput.value = '12';
+gainInput.fire('input');
+check(
+  calls.updateNodeParams.length === 1 &&
+    calls.updateNodeParams[0].params.gainDb === 12,
+  'human knob commit updates the model via AudioGraph.updateNodeParams (12)'
+);
+check(
+  calls.applyParam.length === 1 &&
+    calls.applyParam[0].paramId === 'gainDb' &&
+    calls.applyParam[0].value === 12,
+  'human knob commit reaches NodeTypes.applyParam with the numeric value'
+);
+check(
+  gainValueSpan.textContent === '12 dB',
+  'the mono value span reads "12 dB" after the human commit'
+);
+
+// A2. AGENT FAST PATH: ChainCanvas.updateNodeParam moves the SAME state
+// without a re-render and without a commit (the caller owns the live
+// write).
+var persistBefore = calls.persist.length;
+calls.applyParam.length = 0;
+check(
+  windowStub.ChainCanvas.updateNodeParam('g1', 'gainDb', -6) === true,
+  'updateNodeParam (set_param canvas half) applies gainDb -6'
+);
+check(
+  Number(gainInput.value) === -6,
+  'the engine input moved to -6 in place (no re-render)'
+);
+check(
+  gainValueSpan.textContent === '-6 dB',
+  'the mono span moved to "-6 dB" in place'
+);
+check(
+  calls.applyParam.length === 0,
+  'the fast-path move issues NO commit of its own (display + bookkeeping only)'
+);
+check(
+  windowStub.ChainCanvas.getCurrentModel()[0].params.gainDb === -6,
+  'the canvas model carries -6 after the fast-path move'
+);
+check(
+  calls.persist.length === persistBefore + 1 &&
+    calls.persist[calls.persist.length - 1][0].params.gainDb === -6,
+  'the fast-path move autosaves the new value (PS-2 unchanged)'
+);
+
+// A3. Both directions stay in agreement: a LATER human move on the same
+// control builds on the agent value (no revert), and a later agent move
+// overrides the human one.
+gainInput.value = '3';
+gainInput.fire('input');
+check(
+  windowStub.ChainCanvas.getCurrentModel()[0].params.gainDb === 3,
+  'a later human move on the same knob supersedes cleanly (3)'
+);
+windowStub.ChainCanvas.updateNodeParam('g1', 'gainDb', 24);
+gainInput.value = '10';
+gainInput.fire('input');
+check(
+  windowStub.ChainCanvas.getCurrentModel()[0].params.gainDb === 10 &&
+    gainInput.value === '10',
+  'a later agent write then human move land on the human value (both paths, one state)'
+);
+
+// ----------------------------------------------------------------------
+// B. Discrete pad commits (string values verbatim).
+// ----------------------------------------------------------------------
+console.log('B. pad commits');
+
+windowStub.ChainCanvas.loadModel([
+  { id: 'a1', type: 'autotune', params: { key: 'C', scale: 'Chromatic', retune: 0, mix: 100 } }
+]);
+var atCard = cards()[0];
+var atRows = paramRows(atCard);
+var keyGroup = rowClass(atRows[0], 'pad-group');
+var scaleGroup = rowClass(atRows[1], 'pad-group');
+
+check(
+  !!keyGroup && keyGroup.children.length === 12 &&
+    keyGroup.children.every(function (p) { return p.tagName === 'BUTTON'; }),
+  'autotune Key renders 12 real pad buttons'
+);
+check(
+  keyGroup.getAttribute('role') === 'radiogroup' &&
+    keyGroup.getAttribute('aria-labelledby') === atRows[0].children[0].id,
+  'the pad group is a radiogroup named by its label'
+);
+
+function pressed(group) {
+  var p = group.children.filter(function (pad) {
+    return pad.getAttribute('aria-checked') === 'true';
+  });
+  return p.length === 1 ? p[0] : null;
+}
+
+check(
+  pressed(keyGroup).textContent === 'C' && pressed(scaleGroup).textContent === 'Chromatic',
+  'pads start at the saved values (C / Chromatic)'
+);
+
+// Tab stop: exactly the pressed pad.
+check(
+  keyGroup.children.filter(function (p) {
+    return p.getAttribute('tabindex') === '0';
+  }).length === 1,
+  'roving tabindex: exactly one tab stop in the key group'
+);
+
+calls.applyParam.length = 0;
+calls.updateNodeParams.length = 0;
+scaleGroup.children.filter(function (p) {
+  return p.textContent === 'Minor';
+})[0].fire('click');
+
+check(
+  calls.applyParam.length === 1 &&
+    calls.applyParam[0].paramId === 'scale' &&
+    calls.applyParam[0].value === 'Minor' &&
+    typeof calls.applyParam[0].value === 'string',
+  'pad click commits the STRING value verbatim to NodeTypes.applyParam'
+);
+check(
+  calls.updateNodeParams.length === 1 &&
+    calls.updateNodeParams[0].params.scale === 'Minor' &&
+    calls.updateNodeParams[0].params.key === 'C',
+  'pad click updates the model with full params (scale Minor, key untouched)'
+);
+check(
+  pressed(scaleGroup).textContent === 'Minor',
+  'the pressed pad moved to Minor'
+);
+
+// Fast path on a discrete param: moves the pad, no commit.
+calls.applyParam.length = 0;
+windowStub.ChainCanvas.updateNodeParam('a1', 'key', 'F#');
+check(
+  pressed(keyGroup).textContent === 'F#' &&
+    keyGroup.children.filter(function (p) {
+      return p.getAttribute('tabindex') === '0';
+    })[0].textContent === 'F#',
+  'fast-path pad write moves the pressed pad AND the tab stop (F#)'
+);
+check(
+  calls.applyParam.length === 0,
+  'fast-path pad write issues no commit (caller owns the live write)'
+);
+check(
+  windowStub.ChainCanvas.getCurrentModel()[0].params.key === 'F#',
+  'the model carries the string F# (verbatim, no coercion)'
+);
+
+// ----------------------------------------------------------------------
+// C. Display register contract.
+// ----------------------------------------------------------------------
+console.log('C. display register');
+
+var registerEl = panelEl.children.filter(function (c) {
+  return c.className.split(/\s+/).indexOf('display-register') !== -1;
+})[0];
+
+check(
+  !!registerEl && panelEl.children[0] === registerEl,
+  'the register is built as the canvas panel\'s FIRST child (top edge)'
+);
+check(
+  registerEl.getAttribute('aria-hidden') === 'true',
+  'the register is aria-hidden (purely visual redundancy — controls carry semantics)'
+);
+
+var regModule = registerSpan('register-module');
+var regParam = registerSpan('register-param');
+var regValue = registerSpan('register-value');
+var regHelp = registerSpan('register-help');
+check(
+  !!regModule && !!regParam && !!regValue && !!regHelp,
+  'the register carries the module/param/value/help slots'
+);
+
+// State line at rest — captured back in section A, before ANY control
+// event: the register boots in state mode (this harness's engine stub
+// runs started, so the line is the live count), and a structural change
+// while still in state mode refreshes the count.
+check(
+  /ENGINE \u00B7 LIVE \u00B7 1 MODULE$/.test(stateAfterFirstLoad),
+  'state mode after the first load reads "ENGINE · LIVE · 1 MODULE"'
+);
+check(
+  /ENGINE \u00B7 LIVE \u00B7 2 MODULES$/.test(stateModuleAtRest) &&
+    stateValueAtRest === '',
+  'a structural change refreshed the state count to 2 MODULES (captured before any touch)'
+);
+
+// A control event switches it to MODULE · PARAM · VALUE + the help line.
+windowStub.ChainCanvas.loadModel([
+  { id: 'g2', type: 'gain', params: { gainDb: 0 } }
+]);
+var g2 = cards()[0];
+var g2Input = rowFor(g2, 'gainDb');
+g2Input.value = '7.5';
+g2Input.fire('input');
+check(
+  regModule.textContent === 'Gain' &&
+    regParam.textContent === 'Gain' &&
+    regValue.textContent === '7.5 dB',
+  'a knob commit answers on the register: Gain · Gain · 7.5 dB'
+);
+check(
+  regHelp.textContent === 'Overall mic volume. Higher = louder.',
+  'the register reuses param-controls\' PLAIN_LANGUAGE_HELP line verbatim (no duplicated copy)'
+);
+check(
+  regValue.className.split(/\s+/).indexOf('register-blink') !== -1,
+  'the live-control blink class lands on the value segment'
+);
+
+// The focus feed: focusing a control answers on the register BEFORE it
+// moves (no commit fired).
+calls.applyParam.length = 0;
+windowStub.ChainCanvas.loadModel([
+  { id: 'g3', type: 'gain', params: { gainDb: 0 } }
+]);
+var g3 = cards()[0];
+var g3Input = rowFor(g3, 'gainDb');
+g3Input.fire('focus');
+check(
+  regModule.textContent === 'Gain' && regValue.textContent === '0 dB',
+  'focus feeds the register with the current value (0 dB) before any move'
+);
+check(
+  calls.applyParam.length === 0,
+  'the focus feed commits nothing'
+);
+
+// Sticky: a structural change after a touch does not overwrite the
+// touched control's line (the groovebox rule).
+windowStub.ChainCanvas.onEngineStarted();
+check(
+  regModule.textContent === 'Gain' && regValue.textContent === '0 dB',
+  'the touched-control line is STICKY (engine-state refresh does not overwrite it)'
+);
+
+// Fixed geometry: the CSS pins the height (the register never pumps
+// layout) and tabular numerals on the value line.
+var registerRule = cssRule('.display-register');
+check(
+  registerRule !== null && cssDecl(registerRule, 'height') === '3rem' &&
+    cssDecl(registerRule, 'overflow') === 'hidden',
+  'CSS pins the register geometry (height 3rem, overflow hidden — no layout pumping)'
+);
+var registerMainRule = cssRule('.register-main');
+check(
+  registerMainRule !== null &&
+    cssDecl(registerMainRule, 'font-variant-numeric') === 'tabular-nums',
+  'the register value line uses tabular numerals'
+);
+
+// ----------------------------------------------------------------------
+// D. Section fold.
+// ----------------------------------------------------------------------
+console.log('D. section fold');
+
+var foldCard = cards()[0]; // g3
+var foot = deepFind(foldCard, function (el) {
+  return el.className.split(/\s+/).indexOf('section-foot') !== -1;
+});
+var collapseBtn = foot.children[0];
+
+check(
+  collapseBtn.getAttribute('aria-expanded') === 'true' &&
+    !foldCard.classList.contains('collapsed'),
+  'section starts expanded (aria-expanded true)'
+);
+collapseBtn.fire('click');
+check(
+  foldCard.classList.contains('collapsed') &&
+    collapseBtn.getAttribute('aria-expanded') === 'false',
+  'fold toggle flips .collapsed + mirrors aria-expanded false'
+);
+collapseBtn.fire('click');
+check(
+  !foldCard.classList.contains('collapsed') &&
+    collapseBtn.getAttribute('aria-expanded') === 'true',
+  'fold toggle re-expands'
+);
+
+// Session-only: a rebuild (loadModel) re-creates sections expanded.
+collapseBtn.fire('click');
+check(foldCard.classList.contains('collapsed'), 'section folded before the rebuild');
+windowStub.ChainCanvas.loadModel([
+  { id: 'g4', type: 'gain', params: { gainDb: 0 } }
+]);
+var rebuilt = cards()[0];
+check(
+  rebuilt !== foldCard && !rebuilt.classList.contains('collapsed'),
+  'rebuild re-expands (fold is session-only, never persisted)'
+);
+
+// The CSS fold: 0fr grid + visibility hidden (tab-order removal), with
+// the reduced-motion instant fallback carried by the media guard.
+var foldRule = cssRule('.node-card.collapsed .node-params');
+var foldInnerRule = cssRule('.node-card.collapsed .node-params-inner');
+check(
+  foldRule !== null && cssDecl(foldRule, 'grid-template-rows') === '0fr',
+  'CSS folds the field to 0fr'
+);
+check(
+  foldInnerRule !== null && cssDecl(foldInnerRule, 'visibility') === 'hidden',
+  'CSS hides the folded rows (visibility hidden removes them from tab order)'
+);
+var foldTransitionRule = cssRule('.node-params');
+check(
+  foldTransitionRule !== null &&
+    RAW_CSS.indexOf('prefers-reduced-motion: no-preference') !== -1,
+  'the fold animation is reduced-motion guarded (instant fallback under reduce)'
+);
+
+// ----------------------------------------------------------------------
+// E. Drag-handle scoping.
+// ----------------------------------------------------------------------
+console.log('E. drag-handle scoping');
+
+var chainInstance = null;
+windowStub.Sortable.instances.forEach(function (inst) {
+  if (inst.el === chainListEl) { chainInstance = inst; }
+});
+check(
+  !!chainInstance && chainInstance.opts.handle === '.node-drag-handle',
+  'the chain Sortable drags ONLY from the explicit grip zone (.node-drag-handle)'
+);
+
+var handle = deepFind(rebuilt, function (el) {
+  return el.className.split(/\s+/).indexOf('node-drag-handle') !== -1;
+});
+check(
+  !!handle &&
+    !!deepFind(handle, function (el) {
+      return el.className.split(/\s+/).indexOf('node-drag-icon') !== -1;
+    }),
+  'the grip dot field lives inside the handle (a visible panel part)'
+);
+
+function subtreeHas(el, pred) {
+  if (pred(el)) { return true; }
+  return el.children.some(function (c) { return subtreeHas(c, pred); });
+}
+check(
+  !subtreeHas(handle, function (el) {
+    return el.tagName === 'INPUT' || el.tagName === 'BUTTON' || el.tagName === 'SELECT';
+  }),
+  'NO interactive control lives inside the handle (knobs/pads/chevron/remove can never start a drag)'
+);
+
+// And the controls DO exist elsewhere in the section (the scoping is not
+// vacuous).
+check(
+  subtreeHas(rebuilt, function (el) { return el.tagName === 'INPUT'; }) &&
+    subtreeHas(rebuilt, function (el) { return el.tagName === 'BUTTON'; }),
+  'the section carries its input + header-zone buttons OUTSIDE the handle'
+);
+
+// ----------------------------------------------------------------------
+// F. Adjustment round — display ladder + family-colored knob arcs.
+// ----------------------------------------------------------------------
+console.log('F. adjustment round: display ladder + family arcs');
+
+// F1. The display ladder: every value/state readout shares ONE per-control
+// mono tier (0.75rem / tabular / slot min-width); the register keeps its
+// instrument tier (0.85rem); the register help line joins the mono face.
+var VALUE_TIER = '0.75rem';
+var REGISTER_TIER = '0.85rem';
+
+var paramValueRule = cssRule('.param-value');
+check(
+  paramValueRule !== null &&
+    cssDecl(paramValueRule, 'font-size') === VALUE_TIER &&
+    cssDecl(paramValueRule, 'font-variant-numeric') === 'tabular-nums' &&
+    cssDecl(paramValueRule, 'min-width') === '6ch',
+  'per-control values (.param-value): ' + VALUE_TIER + ' mono, tabular, 6ch min-width slot (knob + trim share the rule)'
+);
+var padRule = cssRule('.pad');
+check(
+  padRule !== null &&
+    cssDecl(padRule, 'font-size') === VALUE_TIER &&
+    cssDecl(padRule, 'font-variant-numeric') === 'tabular-nums',
+  'pad legends ride the same per-control value tier (' + VALUE_TIER + ', tabular — the pressed pad IS the value display)'
+);
+var meterReadoutRule = cssRule('.meter-readout');
+check(
+  meterReadoutRule !== null &&
+    cssDecl(meterReadoutRule, 'font-size') === VALUE_TIER &&
+    cssDecl(meterReadoutRule, 'font-weight') === '400' &&
+    cssDecl(meterReadoutRule, 'font-variant-numeric') === 'tabular-nums',
+  'meter dB readout: value tier with weight pinned 400 (it inherits through two 700-weight ancestors otherwise)'
+);
+var registerHelpRule = cssRule('.register-help');
+check(
+  registerHelpRule !== null &&
+    cssDecl(registerHelpRule, 'font-family') === 'var(--font-readout)' &&
+    cssDecl(registerHelpRule, 'font-size') === VALUE_TIER &&
+    cssDecl(registerHelpRule, 'font-variant-numeric') === 'tabular-nums',
+  'register help line: mono face + tabular numerals at the value tier (register segments internally consistent)'
+);
+var registerMainRule2 = cssRule('.register-main');
+check(
+  registerMainRule2 !== null &&
+    cssDecl(registerMainRule2, 'font-size') === REGISTER_TIER &&
+    cssDecl(registerMainRule2, 'font-variant-numeric') === 'tabular-nums',
+  'register value line keeps the panel-instrument tier (' + REGISTER_TIER + ', tabular — one tier up by direction)'
+);
+var flowToggleRule = cssRule('.canvas-panel .flow-toggle');
+check(
+  flowToggleRule !== null &&
+    cssDecl(flowToggleRule, 'font-size') === VALUE_TIER,
+  'flow-state print: scoped rule rides the value tier (bare .flow-toggle lost the cascade to button.control 0.9rem and rendered 14.4px)'
+);
+// The ladder is CLOSED: no other rule re-sizes a ladder element away
+// from its tier (the ten value/state selectors carry exactly the two
+// documented sizes between them).
+var LADDER_SELECTORS = [
+  '.param-value', '.pad', '.meter-readout', '.register-help', '.register-main'
+];
+var ladderSizes = LADDER_SELECTORS.map(function (sel) {
+  return cssDecl(cssRule(sel) || '', 'font-size');
+});
+check(
+  ladderSizes.every(function (s) {
+    return s === VALUE_TIER || s === REGISTER_TIER;
+  }) &&
+    ladderSizes.indexOf(VALUE_TIER) !== -1 &&
+    ladderSizes.indexOf(REGISTER_TIER) !== -1,
+  'the display ladder is two tiers exactly (' + VALUE_TIER + ' values / ' + REGISTER_TIER + ' register), nothing in between'
+);
+
+// F2. Family-colored arcs: the ten data-family rules are the ONE
+// derivation site — each sets --knob-arc from the rq5 --family-* token
+// (the palette flank's own vocabulary; never raw hex, never a per-control
+// class) and .knob-ring consumes it instead of the system accent.
+var FAMILIES = [
+  'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter',
+  'distortion', 'chorus', 'gate', 'autotune'
+];
+var arcDerivationsOk = true;
+var arcTokenSourcesOk = true;
+FAMILIES.forEach(function (fam) {
+  var body = cssRule(".node-card[data-family='" + fam + "']");
+  var arc = body ? cssDecl(body, '--knob-arc') : null;
+  if (arc !== 'var(--family-' + fam + ')') {
+    arcDerivationsOk = false;
+  }
+  // The referenced token is a real :root definition (derivation resolves).
+  if (RAW_CSS.indexOf('--family-' + fam + ':') === -1) {
+    arcTokenSourcesOk = false;
+  }
+  // No raw hex ever rides the derivation rule (token-only discipline).
+  if (body && /#[0-9a-fA-F]{3,8}\b/.test(body)) {
+    arcDerivationsOk = false;
+  }
+});
+check(
+  arcDerivationsOk,
+  'all ten .node-card[data-family] rules derive --knob-arc from their rq5 --family-* token (one source, no raw hex)'
+);
+check(
+  arcTokenSourcesOk,
+  'every referenced --family-* token is defined in the stylesheet (the derivation resolves)'
+);
+var knobRingRule = cssRule('.knob-ring');
+check(
+  knobRingRule !== null &&
+    knobRingRule.indexOf('var(--knob-arc') !== -1 &&
+    knobRingRule.indexOf('var(--pm-accent') === -1,
+  '.knob-ring consumes var(--knob-arc) — the arc is family-colored, NOT the system accent'
+);
+// Structural single-source: a rendered knob is a DESCENDANT of the
+// data-family card, so the cascade (not any per-control class) carries
+// the arc color; both the drag path and the fast path write --knob-pos
+// through syncKnobVisual, re-rendering the same family arc.
+check(
+  (function () {
+    var knob = deepFind(rebuilt, function (el) {
+      return el.className.split(/\s+/).indexOf('knob') !== -1;
+    });
+    return !!knob && rebuilt.getAttribute('data-family') === 'gain';
+  })(),
+  'the .knob visual renders INSIDE its data-family section (arc color arrives by cascade — no per-control class to drift)'
+);
+// The neutral choice is recorded where it is enforced: detent tick and
+// trim cap stay neutral print (family color lives on the arc alone).
+var detentRule = cssRule(".knob[data-detent='true']::after");
+var trimThumbRule = cssRule('.trim-slider::-webkit-slider-thumb');
+check(
+  detentRule !== null &&
+    cssDecl(detentRule, 'background') === 'var(--pm-print)' &&
+    trimThumbRule !== null &&
+    cssDecl(trimThumbRule, 'background') === 'var(--pm-print-hi)',
+  'detent ticks and trim caps stay NEUTRAL print (family color on arcs only — the recorded calm choice)'
+);
+// The system accent keeps its reserved knob-side duties: the focus ring.
+var focusRingRule = cssRule('.knob-input:focus-visible ~ .knob-unit .knob');
+check(
+  focusRingRule !== null &&
+    cssDecl(focusRingRule, 'outline').indexOf('var(--pm-accent)') !== -1,
+  'the knob focus ring stays SIGNAL ORANGE (accent reserved for system states)'
+);
+
+// ----------------------------------------------------------------------
+// G. Item 2 live variant hooks — drag FEEL per anatomy + the gated CSS.
+// ----------------------------------------------------------------------
+console.log('');
+console.log('G. item 2 live variant hooks: feel modes + gated anatomy');
+
+// The feel switch is body[data-knob-variant], read AT DRAG TIME; absent
+// (the committed harness AND the shipped page until bake) = the built
+// ENCODER feel. A controllable body stub proves both the default safety
+// and each variant's math on the REAL gain knob (-24..24, step 0.5).
+var bodyVariant = null;
+documentStub.body = {
+  getAttribute: function (name) {
+    return name === 'data-knob-variant' ? bodyVariant : null;
+  }
+};
+
+// Fresh fixtures (section D re-rendered the canvas as one g4 gain
+// card): the CURRENT gain card's engine input + knob visual.
+var gCard2 = cards()[0];
+var gInput2 = rowFor(gCard2, 'gainDb');
+var gKnob2 = rowClass(rowByParam(gCard2, 'gainDb'), 'knob');
+
+function dragKnob(moves) {
+  gKnob2.fire('pointerdown', {
+    clientY: 200, pointerId: 1, shiftKey: false,
+    preventDefault: function () {}
+  });
+  // Each move is a DELTA from the previous pointer position (real
+  // pointer semantics — the handler reads clientY, not per-move dy).
+  var y = 200;
+  moves.forEach(function (m) {
+    y -= m.dy;
+    gKnob2.fire('pointermove', {
+      clientY: y, shiftKey: !!m.shift,
+      preventDefault: function () {}
+    });
+  });
+  gKnob2.fire('pointerup', {});
+}
+
+function wheelKnob(deltaY, shift) {
+  gKnob2.fire('wheel', {
+    deltaY: deltaY, deltaX: 0, shiftKey: !!shift,
+    preventDefault: function () {}
+  });
+}
+
+function setGain(v) {
+  gInput2.value = String(v);
+}
+
+// G1. Default safety: no body attribute = the built linear feel, exactly
+// (60px up from 0: (60/150)*48 = 19.2 -> 19.0 on the 0.5 grid).
+bodyVariant = null;
+setGain(0);
+dragKnob([{ dy: 60 }]);
+check(
+  Number(gInput2.value) === 19,
+  'no variant attribute: the built ENCODER linear drag is untouched (60px -> 19 dB)'
+);
+
+// G2. DIAL — angular-velocity mapping. Same 60px from 0 moves LESS
+// (13.824 -> 14.0: the 0.45 center-detent gain); a small push is FINER
+// at center than encoder (1.0 vs 1.5); a flick travels further than the
+// same distance slowly (angular momentum: 30px in one move = 7.0 vs
+// 3x10px = 6.0).
+bodyVariant = 'dial';
+setGain(0);
+dragKnob([{ dy: 60 }]);
+check(
+  Number(gInput2.value) === 14,
+  'DIAL: 60px from center commits 14 dB (0.45 detent-proximity gain x1.6 velocity), not the linear 19'
+);
+setGain(0);
+dragKnob([{ dy: 5 }]);
+var dialSmall = Number(gInput2.value);
+bodyVariant = 'encoder';
+setGain(0);
+dragKnob([{ dy: 5 }]);
+check(
+  dialSmall === 1 && Number(gInput2.value) === 1.5,
+  'DIAL: a 5px push at the center detent is FINER than encoder (1.0 vs 1.5 dB)'
+);
+bodyVariant = 'dial';
+setGain(0);
+dragKnob([{ dy: 30 }]);
+var dialFlick = Number(gInput2.value);
+setGain(0);
+dragKnob([{ dy: 10 }, { dy: 10 }, { dy: 10 }]);
+check(
+  dialFlick === 7 && Number(gInput2.value) === 6,
+  'DIAL: one 30px flick out-travels three 10px pushes (7.0 vs 6.0 dB — the velocity term)'
+);
+
+// G3. VFD — stepped detents. detentStep = round((48/24)/0.5)*0.5 = 2.0:
+// a 6px push snaps exactly one segment; a 1px push holds still (the
+// detent resists); Shift drops the quantizer (fine WITHIN the step —
+// 85px fine-drag lands 5.5, OFF the 2.0 grid but ON the 0.5 step grid);
+// wheel commits one DETENT per notch plain, one STEP with Shift.
+bodyVariant = 'vfd';
+setGain(0);
+dragKnob([{ dy: 6 }]);
+check(
+  Number(gInput2.value) === 2,
+  'VFD: a 6px push commits exactly one 2.0 dB detent (24-segment grid on the step grid)'
+);
+setGain(0);
+dragKnob([{ dy: 1 }]);
+check(
+  Number(gInput2.value) === 0,
+  'VFD: a sub-detent 1px push holds still (the detent resists)'
+);
+setGain(0);
+dragKnob([{ dy: 85, shift: true }]);
+check(
+  Number(gInput2.value) === 5.5,
+  'VFD: Shift = fine within the step (5.5 dB — off the detent grid, on the spec step grid)'
+);
+setGain(0);
+wheelKnob(-100, false);
+check(
+  Number(gInput2.value) === 2,
+  'VFD wheel: one notch = one detent (2.0 dB), not one spec step'
+);
+wheelKnob(-100, true);
+check(
+  Number(gInput2.value) === 2.5,
+  'VFD wheel + Shift: one spec step (0.5 dB fine)'
+);
+bodyVariant = null;
+setGain(0);
+wheelKnob(-100, false);
+check(
+  Number(gInput2.value) === 0.5,
+  'encoder/dial wheel: unchanged one-spec-step-per-notch regression (0.5 dB)'
+);
+
+// G4. The three anatomies are GATED on body[data-knob-variant] — every
+// occurrence of the gate in the stylesheet is body-scoped, so nothing
+// renders unless a variant is active (the unpicked variants never ship).
+var gateUses = RAW_CSS.split('data-knob-variant').length - 1;
+var bodyGatedUses = RAW_CSS.split('body[data-knob-variant=').length - 1;
+check(
+  gateUses > 0 && gateUses === bodyGatedUses,
+  'every anatomy rule is gated behind body[data-knob-variant] (' + bodyGatedUses + ' rules; none un-gated)'
+);
+
+// G5. DIAL anatomy: tick scale, NO arc; the NEEDLE carries family color.
+var dialRing = cssRule("body[data-knob-variant='dial'] .knob-ring");
+check(
+  dialRing !== null &&
+    dialRing.indexOf('repeating-conic-gradient') !== -1 &&
+    dialRing.indexOf('mask') !== -1 &&
+    dialRing.indexOf('var(--knob-arc') === -1,
+  'DIAL ring: repeating-conic tick scale, mask-confined, NO arc (the needle is the value)'
+);
+var dialNeedle = cssRule("body[data-knob-variant='dial'] .knob-pointer");
+check(
+  dialNeedle !== null &&
+    cssDecl(dialNeedle, 'background') === 'var(--knob-arc, var(--pm-print-hi))',
+  'DIAL needle: family color via the same --knob-arc cascade (family stays the value carrier)'
+);
+var dialLiveNeedle = cssRule("body[data-knob-variant='dial'] .knob[data-live='true'] .knob-pointer");
+check(
+  dialLiveNeedle !== null &&
+    cssDecl(dialLiveNeedle, 'background') === 'var(--knob-arc, var(--pm-print-hi))',
+  'DIAL needle stays family-colored while held (the amber pointer lift is overridden — the needle is the value, not a system state)'
+);
+var dialPad = cssRule("body[data-knob-variant='dial'] .pad[aria-checked='true']");
+check(
+  dialPad !== null &&
+    cssDecl(dialPad, 'background') === 'var(--knob-arc, var(--pm-accent))',
+  'DIAL pressed pad: family fill (the grammar rides the variant; chassis ink unchanged)'
+);
+
+// G6. VFD anatomy: chrome-less segmented dial + register-tier value
+// BESIDE the control.
+var vfdRing = cssRule("body[data-knob-variant='vfd'] .knob-ring");
+check(
+  vfdRing !== null &&
+    vfdRing.indexOf('repeating-conic-gradient') !== -1 &&
+    vfdRing.indexOf('mask') !== -1 &&
+    vfdRing.indexOf('background') === -1,
+  'VFD ring: the base family arc (one source, un-redeclared) MASKED into segments — mask + inset only'
+);
+var vfdPointer = cssRule("body[data-knob-variant='vfd'] .knob-pointer");
+check(
+  vfdPointer !== null && cssDecl(vfdPointer, 'display') === 'none',
+  'VFD: chrome-less — cap and pointer hidden (segments carry the value)'
+);
+var vfdUnit = cssRule("body[data-knob-variant='vfd'] .knob-unit");
+check(
+  vfdUnit !== null && cssDecl(vfdUnit, 'display') === 'grid',
+  'VFD: the knob-unit becomes a two-column grid (dial left, value+label beside)'
+);
+var vfdValue = cssRule("body[data-knob-variant='vfd'] .knob-unit .param-value");
+check(
+  vfdValue !== null &&
+    cssDecl(vfdValue, 'font-size') === '0.85rem' &&
+    cssDecl(vfdValue, 'color') === 'var(--pm-display)',
+  'VFD value: display-register tier (0.85rem) in display amber, BESIDE the control'
+);
+var vfdPad = cssRule("body[data-knob-variant='vfd'] .pad[aria-checked='true']");
+check(
+  vfdPad !== null &&
+    cssDecl(vfdPad, 'background') === 'var(--knob-arc, var(--pm-accent))' &&
+    cssDecl(vfdPad, 'border-radius') === '2px',
+  'VFD pressed pad: family fill, squared segment edge'
+);
+
+// G7. ENCODER refinement: the held knob's value line answers amber.
+var liveValue = cssRule("body[data-knob-variant='dial'] .knob[data-live='true'] ~ .param-value");
+check(
+  liveValue !== null &&
+    cssDecl(liveValue, 'color') === 'var(--pm-display)',
+  'the held knob\u2019s mono value line lifts to display amber (value tracking, encoder + dial)'
+);
+
+// ----------------------------------------------------------------------
+// Summary.
+// ----------------------------------------------------------------------
+console.log('');
+if (failures.length === 0) {
+  console.log('control-layer-pattern-machine: ALL PASS');
+  process.exit(0);
+} else {
+  console.log('control-layer-pattern-machine: ' + failures.length + ' FAILURE(S)');
+  process.exit(1);
+}

@@ -546,3 +546,102 @@ consolidated on main (97d6f6e). Cycle 3 is COMPLETE. Deferred work is
 recorded above and in the closing critique snapshot — no scope expansion.
 Artifacts stay in place; archive to cycle-3/ when cycle 4 opens (the
 cycle-1/2 convention). The ultron-swarm run for this cycle is finished.
+
+## Redesign Pass — Node Cards (2026-08-30)
+converted: ultron-swarm → ultron-redesign at phase=intake. Targeted
+look-and-feel pass on the node-card control layer (the FX "plugins"):
+today's fader-everything rows are too wide and monotonous; the user wants
+an Ableton-effect-chain feel — mixed input types (knobs et al.) and a
+condensed, fluid card. Town-hall product facts carry over unchanged
+(param model, presets, MCP contract, safety policy, a11y bar). Baseline =
+the closing critique 36/40 (.impeccable/critique/2026-08-30T05-59-04Z).
+
+### Intake answers (2026-08-30, user)
+- Driver: node-card controls far too wide; fader-everything monotony; not
+  fluid enough. Steer: Ableton-effect-chain feel — mixed input types,
+  knobs, condensed cards.
+- Direction: **full direction round** (7 grounded systems, script deals,
+  user locks) — the Ableton steer rides as a candidate/steer, not a lock.
+- Scope: cards are the main focus, but the user is "open to any other
+  changes as well" once the world is locked (consistent with the full
+  direction round; whole surface is in play, cards carry priority).
+- Fluidity = all three: control response (drag physics, value tracking),
+  motion polish (150–250ms guarded transitions), layout rhythm (snug
+  chain, condensed heights, consistent control alignment).
+- Off-limits / product facts that survive: param model + ranges, preset
+  round-trip, 8+2 MCP tool contract incl. 0..1 agent scale, per-node
+  audio bypass still DECLINED (collapse-only cards), terminal-limiter
+  policy, safety net, keyboard/SR operability, 11px floor, no-runtime-
+  internet, no build step, single page.
+- Build path: code-led (no image generation in this harness; stated, not
+  asked).
+
+Phase: baseline → direction.
+
+### Direction LOCKED (2026-08-30): Pattern Machine
+User locked the assigned card (optionId "assigned", no steer, buildPath
+code-led untouched). Seed 2a363f1b; direction contract + schedule in
+[redesign.md](redesign.md). Alternates shown: Pedalboard (model pick),
+One-Bit Desktop + Teletext (competitive), 4 declined w/ kept lines.
+Phase: execute — item 1 (chain-canvas surface round) dispatched first.
+
+### Surface structure LOCKED (2026-08-30): Single Face Chassis
+User locked the dealt lead (seed 2e642e38, dealt 4/7/3), steer empty.
+One continuous faceplate; sections as panel-print blocks + encoder
+fields split by machined grooves; display register on the top edge.
+Item-1 BUILD dispatched (code-led; craft floor; contract comment; tests
+green; detector + screenshots).
+
+### Change-control event (2026-08-30): patch-chain editor routed to $ultron
+User directive mid-redesign: free-canvas plugins + draggable patch cords
+(in/out jack points, MIC IN one out, master OUT one in) + tiny snap
+grid; FLOW toggle becomes per-card content-flow. This is a product
+BEHAVIOR change → new $ultron cycle (town-hall → plan → production)
+building it inside the locked Pattern Machine world; ultron-redesign
+stays open (item 1b flanks round pending user pick; items 2–8 queued)
+and owns the patch system's visual layer. Sequencing recommendation
+given to user: open the town-hall now; both tracks can run.
+
+### Item 1b built (2026-08-30): Two-Deck Stack — awaiting user gate
+System deck (etch/lamp/Start/BYPASS end key) + machined seam + voice
+deck (palette | chain face | presets as printed zones); canvas internals
+untouched; wiring sync fixes: none; suite 25 files / 2072 checks green;
+detector deltas = --pm-* tokens pending finish-phase DESIGN.md refresh.
+Town hall (cycle 4): all clusters signed off; assembled brief awaiting
+final record confirmation → then $plan-it-out.
+
+## Cycle 4 — Town Hall APPROVED (2026-08-30)
+Final record confirmed by user, no corrections. Scope: free-canvas
+patch-cord chain editing (cords edit order, never gate audio; linear
+topology; bounded panel; snap grid; TIDY) + continuous clamped card
+resize + per-card flow glyph (canvas FLOW retired) + autosave-only
+layout with legacy migration. Non-goals per brief (incl. per-node bypass
+stays DECLINED, no human-edit undo, no agent positioning). OQ-1..8
+production/planning-owned; OQ-9 (cord/jack/grid visual) stays with the
+ultron-redesign run. Phase: plan. Next: $plan-it-out on
+docs/ultron/town-hall.md → user plan-approval gate → production.
+
+## Cycle 4 — Plan (2026-08-30)
+plan.md written via $plan-it-out from the approved brief: 16 tasks, 5
+lanes, 4 milestones, NO research queue (all open questions in-house).
+Critical path FEW-4 (cord editing semantics). Planning decisions PD-1
+(chain SortableJS retired; grip-drag = position move only), PD-2
+(continuous card scale with STEPPED text at the 11px floor — flagged
+for user approval), PD-3 (SVG cord layer), PD-4 (DOM order = chain
+order). Phase gate: user plan approval → $production (M1 first).
+
+### Rebrand (2026-08-30, user): VOXCHAIN
+Display name swapped across index.html (title + identity print),
+README/PRODUCT/DESIGN, src comment headers, MCP capabilities app id
+('voxchain', test pin synced), design.json title. Kept: localStorage
+keys (data preservation), repo/CNAME (owner's infra call), genre prose.
+Rode no schedule item — mechanical coordinator task between gates.
+
+### Cycle-4 plan APPROVED (2026-08-30) — PD-2 as proposed
+User approved the plan incl. stepped-text-within-continuous-scale.
+Production dispatch serialized behind the redesign item-2 element round
+(single working tree, single writer): M1 (FEW-1 + QA-1 + DAT-1) goes
+first-dispatch after the element round lands.
+
+### Rebrand follow-on: item 1b APPROVED (2026-08-30); VOXCHAIN name in
+the shipped Two-Deck build. Item 2 element round dispatched.

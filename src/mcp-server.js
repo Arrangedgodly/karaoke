@@ -1,4 +1,4 @@
-// In-page WebMCP registration adapter for the Karaoke Chain Builder.
+// In-page WebMCP registration adapter for the VOXCHAIN.
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single
 // `window.X` export pattern as the rest of this project. Only external

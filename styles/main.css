@@ -86,39 +86,184 @@
   --font-readout: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* ===========================================================================
+   PATTERN MACHINE register (redesign item 1 — direction "Pattern Machine",
+   structure "Single Face Chassis"; docs/ultron/redesign.md + the locked
+   decision card). The canvas panel's own world, adopted verbatim from the
+   locked card's palette [#131316, #232330, #9EA4B8, #FF6B35, #FFD75E]:
+
+     --pm-chassis    matte near-black instrument chassis (ONE continuous
+                     faceplate ground top to bottom)
+     --pm-face-edge  the panel's machined bezel edge (a cut face, not a
+                     floating border — used as the panel chrome line)
+     --pm-groove-cut / --pm-groove-lip  the machined groove between
+                     sections: a dark slot with a light lower lip (cut-face
+                     geometry, no ambient shadow)
+     --pm-print      silkscreen panel print (labels)  7.47 on chassis
+     --pm-print-hi   lifted print (values, live labels)  11.78 on chassis
+     --pm-print-dim  receding print (flow marks)  5.26 on chassis
+     --pm-accent     SIGNAL ORANGE — the one committed accent; reserved for
+                     SYSTEM STATES only (display-register marks, focus
+                     rings, the live-control blink, pressed pads, the
+                     chosen-drag groove, Start). 6.54 on chassis (non-text
+                     ≥3 ✓, small text ≥4.5 ✓). NOT the knob arcs — item 1's
+                     adjustment round moved those to the section's family
+                     color (see --knob-arc at the data-family rules below).
+     --pm-display    dot-matrix display amber (machine values on the
+                     register)  14.09 on --pm-register-bg
+     --pm-register-bg the inset display slot ground
+     --pm-key        pad/trim key ground (a physical key on the panel)
+     --pm-ring-track unlit knob ring scale — DECORATIVE by design (the
+                     accent arc carries the value; same sub-3 seam
+                     precedent as --hairline)
+     --pm-family-*   the ten family codes as DESATURATED silkscreen inks
+                     (panel-print marking, never filled chips) — all
+                     8.66–10.76 on the chassis, so even their small-print
+                     use clears AA. The knob ARCS do not use these: they
+                     take the rq5 saturated --family-* tokens (the palette
+                     flank's own vocabulary) via --knob-arc — 6.93–11.07
+                     on the chassis as non-text arcs, measured in the
+                     item-1 adjustment record.
+     --pm-vu-*       the VU corner's lamp paint (src/meters.js reads these
+                     first; rq5 meter tokens remain the fallback)
+
+   ITEM 1b (Two-Deck Stack) extends the register to the whole page —
+   the system deck, the deck seam, the page bench, and the two accent
+   tints the one orange key answers through on hover/press:
+     --pm-system-deck  the UPPER slab's cast (a hair lighter than the
+                       chassis — two castings, one instrument)
+     --pm-seam-cut / --pm-seam-lip  the machined deck seam: a deep dark
+                       cut under a bright light lip — DEEPER (4px vs 1px)
+                       and brighter-lipped (0.30 vs 0.14 alpha) than the
+                       section grooves, so the joint reads as the
+                       deepest cut on the page, never a gap
+     --pm-bench        the ground AROUND the instrument (the page)
+     --pm-accent-hi / --pm-accent-lo  hover/press tints of the ONE
+                       signal orange (ink 7.72 / 5.22 on them)
+
+   Scoped by USAGE, not by selector (defined at :root so canvas-drawn
+   meters can resolve them off documentElement). Since item 1b the
+   --pm-* register IS the page's system: the instrument chassis, both
+   decks, and all three voice-deck zones consume it. The remaining rq5
+   consumers are the floating agent toasts, the ?dev harness overlay,
+   and the watchdog Restore key's active state — surfaces outside the
+   chassis that keep the rq5 vocabulary (recorded residual).
+   =========================================================================== */
+:root {
+  --pm-chassis: #131316;
+  --pm-face-edge: #232330;
+  --pm-groove-cut: #05060a;
+  --pm-groove-lip: rgba(158, 164, 184, 0.14);
+  --pm-print: #9ea4b8;
+  --pm-print-hi: #c9cedc;
+  --pm-print-dim: #767c90;
+  --pm-accent: #ff6b35;
+  --pm-accent-hi: #ff8558;
+  --pm-accent-lo: #e85a20;
+  --pm-display: #ffd75e;
+  --pm-register-bg: #0b0c10;
+  --pm-key: #1d1e26;
+  --pm-key-edge: #343746;
+  --pm-ring-track: #454a5a;
+  --pm-cap: #1e2027;
+  --pm-ink: #131316;
+  --pm-system-deck: #17181d;
+  --pm-seam-cut: #010208;
+  --pm-seam-lip: rgba(201, 206, 220, 0.3);
+  --pm-bench: #0a0b0f;
+
+  --pm-family-gain: #cdc5ad;
+  --pm-family-compressor: #b0c6a9;
+  --pm-family-eq: #aabacf;
+  --pm-family-delay: #baaecb;
+  --pm-family-reverb: #a6c6c9;
+  --pm-family-limiter: #d0b3bf;
+  --pm-family-distortion: #bfc7a8;
+  --pm-family-chorus: #afafca;
+  --pm-family-gate: #aecbbd;
+  --pm-family-autotune: #cfb4cf;
+
+  /* VU lamp paint: desaturated matte lamps — green stays green, the mid
+     zone IS the display amber (one lamp language with the register), clip
+     stays safety red. Contrast on chassis in the build record. */
+  --pm-vu-low: #4ea96b;
+  --pm-vu-mid: #ffd75e;
+  --pm-vu-clip: #e4574a;
+  --pm-vu-unlit: #262933;
+  --pm-vu-tick: #c9cedc;
+  --pm-vu-label: #9ea4b8;
+}
+
 body {
   margin: 0;
   padding: 1rem;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   color: var(--text-primary);
-  background: var(--bg-body);
+  /* Item 1b: the page is the BENCH the instrument rests on — one step
+     darker than the chassis, so the full-bleed frame reads as a slab on
+     a surface, not a page background color. */
+  background: var(--pm-bench);
 }
 
-/* Browser surfaces — cheap signal (VIS-1): selected text reads as the amber
-   accent (verified on-accent-ink pairing), and one global focus ring makes
-   every focusable control — including the native range inputs — visible
-   against all three neutral grounds (7.71–10.03 per rq5). */
+/* Browser surfaces — cheap signal (VIS-1, re-tokened to the Pattern
+   Machine register by item 1b): selected text reads as the signal
+   orange with chassis ink, and one global focus ring — the SAME
+   --pm-accent every system state uses — makes every focusable control
+     visible against all the instrument's grounds (6.25–7.97). */
 ::selection {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--pm-accent);
+  color: var(--pm-ink);
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid var(--pm-accent);
   outline-offset: 1px;
 }
 
 /* ===========================================================================
-   Topbar — the console's STATUS LCD STRIP (UI-1 restructured by VIS-2,
-   per .impeccable/surfaces/index-html.md: the topbar reads as broadcast
-   rack gear's dense status display, not a web page header). One
-   persistent full-width panel row: silkscreen identity legend ·
-   engine-state lamp · machine readout group (mono --font-readout; ids
-   reserved for FEW-2) · Start/device controls · BYPASS at the far right.
-   All UI-1 ids/classes survive verbatim — src/main.js and src/agent-ui.js
-   (chip inserts before #bypass-toggle-button inside .topbar) are
-   untouched; the .topbar-section/.readout wrappers are pure additions.
+   ITEM 1b — THE INSTRUMENT: chassis frame, SYSTEM DECK, deck seam.
+   The whole viewport is two slabs bolted into one chassis (locked card
+   `two-deck-stack`): .instrument is the outer machined shell (full-bleed,
+   one frame — not three panels); the SYSTEM DECK below is the upper slab
+   carrying everything read at arm's length; .deck-seam is the machined
+   joint; the VOICE DECK (the .layout block further down) is the lower
+   slab, one faceplate split into printed zones by the same grooves the
+   canvas sections use. All tokens from the --pm-* register.
+   =========================================================================== */
+
+/* The outer shell: bleeds out of body's 1rem padding so the instrument
+   spans the full viewport width — ONE frame around both decks. No
+   overflow clipping (the system deck is position:sticky; a clipped
+   ancestor would break the pin), no radius (a machined slab, squared). */
+.instrument {
+  margin: -1rem;
+  border: 1px solid var(--pm-face-edge);
+  background: var(--pm-chassis);
+}
+
+/* THE DECK SEAM — the joint that makes two slabs read as one chassis
+   (the locked card's honest risk, solved in-design): a 1px bright
+   machined lip over a 4px deep dark cut. It is deliberately DEEPER and
+   WIDER than the section grooves (1px cut + 1px lip) and its lip is
+   brighter (0.30 vs 0.14 alpha): the deepest cut on the page, a joint
+   under load — never a gap that would read as two instruments. Pure
+   geometry: no shadow, no glow. */
+.deck-seam {
+  height: 4px;
+  border-top: 1px solid var(--pm-seam-lip);
+  background: var(--pm-seam-cut);
+}
+
+/* ===========================================================================
+   SYSTEM DECK (VIS-2's status strip re-cast by item 1b as the upper
+   slab): one persistent full-width row — identity legend · the DOT-MATRIX
+   ETCH (engine lamp + status sentence + RATE/LAT/NODES, wrapped in
+   .system-etch) · Start/device controls · BYPASS as the red-ringed end
+   key. All UI-1 ids/classes survive verbatim — src/main.js and
+   src/agent-ui.js (chip inserts before #bypass-toggle-button inside
+   .topbar) are untouched; the .topbar-section/.readout/.system-etch
+   wrappers are pure additions.
    =========================================================================== */
 
 .topbar {
@@ -128,20 +273,17 @@ body {
   column-gap: 0.9rem;
   row-gap: 0.5rem;
   /* One-row vertical rhythm: 1rem total padding + the 3rem (48px) Bypass
-     target = a 4rem (64px) strip; taller content grows the bar in size,
+     target = a 4rem (64px) deck; taller content grows the deck in size,
      never overflows it. */
   min-height: 4rem;
   padding: 0.5rem 1.25rem;
-  /* Bleed out of body's 1rem padding so the strip spans the full viewport
-     width and sits flush against the top — the persistent, full-width
-     status strip. */
-  margin: -1rem -1rem 1.5rem;
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--hairline);
+  /* The upper slab's own cast: a hair lighter than the voice deck's
+     chassis — two castings joined by the seam, one instrument. */
+  background: var(--pm-system-deck);
   position: sticky;
   top: 0;
   /* Agent toasts (z-index 20) and the dev harness (15) stay above the
-     sticky strip. */
+     sticky deck. */
   z-index: 10;
 }
 
@@ -152,7 +294,7 @@ body {
   min-width: 0;
 }
 
-/* Identity absorbs the strip's slack: the legend ellipsizes first, so
+/* Identity absorbs the deck's slack: the legend ellipsizes first, so
    the controls and BYPASS keep their place on the row as long as the
    viewport allows (see the <900px rule below for the narrow fallback).
    Refinement entry 3 ($impeccable harden): the basis drops from `auto`
@@ -163,15 +305,16 @@ body {
    reproduces today's rendered width exactly whenever the row has slack
    (the legend grows back to its content width), so every non-error
    state renders unchanged; it differs only when the row is over-full —
-   exactly the failure states whose error copy must not wrap the strip
+   exactly the failure states whose error copy must not wrap the deck
    (see .start-hint / .topbar-status caps below). */
 .topbar-identity {
   flex: 1 1 0;
 }
 
-/* App title as a SILKSCREENED LEGEND — the same micro-style as the panel
-   headers: uppercase, tracked, muted (5.74 on panel). A legend, not a
-   headline: nothing here may out-shout the Bypass control. */
+/* App title as the ENGRAVED NAMEPLATE: the same silkscreen micro-style
+   as the zone legends (uppercase, tracked) in lifted print (11.26 on the
+   deck). A nameplate, not a headline: nothing here may out-shout the
+   Bypass key. */
 .app-title {
   margin: 0;
   overflow: hidden;
@@ -181,14 +324,34 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print-hi);
+}
+
+/* THE DOT-MATRIX ETCH (item 1b): one etched slot on the system deck
+   carrying the engine lamp + status sentence and the RATE/LAT/NODES
+   readouts — the deck's machine register. It borrows the display
+   register's inset geometry (register ground + machined lip) but stays
+   SUBORDINATE to the chain face's register by design (the locked
+   card's second risk): neutral bright print, never the register's
+   amber/orange machine voice, and the value tier one step down
+   (12px vs the register's 13.6px main line) — the machine reports
+   from ONE mouth, and it is the canvas register's. */
+.system-etch {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0.9rem;
+  background: var(--pm-register-bg);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
 }
 
 .topbar-status {
   /* Shrinkable (not rigid): a transient long error label ellipsizes like
-     a real LCD strip instead of pumping the strip's width. Entry 3: the
+     a real etch instead of pumping the deck's width. Entry 3: the
      hard max-width also caps the flex BASE size — with flex-wrap on the
-     strip, an uncapped base would wrap the row (wrapping beats
+     deck, an uncapped base would wrap the row (wrapping beats
      shrinking) instead of ellipsizing. 20rem fits every WHAT-HAPPENED
      sentence in full; the longer device-switch lines (sentence + next
      action, front-loaded) and footnotes ellipsize by design. */
@@ -208,45 +371,45 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   white-space: nowrap;
-  color: var(--text-muted);
+  color: var(--pm-print);
   min-width: 0;
 }
 
-/* Error strings ("Failed to start (…)") truncate, never reflow the strip. */
+/* Error strings ("Failed to start (…)") truncate, never reflow the deck. */
 #status-text {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
 
-/* Stopped dot: muted-neutral, still ≥3:1 vs the panel (5.74) as a state
-   indicator. */
+/* Stopped lamp: dimmed print, still ≥3:1 vs the etch ground (4.71) as a
+   state indicator. */
 .dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: var(--pm-print-dim);
   flex: none;
   transition: background-color 150ms ease;
 }
 
-/* LIVE belongs to the amber accent per rq5 (green status-live stays
-   reserved for success/ready semantics in later tasks); the label lifts
-   from muted to primary while the lamp carries the amber. */
+/* LIVE belongs to the signal orange — the one accent, reserved for
+     system states; the label lifts to bright print while the lamp
+     carries the orange (6.25 non-text on the deck, ~7 on the etch). */
 .status.live .dot {
-  background: var(--accent);
+  background: var(--pm-accent);
 }
 
 .status.live {
-  color: var(--text-primary);
+  color: var(--pm-print-hi);
 }
 
 /* Refinement entry 3 ($impeccable harden, 2026-08-28): the ERROR
    register. A failed Start / device switch raises the sentence to Error
-   Coral — rq5's status-error token on its verified panel pairing
-   (6.13:1) — while the DOT above keeps telling the engine truth (muted =
-   stopped, amber = still live: a failed switch never stops the show).
-   Copy + color redundancy, same pattern as .live. */
+   Coral (rq5's status-error token on its etch pairing, 7.97) while the
+   DOT above keeps telling the engine truth (dim = stopped, orange =
+   still live: a failed switch never stops the show). Copy + color
+   redundancy, same pattern as .live. */
 .status.error {
   color: var(--status-error);
 }
@@ -263,20 +426,21 @@ body {
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
-  color: var(--text-muted);
+  color: var(--pm-print);
 }
 
-/* Machine readout group — the strip's LCD register (VIS-2, wired by
-   FEW-2): silkscreen micro-label above a mono value, slots separated by
-   decorative hairline seams, the whole cluster bounded by hairlines
-   against the state lamp and the controls. */
+/* Machine readout group — the etch's readout half (VIS-2, wired by
+   FEW-2): silkscreen micro-label over a mono value, slots separated by
+   thin groove cuts, the cluster bounded from the status sentence by the
+   same cut. Fixed value slots: mono + tabular numerals + a per-slot
+   min-width, so '—' becoming '48.0 kHz' changes glyphs, never the
+   deck's geometry. */
 .readout-group {
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  padding: 0 1rem;
-  border-left: 1px solid var(--hairline);
-  border-right: 1px solid var(--hairline);
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--pm-groove-cut);
 }
 
 .readout {
@@ -285,28 +449,37 @@ body {
   gap: 0.2rem;
 }
 
+.readout + .readout {
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--pm-groove-cut);
+}
+
 .readout-label {
   /* 0.7rem silkscreen floor (11.2px) — these are the registers read from
-     across a dark venue; 0.625rem was below the declared 11px floor. */
+     across a dark venue; 0.625rem was below the declared 11px floor.
+     Dimmed print on the etch ground: 4.71, above the 4.5 text floor,
+     one rank below the values they name. */
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   white-space: nowrap;
-  color: var(--text-muted);
+  color: var(--pm-print-dim);
 }
 
+/* The etch's value tier — 12px mono tabular (the ladder's per-control
+   value tier): one step BELOW the chain register's 13.6px main line, so
+   the system deck reports in a smaller register than the instrument it
+   serves (12.42 on the etch ground). */
 .readout-value {
   font-family: var(--font-readout);
-  font-size: 0.95rem;
+  font-size: 0.75rem;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--text-primary);
+  color: var(--pm-print-hi);
 }
 
-/* Fixed value slots: mono + tabular numerals + a per-slot min-width, so
-   '—' becoming '48.0 kHz' changes glyphs, never the strip's geometry. */
 #readout-sample-rate {
   min-width: 8ch;
 }
@@ -319,7 +492,7 @@ body {
   min-width: 3ch;
 }
 
-/* Controls pinned to the strip's right end; Bypass remains the last
+/* Controls pinned to the deck's right end; Bypass remains the last
    item after them (and the agent chip lands between the two). */
 .topbar-controls {
   flex: none;
@@ -327,12 +500,12 @@ body {
 }
 
 /* Long device labels (Chrome's "Default - … (Built-in)") must not pump
-   the strip's width — cap the select, it ellipsizes natively. */
+   the deck's width — cap the select, it ellipsizes natively. */
 #input-device-select {
   max-width: 15rem;
 }
 
-/* Refinement entry 2 ($impeccable clarify): the strip's one visible
+/* Refinement entry 2 ($impeccable clarify): the deck's one visible
    pre-Start instruction — "Press Start to power on" — as muted sentence
    copy beside Start (0.75rem = 12px, above the 11px floor; same register
    as the unsaved-dot flag, NOT a silkscreen legend: it is an instruction,
@@ -346,7 +519,7 @@ body {
   /* Entry 3: recovery copy (e.g. the Chrome mic-permission path, plus a
      demoted technical footnote) runs far longer than "Press Start to
      power on" — the cap bounds the flex BASE size so the block can
-     never widen the strip into wrapping a second row (with flex-wrap,
+     never widen the deck into wrapping a second row (with flex-wrap,
      wrapping is decided on base sizes before any shrinking engages);
      the excess ellipsizes, the copy is front-loaded so the operative
      instruction survives the cut, and the full pair rides the
@@ -355,7 +528,7 @@ body {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--text-muted);
+  color: var(--pm-print);
   font-size: 0.75rem;
   white-space: nowrap;
 }
@@ -364,19 +537,24 @@ body {
   display: none;
 }
 
-/* Controls (Start, device select, preset buttons, toast Undo) — dark
-   defaults: module-card ground, line-strong bezel (3:1 meaningful outline),
-   primary text (11.04 on card). Hover leans the bezel toward the accent.
-   Start overrides this to the amber primary fill below (VIS-2); the
-   device select keeps the bezel style. */
+/* ===========================================================================
+   SHARED CONTROL KEYS (item 1b restyle of the VIS-3 control vocabulary):
+   every button/select on the instrument — Start, the device select, the
+   presets zone's Save As…/select/Load/Delete, the naming row — renders
+   as a physical KEY on the panel: --pm-key ground, cut-edge bezel,
+   bright print. Hover leans the bezel to full print; the pressed state
+   is the ONE orange fill with chassis ink (the accent-as-brightness
+   economy). The canvas flow-toggle carries its own scoped key rule.
+   =========================================================================== */
+
 button.control,
 select.control {
   padding: 0.5rem 1rem;
-  border-radius: 6px;
-  border: 1px solid var(--line-strong);
-  background: var(--bg-card);
+  border-radius: 4px;
+  border: 1px solid var(--pm-key-edge);
+  background: var(--pm-key);
   font-size: 0.9rem;
-  color: var(--text-primary);
+  color: var(--pm-print-hi);
 }
 
 button.control {
@@ -385,56 +563,53 @@ button.control {
 
 button.control:not(:disabled):hover,
 select.control:not(:disabled):hover {
-  border-color: var(--accent);
+  border-color: var(--pm-print);
 }
 
-/* Pressed (VIS-3, completing the shared control vocabulary's state
-   coverage for the presets panel buttons): ink-on-amber fill per rq5's
-   pressed-state guidance (accent-active's 4.73 text margin is thin —
-   prefer ink-on-fill). While amber-filled, the dark focus-ring variant
-   keeps the global :focus-visible ring visible (amber-on-amber is
-   1.16, unusable — the exact case --focus-ring-on-accent exists for). */
+/* Pressed: the one orange fill with chassis ink (6.54) — brightness is
+   saturation on matte, never glow. While orange-filled, the chassis-ink
+   focus-ring variant keeps the global ring visible (orange-on-orange is
+   unusable — the ink ring exists for exactly this). */
 button.control:not(:disabled):active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
 }
 
 button.control:not(:disabled):active:focus-visible {
-  outline-color: var(--focus-ring-on-accent);
-  /* QA-4 V2: the ink ring only scores on amber — pull it INSIDE the fill
-     (global offset 1px would paint it on the neutral ground at ~1.1:1). */
+  outline-color: var(--pm-ink);
+  /* The ink ring only scores on the orange — pull it INSIDE the fill
+     (global offset 1px would paint it on the deck ground at ~1.2:1). */
   outline-offset: -2px;
 }
 
-/* Disabled: reduced emphasis — hairline seam instead of a bezel, muted
-   text, lowered opacity (blends to ≈3:1, within the 3:1 allowance for
-   disabled controls). */
+/* Disabled — the shared RECEDE half of the one disabled grammar (the
+   hatch half lives at zone scale, in the disabled-texture block): the
+   key sinks to its cut-edge seam, print recedes, pointer refuses. */
 button.control:disabled,
 select.control:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
-  border-color: var(--hairline);
-  color: var(--text-muted);
+  opacity: 0.55;
+  border-color: var(--pm-key-edge);
+  color: var(--pm-print);
 }
 
 select.control {
   padding: 0.5rem;
 }
 
-/* Start — the strip's ONE primary action while the engine is not yet
-   running (VIS-2): ink-on-amber fill per rq5 (on-accent ink 8.46–10.60
-   on every amber fill; accent-active's own 4.73 text margin is thin, so
-   pressed keeps ink-on-fill too), the amber-safe DARK focus-ring variant
-   (amber-on-amber 1.16 is unusable), hover to accent-hover, pressed to
-   accent-active. Once the engine starts, src/main.js disables the
-   button and it recedes to the shared disabled treatment — post-engine
-   the strip belongs to the state lamp and BYPASS. Id specificity beats
-   every shared .control rule above without touching them. */
+/* START — the deck's ONE ORANGE KEY (VIS-2 primary, re-cast by item 1b):
+   signal-orange fill with chassis ink (6.54; hover 7.72, press 5.22 —
+   ink-on-fill at every step, per the incumbent pressed-state guidance),
+   the ink focus ring while filled. Once the engine starts, src/main.js
+   disables the button and it recedes to the shared disabled treatment —
+   post-engine the deck belongs to the state lamp and BYPASS. Id
+   specificity beats every shared .control rule above without touching
+   them. */
 #start-button:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
   font-weight: 700;
   transition:
     background-color 150ms ease,
@@ -443,40 +618,42 @@ select.control {
 }
 
 #start-button:not(:disabled):hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: var(--on-accent);
+  background: var(--pm-accent-hi);
+  border-color: var(--pm-accent-hi);
+  color: var(--pm-ink);
 }
 
 #start-button:not(:disabled):active {
-  background: var(--accent-active);
-  border-color: var(--accent-active);
-  color: var(--on-accent);
+  background: var(--pm-accent-lo);
+  border-color: var(--pm-accent-lo);
+  color: var(--pm-ink);
 }
 
 #start-button:not(:disabled):focus-visible,
 #start-button:not(:disabled):active:focus-visible {
-  outline-color: var(--focus-ring-on-accent);
-  /* QA-4 V2: ink ring must sit on the amber fill (8.46), not the panel
-     ground outside it (1.14) — negative offset draws it inside. */
+  outline-color: var(--pm-ink);
+  /* Chassis-ink ring must sit on the orange fill (6.54), not the deck
+     ground outside it — negative offset draws it inside. */
   outline-offset: -2px;
 }
 
 /* ===========================================================================
-   Bypass button (UI-2 + VIS-2) — the single most safety-critical control
-   in the app, and the strip's LOUDEST element: largest target (3rem /
-   48px min-height), heaviest type on the bar (1.05rem / 700 / tracked —
-   the title legend is 0.75rem silkscreen and readout values 0.95rem
-   mono, so nothing exceeds this weight), and the only red-ringed thing
-   on the strip. rq5 split-role safety red, applied in its verified
-   pairing:
-     OFF  — panel ground + primary text + 2px red-edge ring (the halo role;
-            red-edge is an EDGE here, never a text or fill color);
+   BYPASS — the deck's RED-RINGED END KEY (UI-2 + VIS-2, re-cast by item
+   1b): the single most safety-critical control in the app, and the
+   LOUDEST element on the deck — largest target (3rem / 48px min-height),
+   heaviest type on the deck (1.05rem / 700 / tracked; the nameplate is
+   0.75rem silkscreen and etch values 12px mono, so nothing exceeds this
+   weight), and the only red-ringed thing on the page's system surface.
+   Split-role safety red (rq5 tokens, re-used verbatim), applied in its
+   verified pairing:
+     OFF  — key ground + bright print + 2px red-edge ring (4.53 vs the
+            deck around it as a non-text state ring; red-edge is an EDGE
+            here, never a text or fill color);
      ON   — red-fill ground + #FFFFFF text (5.08 PASS) + red-edge ring.
-   Never white text on red-edge (3.91 fails); never red-fill as an edge
-   (2.65 fails).
-   =========================================================================== */
-
+   Never white text on red-edge (fails); never red-fill as an edge
+   (fails). Below 900px the order-wrap rules keep it above the wrapped
+   etch row, and the deck is sticky — the emergency key never leaves
+   the visible top. */
 .bypass-btn {
   flex: none;
   min-height: 3rem;
@@ -484,10 +661,10 @@ select.control {
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 2px solid var(--red-edge);
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  background: var(--pm-key);
+  color: var(--pm-print-hi);
   cursor: pointer;
   transition:
     background-color 150ms ease,
@@ -503,173 +680,631 @@ select.control {
 
 .bypass-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
-/* Narrow strip (<900px): the machine cluster (state lamp + readouts)
-   wraps to a second row via order — the identity legend, Start/device
-   controls, agent chip, and BYPASS keep the first row, so the emergency
-   control never leaves the visible top of the screen. DOM order (and
-   with it tab order and the chip's insertion point) is untouched —
-   this is presentation-only reordering. */
+/* Narrow deck (<900px, item 1b): the deck re-packs so BYPASS NEVER
+   leaves the visible top — row 1 keeps the identity nameplate, the
+   agent chip, and BYPASS (its red ring at the row's end); the Start/
+   hint/device group takes the second row as a full-width block that
+   wraps internally (Start + hint over the device select — nothing may
+   overflow the deck); the DOT-MATRIX ETCH (lamp + status + readouts,
+   now ONE wrapper) wraps LAST. The deck is sticky, so every row stays
+   pinned. DOM order (and with it tab order and the chip's insertion
+   point) is untouched — presentation-only reordering via order. */
 @media (max-width: 900px) {
-  .topbar-status {
-    order: 9;
+  .topbar-identity {
+    order: 1;
   }
 
-  .readout-group {
-    order: 10;
+  .agent-chip {
+    order: 2;
+  }
+
+  .bypass-btn {
+    order: 3;
+  }
+
+  .topbar-controls {
+    order: 4;
+    /* A full-width block so its own internal wrap owns the deck's width
+       — the select can never push past the frame (the packing defect
+       the first narrow-deck render exposed: controls as an unbreakable
+       flex:none group overflowed the viewport). */
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+    margin-left: 0;
+  }
+
+  .system-etch {
+    order: 9;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Keep the first rows honest on a narrow deck: the device select and
+     the hint cap tighter so they wrap inside the controls block. */
+  #input-device-select {
+    max-width: 11rem;
+  }
+
+  .start-hint {
+    max-width: 9rem;
   }
 }
 
 /* ===========================================================================
-   Parameter controls (UI-4 + VIS-4) — generic slider rows rendered by
-   src/param-controls.js for any node type, restyled as console FADERS.
-   Pure CSS over the existing markup: the value <span> already carries
-   .param-value, so param-controls.js needed NO change (input semantics,
-   step values, event wiring, keyboard behavior all exactly as before —
-   still one native <input type="range"> per param). Each row re-stacks
-   via order + flex-wrap into a label+value readout line with the
-   full-width fader beneath — flex/block only, no layout-system change.
-   Track: hairline base with detent ticks (a repeating-linear-gradient of
-   1px hairline marks — the measuring-tool markings of the committed
-   pro-audio world, decorative like every hairline use) plus a slightly
-   stronger line-strong center detent (the one meaningful 3:1 marking).
-   Thumb: amber fader cap (~14×22 vertical bar, accent 6.65 vs card
-   non-text) with a line-strong bezel and an on-accent ink position line
-   down its center — physical fader caps carry exactly that — via the
-   same appearance:none pattern VIS-1 established. Values are machine
-   state: --font-readout mono (the LCD/VFD register); labels share the
-   palette chips' silkscreen micro-style, one vocabulary surface-wide.
+   PATTERN MACHINE CONTROL LAYER (redesign item 1) — the encoder field
+   src/param-controls.js renders inside each section. Three shapes, one
+   chassis vocabulary (all tokens from the --pm-* register):
+
+   KNOB (.knob-row) — a 54px rotary encoder. The native range input is the
+   semantic engine, clipped to the knob's own box (opacity 0, hit-through)
+   and still the focusable control; the KNOB draws the keyboard focus ring
+   when the engine has :focus-visible (sibling selector below). Ring: a
+   conic-gradient arc from min to value in the SECTION'S FAMILY COLOR over
+   the unlit ring-track scale (--knob-pos is written by JS per value; the
+   arc color is --knob-arc, derived from the section's data-family at the
+   .node-card rules — the same rq5 --family-* tokens the palette flank
+   uses, so a section's knobs answer in its menu color). ONLY the arc
+   carries family color: pointer line, track, detent tick, labels and
+   values stay neutral print; signal orange stays reserved for system
+   states (focus ring below, the live-control pointer lift, the register,
+   pressed pads, Start). Cap: matte knob cap with a print pointer line
+   (--knob-rot). Bipolar params print a detent tick at 12 o'clock (unity).
+   Label UNDER the knob in silkscreen print; the mono value under that,
+   tabular numerals.
+
+   PADS (.pad-row) — discrete params as real buttons in a radio group:
+   keys on the panel (--pm-key ground, print text), the pressed pad LIT in
+   the accent fill with chassis ink (6.54) — the accent-as-brightness
+   economy: the selected value is the one bright thing in the group.
+
+   TRIM (.trim-row) — the wide linear ranges as a short horizontal
+   instrument trimmer: label + mono value line over a hairline milled slot
+   with a bright print cap.
+
+   Motion: the touched control's value writes the display register (the
+   one blink lives there — see .register-blink). Nothing on the controls
+   themselves animates except the 150ms hover/focus color answers, all
+   inside the reduced-motion guard per house discipline.
    =========================================================================== */
 
-/* VIS-7 density pass (~90% card scale): tighter row rhythm and slightly
-   narrower mono readouts; text floors hold — labels stay 0.7rem (11.2px),
-   nothing on the card renders below 11px. */
-.param-row {
+/* The encoder field: rows flow and wrap as clusters (condensed, fluid —
+   the direction contract's refusal of stacked full-width fader rows). */
+.node-params-inner {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.2rem 0.6rem;
-  padding: 0.25rem 0;
+  flex-flow: row wrap;
+  align-items: flex-start;
+  gap: 0.5rem 0.9rem;
 }
 
-/* Readout line: silkscreen label left, mono value right. */
+.param-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  padding: 0.35rem 0 0.45rem;
+  /* Every control row shares the section's lift/recede behavior through
+     the section rules below (no per-control brightness). */
+}
+
+/* --- Silkscreen label + mono value registers (shared) ----------------
+   VALUE-DISPLAY LADDER (item 1 adjustment round — the one documented
+   grammar for every value/state readout on the canvas surface; one mono
+   size per tier, tabular numerals everywhere, min-widths so digits
+   changing never pump layout):
+
+     per-control value   0.75rem (12px) / 400 / mono / tabular /
+                         min-width 6ch — .param-value (knob + trim),
+                         .pad legends, .meter-readout (dB), .flow-toggle
+                         (flow-state print), .register-help (the
+                         register's subordinate line)
+     register line       0.85rem (13.6px) / 400 + 700 segments / mono /
+                         tabular — .register-main (module · param ·
+                         value): the PANEL-LEVEL INSTRUMENT's etched
+                         scale, one tier up from per-control values by
+                         direction; its own segments share the one size
+                         (weight/color differentiate, never size)
+     identity print     NOT value display: .section-code 1.25rem (family
+                         code), sans silkscreen labels (.param-label
+                         0.7rem, .node-label 0.75rem), the EXP badge
+                         (0.6875rem floor) — unchanged by this round
+
+   Rationale for 0.75rem: at operator distance 12px mono holds the value
+   as the brightest read line under each control while the 11.2px sans
+   label recedes to silkscreen; everything that DISPLAYS A VALUE on this
+   surface now renders at exactly that one size. */
+
 .param-label {
-  order: 1;
-  flex: 1 1 auto;
-  min-width: 0;
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  line-height: 1.25;
+  color: var(--pm-print);
 }
 
 .param-value {
-  order: 2;
-  flex: 0 0 auto;
-  min-width: 3.25rem;
-  text-align: right;
   font-family: var(--font-readout);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
+  white-space: nowrap;
+  /* The ladder's stable slot: 6ch holds every common format ("8 dB",
+     "-6 dB", "25%", "4:1", "300 ms") at fixed width so 9 -> 10 digit
+     changes re-center inside the box, never reflow the row. Longer
+     readouts ("-23.5 dB") simply render past it — nowrap, no clip. */
+  min-width: 6ch;
+  color: var(--pm-print-hi);
 }
 
-/* Fader beneath: order 3 + 100% flex-basis wraps it onto its own
-   full-width line under the label+value row (order-only restack — DOM
-   order label/input/value and the label[for] pairing are untouched). */
-.param-slider {
-  order: 3;
-  flex: 1 1 100%;
-  min-width: 0;
-  height: 1.25rem;
+/* --- KNOB ------------------------------------------------------------ */
+
+.knob-row {
+  position: relative; /* anchor for the clipped engine input */
+}
+
+/* The clipped semantic engine: the knob unit's dial band (top of the
+   row, the unit's full width), invisible but focusable (opacity, not
+   display/visibility — it must stay in the tab order and keep
+   announcing), hit-through so the knob visual owns the pointer. The
+   global :focus-visible ring is REPLACED by the accent ring drawn on
+   the knob itself (below). */
+.knob-input {
+  position: absolute;
+  left: 0;
+  top: 0.35rem;
+  width: 6rem;
+  height: 54px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.knob-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  width: 6rem;
+}
+
+.knob {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  cursor: ns-resize;
+  touch-action: none; /* the vertical drag is ours, not the page's scroll */
+  user-select: none;
+}
+
+/* Position ring: the FAMILY-COLORED arc from min to value over the unlit
+   scale, starting at 225deg (down-left) sweeping 270deg. --knob-pos (0..1)
+   is written by src/param-controls.js on every value change — native
+   keyboard, drag tick, wheel notch, and agent fast-path writes all land
+   in the same place. The COLOR comes from --knob-arc, set per family on
+   the .node-card (one derivation, no per-control class); the fallback is
+   neutral bright print so an as-yet-unmapped future family still gets a
+   readable arc without borrowing the system accent. */
+.knob-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 225deg,
+    var(--knob-arc, var(--pm-print-hi)) 0deg,
+    var(--knob-arc, var(--pm-print-hi)) calc(var(--knob-pos, 0) * 270deg),
+    var(--pm-ring-track) calc(var(--knob-pos, 0) * 270deg),
+    var(--pm-ring-track) 270deg,
+    transparent 270deg
+  );
+}
+
+/* Matte knob cap — the rotating body the pointer line rides on. The
+   1px top inset is the cap's own machined lip (bevel geometry, not an
+   ambient shadow). */
+.knob-cap {
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: var(--pm-cap);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Pointer line: from the cap's center to its rim, rotated by --knob-rot
+   (-135deg at min .. +135deg at max, 0 = 12 o'clock). */
+.knob-pointer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 15px;
+  background: var(--pm-print-hi);
+  transform: translate(-50%, -100%) rotate(var(--knob-rot, 0deg));
+  transform-origin: 50% 100%;
+}
+
+/* Detent tick — printed at 12 o'clock OUTSIDE the ring only where the
+   param has a unity center (bipolar ranges; data-detent written by JS).
+   NEUTRAL by recorded choice (item 1 adjustment): family color lives on
+   the arc alone — the one colored instrument per section; marking the
+   detent in family color too would multiply the colored pixels and read
+   as decoration, not identity. */
+.knob[data-detent='true']::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: calc(50% - 1px);
+  width: 2px;
+  height: 4px;
+  background: var(--pm-print);
+}
+
+/* The engine's keyboard focus, drawn on the KNOB (the visible control):
+   an accent ring at the dial's edge — the global :focus-visible rule is
+   suppressed on the invisible input itself. */
+.knob-input:focus {
+  outline: none;
+}
+
+.knob-input:focus-visible {
+  outline: none;
+}
+
+.knob-input:focus-visible ~ .knob-unit .knob {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 3px;
+  border-radius: 50%;
+}
+
+/* While a pointer drag holds the knob, the value arc holds full
+   saturation and the cap's pointer lifts to bright — the held encoder
+   reads as the live control. Static color state, no animation. */
+.knob[data-live='true'] .knob-pointer {
+  background: var(--pm-display);
+}
+
+.knob-unit .param-value {
+  text-align: center;
+}
+
+.knob-unit .param-label {
+  text-align: center;
+}
+
+/* --- PADS ------------------------------------------------------------ */
+
+.pad-row {
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pad-group {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 4px;
+  max-width: 19rem; /* the 12-key field folds 6 per row */
+}
+
+/* A pad key: physical key ground + print legend. Min 34px hit floor in
+   both axes (the 24px floor is for the rail's small buttons; pad fields
+   carry the primary interaction). Legend at the ladder's per-control
+   value size (0.75rem mono tabular — the pressed pad IS the value
+   display; the 12-key field still folds 6 per row at this size). */
+.pad {
+  min-width: 44px;
+  min-height: 34px;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 4px;
+  background: var(--pm-key);
+  color: var(--pm-print);
+  font-family: var(--font-readout);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pad:not([aria-checked='true']):hover {
+  border-color: var(--pm-print);
+  color: var(--pm-print-hi);
+}
+
+/* The pressed pad is LIT: accent fill, chassis ink legend (6.54) — the
+   one bright element of the group, i.e. the selected value. */
+.pad[aria-checked='true'] {
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
+  font-weight: 700;
+}
+
+/* Keyboard focus rides the visible pad (it is the focusable control). */
+.pad:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+
+/* --- TRIM (mini-slider) ---------------------------------------------- */
+
+.trim-row {
+  width: 11.5rem;
+}
+
+.trim-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* The value rides the label line's right end — a readout line over the
+   throw, like the printed scale on a trimmer. The ladder's 6ch min-width
+   anchors the slot's RIGHT edge: digits changing grow leftward into the
+   throw, never pushing the label or the slot. */
+.trim-unit .param-label {
+  align-self: flex-start;
+}
+
+.trim-unit .param-value {
+  margin-left: auto;
+  text-align: right;
+}
+
+.trim-slider {
   -webkit-appearance: none;
   appearance: none;
+  width: 100%;
+  height: 1.25rem;
+  margin: 0;
   background: transparent;
+  cursor: ew-resize;
 }
 
-/* Fader track: hairline slot + detent ticks + stronger center detent,
-   painted as three stacked gradients (top layer first):
-     1. center detent — 2px line-strong notch at 50%, the unity mark;
-     2. detent ticks — 1px hairline marks every 12px (subtle scale);
-     3. base — 2px hairline center line tying the scale together. */
-.param-slider::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 4px;
+/* Milled slot: hairline channel + step ticks every 10% (the measuring
+   scale; decorative like every hairline) + a center detent notch where
+   the throw is bipolar. */
+.trim-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
   background:
     linear-gradient(90deg,
-      transparent calc(50% - 1px), var(--line-strong) calc(50% - 1px),
-      var(--line-strong) calc(50% + 1px), transparent calc(50% + 1px)),
+      transparent calc(50% - 1px), var(--pm-print-dim) calc(50% - 1px),
+      var(--pm-print-dim) calc(50% + 1px), transparent calc(50% + 1px)),
     repeating-linear-gradient(90deg,
-      var(--hairline) 0, var(--hairline) 1px,
-      transparent 1px, transparent 12px),
-    linear-gradient(90deg,
-      transparent calc(50% - 1px), var(--hairline) calc(50% - 1px),
-      var(--hairline) calc(50% + 1px), transparent calc(50% + 1px));
+      var(--pm-key-edge) 0, var(--pm-key-edge) 1px,
+      transparent 1px, transparent 11.5px),
+    linear-gradient(90deg, var(--pm-key-edge), var(--pm-key-edge));
 }
 
-/* Fader cap: accent fill with line-strong bezel, ~12×18 vertical bar
-   (VIS-7 density: 22→18px tall — pinned at the 18px thumb-height floor;
-   18px keeps the cap comfortably taller than the 8px track).
-   margin-top centers the 18px cap on the 8px track: -(18-8)/2 = -5px. */
-.param-slider::-webkit-slider-thumb {
+/* Bright print cap: the moving indicator (non-text 11.78 on chassis —
+   the state-carrying part of the trimmer). NEUTRAL by recorded choice
+   (same decision as the knob detent tick): the trimmer cap is a pointer,
+   not an arc — family color stays on the rotary arcs only. */
+.trim-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px;
+  width: 10px;
   height: 18px;
-  margin-top: -5px;
-  border-radius: 3px;
-  border: 1px solid var(--line-strong);
-  background-color: var(--accent);
-  /* The cap's 2px position line in on-accent ink (8.46+ on every amber
-     fill per rq5) — reads as the physical cap's indicator groove. */
-  background-image: linear-gradient(90deg,
-    transparent calc(50% - 1px), var(--on-accent) calc(50% - 1px),
-    var(--on-accent) calc(50% + 1px), transparent calc(50% + 1px));
-  transition: background-color 150ms ease;
+  margin-top: -6px;
+  border-radius: 2px;
+  border: 1px solid var(--pm-chassis);
+  background: var(--pm-print-hi);
 }
 
-.param-slider:hover::-webkit-slider-thumb {
-  background-color: var(--accent-hover);
+.trim-slider:hover::-webkit-slider-thumb {
+  background: var(--pm-display);
 }
 
-/* UI-1 — discrete (enumerated) param rows: a native <select> renders in
-   the same readout slot the mono value span occupies (order 2), styled
-   as machine state to match --font-readout. The silkscreen .param-label
-   (order 1) pairs with it exactly as with a fader row; no separate value
-   span is needed — the select's own option text IS the value display,
-   which also keeps the screen reader's announced name = label and
-   announced value = selected option in one control. Hairline bezel +
-   panel face, accent focus ring: interactive elements get meaningful
-   outlines (palette-chip vocabulary), text sits at the 11px card floor.
-   Native select semantics (keyboard arrows, typeahead, SR value
-   announcement) are kept untouched — appearance-only styling. */
-.param-select {
-  order: 2;
-  flex: 0 0 auto;
-  min-width: 5.5rem;
-  margin-left: auto;
-  font-family: var(--font-readout);
-  font-size: 0.7rem;
-  color: var(--text-primary);
-  background-color: var(--bg-panel);
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  padding: 0.15rem 0.4rem;
-}
-
-.param-select:focus {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+.trim-slider:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
 }
 
 /* ===========================================================================
-   Palette + chain canvas (UI-3). Layout unchanged from the approved PX-1
-   mockup; colors from the VIS-1 tokens — panel faceplates separated by
-   hairline seams, module-card items (palette chips, anchors, node cards)
-   with meaningful line-strong outlines only where interactive.
+   ITEM 2 LIVE VARIANT LAYER (redesign item 2 — control anatomy + drag
+   feel, live round 2026-08-30; docs/ultron/redesign.md item 2). THREE
+   archetype-anchored anatomies for the encoder field's continuous
+   controls. Every rule is GATED on body[data-knob-variant], written only
+   by the round's switcher (index.html, ITEM 2 LIVE scaffold) and by the
+   live session's cycler mirroring — the attribute is absent in the
+   committed tests and any shipped page until bake, so nothing below
+   renders unless a variant is active. On bake the picked variant's rules
+   lose their gate and the other two are deleted; the unpicked variants
+   never ship. What every variant keeps: the native range-input engine
+   (geometry + focus ring + hit box untouched), the FAMILY-COLORED value
+   marking via the same --knob-arc cascade (arc / needle / segments —
+   family color stays the value carrier), the 11px floor, tabular mono
+   readouts, neutral labels, and the no-glow/reduced-motion discipline.
+
+   A "ENCODER" (encoder) — the built anatomy as the baseline anchor:
+   family position arc + pointer line + center detent, linear vertical
+   drag. ONE refinement answering the standing value-tracking complaint:
+   while a pointer drag holds the knob, the mono value under it lifts to
+   display amber (the register's machine-value color, 13.36 on chassis)
+   — the readout the operator watches answers the hand, not just the
+   arc. Static state, no animation.
+
+   B "DIAL" (dial) — potentiometer dial: an 11-tick scale over the 270°
+   sweep (repeating-conic ticks, mask-confined to the sweep), NO filled
+   arc — the NEEDLE is the value and carries the family color from cap
+   center to the tick ring's rim; a small pivot hub replaces the cap.
+   The trimmer cap becomes a tuning needle (neutral print — the family
+   color lives on the rotary needle alone, the same one-instrument
+   economy the arc had). Pressed pads ride the grammar: family fill,
+   chassis ink (6.93–11.07, the chip-legend pairing). Drag feel lives
+   in src/param-controls.js: angular-velocity mapping.
+
+   C "VFD" (vfd) — display-driven: a chrome-less smaller dial face (the
+   ring insets to a 40px face inside the unchanged 54px hit box; cap and
+   pointer hidden) whose family arc is MASKED into 24 discrete segments
+   — a VFD meter where lit segments ARE the value. The mono value rides
+   BESIDE the control at the display-register tier (0.85rem amber on
+   chassis, 13.36), not under it. Pads ride the segment grammar
+   (pressed = family fill, squared 2px). The trim slot prints coarser
+   segments with a family-colored block cap — the segment grammar's
+   value carrier. Drag feel lives in src/param-controls.js: stepped
+   detent quantization.
+   =========================================================================== */
+
+/* --- A: ENCODER — value tracking while held --------------------------- */
+body[data-knob-variant='encoder'] .knob[data-live='true'] ~ .param-value,
+body[data-knob-variant='dial'] .knob[data-live='true'] ~ .param-value {
+  color: var(--pm-display);
+}
+
+/* --- B: DIAL — tick scale + family needle ------------------------------ */
+body[data-knob-variant='dial'] .knob-ring {
+  /* 11 ticks across the 270deg sweep (every 27deg), confined to it. */
+  background: repeating-conic-gradient(
+    from 225deg,
+    var(--pm-print-dim) 0deg 1.5deg,
+    transparent 1.5deg 27deg
+  );
+  -webkit-mask: conic-gradient(
+    from 225deg, #000 0deg 270deg, transparent 270deg 360deg
+  );
+  mask: conic-gradient(
+    from 225deg, #000 0deg 270deg, transparent 270deg 360deg
+  );
+}
+
+/* The pivot hub replaces the matte cap (the needle spins on it). */
+body[data-knob-variant='dial'] .knob-cap {
+  inset: 41%;
+  background: var(--pm-key);
+  box-shadow: none;
+}
+
+/* The needle IS the value: cap center to the tick rim, family color.
+   The held state keeps the family color (the data-live pointer lift to
+   amber is overridden — the needle is the value carrier, not a system
+   state; the value line answers amber instead, above). */
+body[data-knob-variant='dial'] .knob-pointer {
+  height: 25px;
+  background: var(--knob-arc, var(--pm-print-hi));
+}
+
+body[data-knob-variant='dial'] .knob[data-live='true'] .knob-pointer {
+  background: var(--knob-arc, var(--pm-print-hi));
+}
+
+/* Trimmer as a tuning needle (neutral print — same recorded economy as
+   the built trim cap). */
+body[data-knob-variant='dial'] .trim-slider::-webkit-slider-thumb {
+  width: 3px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 1px;
+  border: none;
+  background: var(--pm-print-hi);
+}
+
+body[data-knob-variant='dial'] .trim-slider:hover::-webkit-slider-thumb {
+  background: var(--pm-display);
+}
+
+/* Pads ride the dial grammar: the pressed value lit in the family
+   color (the needle's own), chassis ink legend. */
+body[data-knob-variant='dial'] .pad[aria-checked='true'] {
+  background: var(--knob-arc, var(--pm-accent));
+  border-color: var(--knob-arc, var(--pm-accent));
+}
+
+/* --- C: VFD — chrome-less dial + segmented ring + register value ------ */
+body[data-knob-variant='vfd'] .knob-ring {
+  /* The family arc (unchanged gradient) masked into 24 hard segments
+     across the sweep — lit segments up to the value, like a VFD meter.
+     The dial face shrinks inside the UNCHANGED 54px hit box. */
+  inset: 12%;
+  -webkit-mask: repeating-conic-gradient(
+    from 225deg,
+    #000 0deg 8.4deg,
+    transparent 8.4deg 11.25deg
+  );
+  mask: repeating-conic-gradient(
+    from 225deg,
+    #000 0deg 8.4deg,
+    transparent 8.4deg 11.25deg
+  );
+}
+
+body[data-knob-variant='vfd'] .knob-cap,
+body[data-knob-variant='vfd'] .knob-pointer {
+  display: none;
+}
+
+/* Value BESIDE the control, at the display-register tier: the knob-unit
+   becomes a two-column grid — dial left, the amber register value over
+   its label right. */
+body[data-knob-variant='vfd'] .knob-unit {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.55rem;
+  row-gap: 0.1rem;
+  align-items: center;
+  width: 8rem;
+}
+
+body[data-knob-variant='vfd'] .knob-unit .knob {
+  grid-row: 1 / span 2;
+  grid-column: 1;
+}
+
+body[data-knob-variant='vfd'] .knob-unit .param-value {
+  grid-row: 1;
+  grid-column: 2;
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--pm-display);
+}
+
+body[data-knob-variant='vfd'] .knob-unit .param-label {
+  grid-row: 2;
+  grid-column: 2;
+  text-align: left;
+}
+
+/* Pads ride the segment grammar: family fill, squared segment edge. */
+body[data-knob-variant='vfd'] .pad[aria-checked='true'] {
+  background: var(--knob-arc, var(--pm-accent));
+  border-color: var(--knob-arc, var(--pm-accent));
+  border-radius: 2px;
+}
+
+/* Trim as a segment scale: coarser printed segments, family block cap
+   (the segment grammar's value carrier). */
+body[data-knob-variant='vfd'] .trim-slider::-webkit-slider-runnable-track {
+  background:
+    linear-gradient(90deg,
+      transparent calc(50% - 1px), var(--pm-print-dim) calc(50% - 1px),
+      var(--pm-print-dim) calc(50% + 1px), transparent calc(50% + 1px)),
+    repeating-linear-gradient(90deg,
+      var(--pm-key-edge) 0, var(--pm-key-edge) 7px,
+      transparent 7px, transparent 11.5px),
+    linear-gradient(90deg, var(--pm-key-edge), var(--pm-key-edge));
+}
+
+body[data-knob-variant='vfd'] .trim-slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 14px;
+  margin-top: -4px;
+  border-radius: 2px;
+  background: var(--knob-arc, var(--pm-print-hi));
+}
+
+/* ===========================================================================
+   VOICE DECK (UI-3 re-cast by item 1b) — the LOWER slab of the Two-Deck
+   Stack: one continuous faceplate (the .instrument chassis ground) whose
+   three columns read as PRINTED ZONES, not separate panels. The palette
+   zone and presets zone are print on the same face as the chain face;
+   the zone boundaries are MACHINED GROOVES in the same grammar the
+   canvas sections use between themselves (a 1px dark cut beside a 1px
+   light lip — cut first in reading order, lip after). Grid columns keep
+   the committed 200px | 1fr | 220px; below 900px the zones stack
+   palette → face → presets and the grooves turn horizontal.
    =========================================================================== */
 
 .layout {
@@ -677,9 +1312,11 @@ select.control {
   grid-template-columns: 200px 1fr 220px;
   gap: 0;
   min-height: 60vh;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  overflow: hidden;
+  /* The voice deck IS the lower slab of the one chassis — the
+     .instrument frame provides the shell; the face carries no border,
+     radius, or overflow of its own (the system deck above must stay
+     position:sticky, so nothing in the frame may clip). */
+  background: var(--pm-chassis);
 }
 
 /* Gated until AudioEngine.start() succeeds (mirrors the Bypass button /
@@ -688,105 +1325,103 @@ select.control {
    src/canvas.js's onSort/remove handlers ALSO guard on
    window.AudioEngine.isStarted directly, so this is a visual/UX affordance
    on top of a real functional guard, not the only thing preventing a
-   pre-Start drop from throwing. Includes .presets (PS-3) too — the whole
-   3-column layout stays dimmed/inert together until Start succeeds.
-   Dark-theme note: 0.55 opacity still blends labels to ≈3:1 — legible
-   enough to read WHAT is gated while clearly reading as inert.
-   Refinement entry 2 ($impeccable clarify): the 0.55 dim stays where it
-   was ON PURPOSE — it already sits at the documented ≈3:1 gated-legibility
-   floor, so a stronger dim would trade away "read what is gated". The
-   locked reading instead comes from two honest, token-pure signals added
-   below: the inset hairline LOCK SEAM on each sealed panel, and the
-   not-allowed cursor on the gated region (critique P2: the dim alone was
-   ambiguous). */
-.layout.engine-not-started .palette,
-.layout.engine-not-started .canvas-panel,
-.layout.engine-not-started .presets {
-  opacity: 0.55;
-  pointer-events: none;
-  /* Lock seam — decorative hairline per the Seam Rule: state
-     reinforcement, not a meaningful outline. Comes off with the class. */
-  box-shadow: inset 0 0 0 1px var(--hairline);
-}
-
-/* Refinement entry 2: the gated region answers the pointer with
-   not-allowed. The panels above are pointer-events:none, so hit-testing
-   passes through them to THIS .layout element — its cursor is what
-   actually renders over the whole locked region (computed cursor
-   resolves through inheritance for every child). Removed the instant
-   onEngineStarted() drops the class. */
-.layout.engine-not-started {
-  cursor: not-allowed;
-}
-
-/* Refinement entry 2: pre-Start, the empty-hint must not carry the dashed
-   interactive drop-target affordance — dropping is impossible in this
-   state, and the dashed line-strong target was half of the dishonest
-   invitation (critique P2). While gated, it recedes to a solid hairline
-   seam; the base .empty-hint rule below restores the drop-target look
-   exactly when the drag copy returns (copy flip lives in
-   src/canvas.js's onEngineStarted). */
-.layout.engine-not-started .empty-hint {
-  border: 1px solid var(--hairline);
-}
+   pre-Start drop from throwing. Includes .presets (PS-3) too.
+   Item 1b: all three zones now share the ONE Pattern Machine disabled
+   grammar (hatch + recede — see the disabled-texture block); the
+   legacy flank dim is retired. */
 
 .panel {
-  padding: 1rem;
+  padding: 0.85rem 0.9rem 1rem;
 }
 
+/* PALETTE ZONE — print zone on the voice deck. The zone's right edge
+   is the CUT half of the palette|face groove (the face's left border is
+   the lip half, at .canvas-panel below): sequence reads cut-then-lip,
+   the vertical twin of the sections' top groove. */
 .palette {
-  border-right: 1px solid var(--hairline);
-  background: var(--bg-panel);
+  border-right: 1px solid var(--pm-groove-cut);
+  background: transparent;
 }
 
-/* Panel header — silkscreened legend (VIS-3): uppercase tracked muted
-   label over a hairline rule, with more space above (the panel's 1rem
+/* Zone header — silkscreened legend (VIS-3): uppercase tracked print
+   label over a groove-cut rule, with more space above (the zone's
    padding) than below (0.6rem), per the craft floor. Same treatment on
-   the Presets header keeps the two flanks one vocabulary. */
+   the Presets header keeps the two zones one vocabulary. */
 .palette h2 {
   margin: 0 0 0.6rem;
   padding-bottom: 0.45rem;
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--pm-groove-cut);
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print);
 }
 
 /* Refinement entry 3 (critique P2-3) — palette group legends. The ten
    chips chunk into three operator groups under micro-legend headers in
    the SAME register the surface already uses for grouped options (the
    preset/device selects' optgroup labels — the in-house precedent):
-   uppercase, tracked 0.08em, muted, 0.7rem = 11.2px above the 11px
+   uppercase, tracked 0.08em, print, 0.7rem = 11.2px above the 11px
    floor. Real <h3>s (h1 title → h2 Palette → h3 groups) so screen
    readers can navigate the chunking; non-interactive by construction —
    no border, no pointer, proximity does the grouping (headers bind
    tight to the chips below them, groups separate through the generous
    space above each subsequent header; the first header needs no extra
-   top margin — the panel h2's rule already separates it). */
+   top margin — the zone h2's rule already separates it). */
 .palette-group-label {
   margin: 0.9rem 0 0.35rem;
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print);
 }
 
 .palette-group-label:first-child {
   margin-top: 0;
 }
 
-/* VIS-3 — palette items as console modules. Anatomy: a 20px family
-   legend square (the ONLY fill — color lives on the chip + a 2px top
-   edge on hover/active, never on the item) beside the module's name as
-   a silkscreened legend label (12px uppercase tracked, muted at rest
-   5.14 on card, primary on hover). Rest seam is hairline; hover raises
-   it to the line-strong bezel (4.26 vs card); active/drag-origin goes
-   amber. Sizes stay close to the pre-VIS-3 chips so SortableJS's drag
-   ghost geometry is unaffected. Keyboard focus: the global
-   :focus-visible ring above covers these items exactly as before. */
+/* Narrow viewport (<900px, item 1b — the locked card's viewport law):
+   the voice deck STACKS palette → chain face → presets, and the zone
+   grooves turn horizontal (same cut-then-lip reading order, now top to
+   bottom). This also relieves the old sub-680px three-column squeeze:
+   every zone takes the full width. */
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .palette {
+    border-right: none;
+    border-bottom: 1px solid var(--pm-groove-cut);
+  }
+
+  .canvas-panel {
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid var(--pm-groove-lip);
+    border-bottom: 1px solid var(--pm-groove-cut);
+  }
+
+  .presets {
+    border-left: none;
+    border-top: 1px solid var(--pm-groove-lip);
+  }
+}
+
+/* ITEM 1b — palette chips as KEYS ON THE VOICE DECK, the flank twin of
+   the canvas key vocabulary (--pm-key ground, cut-edge bezel). Anatomy:
+   a 20px family legend square (the family's IDENTITY MARK — the one
+   fill, carrying the same saturated rq5 --family-* token the section's
+   knob arcs answer in) beside the module's name as a silkscreened
+   legend label (12px uppercase tracked, print at rest 6.68 on key,
+   bright on hover). Rest seam is the key's cut edge; hover raises it
+   to full print; active/drag-origin goes signal orange — the module is
+   being pulled into the signal path. Sizes stay close to the pre-item-1b
+   chips so SortableJS's drag ghost geometry is unaffected. Keyboard
+   focus: the global orange :focus-visible ring covers these items
+   exactly as before. */
 .node-chip {
   /* R2-2 button-semantics normalization (visual no-op): the chip is now a
      real <button>, so the three UA button defaults the old <div> never
@@ -804,14 +1439,14 @@ select.control {
   gap: 0.5rem;
   padding: 0.5rem 0.6rem;
   margin-bottom: 0.5rem;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--bg-card);
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 4px;
+  background: var(--pm-key);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print);
   cursor: grab;
   user-select: none;
   transition:
@@ -821,13 +1456,21 @@ select.control {
     transform 150ms ease;
 }
 
-/* The family legend square: family token fill (mapped below from the
-   data-family attribute src/canvas.js writes) with the 2-letter
-   silkscreen initials from data-initials in on-accent ink (7.06–9.82 on
-   every family fill — rq5's redundant encoding, so color is never the
-   only signal). An as-yet-unmapped future type falls back to a
-   line-strong square so the module never loses its chip while awaiting
-   a family token. */
+/* Pre-Start the whole zone is pointer-locked by the gate; the chip's
+   own disabled attribute also withdraws it from the tab order (the
+   honest functional gate) — the key merely refuses the pointer. */
+.node-chip:disabled {
+  cursor: not-allowed;
+}
+
+/* The family legend square: the FAMILY IDENTITY MARK. Family token fill
+   (mapped below from the data-family attribute src/canvas.js writes —
+   the same saturated rq5 tokens the knob arcs carry) with the 2-letter
+   silkscreen initials from data-initials in chassis ink (6.93–11.07 on
+   every family fill — the redundant encoding, so color is never the
+   only signal). An as-yet-unmapped future type falls back to the
+   ring-track grey so the module never loses its chip while awaiting a
+   family token. */
 .node-chip::before {
   content: attr(data-initials);
   flex: none;
@@ -837,9 +1480,9 @@ select.control {
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 3px;
-  background: var(--chip-family, var(--line-strong));
-  color: var(--on-accent);
-  /* 0.6875rem — the declared initials floor (matches the node-card chip). */
+  background: var(--chip-family, var(--pm-ring-track));
+  color: var(--pm-ink);
+  /* 0.6875rem — the declared initials floor (matches the section badge). */
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -889,13 +1532,13 @@ select.control {
   --chip-family: var(--family-autotune);
 }
 
-/* Hover: the module answers — line-strong bezel, label to primary, a
+/* Hover: the module answers — bezel to full print, label to bright, a
    1px lift, and the family color appears as a 2px top EDGE (inset
    shadow: no layout shift, no glow — edge marking, not edge light). */
 .node-chip:hover {
-  border-color: var(--line-strong);
-  color: var(--text-primary);
-  box-shadow: inset 0 2px 0 var(--chip-family, var(--line-strong));
+  border-color: var(--pm-print);
+  color: var(--pm-print-hi);
+  box-shadow: inset 0 2px 0 var(--chip-family, var(--pm-print));
 }
 
 /* QA-4 V3: the 1px hover lift is motion — guarded per the reduced-motion
@@ -907,13 +1550,14 @@ select.control {
 }
 
 /* Active / drag-origin (SortableJS applies chosenClass for the whole
-   drag): amber bezel — the module is being pulled into the signal path.
-   The 2px family top edge rides along; the label stays primary. */
+   drag): signal-orange bezel — the module is being pulled into the
+   signal path. The 2px family top edge rides along; the label stays
+   bright. */
 .node-chip:active,
 .node-chip.sortable-chosen {
-  border-color: var(--accent);
-  color: var(--text-primary);
-  box-shadow: inset 0 2px 0 var(--chip-family, var(--accent));
+  border-color: var(--pm-accent);
+  color: var(--pm-print-hi);
+  box-shadow: inset 0 2px 0 var(--chip-family, var(--pm-accent));
   cursor: grabbing;
 }
 
@@ -931,107 +1575,265 @@ select.control {
   transform: none;
 }
 
+/* ===========================================================================
+   CANVAS PANEL — the SINGLE FACE CHASSIS (redesign item 1): the CHAIN
+   FACE, the middle zone of the voice deck. One continuous matte
+   near-black faceplate:
+
+     top edge    DISPLAY REGISTER (etched, accent-marked, JS-built by
+                 src/canvas.js as the panel's first child)
+     face        MIC IN jack print (top-left) → panel-print SECTIONS
+                 split by machined grooves → OUT jack print
+     base edge   the pinned OUT footer mirror (the VU corner,
+                 bottom-right — src/meters.js) + the flow-direction
+                 switch (bottom-left)
+
+   The old floating-card vocabulary (border-radius islands, drop shadows
+   at rest) is gone: sections are print zones of the one face, the only
+   real shadow in the world is the drag LIFT (SortableJS's live clone),
+   and brightness is saturation on matte, never glow.
+
+   Item 1b: the panel's side chrome is now the two halves of the ZONE
+   GROOVES it shares with the flanking zones — its left border is the
+   LIP under the palette zone's cut, its right border the CUT above the
+   presets zone's lip (same grammar as the sections' top grooves, read
+   left to right: cut, then lip). Everything inside the panel is the
+   item-1 build, untouched.
+   =========================================================================== */
+
 .canvas-panel {
   padding: 0;
-  background: var(--bg-panel);
-  /* VIS-7: a bounded flex column so the vertical canvas below can own its
-     scrolling — the page must never grow unbounded with a long chain. The
-     max-height leaves room for the sticky status strip (4rem) + its 1.5rem
-     drop + the body's 1rem padding top and bottom + slack. */
+  /* The chassis ground: the SAME faceplate as the whole voice deck —
+     the chain face is a zone of the one slab, not an inset panel. */
+  background: var(--pm-chassis);
+  /* The zone grooves (see the block comment above). */
+  border-left: 1px solid var(--pm-groove-lip);
+  border-right: 1px solid var(--pm-groove-cut);
+  /* A bounded flex column so the face owns its scrolling — the page must
+     never grow unbounded with a long chain. Budget re-based by item 1b
+     to the Two-Deck Stack's chrome: body padding (2rem) + the 4rem
+     system deck + the 4px deck seam + slack — slightly MORE room for
+     the face than the old strip+margin budget. */
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 7.5rem);
+  max-height: calc(100vh - 6.75rem);
   min-height: 0;
 }
 
-/* VIS-7 (2026-08-28 amendment, presentation-only): the signal path flows
-   TOP-DOWN — MIC IN anchor (top, meter at its right) → ↓ → stacked
-   full-width effect rows → ↓ → OUT anchor (bottom, meter + the MC-4
-   safe-output note beneath it). index.html's DOM order already encodes
-   exactly this sequence (anchor → arrow → chain-list → empty-hint → arrow
-   → anchor), so the reorientation is a flex-direction change ONLY — no
-   markup, id, or copy change. */
+/* --- The display register (top edge) ---------------------------------
+   One etched slot: inset dark register ground, machined lip, an accent
+   mark at the left edge. TWO fixed-height lines (machine value line +
+   help line) that clip overflow — the register must never pump layout.
+   Dot-matrix amber on the register ground (14.09), the module segment
+   in signal orange (6.89) as the accent mark. aria-hidden: the controls
+   carry the semantics; this is the redundant display.
+
+   INTERNAL SCALE (item 1 adjustment round): the register is the
+   panel-level instrument and keeps its larger etched tier, but its own
+   segments are internally consistent — ONE face (mono --font-readout)
+   and ONE size per line: the value line at the register tier (0.85rem,
+   its module/param/value segments differentiated by color and weight,
+   never by size), the help line at the surface's shared per-control
+   value size (0.75rem, the ladder's bottom tier — see the VALUE-DISPLAY
+   LADDER at the control layer) in the same mono face with tabular
+   numerals, so the instrument speaks one voice top to bottom. */
+.display-register {
+  flex: none;
+  position: relative;
+  /* FIXED geometry: two register lines, height pinned — the register
+     answers every control event without ever pumping layout (values and
+     help lines clip, never reflow). */
+  height: 3rem;
+  padding: 0.35rem 0.9rem 0.35rem 1.4rem;
+  background: var(--pm-register-bg);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  border-bottom: 1px solid var(--pm-groove-cut);
+  overflow: hidden;
+}
+
+.display-register::before {
+  content: '';
+  position: absolute;
+  left: 0.6rem;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  width: 3px;
+  background: var(--pm-accent);
+}
+
+.register-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-family: var(--font-readout);
+  font-size: 0.85rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.register-module {
+  color: var(--pm-accent);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.register-module::after {
+  content: '\00B7';
+  margin-left: 0.45rem;
+  color: var(--pm-print-dim);
+}
+
+.register-param {
+  color: var(--pm-print);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.register-param::after {
+  content: '\00B7';
+  margin-left: 0.45rem;
+  color: var(--pm-print-dim);
+}
+
+.register-param:empty::after {
+  content: none;
+}
+
+.register-value {
+  color: var(--pm-display);
+  font-weight: 700;
+}
+
+.register-help {
+  /* The register's subordinate line — same mono face + tabular numerals
+     as the value line above it (internal consistency), at the ladder's
+     shared per-control value size. */
+  font-family: var(--font-readout);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  color: var(--pm-print);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ONE blink marks the live control: the register's value segment blinks
+   once per update while the operator works (retriggered from JS by a
+   class re-add across a reflow). Pure signal — and fully guarded: under
+   prefers-reduced-motion the keyframe never exists, the value text
+   change itself carries the information. */
+@media (prefers-reduced-motion: no-preference) {
+  .register-value.register-blink {
+    animation: register-value-blink 220ms ease-out;
+  }
+
+  @keyframes register-value-blink {
+    0% {
+      color: var(--pm-ink);
+      background: var(--pm-display);
+    }
+
+    100% {
+      color: var(--pm-display);
+      background: transparent;
+    }
+  }
+}
+
+/* --- The face (scrolling flow) ---------------------------------------- */
+
 .canvas {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: 0.35rem;
+  padding: 0.75rem 0.9rem 1rem;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
 }
 
-/* Canvas anchors (MIC IN / OUT) — card ground + meaningful dashed outline
-   (line-strong, 3:1) + muted labels (5.14). VIS-7: full-width horizontal
-   bars at the flow's endpoints — silkscreen label left, the VIS-5 meter
-   unit (created INSIDE the anchor by src/meters.js) pinned right, so IN/OUT
-   levels read at the top and bottom of the stack. */
+/* Canvas anchors (MIC IN / OUT) — silkscreen JACK PRINT, not cards: the
+   drawn jack ring + the label in print, the VIS-5 meter unit at the
+   print row's right end. No border-radius island, no dashed target. */
 .anchor {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
+  padding: 0.35rem 0.15rem;
+  background: transparent;
+  border: none;
+  color: var(--pm-print);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   white-space: nowrap;
-  border: 1px dashed var(--line-strong);
 }
 
-/* Signal-flow arrows — the SAME aria-hidden decorative spans index.html
-   always carried, rotated to point down the vertical flow. CSS rotation
-   (not a glyph swap) keeps the markup byte-identical; the glyph stays a
-   decoration, never copy. */
+/* The drawn jack: a threaded ring with a dark socket — authored SVG-free
+   geometry (border ring + radial socket), never a text glyph. */
+.anchor::before {
+  content: '';
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid var(--pm-print);
+  background: radial-gradient(circle, var(--pm-register-bg) 0 2.5px, transparent 2.5px);
+  margin-right: 0.55rem;
+}
+
+.anchor .meter-unit {
+  margin-right: 0.25rem;
+}
+
+/* Signal-flow arrows — the same aria-hidden decorative spans, drawn as
+   print chevrons (the glyph text is zeroed; the mark is CSS geometry
+   pointing down the vertical flow). */
 .arrow {
   flex: none;
   align-self: center;
-  color: var(--text-muted);
-  transform: rotate(90deg);
+  font-size: 0;
+  color: var(--pm-print-dim);
+}
+
+.arrow::before {
+  content: '';
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--pm-print-dim);
+  border-bottom: 2px solid var(--pm-print-dim);
+  transform: rotate(45deg);
 }
 
 .chain-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  /* flex-shrink MUST be 0 (the pre-fix `flex: 1 1 auto` carried 1): the
-     list may never shrink below its cards on the canvas's main axis. The
-     min-height below overrides the flex item's automatic content-based
-     minimum on that axis, so with shrink 1 the bounded VIS-7 panel could
-     squeeze the list toward 1.5rem while the flex:none (position:relative)
-     cards kept their size — the overflow then painted over the static OUT
-     anchor + meter, the MC-4 safe-output note and the FEW-3 watchdog alert
-     (the P1 occlusion defect; measured 100% of the OUT block at 1440x900
-     default state, and up to 100% of the OUT meter in horizontal mode).
-     With shrink 0 the list keeps its content size, growth still shares the
-     canvas's slack with the empty-hint, and .canvas's own overflow owns
-     the scrolling in BOTH orientations (vertical: overflow-y inside the
-     bounded panel, so a long chain never grows the page; horizontal:
-     overflow-x). In horizontal mode this only makes explicit what the row
-     list's automatic min-width already implied — flex:none cards never
-     shrink, so no behavior changes there. */
+  /* The grooves between sections are part of each section's top edge
+     (see .node-card below), so the list itself carries no gap. */
+  gap: 0;
+  /* flex-shrink MUST stay 0: the list may never shrink below its
+     sections on the canvas's main axis (the round-1 occlusion defect —
+     the .canvas owns the scrolling). */
   flex: 1 0 auto;
   /* Keeps a droppable slot between the arrows while the chain is empty
-     (SortableJS drops land on the list element itself; the visible dashed
-     target next to it is the empty-hint below). */
+     (SortableJS drops land on the list element itself; the visible
+     taught target next to it is the empty-hint below). */
   min-height: 1.5rem;
+  position: relative; /* anchor for the bypassed-state hatch overlay */
 }
 
-/* Occlusion guard, second layer of the same P1 fix: node cards are
-   position:relative (the anchor for their ::before legend square), which
-   paints them above STATIC siblings if their boxes ever intersect. The
-   chain-list flex rule above makes that geometrically impossible; this
-   rule makes the invariant fail-safe regardless — the flow's fixed
-   instrumentation (both anchors with their VIS-5 meters, the MC-4
-   safe-output note, the FEW-3 watchdog alert) always paints above card
-   paint. z-index only applies to positioned boxes, hence position:
-   relative — no layout effect: all three stay in normal flow exactly
-   where they are, and SortableJS's forceFallback drag clone lives at
-   body level (far above everything here), so drag visuals are
-   untouched in both orientations. */
+/* Occlusion guard (unchanged invariant): the flow's fixed
+   instrumentation (both anchors with their meters, the MC-4 safe-output
+   note, the FEW-3 watchdog alert) always paints above section paint. */
 .anchor,
 .safe-output-note,
 .watchdog-alert {
@@ -1039,227 +1841,235 @@ select.control {
   z-index: 1;
 }
 
-/* Taught empty state (VIS-4): copy verbatim from cycle 1, styled as an
-   inset dashed TARGET ZONE — card-ground inset with a line-strong dashed
-   boundary (this is an interactive drop target, so it earns the
-   meaningful-outline token, not a hairline seam). VIS-7: in the vertical
-   flow it reads as a horizontal dashed slot between the two arrows — it
-   shares the canvas's vertical slack with the (empty) chain list exactly
-   as the two shared the horizontal slack before. */
+/* Taught empty state — a printed EMPTY SOCKET on the face: recessed
+   register ground, hairline dashed print boundary (a drop target earns a
+   visible boundary, in the print register — no card island). */
 .empty-hint {
   flex: 1 1 auto;
-  padding: 1.25rem 1rem;
-  border: 1px dashed var(--line-strong);
-  border-radius: 8px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 0.85rem;
+  padding: 1.1rem 1rem;
+  border: 1px dashed var(--pm-key-edge);
+  border-radius: 2px;
+  background: var(--pm-register-bg);
+  color: var(--pm-print);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
   text-align: center;
 }
 
 /* ===========================================================================
-   Node cards (UI-3 + VIS-4 + VIS-7) — CHANNEL-STRIP MODULES on the
-   faceplate. src/canvas.js writes data-family + data-initials alongside
-   data-node-id (same pair the palette chips carry), so the card's family
-   identity is edge-coded exactly as the brief pins it: a 3px family-color
-   top edge — color as edge marking, never fill; the label (and the
-   2-letter initials) always present so color is never the only signal.
-   The header legend mirrors the palette chips' vocabulary (VIS-7 density:
-   an 18px family square instead of the palette's 20px), the module label
-   in the same silkscreen micro-style, then the physical grip, the VIS-7
-   collapse chevron, and the remove ×. The params region beneath collapses
-   to nothing on chevron toggle (see .node-collapse / .node-params below)
-   — presentation-only, no per-node audio bypass. All card styles dim
-   coherently with the pre-existing .layout.engine-not-started opacity
-   rule (nothing below fights it).
+   SECTIONS (the chain's effects) — panel-print zones of the one faceplate
+   (src/canvas.js writes the same data-family/data-initials hooks the old
+   cards carried). Anatomy per the locked structure: FAMILY PRINT BLOCK
+   (rail) left + ENCODER FIELD right, split by a MACHINED GROOVE from the
+   neighbors above and below — never a floating card.
+
+   The groove: each section's top edge carries a 1px dark cut with a 1px
+   light lip (inset) — cut-face geometry, no shadow, no rounded island.
+   Family coding is PRINT: the 2-letter code in the family's desaturated
+   ink (8.66–10.76 on chassis) + a 2px family tick on the rail's left
+   edge. Color is never the only signal (code text + label always carry
+   the family identity too).
    =========================================================================== */
 
 .node-card {
-  position: relative; /* anchor for the ::before legend square */
+  position: relative;
   flex: none;
-  /* VIS-7 density pass (~90%): 12→6px vertical, 16→12px horizontal.
-     Collapsed, the card is the header-only slim row: 3px family edge +
-     6px + 24px header + 6px ≈ 39px — inside the ~34–40px band. */
-  padding: 0.375rem 0.75rem;
-  border-radius: 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--hairline);
-  /* THE card encoding: 3px family top edge on the card surface — retained
-     verbatim in both expanded and collapsed states. An as-yet-unmapped
-     future type falls back to line-strong, same as the palette square
-     below. */
-  border-top: 3px solid var(--card-family, var(--line-strong));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  min-width: 190px;
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+  display: grid;
+  grid-template-columns: 8.5rem 1fr;
+  align-items: stretch;
+  padding: 0.55rem 0.75rem 0.6rem 0.9rem;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  min-width: 0;
 }
 
-/* Family edge mapping — same six tokens, same data-family strings the
-   palette chips use; one vocabulary across cards and palette. */
-.node-card[data-family='gain'] {
-  --card-family: var(--family-gain);
+/* The focus LIFT (the honest-risk solve): a touched section's print
+   brightens a hair while its neighbors recede — brightness and print
+   emphasis only, NO shadow (the locked card's risk line). Focus lands in
+   a section whenever any of its controls is focused (pointerdown hands
+   focus to the control's engine input; keyboard Tab does the same), so
+   :focus-within IS the touch signal — no JS state, no drift. */
+.node-card:focus-within {
+  /* The cut face catches the light: print lifts, the groove lip
+     brightens, the family tick saturates to full family ink. */
+  filter: brightness(1.13);
 }
 
-.node-card[data-family='compressor'] {
-  --card-family: var(--family-compressor);
+/* Neighbors recede while one section is touched (scope :has to the list
+   so a touched PALETTE chip can never dim the chain). */
+.chain-list:has(.node-card:focus-within) .node-card:not(:focus-within) {
+  filter: brightness(0.9);
 }
 
-.node-card[data-family='eq'] {
-  --card-family: var(--family-eq);
+@media (prefers-reduced-motion: no-preference) {
+  .node-card {
+    transition: filter 180ms ease;
+  }
 }
 
-.node-card[data-family='delay'] {
-  --card-family: var(--family-delay);
-}
+/* --- Family print block (the rail) ------------------------------------ */
 
-.node-card[data-family='reverb'] {
-  --card-family: var(--family-reverb);
-}
-
-.node-card[data-family='limiter'] {
-  --card-family: var(--family-limiter);
-}
-
-/* UI-2 (cycle 3): the four shelved effects' card edges — same mapping,
-   same tokens as the palette chips just above. */
-.node-card[data-family='distortion'] {
-  --card-family: var(--family-distortion);
-}
-
-.node-card[data-family='chorus'] {
-  --card-family: var(--family-chorus);
-}
-
-.node-card[data-family='gate'] {
-  --card-family: var(--family-gate);
-}
-
-.node-card[data-family='autotune'] {
-  --card-family: var(--family-autotune);
-}
-
-/* The header's legend square — the palette chip's ::before vocabulary at
-   the VIS-7 density scale: 18px instead of the palette's 20px (the
-   palette flank is the VIS-3 surface and stays untouched), same radius,
-   family fill, on-accent initials (7.06–9.82 per rq5), initials lifted to
-   0.6875rem (11px) to hold the density-pass text floor. CSS attr() can
-   only read attributes off the element the pseudo originates from, and
-   the CARD is the element that carries data-initials, so the square is
-   the card's own ::before — pinned onto the header line via absolute
-   positioning (top/left = the card's padding + half the header/square
-   height difference, optically centering the 18px square on the 24px
-   header row). .node-drag-handle's padding-left below reserves the space;
-   that same padding doubles as the grip's wider hit area. */
-.node-card::before {
-  content: attr(data-initials);
-  position: absolute;
-  top: 0.5625rem;
-  left: 0.75rem;
+.section-rail {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 3px;
-  background: var(--card-family, var(--line-strong));
-  color: var(--on-accent);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+  /* The family tick: 2px of the family ink down the rail's left edge —
+     panel-print marking, not a filled chip. */
+  border-left: 2px solid var(--card-family, var(--pm-print-dim));
+  padding-left: 0.6rem;
 }
 
-.node-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  /* No margin-bottom: the header→params gap lives inside the collapsible
-     region (the rows' own padding), so a collapsed card is EXACTLY the
-     slim header row. The min-height is the 24px hit-area floor the grip,
-     chevron and × all share. */
-  min-height: 1.5rem;
-}
-
-/* The handle spans the header line. Its padding-left (1.125rem square +
-   0.375rem air) clears the absolutely-positioned legend square AND widens
-   the grip's hit area leftward — padding, not glyph size. flex-grow
-   absorbs the header's slack so the chevron and × cluster together at the
-   right edge (and the drag hit area is the whole label line, VIS-7). */
+/* The explicit GRIP ZONE (the locked card's risk line): with no card
+   edges, drag-to-reorder must read as a panel part — the machined grip
+   dot field IS that part, in the rail, at the handle the SortableJS
+   config names. */
 .node-drag-handle {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding-left: 1.5rem;
+  padding: 0.2rem 0.35rem 0.2rem 0;
+  margin-left: -0.35rem;
   cursor: grab;
-  flex: 1 1 auto;
-  min-width: 0;
   min-height: 1.5rem;
   user-select: none;
-}
-
-/* Physical grip: muted dots at rest, brightening to primary when the
-   card is hovered (the handle answers with its module); grabbing cursor
-   once a drag latches. The icon's own padding widens the hit area a
-   little further without inflating the glyph. */
-.node-drag-icon {
-  padding: 0.15rem 0.1rem;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  line-height: 1;
-  letter-spacing: -0.1em;
-  transition: color 150ms ease;
-}
-
-.node-card:hover .node-drag-icon {
-  color: var(--text-primary);
 }
 
 .node-drag-handle:active {
   cursor: grabbing;
 }
 
-/* Module label — the palette chips' silkscreen micro-style (same size,
-   weight, tracking as .node-chip's label), primary at rest: a placed
-   card is a committed module in the live path, not a menu entry. */
+/* The grip: a 3x3 machined dot field (authored geometry — the dot matrix
+   a real grip zone knurls into). Muted at rest, lifting to print when
+   the section is hovered. */
+.node-drag-icon {
+  width: 10px;
+  height: 12px;
+  background-image: radial-gradient(circle, var(--pm-print-dim) 1px, transparent 1.3px);
+  background-size: 4px 4px;
+  background-position: center;
+  transition: background-image 150ms ease;
+}
+
+.node-card:hover .node-drag-icon {
+  background-image: radial-gradient(circle, var(--pm-print) 1.1px, transparent 1.4px);
+}
+
+/* The family CODE: the rail's large silkscreen print — 1.25rem/700 in the
+   family's desaturated ink (large print, comfortably past 3:1; the pair
+   table lives in the build record). */
+.section-code {
+  font-family: var(--font-readout);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: var(--card-family, var(--pm-print));
+}
+
+/* Module label — the section's name in the print register. */
 .node-label {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  color: var(--pm-print);
+  overflow-wrap: anywhere;
 }
 
-/* UI-2 (cycle 3) — the FORMAL experimental badge component (formalizing
-   AT-1's minimal card hook): one amber silkscreen tag, one typography,
-   two placements in the industrial label system — after the module label
-   on the node card, pinned right on the palette chip (rule below).
-   Autotune only, per the cycle-3 scope, driven by the single
-   EXPERIMENTAL_TYPES lookup in src/canvas.js (createExperimentalBadge).
-   Amber bezel + amber text on the module ground: a status tag, not a
-   control, so no focus ring and no pointer affordance. Screen-reader
-   access is by content, never title-only: the tag's text is announced in
-   the header flow on the card, and the chip's aria-label carries the
-   status pre-add. Text sits AT the 11px floor, 0.6875rem — the
-   legend-initials size. Refinement entry 2 ($impeccable typeset, critique
-   P2-2) caught the cycle-3 tag a step below at 0.625rem (10px), which
-   this comment had misstated as above the floor. The all-caps tag keeps
-   its 0.06em tracking (same micro-type rationale as the legend initials)
-   and widens its side padding to 0.35rem so the tag's optical
-   proportions survive the one-step lift — still a quiet status marker;
-   contrast is text-on-bg-card amber (6.65 per rq5), above the
-   muted-legend floor the card's own labels use. */
+/* Family derivations — ONE rule per family carries BOTH family-color
+   roles of the section (single source; no per-control class anywhere):
+     --card-family  the rail's DESATURATED silkscreen ink (code + tick —
+                    panel print, same vocabulary as the legacy chips)
+     --knob-arc     the knob arc's SATURATED rq5 --family-* token — the
+                    SAME token the palette flank's chip legend uses, so a
+                    section's arcs answer in its left-hand-menu color.
+                    Measured as non-text arcs on the chassis ground
+                    #131316: 6.93–11.07, all ≥3:1 (table in the item-1
+                    adjustment record) — no derivation adjustments
+                    needed. The palette flank keeps the rq5 tokens until
+                    item 2 restyles it. */
+.node-card[data-family='gain'] {
+  --card-family: var(--pm-family-gain);
+  --knob-arc: var(--family-gain);
+}
+
+.node-card[data-family='compressor'] {
+  --card-family: var(--pm-family-compressor);
+  --knob-arc: var(--family-compressor);
+}
+
+.node-card[data-family='eq'] {
+  --card-family: var(--pm-family-eq);
+  --knob-arc: var(--family-eq);
+}
+
+.node-card[data-family='delay'] {
+  --card-family: var(--pm-family-delay);
+  --knob-arc: var(--family-delay);
+}
+
+.node-card[data-family='reverb'] {
+  --card-family: var(--pm-family-reverb);
+  --knob-arc: var(--family-reverb);
+}
+
+.node-card[data-family='limiter'] {
+  --card-family: var(--pm-family-limiter);
+  --knob-arc: var(--family-limiter);
+}
+
+.node-card[data-family='distortion'] {
+  --card-family: var(--pm-family-distortion);
+  --knob-arc: var(--family-distortion);
+}
+
+.node-card[data-family='chorus'] {
+  --card-family: var(--pm-family-chorus);
+  --knob-arc: var(--family-chorus);
+}
+
+.node-card[data-family='gate'] {
+  --card-family: var(--pm-family-gate);
+  --knob-arc: var(--family-gate);
+}
+
+.node-card[data-family='autotune'] {
+  --card-family: var(--pm-family-autotune);
+  --knob-arc: var(--family-autotune);
+}
+
+/* The rail's foot: the section's header-zone controls (fold chevron +
+   eject ×). Expanded they sit at the rail's bottom edge; folded they
+   ride the slim row's right end. */
+.section-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.35rem;
+}
+
+/* --- The experimental badge (autotune only, single-sourced) ------------
+   UI-2 (cycle 3): the FORMAL badge, one class, two placements — the
+   palette chip and the section rail. Item 1b unified them in the
+   Pattern Machine register: display-amber silkscreen on transparent —
+   a machine marking, not a bright object, so the accent budget stays
+   with the register and the one orange key (13.36 on the chassis /
+   12.42 on the etch-toned key). A status tag, not a control: no focus,
+   no pointer affordance; SR access is by content. Text at the 11px
+   floor. */
 .node-experimental-badge {
   flex: none;
   padding: 0.1rem 0.35rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--pm-display);
   border-radius: 3px;
-  color: var(--accent);
-  background: var(--bg-card);
+  color: var(--pm-display);
+  background: transparent;
   font-family: var(--font-readout);
   font-size: 0.6875rem;
   font-weight: 700;
@@ -1269,92 +2079,29 @@ select.control {
   white-space: nowrap;
 }
 
-/* The palette-chip placement of the same badge: identical tag anatomy
-   and typography (one component, one look — the 'EXP' abbreviation is
-   the only content difference, chosen at chip density the same way the
-   legend squares abbreviate), pinned to the chip's right edge so the
-   status closes the menu row instead of crowding the silkscreen name.
-   margin-left:auto is the only override — everything else inherits from
-   the rule above, so the two placements can never drift apart
-   typographically. */
+/* The palette-chip placement (pinned right inside the chip key). */
 .node-chip .node-experimental-badge {
   margin-left: auto;
 }
 
-/* Remove × — a real control: card ground + line-strong bezel + muted ×
-   (5.14), 1.5rem square for a comfortable hit area. Hover signals danger
-   via the red-edge BEZEL (3.45 non-text) with the glyph brightening to
-   primary text — red-edge is not used as text color (3.45 < 4.5 for a
-   small glyph; rq5's small-text red failure). The global :focus-visible
-   ring above covers keyboard focus. */
-.node-remove-btn {
-  flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    border-color 150ms ease,
-    color 150ms ease;
+/* --- The encoder field (right) ---------------------------------------- */
+
+.section-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.node-remove-btn:hover,
-.node-remove-btn:active {
-  color: var(--text-primary);
-  border-color: var(--red-edge);
-}
-
-/* VIS-7 — the collapse chevron: a real control in the remove-button
-   vocabulary but quieter (the × is destructive, the chevron is routine):
-   hairline seam at rest rising to the line-strong bezel on hover, muted
-   glyph brightening to primary. 1.5rem square = the 24px hit-target floor,
-   same as the remove button; the global :focus-visible ring covers
-   keyboard focus. */
-.node-collapse {
-  flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.node-collapse:hover,
-.node-collapse:active {
-  color: var(--text-primary);
-  border-color: var(--line-strong);
-}
-
-/* Collapsed, the chevron rotates to point right — the disclosure-widget
-   convention: "content will appear below". A static transform (no
-   transition), so nothing here enters the motion inventory. */
-.node-card.collapsed .node-collapse {
-  transform: rotate(-90deg);
-}
-
-/* VIS-7 — the collapsible params region. .node-params is a one-row grid
-   whose track animates 1fr→0fr; the .node-params-inner wrapper (created
-   post-render by src/canvas.js so src/param-controls.js stays untouched)
-   carries min-height:0 + overflow:hidden — the pair that lets a 0fr track
-   actually clip the rows. Collapsed, visibility:hidden removes the rows
-   from tab order and the accessibility tree (an animating height alone
-   would leave invisible focusable sliders); the end-of-transition
-   visibility flip under the motion guard lets the collapse finish before
-   the content disappears, while expand restores it instantly. Under
-   prefers-reduced-motion none of the transitions exist — collapse is an
-   instant state change. Session-only: chain rebuilds (preset loads, agent
-   mutations) re-create cards expanded; accepted v1 behavior. */
+/* The collapsible field. .node-params is a one-row grid animating
+   1fr→0fr; .node-params-inner (wrap-AFTER-render, src/canvas.js) carries
+   min-height:0 + overflow:hidden — the pair that lets a 0fr track clip
+   the rows. Folded, visibility:hidden removes the rows from tab order
+   and the accessibility tree (an animating height alone would leave
+   invisible focusable knobs); the end-of-transition visibility flip
+   under the motion guard lets the fold finish first. Under
+   prefers-reduced-motion none of the transitions exist — folding is an
+   instant state change. Session-only: chain rebuilds re-create sections
+   expanded (accepted v1 behavior). */
 .node-params {
   display: grid;
   grid-template-rows: 1fr;
@@ -1375,146 +2122,340 @@ select.control {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Chevron bezel/color answer — same declaration the remove button
-     carries, guarded here so no NEW unguarded transition enters the file
-     (vis6 discipline; under reduce the colors snap instantly). */
-  .node-collapse {
-    transition:
-      border-color 150ms ease,
-      color 150ms ease;
-  }
-
   .node-params {
     transition: grid-template-rows 180ms ease;
   }
 
-  /* visibility transitions discretely and, per the CSS Transitions spec,
-     stays VISIBLE until the END of the duration when animating toward
-     hidden — exactly the "let the collapse finish first" behavior, with a
-     single in-budget 180ms duration. Expand (collapsed rules removed) has
-     no transition at all: the rows reappear instantly as the grid grows. */
+  /* visibility transitions discretely and stays VISIBLE until the END of
+     the duration when animating toward hidden — the fold finishes first;
+     expand restores it instantly. */
   .node-card.collapsed .node-params-inner {
     transition: visibility 180ms;
   }
 }
 
-/* Card states. Hover: the module answers with a line-strong bezel —
-   longhand border-top-color re-asserts the family edge after the
-   shorthand, so the hover bezel never swallows the card's identity. */
-.node-card:hover {
-  border-color: var(--line-strong);
-  border-top-color: var(--card-family, var(--line-strong));
+/* --- Folded state: the section becomes a groove line -------------------
+   The rail lays out horizontally (grip · code · label · badge, then the
+   foot's buttons pinned right), the field is folded away, and the whole
+   section recedes to the chassis — a printed groove line, exactly the
+   locked collapsed row. */
+.node-card.collapsed {
+  grid-template-columns: 1fr;
+  padding: 0.3rem 0.75rem 0.35rem 0.9rem;
 }
 
-/* SortableJS auto-applies these during a drag (forceFallback:true mode),
-   per px1-layout-spec.md's "Mid-drag" rows, upgraded to the console
-   vocabulary. Chosen (held, whole drag): amber bezel + the family edge
-   EMPHASIZED — a 3px inset family stripe stacks under the 3px border-top
-   (thicker edge marking, no layout shift, no glow). */
+.node-card.collapsed .section-rail {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  border-left-width: 2px;
+}
+
+.node-card.collapsed .section-code {
+  font-size: 0.9rem;
+}
+
+.node-card.collapsed .section-foot {
+  margin-top: 0;
+  margin-left: auto;
+  padding-top: 0;
+}
+
+.node-card.collapsed .section-main {
+  display: none;
+}
+
+/* --- Header-zone controls (fold chevron, eject ×) ---------------------- */
+
+/* The chevron: a drawn mark (a square's two edges) rotating to point
+   right when folded — the disclosure convention, as geometry. */
+.node-collapse {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 3px;
+  background: var(--pm-chassis);
+  color: var(--pm-print);
+  cursor: pointer;
+}
+
+.chevron-mark {
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 0.5rem auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); /* points down at the visible field */
+  margin-top: 0.55rem;
+}
+
+.node-collapse:hover,
+.node-collapse:active {
+  color: var(--pm-print-hi);
+  border-color: var(--pm-print);
+}
+
+.node-card.collapsed .node-collapse .chevron-mark {
+  transform: rotate(-45deg); /* points right: content will follow */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .node-collapse {
+    transition: border-color 150ms ease, color 150ms ease;
+  }
+}
+
+/* The remove × — a real control in the section's header zone. The × is
+   DRAWN (two crossed bars), never a text glyph; danger is signaled by
+   the bezel answering to the rq5 safety-red EDGE role (non-text 3.45 on
+   chassis ≈ the legacy pairing on card; red is never the text color). */
+.node-remove-btn {
+  flex: none;
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 3px;
+  background: var(--pm-chassis);
+  color: var(--pm-print);
+  cursor: pointer;
+}
+
+.remove-mark,
+.remove-mark::before,
+.remove-mark::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 1.5px;
+  background: currentColor;
+}
+
+.remove-mark::before,
+.remove-mark::after {
+  content: '';
+  margin: -0.75px 0 0 -4.5px;
+}
+
+.remove-mark {
+  background: transparent;
+}
+
+.remove-mark::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.remove-mark::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.node-remove-btn:hover,
+.node-remove-btn:active {
+  color: var(--pm-print-hi);
+  border-color: var(--red-edge);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .node-remove-btn {
+    transition: border-color 150ms ease, color 150ms ease;
+  }
+}
+
+/* --- SortableJS drag states (the one real shadow in the world) ---------
+   Chosen (held, whole drag): the section's groove lip goes accent — the
+   part being pulled into the signal path. Drag (the lifted live clone):
+   a REAL physical lift, so it earns the world's one offset+blur shadow.
+   Ghost (the insertion slot): a dashed print slot — where the section
+   WILL land, reading as a groove reservation, not a section. */
 .node-card.sortable-chosen {
   cursor: grabbing;
-  border-color: var(--accent);
-  border-top-color: var(--card-family, var(--accent));
   box-shadow:
-    inset 0 3px 0 var(--card-family, var(--accent)),
-    0 1px 2px rgba(0, 0, 0, 0.3);
+    inset 0 1px 0 var(--pm-accent),
+    inset 0 2px 0 rgba(255, 107, 53, 0.25);
 }
 
-/* Drag (the lifted live clone): stronger shadow — the module reads as
-   physically lifted off the faceplate. */
 .node-card.sortable-drag {
-  opacity: 0.85;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+  background: var(--pm-chassis);
+  opacity: 0.92;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
 }
 
-/* Ghost (the insertion placeholder): a dashed line-strong outline slot,
-   no shadow, no legend square — it marks where the module WILL land, so
-   it should not read as a module itself. */
 .node-card.sortable-ghost {
-  opacity: 0.35;
-  border: 1px dashed var(--line-strong);
-  border-top: 1px dashed var(--line-strong);
-  box-shadow: none;
+  opacity: 0.4;
+  border-top: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
 }
 
-.node-card.sortable-ghost::before {
-  content: none;
+.node-card.sortable-ghost::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px dashed var(--pm-key-edge);
+  border-radius: 2px;
 }
 
-/* VIS-6 hook (FEW-1/MC events wire the .agent-pulse class later;
-   NOTHING sets it yet — this rule is deliberately inert). One amber
-   outline pulse, 150ms × 2: the card visibly answering an agent edit.
-   Outline, not box-shadow, per the lamp-light discipline — no glow on
-   static modules. The entire hook lives inside
-   prefers-reduced-motion: no-preference, so reduced-motion users get no
-   animation at all (the pulse is pure motion; VIS-6's toast carries the
-   information redundantly). */
+/* --- Agent mutation pulse ----------------------------------------------
+   One accent blink on the section's top groove (the frame's cut edge
+   flashes signal orange) — a state blink, not a glow; the animation
+   NAME is pinned by src/canvas.js's animationend listener and MUST NOT
+   change. Entirely inside the reduced-motion guard. */
 @media (prefers-reduced-motion: no-preference) {
   .node-card.agent-pulse {
-    outline: 2px solid transparent;
-    outline-offset: 2px;
     animation: node-card-agent-pulse 150ms ease-in-out 2;
   }
 
   @keyframes node-card-agent-pulse {
     0%,
     100% {
-      outline-color: transparent;
+      box-shadow: inset 0 1px 0 var(--pm-groove-lip);
     }
 
     50% {
-      outline-color: var(--accent);
+      box-shadow: inset 0 1px 0 var(--pm-accent);
     }
   }
 }
 
 /* ===========================================================================
-   Presets panel (PS-3 + VIS-3) — same faceplate/card/silkscreen
-   vocabulary as the palette flank: silkscreen header over a hairline
-   rule, the current-preset name as a mono machine readout
-   (--font-readout — the panel's LCD register; primary text 12.32 on
-   panel), the unsaved flag in the amber accent as text (7.43), controls
-   in the shared .control vocabulary. The preset <select> is already
-   dark-coherent via the shared rules: color-scheme dark (root) renders
-   the native dropdown dark, line-strong bezel, text-primary.
+   DISABLED TEXTURE — the ONE unambiguous non-interactive grammar: a
+   diagonal hatch over the panel print plus a recede. Used in exactly two
+   states (never anywhere else): the pre-Start panel gate and the
+   bypassed chain. Accent-marked elements that stay live (the display
+   register, the anchors/meters/footer) never carry it.
+   Item 1b: the two flanking ZONES join the grammar — the legacy rq5
+   dim-with-inset-hairline is retired, so all three voice-deck zones
+   gate with the same hatch + recede the canvas face has always used.
+   =========================================================================== */
+
+/* Pre-Start gate, the flanking zones: pointer lock (the functional
+   gate, unchanged) + the SAME recede + diagonal hatch the canvas face
+   carries below — one grammar, three zones. */
+.layout.engine-not-started .palette,
+.layout.engine-not-started .presets {
+  position: relative;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.layout.engine-not-started .palette::before,
+.layout.engine-not-started .presets::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 7px,
+    rgba(11, 12, 16, 0.55) 7px,
+    rgba(11, 12, 16, 0.55) 9px
+  );
+}
+
+/* Pre-Start gate, the canvas face: pointer lock (the functional
+   gate, unchanged) + hatch over the FACE (.canvas, i.e. everything
+   except the register and the footer, which both stay live and answer
+   "press Start"). */
+.layout.engine-not-started .canvas-panel {
+  opacity: 1;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+.layout.engine-not-started .canvas {
+  position: relative;
+  opacity: 0.55;
+}
+
+.layout.engine-not-started .canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 7px,
+    rgba(11, 12, 16, 0.55) 7px,
+    rgba(11, 12, 16, 0.55) 9px
+  );
+}
+
+/* Pre-Start, the empty-hint reads as a printed socket, not a dashed
+   drop-target (dropping is impossible until Start — the copy flip in
+   src/canvas.js's onEngineStarted carries the teaching). */
+.layout.engine-not-started .empty-hint {
+  border: 1px solid var(--pm-key-edge);
+}
+
+/* The gated region answers the pointer with not-allowed (the panels are
+   pointer-events:none, so hit-testing resolves to this .layout element).
+   Removed the instant onEngineStarted() drops the class. */
+.layout.engine-not-started {
+  cursor: not-allowed;
+}
+
+/* ===========================================================================
+   PRESETS ZONE (PS-3 + VIS-3, re-cast by item 1b) — the voice deck's
+   right-hand print zone, one vocabulary with the palette zone:
+   silkscreen zone legend over a groove-cut rule, the current-preset
+   name as the zone's mono machine readout (12px tabular — the shared
+   per-control value tier, 11.78 on the chassis), the unsaved flag in
+   the signal orange as text (6.54 — a system state), controls as the
+   shared control KEYS. The preset <select> is already dark-coherent
+   via the shared rules: color-scheme dark (root) renders the native
+   dropdown dark, key-edge bezel, bright print.
    =========================================================================== */
 
 .presets {
-  border-left: 1px solid var(--hairline);
-  background: var(--bg-panel);
+  /* The lip half of the face|presets zone groove (the face's right
+     border is the cut — see .canvas-panel above). */
+  border-left: 1px solid var(--pm-groove-lip);
+  background: transparent;
 }
 
-/* Silkscreen header — identical treatment to .palette h2 above (one
-   vocabulary across both flanks). */
+/* Silkscreen zone legend — identical treatment to .palette h2 above
+   (one vocabulary across both zones). */
 .presets h2 {
   margin: 0 0 0.6rem;
   padding-bottom: 0.45rem;
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--pm-groove-cut);
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print);
 }
 
 .preset-current {
   margin-bottom: 0.75rem;
 }
 
-/* The preset name is machine state — mono readout, block so the unsaved
-   flag reads as its own tight line beneath (the group then keeps the
-   panel's 0.75rem separation from the controls). */
+/* The preset name is machine state — the zone's mono bank-slot readout,
+   at the shared 12px value tier (one register with the system etch and
+   the per-control values; the chain face's 13.6px register line stays
+   the loudest machine voice on the page). Block so the unsaved flag
+   reads as its own tight line beneath. */
 .preset-name {
   display: block;
   font-family: var(--font-readout);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
   margin-bottom: 0.25rem;
   overflow-wrap: anywhere;
+  color: var(--pm-print-hi);
 }
 
 .unsaved-dot {
-  color: var(--accent);
+  color: var(--pm-accent);
   font-weight: 600;
   font-size: 0.75rem;
 }
@@ -1541,16 +2482,16 @@ select.control {
 }
 
 /* R2-3 — the inline Save As naming row: the same control vocabulary as
-   the rest of the panel, so naming a preset mid-show stays in-panel (no
+   the rest of the zone, so naming a preset mid-show stays in-zone (no
    browser prompt()). Hidden by default; src/presets-ui.js shows it on
    Save As… and hides it again on Save/Cancel (display:none also removes
    the input from the tab order — no dead stops). The input is a text
-   .control: card ground, line-strong bezel, native-dark via the root
-   color-scheme. Layout is measured to the 220px flank: the input takes
-   the full row (flex-basis 100%), and Save (ink-on-amber primary, the
-   Start/Undo pairing) + Cancel sit beneath it sharing a second line
-   exactly like the Load/Delete pair — side-by-side input+buttons cannot
-   fit 220px without shrinking the input to unreadability. */
+   field on the key vocabulary: key ground, cut-edge bezel, native-dark
+   via the root color-scheme. Layout is measured to the 220px zone: the
+   input takes the full row (flex-basis 100%), and Save (the one orange
+   key pairing, Start's twin) + Cancel sit beneath it sharing a second
+   line exactly like the Load/Delete pair — side-by-side input+buttons
+   cannot fit 220px without shrinking the input to unreadability. */
 .preset-name-row {
   display: flex;
   flex-direction: column;
@@ -1562,11 +2503,11 @@ input.preset-name-input {
   display: block;
   width: 100%;
   padding: 0.5rem;
-  border-radius: 6px;
-  border: 1px solid var(--line-strong);
-  background: var(--bg-card);
+  border-radius: 4px;
+  border: 1px solid var(--pm-key-edge);
+  background: var(--pm-key);
   font-size: 0.9rem;
-  color: var(--text-primary);
+  color: var(--pm-print-hi);
 }
 
 /* The Save/Cancel sub-row — the Load/Delete pairing, verbatim. */
@@ -1581,29 +2522,30 @@ input.preset-name-input {
 }
 
 input.preset-name-input:focus-visible {
-  /* The global ring already covers it — this block exists to keep the
-     vocabulary explicit next to the row it belongs to. */
-  outline: 2px solid var(--focus-ring);
+  /* The global orange ring already covers it — this block exists to
+     keep the vocabulary explicit next to the row it belongs to. */
+  outline: 2px solid var(--pm-accent);
   outline-offset: 1px;
 }
 
 .preset-name-row .control-primary {
   flex: 1 1 0;
   min-width: 0;
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
   font-weight: 700;
 }
 
 .preset-name-row .control-primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  background: var(--pm-accent-hi);
+  border-color: var(--pm-accent-hi);
+  color: var(--pm-ink);
 }
 
 .preset-name-row .control-primary:focus-visible {
-  outline-color: var(--focus-ring-on-accent);
-  outline-offset: -2px; /* ink ring on the amber fill, same as Start */
+  outline-color: var(--pm-ink);
+  outline-offset: -2px; /* ink ring on the orange fill, same as Start */
 }
 
 .preset-name-row .control:not(.control-primary) {
@@ -1617,7 +2559,7 @@ input.preset-name-input:focus-visible {
    state together — neither alone. */
 #delete-preset-btn.danger-arm {
   border-color: var(--red-edge);
-  color: var(--text-primary);
+  color: var(--pm-print-hi);
 }
 
 #delete-preset-btn.danger-arm:not(:disabled):hover {
@@ -1625,21 +2567,21 @@ input.preset-name-input:focus-visible {
 }
 
 /* PS-4 — factory/user dropdown groups. The <optgroup> labels read as
-   silkscreen micro-legends (the .readout-label vocabulary: small, bold,
-   tracked, muted), so the native menu keeps the panel's faceplate voice;
-   the option rows themselves stay native and dark via the root
+   silkscreen micro-legends (the etch-label vocabulary: small, bold,
+   tracked, print), so the native menu keeps the faceplate voice; the
+   option rows themselves stay native and dark via the root
    color-scheme: dark rule (no per-option styling — the shared rules
    already render the popup dark). Grouping is structural only: the
    factory options carry 'factory:'-prefixed values in the DOM, so the
    styling never carries meaning on its own. Uppercasing degrades to the
    markup's title case where a platform ignores text-transform here. */
 #preset-select optgroup {
-  /* 0.7rem — the .readout-label floor applies to the native popup too. */
+  /* 0.7rem — the etch-label floor applies to the native popup too. */
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print);
 }
 
 /* PS-4 — the quiet inline refusal note under the preset controls (e.g.
@@ -1649,7 +2591,7 @@ input.preset-name-input:focus-visible {
 .preset-note {
   margin: 0.5rem 0 0;
   font-size: 0.7rem;
-  color: var(--text-muted);
+  color: var(--pm-print);
 }
 
 /* Visually hide (but keep accessible to assistive tech) the device-select
@@ -1680,20 +2622,21 @@ input.preset-name-input:focus-visible {
    (VIS-4's .agent-pulse rule above already carries its own guard).
    =========================================================================== */
 
-/* The chip reads as a strip native: silkscreen-adjacent legend type
-   (same 0.75rem/700/0.08em register as .status and the panel headers),
-   card-ground pill. It is NOT a control — it reports, never acts — so
-   at rest it stays quiet. */
+/* The chip reads as a deck native (item 1b: a small KEY on the system
+   deck): silkscreen-adjacent legend type (same 0.75rem/700/0.08em
+   register as .status and the zone legends), key ground + cut-edge
+   bezel. It is NOT a control — it reports, never acts — so at rest it
+   stays quiet. */
 .agent-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
   flex: none;
   padding: 0.35rem 0.6rem;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--bg-card);
-  color: var(--text-muted);
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 4px;
+  background: var(--pm-key);
+  color: var(--pm-print);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -1701,31 +2644,31 @@ input.preset-name-input:focus-visible {
 }
 
 /* unavailable — the load-time default and deliberately the least loud
-   state on the strip: muted legend, hairline seam, no lamp. (Explicit
+   state on the deck: muted legend, cut-edge seam, no lamp. (Explicit
    for completeness; this is the base treatment above.) */
 .agent-chip[data-state='unavailable'] {
-  border-color: var(--hairline);
-  color: var(--text-muted);
+  border-color: var(--pm-key-edge);
+  color: var(--pm-print);
 }
 
 .agent-chip[data-state='unavailable']::before {
   content: none;
 }
 
-/* tools-ready / acting — the agent lane is live: bezel rises to
-   line-strong (the meaningful-outline token), the label lifts to the
-   amber accent (6.65 on card; 7.43 on panel), and an 8px amber status
-   square (rq5's 8px-dot register; non-text ≥3:1) lights beside it.
-   Color is never the only signal — the copy reads AGENT READY / AGENT
-   ACTING either way. */
+/* tools-ready / acting — the agent lane is live: bezel rises to full
+   print, the label lifts to the SIGNAL ORANGE (agent-active is one of
+   the accent's system states; 5.85 on the key ground as text), and an
+   8px orange status square (non-text ≥3) lights beside it. Color is
+   never the only signal — the copy reads AGENT READY / AGENT ACTING
+   either way. */
 .agent-chip[data-state='tools-ready'],
 .agent-chip[data-state='acting'] {
-  border-color: var(--line-strong);
+  border-color: var(--pm-print);
 }
 
 .agent-chip[data-state='tools-ready'] .agent-chip-label,
 .agent-chip[data-state='acting'] .agent-chip-label {
-  color: var(--accent);
+  color: var(--pm-accent);
 }
 
 .agent-chip[data-state='tools-ready']::before,
@@ -1735,7 +2678,7 @@ input.preset-name-input:focus-visible {
   width: 8px;
   height: 8px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--pm-accent);
 }
 
 /* Acting adds ONE slow activity breath (opacity 1→0.7→1, ~1.2 s loop —
@@ -1920,12 +2863,13 @@ input.preset-name-input:focus-visible {
 
 .safe-output-note {
   flex: none;
-  /* VIS-7: in the top-down flow the note sits BENEATH the OUT anchor —
+  /* In the top-down flow the note sits BENEATH the OUT anchor —
      left-aligned so it reads as that block's caption, not a free-floating
-     caption for the whole canvas. */
+     caption for the whole canvas. Redesign item 1: panel print on the
+     chassis (7.47), the print register's caption size. */
   align-self: flex-start;
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--pm-print);
   white-space: nowrap;
 }
 
@@ -1947,8 +2891,11 @@ input.preset-name-input:focus-visible {
 
 .watchdog-alert {
   flex: none;
-  /* VIS-7: a full-width banner beneath the OUT block + safe-output note —
-     the loudest thing the token set allows, at the loudest width. */
+  /* A full-width banner beneath the OUT block + safe-output note — the
+     loudest thing the vocabulary allows, at the loudest width. Redesign
+     item 1: chassis ground, squared cut (no island radius), and the one
+     real exception to "no shadow" stays OUT (safety red earns no
+     shadow either — the 2px red EDGE ring is the loudness). */
   align-self: stretch;
   justify-content: center;
   display: flex;
@@ -1956,9 +2903,8 @@ input.preset-name-input:focus-visible {
   gap: 0.625rem;
   padding: 0.5rem 0.625rem;
   border: 2px solid var(--red-edge);
-  border-radius: 6px;
-  background: var(--bg-panel);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  border-radius: 2px;
+  background: var(--pm-chassis);
 }
 
 .watchdog-alert-text {
@@ -2345,12 +3291,15 @@ input.preset-name-input:focus-visible {
    in --font-readout per the design brief), muted like the scale
    numerals; tabular numerals so −∞ / −12.0 / CLIP don't jitter. The
    'CLIP' latch text renders in the meter-clip stop as the one state
-   color the readout ever carries. */
+   color the readout ever carries. LADDER: per-control value tier
+   (0.75rem/400) — weight pinned explicitly because the readout inherits
+   through two 700-weight ancestors (.anchor, .canvas-footer-legend) and
+   must match the knob/trim values' weight; '−12.0' / 'CLIP' / '−∞' fit
+   the fixed 96px unit right-aligned at this size. */
 .meter-readout {
   font-family: var(--font-readout);
-  /* 0.7rem silkscreen floor (11.2px) — dB values are read at distance;
-     '−12.0' / 'CLIP' / '−∞' fit the 96px unit right-aligned at this size. */
-  font-size: 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 400;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -2393,56 +3342,107 @@ input.preset-name-input:focus-visible {
    vertical default's; it still renders there as part of the panel.
    =========================================================================== */
 
+/* --- The base plate (redesign item 1 restyle of the R2-1 pinned OUT
+   footer): the panel's bottom edge is the OUT corner — jack print legend
+   right, the SAME 96×26 lamp scene + mono readout (one feed, one
+   ballistics, two views; the mirror is aria-hidden). Fixed height (the
+   meter footprint is the tallest item — no layout pumping); machined
+   groove along its top edge; NEVER de-emphasized while bypassed or
+   gated (the operator's output ground truth in every state — the
+   dim/hatch grammar is scoped to the chain and the face, never the base
+   plate). In horizontal flow mode the panel un-bounds and the footer
+   scrolls with it — the pinned guarantee is the vertical default's. */
 .canvas-footer {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 0.75rem;
-  padding: 0.4rem 1rem;
-  border-top: 1px solid var(--hairline);
+  padding: 0.4rem 0.9rem;
+  border-top: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
 }
 
-/* Silkscreen legend — the same register as the BYPASSED state line and
-   the flow toggle's label (mono, 0.7rem floor, tracked caps). */
+/* OUT jack print: the drawn jack ring + the legend, the anchor
+   vocabulary's bottom-edge twin. */
 .canvas-footer-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   font-family: var(--font-readout);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print);
+  white-space: nowrap;
+}
+
+.canvas-footer-legend::before {
+  content: '';
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--pm-print);
+  background: radial-gradient(circle, var(--pm-register-bg) 0 2px, transparent 2px);
 }
 
 /* The mirrored unit reuses .meter-unit/.meter-canvas/.meter-readout
-   verbatim above; this override only enforces the single-row compact
+   verbatim; this override only enforces the single-row compact
    register (column stack inherited as-is — canvas over readout). */
 .canvas-footer .meter-unit {
   width: 96px;
 }
 
 /* ===========================================================================
-   VIS-7b (2026-08-28 user direction) — FLOW-DIRECTION TOGGLE. Vertical
-   top-down is the default (VIS-7 above); src/canvas.js flips .flow-horizontal
-   on the canvas panel from the .flow-toggle button and persists the choice
-   under karaoke-flow-orientation-v1. Everything orientation-sensitive is
-   scoped here so the two modes are one class apart. SortableJS re-reads
-   the container direction on drag start — no JS-mode coupling.
+   FLOW-DIRECTION SWITCH (VIS-7b behavior, Pattern Machine restyle).
+   src/canvas.js flips .flow-horizontal on the canvas panel from the
+   .flow-toggle button and persists the choice under
+   karaoke-flow-orientation-v1. In the default (vertical) mode the switch
+   rides the base plate's LEFT end (absolutely placed against the
+   panel's bottom edge so the OUT corner owns the right — one base
+   strip, two ends); in horizontal mode it returns to static flow.
    =========================================================================== */
 
-.flow-toggle {
+.canvas-panel {
+  position: relative; /* anchor for the vertical-mode switch placement */
+}
+
+/* Scoped .canvas-panel .flow-toggle (not bare .flow-toggle): the button
+   carries the shared .control class, whose `button.control` font-size
+   (0.9rem) OUTRANKED the old single-class rule — the switch rendered
+   14.4px, a mono size matching nothing on the surface (the size bug the
+   ladder audit caught). At the panel scope it wins the cascade and rides
+   the ladder's per-control value tier like every other state readout. */
+.canvas-panel .flow-toggle {
   display: block;
-  margin: 0.5rem auto 0.75rem;
-  padding: 0.3rem 0.9rem;
+  padding: 0.3rem 0.8rem;
+  border-color: var(--pm-key-edge);
+  background: var(--pm-chassis);
   font-family: var(--font-readout);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
+  color: var(--pm-print);
+}
+
+.flow-toggle:not(:disabled):hover {
+  border-color: var(--pm-print);
+  color: var(--pm-print-hi);
+}
+
+.canvas-panel:not(.flow-horizontal) .flow-toggle {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 0.4rem;
+  margin: 0;
 }
 
 /* HORIZONTAL MODE — the cycle-1 reading: MIC IN at the left, chain runs
    left→right, OUT at the right. The panel un-bounds (the page owns the
-   scroll, as it did before VIS-7), anchors return to compact stacked
-   blocks with their meters beneath, arrows stand upright, cards take
-   their content width in a row list. */
+   scroll), anchors return to compact stacked blocks with their meters
+   beneath, the drawn chevrons point right, sections take their content
+   width in a row list. */
 .canvas-panel.flow-horizontal {
   max-height: none;
 }
@@ -2459,7 +3459,11 @@ input.preset-name-input:focus-visible {
 }
 
 .canvas-panel.flow-horizontal .arrow {
-  transform: none;
+  font-size: 0;
+}
+
+.canvas-panel.flow-horizontal .arrow::before {
+  transform: rotate(-45deg); /* points right down the row */
 }
 
 .canvas-panel.flow-horizontal .anchor {
@@ -2470,14 +3474,19 @@ input.preset-name-input:focus-visible {
   justify-content: flex-start;
 }
 
+.canvas-panel.flow-horizontal .anchor::before {
+  margin-right: 0;
+  margin-bottom: 0.45rem;
+}
+
 .canvas-panel.flow-horizontal .meter-unit {
   margin-top: 0.35rem;
 }
 
 .canvas-panel.flow-horizontal .node-card {
   width: auto;
-  min-width: 13rem;
-  max-width: 19rem;
+  min-width: 21rem;
+  max-width: 30rem;
 }
 
 .canvas-panel.flow-horizontal .safe-output-note {
@@ -2491,29 +3500,23 @@ input.preset-name-input:focus-visible {
 }
 
 /* ===========================================================================
-   Refinement entry 5 ($impeccable polish, 2026-08-29) — BYPASS-ENGAGED
-   CANVAS INDICATION. src/main.js toggles `bypassed` on the .canvas-panel
-   from the SAME single-source read (AudioBypass.isEngaged()) that drives
-   the strip button's label/.engaged class, so the two can never drift.
+   BYPASS-ENGAGED CANVAS INDICATION (refinement entry 5 semantics, the
+   Pattern Machine disabled grammar). src/main.js toggles `bypassed` on
+   the .canvas-panel from the SAME single-source read
+   (AudioBypass.isEngaged()) that drives the strip button, so the two can
+   never drift.
 
-   What reads as bypassed: only the CHAIN — the node cards (.chain-list)
-   and the flow toggle recede to 0.55 opacity, the exact gated-region
-   precedent above (.layout.engine-not-started), so "out of the audio
-   path" and "locked before Start" share one house vocabulary. No glow,
-   no keyframes: a single 150ms ease opacity transition per the house
-   motion budget (and none at all under prefers-reduced-motion — the
-   global guard zeroes all transitions).
+   What reads as bypassed: ONLY the chain — the sections and the flow
+   switch recede (0.55, the house precedent for inert regions) under the
+   ONE disabled texture (the same diagonal hatch as the pre-Start gate —
+   one grammar for "not in the circuit", two states). The BYPASSED
+   silkscreen line prints beneath the folded sections.
 
-   What must NOT recede (the operator's ground truth while bypassed — the
-   dry path is what the room hears, so output health stays readable):
-   both .anchor blocks with their meters, the safe-output note, the
-   watchdog alert, and the empty-hint. These are siblings of the
-   chain-list inside .canvas, so scoping the dim to .chain-list +
-   .flow-toggle leaves them at full strength. The palette/presets flanks
-   also stay live on purpose: the operator may prep the next chain while
-   bypassed. The silkscreen BYPASSED state line (chain-list::after) is
-   pure CSS content — no markup, no SortableJS child, no geometry change
-   beyond its own flex item box.
+   What must NOT recede (the operator's ground truth while bypassed —
+   the dry path is what the room hears): both .anchor blocks with their
+   meters, the safe-output note, the watchdog alert, the empty-hint, the
+   display register, and the OUT footer. These sit outside .chain-list,
+   so the scoping below leaves them at full strength.
    =========================================================================== */
 
 .canvas-panel .chain-list,
@@ -2526,6 +3529,24 @@ input.preset-name-input:focus-visible {
   opacity: 0.55;
 }
 
+/* The hatch half of the grammar, painted OVER the receded sections
+   (pointer-events:none — a pseudo cannot intercept, and the sections
+   stay interactive in bypass: the operator may tune while dry). */
+.canvas-panel.bypassed .chain-list::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 7px,
+    rgba(11, 12, 16, 0.45) 7px,
+    rgba(11, 12, 16, 0.45) 9px
+  );
+}
+
 .canvas-panel.bypassed .chain-list::after {
   content: 'BYPASSED';
   flex: none;
@@ -2535,10 +3556,10 @@ input.preset-name-input:focus-visible {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--pm-print);
 }
 
-/* Horizontal flow: the state line rides the row after the last card
+/* Horizontal flow: the state line rides the row after the last section
    instead of stacking beneath the column — same register, same tokens. */
 .canvas-panel.flow-horizontal.bypassed .chain-list::after {
   align-self: center;

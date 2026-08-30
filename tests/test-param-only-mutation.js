@@ -1129,12 +1129,33 @@ async function main() {
 
   // The agent move (midGain was set to +6 in section B): route it through
   // the same delegation the canvas makes.
+  // Redesign item 1: the row anatomy is [input, .knob-unit(label, knob,
+  // value span), help span] — find the engine input by id and the mono
+  // span by class instead of child indexes.
+  function findRowParts(row, paramId) {
+    var input = null;
+    var span = null;
+    function walk(el) {
+      (el.children || []).forEach(function (child) {
+        if (String(child.tagName).toUpperCase() === 'INPUT' && child.id === 'param-n3-' + paramId) {
+          input = child;
+        }
+        if (String(child.tagName).toUpperCase() === 'SPAN' && child.className === 'param-value') {
+          span = child;
+        }
+        walk(child);
+      });
+    }
+    walk(row);
+    return { input: input, span: span };
+  }
   var midInput = null;
   var midSpan = null;
   rows.forEach(function (row) {
-    if (row.children[0] && row.children[0].getAttribute('for') === 'param-n3-midGain') {
-      midInput = row.children[1];
-      midSpan = row.children[2];
+    var parts = findRowParts(row, 'midGain');
+    if (parts.input) {
+      midInput = parts.input;
+      midSpan = parts.span;
     }
   });
   check(
@@ -1163,8 +1184,9 @@ async function main() {
   // value (the working-copy re-sync added with issue #5).
   var lowInput = null;
   rows.forEach(function (row) {
-    if (row.children[0] && row.children[0].getAttribute('for') === 'param-n3-lowGain') {
-      lowInput = row.children[1];
+    var parts = findRowParts(row, 'lowGain');
+    if (parts.input) {
+      lowInput = parts.input;
     }
   });
   n3Entry.params = { lowGain: 0, midGain: 6, highGain: 0 }; // what canvas bookkeeping now holds

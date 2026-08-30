@@ -566,7 +566,7 @@ async function main() {
   var capsResult = await byName(apiRegisterCalls, 'get_capabilities').execute({});
   check(
     !!capsResult &&
-      capsResult.app === 'karaoke-chain-builder' &&
+      capsResult.app === 'voxchain' &&
       capsResult.nodeTypes &&
       Object.keys(capsResult.nodeTypes).length === 6,
     'D1: get_capabilities resolves the compact policy for all 6 live node types'

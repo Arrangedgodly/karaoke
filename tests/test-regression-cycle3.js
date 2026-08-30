@@ -576,12 +576,24 @@ function partB() {
       'B1: ' + type + ' renders one row per paramSpec entry (' + spec.length + ')'
     );
 
+    // Redesign item 1: the engine input is the row's first child on KNOB
+    // rows and lives inside .trim-unit on TRIM rows (delay Time) — find
+    // it by a deep tag search rather than child index; discrete rows have
+    // no input at all (pads), but legacy types are all-numeric.
+    function deepInputs(el) {
+      var found = [];
+      (el.children || []).forEach(function (c) {
+        if (c.tagName === 'input' || c.tagName === 'select') {
+          found.push(c);
+        }
+        found = found.concat(deepInputs(c));
+      });
+      return found;
+    }
     var allRanges = true;
     rows.forEach(function (row) {
-      var input = row.children.filter(function (c) {
-        return c.tagName === 'input' || c.tagName === 'select';
-      })[0];
-      if (!input || input.tagName !== 'input' || input.type !== 'range') {
+      var inputs = deepInputs(row);
+      if (inputs.length !== 1 || inputs[0].tagName !== 'input' || inputs[0].type !== 'range') {
         allRanges = false;
       }
     });
@@ -591,9 +603,7 @@ function partB() {
     // verify the exact pre-cycle-1..2 commit semantics: parseFloat to a
     // NUMBER, passed verbatim to applyParam, model updated with numbers.
     var first = spec[0];
-    var firstInput = rows[0].children.filter(function (c) {
-      return c.tagName === 'input';
-    })[0];
+    var firstInput = deepInputs(rows[0])[0];
     var probe = String(first.default === 0 ? 7.5 : first.default / 2);
     firstInput.value = probe;
     firstInput.__fire('input');
@@ -626,8 +636,10 @@ function partB() {
   });
 
   // The discrete branch is keyed on `values` alone: one throwaway discrete
-  // type (the UI-4 throwaway-type convention) renders a <select> in the
+  // type (the UI-4 throwaway-type convention) renders PAD SELECTORS in the
   // SAME render loop, proving the branch selector itself discriminates.
+  // (Redesign item 1: the discrete shape is a pad group — real buttons in
+  // a radiogroup — no longer a <select>; the branch KEY is unchanged.)
   s.NodeTypes.register('test-discrete-throwaway', {
     label: 'Throwaway',
     paramSpec: [{ id: 'pick', label: 'Pick', values: ['a', 'b', 'c'], default: 'b' }],
@@ -637,12 +649,21 @@ function partB() {
   s.ParamControls.render(container, {
     id: 'x-disc', type: 'test-discrete-throwaway', params: {}
   });
-  var sel = container.children[0].children.filter(function (c) {
-    return c.tagName === 'select';
+  var padGroup = container.children[0].children.filter(function (c) {
+    return c.className === 'pad-group';
   })[0];
+  var pressedPads = padGroup
+    ? padGroup.children.filter(function (pad) {
+        return pad.getAttribute('aria-checked') === 'true';
+      })
+    : [];
   check(
-    !!sel && sel.children.length === 3,
-    'B6: a values-list spec still renders a <select> (branch keyed on spec.values, not on type)'
+    !!padGroup &&
+      padGroup.children.length === 3 &&
+      padGroup.children.every(function (pad) { return pad.tagName === 'button'; }) &&
+      pressedPads.length === 1 &&
+      pressedPads[0].textContent === 'b',
+    'B6: a values-list spec still renders the discrete shape (3 pads, default pressed — branch keyed on spec.values, not on type)'
   );
 
   // Issue-#5 updateControl on a legacy row moves the slider + display and

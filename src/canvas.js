@@ -1,4 +1,8 @@
-// Drag-and-drop chain canvas for the Node-Based Web Audio Chain Builder.
+// Chain canvas for the VOXCHAIN — drag-and-drop build /
+// reorder / remove, the loadModel rebuild, the parameter-only fast path,
+// and (redesign item 1) the canvas panel's Pattern Machine chrome: the
+// display register and the panel-print SECTION anatomy each chain entry
+// renders as (see createNodeCard + buildDisplayRegister below).
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single
 // `window.X` export pattern as the rest of this project. Depends on
@@ -79,6 +83,137 @@
   // drop's onSort commit. Purely additive: nothing in this file branches
   // on it, so drag behavior is bit-for-bit unchanged.
   var dragActive = false;
+
+  // ---------------------------------------------------------------------
+  // DISPLAY REGISTER (redesign item 1, Single Face Chassis) — the
+  // dot-matrix line etched along the canvas panel's TOP EDGE: one
+  // accent-marked machine line ("MODULE · PARAM · VALUE", displayScale
+  // honored, tabular numerals) plus the param's plain-language help line
+  // beneath it. Built HERE (canvas.js owns the panel chrome; same
+  // JS-built pattern as the OUT footer mirror in src/meters.js) as the
+  // panel's FIRST child, before the scrolling .canvas.
+  //
+  // Discipline:
+  //   - PURELY VISUAL REDUNDANCY: aria-hidden — every semantic (name,
+  //     value, description) stays on the control itself, so assistive
+  //     tech never hears the register double-announce.
+  //   - NEVER PUMPS LAYOUT: fixed height, single-line clipping (CSS).
+  //   - AT REST it carries the ENGINE STATE (boot: "ENGINE · STOPPED";
+  //     live: "ENGINE · LIVE · N MODULES"). Once an operator touches a
+  //     control it shows THAT control's exact value and KEEPS it (the
+  //     groovebox rule: the display answers the last encoder you held)
+  //     until another control is touched — engine-state lines only
+  //     re-assert through onEngineStarted, which by construction cannot
+  //     happen after a touch (the panel is pointer-locked pre-Start).
+  //   - FED BY src/param-controls.js through window.CanvasRegister
+  //     .showParam() on commit / focus / external agent write, and by
+  //     this file's state lines. The help copy is passed THROUGH from
+  //     param-controls' PLAIN_LANGUAGE_HELP map — never duplicated here.
+  // Guarded like everything panel-level: a harness without
+  // document.querySelector (the committed tests) skips the register and
+  // param-controls' guarded feed calls no-op.
+  // ---------------------------------------------------------------------
+  var registerEl = null;
+  var registerModuleEl = null;
+  var registerParamEl = null;
+  var registerValueEl = null;
+  var registerHelpEl = null;
+  var registerMode = 'state';
+
+  function buildDisplayRegister() {
+    if (typeof document.querySelector !== 'function' ||
+        typeof document.createElement !== 'function') {
+      return;
+    }
+    var panel = document.querySelector('.canvas-panel');
+    if (!panel || !panel.insertBefore) {
+      return;
+    }
+
+    registerEl = document.createElement('div');
+    registerEl.className = 'display-register';
+    registerEl.setAttribute('aria-hidden', 'true');
+
+    var main = document.createElement('div');
+    main.className = 'register-main';
+
+    var mark = document.createElement('span');
+    mark.className = 'register-mark';
+    registerModuleEl = document.createElement('span');
+    registerModuleEl.className = 'register-module';
+    registerParamEl = document.createElement('span');
+    registerParamEl.className = 'register-param';
+    registerValueEl = document.createElement('span');
+    registerValueEl.className = 'register-value';
+    main.appendChild(mark);
+    main.appendChild(registerModuleEl);
+    main.appendChild(registerParamEl);
+    main.appendChild(registerValueEl);
+
+    registerHelpEl = document.createElement('div');
+    registerHelpEl.className = 'register-help';
+
+    registerEl.appendChild(main);
+    registerEl.appendChild(registerHelpEl);
+    panel.insertBefore(registerEl, panel.firstChild);
+
+    showRegisterState('ENGINE \u00B7 STOPPED', 'Press Start to power on');
+  }
+
+  function setRegisterText(module, param, value, help) {
+    if (!registerEl) {
+      return;
+    }
+    registerModuleEl.textContent = module;
+    registerParamEl.textContent = param;
+    registerValueEl.textContent = value;
+    registerHelpEl.textContent = help;
+  }
+
+  function showRegisterState(line, help) {
+    registerMode = 'state';
+    setRegisterText(line, '', '', help);
+  }
+
+  function showRegisterParam(module, param, value, help) {
+    registerMode = 'param';
+    setRegisterText(module, param, value, help);
+    // ONE blink marks the live control (the direction contract's palette
+    // economy): retrigger the value segment's blink by dropping and
+    // re-adding the class across a forced reflow. Guarded — under
+    // prefers-reduced-motion the CSS keyframe never exists, and a
+    // stripped harness has no offsetWidth to force.
+    try {
+      registerValueEl.classList.remove('register-blink');
+      if (typeof registerValueEl.offsetWidth === 'number') {
+        void registerValueEl.offsetWidth; // reflow so the animation restarts
+      }
+      registerValueEl.classList.add('register-blink');
+    } catch (err) {
+      /* animation-only */
+    }
+  }
+
+  /** Refresh the state line's module count after a structural change —
+   *  only while the register is still in state mode (a touched control's
+   *  value line is sticky by design). */
+  function refreshRegisterState() {
+    if (!registerEl || registerMode !== 'state') {
+      return;
+    }
+    if (window.AudioEngine && window.AudioEngine.isStarted) {
+      var n = chainModel.length;
+      showRegisterState(
+        'ENGINE \u00B7 LIVE \u00B7 ' + n + ' MODULE' + (n === 1 ? '' : 'S'),
+        'Signal path: MIC IN \u2192 chain \u2192 OUT'
+      );
+    } else {
+      showRegisterState('ENGINE \u00B7 STOPPED', 'Press Start to power on');
+    }
+  }
+
+  buildDisplayRegister();
+
 
   function nextNodeId() {
     nodeIdCounter += 1;
@@ -480,6 +615,7 @@
   function commitStructuralChange() {
     recomputeModelFromDom();
     updateEmptyHint();
+    refreshRegisterState();
     rebuildGraph();
     // PS-2: persist the chain after every structural add/remove/reorder.
     // Pass chainModel explicitly rather than AudioGraph.getModel() — see
@@ -509,54 +645,58 @@
   // Node card construction (Part C).
   // ---------------------------------------------------------------------
 
-  /**
-   * Build a real, stateful node-card element for one chain entry.
-   *
-   * Structure (see styles/main.css for the visual rules):
-   *   .node-card[data-node-id][data-family][data-initials]
-   *     .node-card-header
-   *       .node-drag-handle          <- ONLY this drives SortableJS's
-   *                                     `handle: '.node-drag-handle'` on the
-   *                                     chain list, so grabbing the slider,
-   *                                     the collapse chevron or the remove
-   *                                     button can never start a card drag.
-   *         .node-drag-icon
-   *         .node-label
-   *       .node-collapse             <- VIS-7: real <button> toggling
-   *                                     .node-card.collapsed + its own
-   *                                     aria-expanded. Sibling of the
-   *                                     handle, NOT nested inside it — same
-   *                                     press-mistake reasoning as the
-   *                                     remove button below.
-   *       .node-remove-btn           <- sibling of the handle, NOT nested
-   *                                     inside it — clicking it can't be
-   *                                     mistaken for a handle-area press.
-   *     .node-params                 <- ParamControls.render() target
-   *                                     (still the render container — the
-   *                                     ParamControls contract is
-   *                                     untouched).
-   *       .node-params-inner         <- VIS-7 wrap-AFTER-render: the rows
-   *                                     ParamControls rendered into
-   *                                     .node-params are moved into this
-   *                                     inner wrapper in one pass, so
-   *                                     src/param-controls.js stays
-   *                                     byte-identical while CSS gets an
-   *                                     animatable 0fr-collapse boundary.
-   *
-   * VIS-7 collapse state is SESSION-ONLY and never persisted: a collapsed
-   * card re-expands whenever the card element is rebuilt — agent/preset
-   * loads through loadModel() replace every card, and a structural
-   * drag/remove only touches other cards. Default is EXPANDED; reset-on-
-   * rebuild is the accepted v1 behavior (per the 2026-08-28 amendment).
-   *
-   * @param {string} type
-   * @param {Object} initialParams
-   * @param {string} [explicitId] - when provided, use this exact id instead
-   *   of minting a new one via nextNodeId(). Used by loadModel() (below) to
-   *   restore a saved/preset model's ORIGINAL ids verbatim, rather than
-   *   silently reassigning fresh ones on every reload.
-   * @returns {HTMLElement}
-   */
+  // ---------------------------------------------------------------------
+  // Node card construction (Part C) — redesigned item 1: the card is a
+  // panel-print SECTION of the Single Face Chassis, not a floating card.
+  // Class names from the card era SURVIVE on purpose (.node-card is the
+  // SortableJS item, the agent-pulse target, the bypass-dim scope, and
+  // the selector this file's own recompute/commit paths read), while the
+  // inner anatomy is the locked rail + field structure:
+  //
+  //   .node-card[data-node-id][data-family][data-initials]
+  //     .section-rail            <- the FAMILY PRINT BLOCK (left): grip
+  //                                 zone, family code, module label, the
+  //                                 experimental badge, and the section's
+  //                                 header-zone controls (collapse +
+  //                                 remove) at the rail's foot. The rail
+  //                                 is the section's persistent header —
+  //                                 it is exactly what remains visible
+  //                                 when the section folds.
+  //       .node-drag-handle      <- ONLY this drives SortableJS's
+  //                                 `handle: '.node-drag-handle'` (the
+  //                                 explicit GRIP ZONE the locked card's
+  //                                 risk line demands — knobs, pads,
+  //                                 chevron and × can never start a drag).
+  //         .node-drag-icon      <- CSS-drawn grip dots (aria-hidden).
+  //       .section-code          <- the 2-letter family silkscreen code.
+  //       .node-label            <- the module label (print register).
+  //       .section-foot          <- collapse chevron + remove × (real
+  //                                 buttons, the section's header-zone
+  //                                 parts; siblings of the handle, never
+  //                                 nested in it).
+  //     .section-main            <- the ENCODER FIELD (right).
+  //       .node-params           <- the 0fr collapsible boundary.
+  //         .node-params-inner   <- wrap-AFTER-render: rows ParamControls
+  //                                 rendered are moved here in one pass.
+  //
+  // Machined grooves between sections, the focus lift, and the folded
+  // (collapsed) slim row are all CSS on this structure — see main.css's
+  // Pattern Machine block.
+  //
+  // Collapse state is SESSION-ONLY and never persisted: a folded section
+  // re-expands whenever the card element is rebuilt — agent/preset loads
+  // through loadModel() replace every card, and a structural drag/remove
+  // only touches other cards. Default is EXPANDED; reset-on-rebuild is
+  // the accepted v1 behavior (per the 2026-08-28 amendment).
+  //
+  // @param {string} type
+  // @param {Object} initialParams
+  // @param {string} [explicitId] - when provided, use this exact id instead
+  //   of minting a new one via nextNodeId(). Used by loadModel() (below) to
+  //   restore a saved/preset model's ORIGINAL ids verbatim, rather than
+  //   silently reassigning fresh ones on every reload.
+  // @returns {HTMLElement}
+  // ---------------------------------------------------------------------
   function createNodeCard(type, initialParams, explicitId) {
     var id = explicitId || nextNodeId();
     var nodeState = { id: id, type: type, params: Object.assign({}, initialParams || {}) };
@@ -565,20 +705,18 @@
     var card = document.createElement('div');
     card.className = 'node-card';
     card.setAttribute('data-node-id', id);
-    // VIS-4 channel-strip legend hooks, mirroring the palette chips'
-    // data-family/data-initials pair one column to the left: data-family
-    // maps the card's 3px family top edge + header legend square to its
-    // --family-* token in styles/main.css; data-initials is that square's
-    // silkscreen text (rendered via CSS attr(data-initials) — never a
-    // second copy in the DOM text). Both come from the same
-    // familyInitials() lookup the palette uses, so card and palette
-    // legends share one vocabulary and can never drift. Additive only —
-    // no element, class, or text changes here.
+    // Family identity (VIS-4's data hooks, kept verbatim): data-family
+    // maps the rail's family print (code + tick) to its --pm-family token
+    // in styles/main.css; data-initials is that code's text source. Both
+    // come from the same familyInitials() lookup the palette uses, so
+    // section and palette legends share one vocabulary and can never
+    // drift.
     card.setAttribute('data-family', type);
     card.setAttribute('data-initials', familyInitials(type));
 
-    var header = document.createElement('div');
-    header.className = 'node-card-header';
+    // --- The family print block (left rail). ---------------------------
+    var rail = document.createElement('div');
+    rail.className = 'section-rail';
 
     var handle = document.createElement('span');
     handle.className = 'node-drag-handle';
@@ -587,56 +725,89 @@
     var gripIcon = document.createElement('span');
     gripIcon.className = 'node-drag-icon';
     gripIcon.setAttribute('aria-hidden', 'true');
-    gripIcon.textContent = '⋮⋮'; // vertical ellipsis pair, a small grip glyph
+    // The grip is DRAWN (CSS dot field in main.css), not a text glyph —
+    // a Unicode glyph standing in for an icon is refused by the craft
+    // floor, and the machined grip zone is exactly the kind of drawn
+    // hardware mark the chassis world wants. No text content here.
+
+    var code = document.createElement('span');
+    code.className = 'section-code';
+    code.setAttribute('aria-hidden', 'true');
+    code.textContent = familyInitials(type);
 
     var label = document.createElement('span');
     label.className = 'node-label';
     label.textContent = window.NodeTypes.getLabel(type);
 
     handle.appendChild(gripIcon);
-    handle.appendChild(label);
+    rail.appendChild(handle);
+    rail.appendChild(code);
+    rail.appendChild(label);
 
-    // UI-2 (cycle 3): the formal experimental badge on the card of every
-    // type in EXPERIMENTAL_TYPES (autotune only, cycle-3 scope) — the
-    // amber tag after the silkscreen label. SR-visible by content (see
-    // createExperimentalBadge); title carries the why.
+    // UI-2 (cycle 3): the formal experimental badge on the section of
+    // every type in EXPERIMENTAL_TYPES (autotune only, cycle-3 scope) —
+    // a silkscreen tag in the rail under the module label. SR-visible by
+    // content (see createExperimentalBadge); title carries the why.
     if (isExperimentalType(type)) {
-      handle.appendChild(createExperimentalBadge(type, false));
+      rail.appendChild(createExperimentalBadge(type, false));
     }
 
-    // VIS-7: the collapse chevron — a real button (keyboard-operable for
-    // free, announced by its aria-label) between the handle and the remove
-    // button. aria-expanded is the toggle's OWN state mirror; the visual
-    // state lives on the card (.collapsed), which is the only thing CSS
-    // needs. Session-only: nothing here persists (see the doc block above).
+    // The header-zone controls at the rail's foot: the collapse chevron
+    // and the remove ×. Real buttons (keyboard-operable for free,
+    // announced by their aria-labels), siblings of the handle — never
+    // nested inside it — so pressing them can never be mistaken for a
+    // grip-zone press. Expanded, they sit at the rail's bottom edge
+    // (margin-top:auto in CSS); folded, they ride the slim row's right
+    // end.
+    var foot = document.createElement('div');
+    foot.className = 'section-foot';
+
+    // The collapse chevron — drawn in CSS (a rotated square's edge), no
+    // text glyph; aria-expanded is the toggle's OWN state mirror, the
+    // visual fold lives on the card (.collapsed). The drawn mark is a
+    // child span (referenced directly, never re-queried — minimal DOM
+    // stubs in the committed tests carry no firstChild).
     var collapseBtn = document.createElement('button');
     collapseBtn.type = 'button';
     collapseBtn.className = 'node-collapse';
     collapseBtn.setAttribute('aria-expanded', 'true');
     collapseBtn.setAttribute('aria-label', 'Toggle parameters for ' + window.NodeTypes.getLabel(type));
-    collapseBtn.textContent = '▾'; // chevron, points down at the visible params
+    var chevronMark = document.createElement('span');
+    chevronMark.className = 'chevron-mark';
+    chevronMark.setAttribute('aria-hidden', 'true');
+    collapseBtn.appendChild(chevronMark);
 
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'node-remove-btn';
     removeBtn.setAttribute('aria-label', 'Remove ' + window.NodeTypes.getLabel(type));
-    removeBtn.textContent = '×'; // ×
+    // The × is DRAWN (two crossed bars in CSS), not a text glyph.
+    var removeMark = document.createElement('span');
+    removeMark.className = 'remove-mark';
+    removeMark.setAttribute('aria-hidden', 'true');
+    removeBtn.appendChild(removeMark);
 
-    header.appendChild(handle);
-    header.appendChild(collapseBtn);
-    header.appendChild(removeBtn);
+    foot.appendChild(collapseBtn);
+    foot.appendChild(removeBtn);
+    rail.appendChild(foot);
+
+    // --- The encoder field (right). ------------------------------------
+    var main = document.createElement('div');
+    main.className = 'section-main';
 
     var paramsContainer = document.createElement('div');
     paramsContainer.className = 'node-params';
+    main.appendChild(paramsContainer);
 
-    card.appendChild(header);
-    card.appendChild(paramsContainer);
+    card.appendChild(rail);
+    card.appendChild(main);
 
-    // Render this node's sliders inline, per Part C. onParamsChanged keeps
-    // OUR in-memory copy (nodeState.params) current, so a later structural
-    // rebuild (add/remove/reorder elsewhere in the chain) passes along
-    // whatever this node's CURRENT tuned values are — reordering must never
-    // reset an already-tuned param back to its type default.
+    // Render this node's controls inline (knobs / pads / trims). The
+    // onParamsChanged callback keeps OUR in-memory copy (nodeState.params)
+    // current, so a later structural rebuild (add/remove/reorder elsewhere
+    // in the chain) passes along whatever this node's CURRENT tuned values
+    // are — reordering must never reset an already-tuned param back to its
+    // type default.
     window.ParamControls.render(paramsContainer, nodeState, function (updatedParams) {
       nodeState.params = updatedParams;
       // Deliberately no rebuildGraph() call here — a plain param tweak is
@@ -668,14 +839,13 @@
       }
     });
 
-    // VIS-7 wrap-AFTER-render (see the doc block above): ParamControls has
-    // by now placed its .param-row children directly inside
-    // paramsContainer; move them verbatim into one .node-params-inner
-    // wrapper. DOM nodes are MOVED, not rebuilt, so every listener
-    // ParamControls attached to its sliders survives untouched. This is the
-    // ONLY place .node-params ever gains an inner wrapper, and it runs once
-    // per card — ParamControls.render() (which clears its container) is
-    // never called again on a live card.
+    // Wrap-AFTER-render: ParamControls has by now placed its .param-row
+    // children directly inside paramsContainer; move them verbatim into
+    // one .node-params-inner wrapper. DOM nodes are MOVED, not rebuilt,
+    // so every listener ParamControls attached survives untouched. This
+    // is the ONLY place .node-params ever gains an inner wrapper, and it
+    // runs once per card — ParamControls.render() (which clears its
+    // container) is never called again on a live card.
     var paramsInner = document.createElement('div');
     paramsInner.className = 'node-params-inner';
     var renderedRows = Array.prototype.slice.call(paramsContainer.children);
@@ -684,13 +854,15 @@
     });
     paramsContainer.appendChild(paramsInner);
 
-    // VIS-7: chevron toggle. Flips the card's .collapsed class and mirrors
-    // the state into the button's own aria-expanded — everything CSS or an
-    // assistive tech needs, nothing more. stopPropagation for the same
-    // defensive reason as the remove button (the button is a header sibling
-    // of the SortableJS handle, so it can never start a drag anyway).
-    // Presentation-ONLY: no model, no graph, no persistence — collapsing a
-    // card changes nothing but how much of it is visible.
+    // Chevron toggle. Flips the card's .collapsed class (CSS folds the
+    // encoder field away and lays the rail out as the slim groove row)
+    // and mirrors the state into the button's own aria-expanded —
+    // everything CSS or an assistive technology needs, nothing more.
+    // stopPropagation for the same defensive reason as the remove button
+    // (the button is a rail sibling of the SortableJS handle, so it can
+    // never start a drag anyway). Presentation-ONLY: no model, no graph,
+    // no persistence — folding a section changes nothing but how much of
+    // it is visible.
     collapseBtn.addEventListener('click', function (event) {
       event.stopPropagation();
       card.classList.toggle('collapsed');
@@ -709,6 +881,7 @@
       delete nodesById[id];
       recomputeModelFromDom();
       updateEmptyHint();
+      refreshRegisterState();
       // Structural change (Part D) — recompute then rebuild, exactly once,
       // immediately (not deferred to some other event).
       rebuildGraph();
@@ -844,6 +1017,11 @@
     if (emptyHintEl) {
       emptyHintEl.textContent = 'Drag an effect here to start building your chain';
     }
+    // The display register's state line flips at the same transition —
+    // ENGINE LIVE with the live module count (mode returns to 'state';
+    // by construction no control has been touched yet at this moment,
+    // since the whole panel was pointer-locked and chip-disabled before).
+    refreshRegisterState();
   }
 
   /**
@@ -912,6 +1090,7 @@
 
     recomputeModelFromDom();
     updateEmptyHint();
+    refreshRegisterState();
     rebuildGraph();
 
     // PS-3: persist the newly-loaded state as the new autosave baseline.
@@ -1213,5 +1392,16 @@
     isDragActive: isDragActive,
     // Issue #5: the parameter-only write path (see updateNodeParam above).
     updateNodeParam: updateNodeParam,
+  };
+
+  // The display-register feed consumed by src/param-controls.js (guarded
+  // there): showParam for the touched/externally-written control, the
+  // internal state line for this file's own engine/structural moments.
+  // Exported SEPARATELY from ChainCanvas on purpose — param-controls.js
+  // loads before canvas.js and must not need the canvas namespace to
+  // render (a bare param-controls harness works with no register at all).
+  window.CanvasRegister = {
+    showParam: showRegisterParam,
+    showState: showRegisterState,
   };
 })();

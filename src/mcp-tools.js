@@ -1745,7 +1745,7 @@
       }
     });
     return {
-      app: 'karaoke-chain-builder',
+      app: 'voxchain',
       nodeTypes: nodeTypes,
       chainRules: {
         'limiter-required-terminal': 'Exactly one limiter, always last.',

@@ -121,14 +121,13 @@
 //     and the R2-1 footer mirror canvas) — there is no size variant, so
 //     the CSS lockstep contract in styles/main.css (.meter-canvas
 //     width/height) stays a single 96 x 26 pair.
-//   - 19 lamp segments (4 px segment + 1 px gap): unlit segments in
-//     --hairline (the visible-at-rest dark scale), lit segments in the
-//     rq5 meter stops by zone — green --meter-low (-60..-20), amber
-//     --meter-mid (-20..-6), red --meter-clip (-6..0) — with ONE small
-//     shadowBlur (3 px, same color) on lit segments only: lamp light on
-//     active signal, never on the dark scale (the surface's lamp-light
-//     discipline; this is the one glowing element and it reads as
-//     hardware, not neon).
+//   - 19 lamp segments (4 px segment + 1 px gap): unlit segments in the
+//     unlit-glass token (the visible-at-rest dark scale), lit segments in
+//     the VU stops by zone — green --pm-vu-low (-60..-20), display amber
+//     --pm-vu-mid (-20..-6), safety red --pm-vu-clip (-6..0) — with NO
+//     shadowBlur: the Pattern Machine world's rule is brightness from
+//     saturation on matte, never glow (redesign item 1; LAMP_GLOW_PX is
+//     pinned to 0 at its definition).
 //   - RMS underlay: same segments at 50% alpha, no glow.
 //   - Peak-hold tick: 2 px, --text-primary; clip pin: 2 px at 0 dB in
 //     --meter-clip + 4 px clip dot top-right, latched.
@@ -213,25 +212,29 @@
   var ZONE_CLIP_EDGE = -6;
 
   // RMS underlay brightness relative to the peak pass (dimmer hardware,
-  // and no glow — glow belongs to the peak lamps only).
+  // and no glow — brightness is saturation on matte in this world).
   var RMS_ALPHA = 0.5;
-  // Lit-segment lamp glow: one small blur, same color as the segment.
-  var LAMP_GLOW_PX = 3;
+  // Redesign item 1 (Pattern Machine): NO lamp glow. Lit segments are
+  // saturated color on the matte unlit glass — brightness comes from
+  // saturation, never blur (the world's no-glow rule). The constant
+  // stays (resolved to 0) so the no-glow decision is documented at the
+  // single paint site that used it.
+  var LAMP_GLOW_PX = 0;
 
-  // Fallback palette + font: the rq5 token values VERBATIM (see
-  // styles/main.css's :root block, adopted from
-  // docs/ultron/research/rq5-palette.md). Used ONLY when CSS custom
-  // properties cannot be read (e.g. a canvas-only test embed with no
-  // stylesheet); in the browser the live tokens below always win, so
-  // these mirrors can never override a real theme decision. NOT new
-  // colors — do not treat as a palette source.
+  // Fallback palette + font: the Pattern Machine VU tokens' values
+  // VERBATIM (see the --pm-vu-* register in styles/main.css — green low
+  // zone, display-amber mid zone, safety-red clip, matte unlit glass).
+  // Used ONLY when CSS custom properties cannot be read (e.g. a
+  // canvas-only test embed with no stylesheet); in the browser the live
+  // tokens below always win, so these mirrors can never override a real
+  // theme decision. NOT new colors — do not treat as a palette source.
   var DEFAULT_COLORS = {
-    low: '#5CC06E', // --meter-low
-    mid: '#F0A83C', // --meter-mid
-    clip: '#F05A45', // --meter-clip
-    tick: '#EDE8DE', // --text-primary (peak-hold tick)
-    unlit: '#4C463E', // --hairline (unlit lamp glass)
-    label: '#A79F92', // --text-muted (scale numerals)
+    low: '#4EA96B', // --pm-vu-low
+    mid: '#FFD75E', // --pm-vu-mid
+    clip: '#E4574A', // --pm-vu-clip
+    tick: '#C9CEDC', // --pm-vu-tick (peak-hold tick)
+    unlit: '#262933', // --pm-vu-unlit (unlit lamp glass)
+    label: '#9EA4B8', // --pm-vu-label (scale numerals)
     font: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', // --font-readout
   };
 
@@ -345,9 +348,11 @@
   // Color/token resolution.
   // ---------------------------------------------------------------------
 
-  /** Resolve the rq5 tokens the meter paints with from the live
-   *  stylesheet; fall back to the DEFAULT_COLORS mirrors only when CSS
-   *  custom properties are unreadable in this runtime. */
+  /** Resolve the VU tokens the meter paints with from the live
+   *  stylesheet — the Pattern Machine --pm-vu-* register first (redesign
+   *  item 1), falling back to the legacy rq5 meter tokens, then to the
+   *  DEFAULT_COLORS mirrors only when CSS custom properties are
+   *  unreadable in this runtime. */
   function resolveColors() {
     if (colors) {
       return;
@@ -366,12 +371,12 @@
       return fallback;
     }
     colors = {
-      low: token('--meter-low', DEFAULT_COLORS.low),
-      mid: token('--meter-mid', DEFAULT_COLORS.mid),
-      clip: token('--meter-clip', DEFAULT_COLORS.clip),
-      tick: token('--text-primary', DEFAULT_COLORS.tick),
-      unlit: token('--hairline', DEFAULT_COLORS.unlit),
-      label: token('--text-muted', DEFAULT_COLORS.label),
+      low: token('--pm-vu-low', token('--meter-low', DEFAULT_COLORS.low)),
+      mid: token('--pm-vu-mid', token('--meter-mid', DEFAULT_COLORS.mid)),
+      clip: token('--pm-vu-clip', token('--meter-clip', DEFAULT_COLORS.clip)),
+      tick: token('--pm-vu-tick', token('--text-primary', DEFAULT_COLORS.tick)),
+      unlit: token('--pm-vu-unlit', token('--hairline', DEFAULT_COLORS.unlit)),
+      label: token('--pm-vu-label', token('--text-muted', DEFAULT_COLORS.label)),
       font: token('--font-readout', DEFAULT_COLORS.font),
     };
   }

@@ -1,0 +1,131 @@
+{
+  "title": "One instrument, whole page",
+  "question": "The roll dealt the Two-Deck Stack — the whole viewport as one chassis assembled from a system deck and a voice deck, joining the built chain face. Lock it, take the bridge or the pockets, or re-roll.",
+  "options": [
+    {
+      "id": "two-deck-stack",
+      "label": "Two-Deck Stack",
+      "kicker": "THE ROLL",
+      "lineage": "stacked hardware decks — dual-panel grooveboxes and broadcast power benches",
+      "thesis": "The instrument is two slabs bolted into one chassis: a slim SYSTEM DECK carrying everything read at arm's length — identity print, engine lamp, RATE/LAT/NODES as a dot-matrix etch, the agent reporter, the one orange Start key, and BYPASS as the deck's red-ringed end key — joined by a machined seam to the VOICE DECK, a single faceplate whose palette, chain face and presets read as printed zones split by the same grooves the locked canvas already uses.",
+      "palette": [
+        "#131316",
+        "#0b0c10",
+        "#9ea4b8",
+        "#ffd75e",
+        "#ff6b35",
+        "#e5484d"
+      ],
+      "materials": [
+        "matte near-black chassis cast as two slabs",
+        "machined deck seam — dark cut under a light lip",
+        "dot-matrix display etch on the system deck",
+        "silkscreen panel print",
+        "family ink ticks marking every key group"
+      ],
+      "viewport": "Desktop shows one full-width instrument — a one-row system deck over a three-zone voice deck (palette strip | chain face | presets strip); below 900px the system deck wraps its lamp + readout etch to a second row so BYPASS never leaves the visible top, and the voice deck stacks palette, face, presets.",
+      "risk": "Two decks can read as two instruments if the seam is drawn as a gap rather than a machined joint — the join must be the deepest cut on the page; and the system deck's dot-matrix etch must stay subordinate to the chain face's own register, or the machine reports from two mouths.",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "SYSTEM DECK · identity legend print", "x": 0, "y": 0, "w": 2, "h": 1 },
+          { "label": "engine lamp + status · RATE/LAT/NODES dot-matrix etch", "x": 2, "y": 0, "w": 5, "h": 1, "accent": true },
+          { "label": "agent chip — reporter, never a control", "x": 7, "y": 0, "w": 2, "h": 1 },
+          { "label": "Start — the one orange key", "x": 9, "y": 0, "w": 1, "h": 1 },
+          { "label": "BYPASS — red-ringed end key, loudest", "x": 10, "y": 0, "w": 2, "h": 1, "accent": true },
+          { "label": "machined deck seam (cut + lip) — two slabs, one chassis", "x": 0, "y": 1, "w": 12, "h": 1 },
+          { "label": "VOICE DECK · palette zone — three operator key groups, family ticks", "x": 0, "y": 2, "w": 2, "h": 8 },
+          { "label": "chain face · display register (etched top edge)", "x": 2, "y": 2, "w": 8, "h": 1, "accent": true },
+          { "label": "chain sections — family rail + encoder field, groove-split", "x": 2, "y": 3, "w": 8, "h": 5 },
+          { "label": "base plate — OUT jack + VU corner, flow switch left", "x": 2, "y": 8, "w": 8, "h": 2 },
+          { "label": "presets zone — bank slot, save/load, armed red-bezel delete", "x": 10, "y": 2, "w": 2, "h": 8 }
+        ]
+      }
+    },
+    {
+      "id": "meter-bridge",
+      "label": "Meter Bridge",
+      "lineage": "console meter bridges overhanging channel bays",
+      "thesis": "The machine grows a bridge: a raised full-width slab spanning and overhanging all three columns, carrying every machine readout on one line — engine lamp, status sentence, RATE/LAT/NODES, the agent reporter — as a continuous dot-matrix etch with Start and the red-ringed BYPASS as keys at its right end, while the palette and presets sink into recessed wing bays flanking the raised chain face.",
+      "palette": [
+        "#131316",
+        "#0b0c10",
+        "#c9cedc",
+        "#ffd75e",
+        "#ff6b35",
+        "#c93a32"
+      ],
+      "materials": [
+        "raised bridge slab with cut faces — never a floating bar",
+        "recessed wing bays — milled insets under the overhang",
+        "one continuous dot-matrix display etch",
+        "silkscreen print on the plate below"
+      ],
+      "viewport": "Desktop stacks a two-row bridge slab over three bays — recessed palette wing, raised chain face, recessed presets wing; below 900px the bridge wraps its display etch to a second row with BYPASS pinned to row one's right end, and the wings stack under the face.",
+      "risk": "A bridge drawn with a drop shadow instead of cut faces floats like the web header it replaced; and the recessed wings sit a step darker, so chip print must hold glance contrast in a dark venue or the palette reads disabled.",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "METER BRIDGE · identity + engine lamp + RATE/LAT/NODES — one continuous dot-matrix etch", "x": 0, "y": 0, "w": 7, "h": 2, "accent": true },
+          { "label": "agent chip — reporter", "x": 7, "y": 0, "w": 2, "h": 1 },
+          { "label": "Start — the one orange key", "x": 9, "y": 0, "w": 1, "h": 1 },
+          { "label": "BYPASS — red-ringed key, loudest on the bridge", "x": 10, "y": 0, "w": 2, "h": 1, "accent": true },
+          { "label": "bridge overhang — cut face shading the bays, no shadow", "x": 7, "y": 1, "w": 5, "h": 1 },
+          { "label": "PALETTE WING (recessed bay) — three key groups under the overhang", "x": 0, "y": 2, "w": 3, "h": 8 },
+          { "label": "CHAIN FACE (raised bay) · display register top edge", "x": 3, "y": 2, "w": 6, "h": 1, "accent": true },
+          { "label": "chain sections — groove-split", "x": 3, "y": 3, "w": 6, "h": 4 },
+          { "label": "base plate — OUT jack + VU corner", "x": 3, "y": 7, "w": 6, "h": 3 },
+          { "label": "PRESETS WING (recessed bay) — bank + armed delete", "x": 9, "y": 2, "w": 3, "h": 8 }
+        ]
+      }
+    },
+    {
+      "id": "milled-pockets",
+      "label": "Milled Pockets",
+      "lineage": "machined controller faces — pocketed utility bays beside the main field",
+      "thesis": "No separate top member at all: the whole page is one continuous faceplate whose top margin IS the strip — identity legend, engine lamp, RATE/LAT/NODES as small etched slots mirroring the display register's geometry, the agent reporter, Start, and BYPASS as the largest key at the top-right corner — while the palette and presets flanks are milled pockets sunk into that same face, recessed insets with machined lips where the chips and the preset bank read as keys seated in the bay.",
+      "palette": [
+        "#131316",
+        "#0b0c10",
+        "#232330",
+        "#9ea4b8",
+        "#ff6b35",
+        "#e5484d"
+      ],
+      "materials": [
+        "one continuous full-bleed faceplate",
+        "milled pocket insets — recess under a lip, never an outline",
+        "etched readout slots in the top margin",
+        "silkscreen print"
+      ],
+      "viewport": "Desktop is a single full-bleed face: the printed top margin with BYPASS pinned top-right, palette and presets sunk as pockets to either side of the raised chain face; below 900px the margin wraps its machine slots to a second row — BYPASS stays on the visible top — and the pockets stack beneath the face.",
+      "risk": "Two large dark pockets fight the chain face's own display register for inset primacy — the register must keep its accent mark as the page's one display event — and pockets drawn with outlines instead of lips collapse straight back into the old rack's panel seams.",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "TOP MARGIN (printed, no separate member) · identity legend", "x": 0, "y": 0, "w": 2, "h": 1 },
+          { "label": "engine lamp + status sentence", "x": 2, "y": 0, "w": 3, "h": 1 },
+          { "label": "RATE/LAT/NODES — etched slots mirroring the register", "x": 5, "y": 0, "w": 3, "h": 1, "accent": true },
+          { "label": "agent chip — reporter", "x": 8, "y": 0, "w": 1, "h": 1 },
+          { "label": "Start — orange key", "x": 9, "y": 0, "w": 1, "h": 1 },
+          { "label": "BYPASS — red-ringed key, top-right corner, loudest", "x": 10, "y": 0, "w": 2, "h": 1, "accent": true },
+          { "label": "PALETTE POCKET (milled inset) · three key groups, family ticks", "x": 0, "y": 1, "w": 2, "h": 9 },
+          { "label": "CHAIN FACE (the locked chassis) · display register top edge", "x": 2, "y": 1, "w": 8, "h": 1, "accent": true },
+          { "label": "chain sections — groove-split", "x": 2, "y": 2, "w": 8, "h": 6 },
+          { "label": "base plate — OUT jack + VU corner", "x": 2, "y": 8, "w": 8, "h": 2 },
+          { "label": "PRESETS POCKET (milled inset) · bank + armed delete", "x": 10, "y": 1, "w": 2, "h": 9 }
+        ]
+      }
+    }
+  ],
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "steer": true
+}
