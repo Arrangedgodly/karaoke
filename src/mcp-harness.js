@@ -657,7 +657,6 @@
     // --- Tool list: one card per def from ONE fresh getDefs() call. ---
     var toolsSection = el('section', 'mcp-harness-section');
     toolsSection.setAttribute('aria-label', 'Tools');
-    toolsSection.appendChild(el('h3', 'mcp-harness-section-title', 'TOOLS — 8 agent tools'));
     var defs = [];
     try {
       if (window.McpTools && typeof window.McpTools.getDefs === 'function') {
@@ -666,6 +665,13 @@
     } catch (err) {
       defs = [];
     }
+    toolsSection.appendChild(
+      el(
+        'h3',
+        'mcp-harness-section-title',
+        'TOOLS — ' + (Array.isArray(defs) ? defs.length : 0) + ' agent tools'
+      )
+    );
     if (!Array.isArray(defs) || defs.length === 0) {
       toolsSection.appendChild(
         el(

@@ -21,7 +21,7 @@
 //   src/node-types.js    (UI metadata registry — applyParam dispatch)
 //   src/node-gain.js     (real `gain` factory + applyParam)
 //   src/node-limiter.js  (real `limiter` factory + applyParam)
-//   src/mcp-tools.js     (the 8 agent tools, incl. set_chain/set_param)
+//   src/mcp-tools.js     (the 10 agent tools, incl. set_chain/set_param)
 //
 // ChainCanvas/AudioEngine/AgentUI-shaped globals the tools guard on are
 // stubbed to the minimum the mutation path reads; everything absent is an
