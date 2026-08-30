@@ -11,7 +11,7 @@ first · distortion readout normalized 0–100 · all issues in scope.
 | 2 | `$impeccable typeset` | P2-2: EXP badge renders at 10px on both placements — below the 11px floor; CSS comment + DESIGN.md misstate it as compliant. | **done-pending-approval** |
 | 3 | `$impeccable layout` | P2-3: palette is 10 flat ungrouped chips (was 6) — chunking violation at the decision point. | **done-pending-approval** |
 | 4 | `$impeccable polish` | P3-4: distortion Drive/Tone read "0.25%"/"0.7%" (0–1 scale + %) vs surface 0–100% convention — user approved normalizing to 0–100. | **done-pending-approval** |
-| 5 | `$impeccable harden` | P3-5 (partial): two latent `window.alert`s + late-context-resume can wedge the strip at "Stopped". The manual +24 dB / limiter-removal sovereignty finding stays recorded as deliberate design (backlog), per cycle-2 close. | queued |
+| 5 | `$impeccable harden` | P3-5 (partial): two latent `window.alert`s + late-context-resume can wedge the strip at "Stopped". The manual +24 dB / limiter-removal sovereignty finding stays recorded as deliberate design (backlog), per cycle-2 close. | **done-pending-approval** |
 
 Closing-critique trigger: entries 1–3 are P2 findings and 2–3 touch the
 design system (type floor, palette structure) → closing critique + final
@@ -257,3 +257,85 @@ document refresh required after the loop.
   string-level conversion at the one rendering path (the capabilities
   readout's 0..1 stays truthful by design, per the approved
   display-only scope).
+
+### Entry 5 — `$impeccable harden` (P3-5 partial: dialogs + late-resume wedge) — done-pending-approval
+
+- **Files changed**: `src/presets-ui.js` (the two Load defensive guards
+  + their comments; no other handler semantics touched), `src/main.js`
+  (handleContextState's 'running' branch only),
+  `tests/test-preset-persistence-honesty.js` (+12: new sections L/M,
+  the no-op alert stub became a recorder),
+  `tests/test-audio-lifecycle.js` (+20: the context stub's resume() is
+  now honestly deferred, startWith settles it after the start
+  continuation, new section J). No audio-path files, no markup, no CSS
+  — the graph, watchdog, meters, and bypass routing are untouched. The
+  sovereignty finding (+24 dB / mid-show limiter removal) is
+  deliberately NOT addressed: it stays recorded as deliberate design
+  (the human outranks the policy that binds the agent), per the
+  cycle-2 close.
+- **Mechanism (a — the two dialogs)**: both Load defensive guards — a
+  factory entry whose name the library no longer reports (changed
+  mid-session) and a user preset another tab removed between dropdown
+  render and click — are operator-facing load failures, not developer
+  edges, so they move to the panel's established quiet communication
+  channel: `showPresetNote`, the same lazily-built `.preset-note` line
+  PS-4 introduced and issue #8 reused (every quiet refusal in the panel
+  reads identically). Same sentence, verbatim ("Could not load that
+  preset — it may have been removed."), same 4 s auto-hide, same
+  best-effort construction; nothing else in the handlers changes (the
+  early return, the untouched display state, the un-replaced chain).
+  The stale doc claim that the app "reserves alerts/confirms for the
+  PS-3 defensive paths" is corrected — the surface now ships zero
+  alert/confirm/prompt calls, the R2-3 rule finally held everywhere.
+- **Mechanism (b — the wedge)**: `handleContextState`'s 'running'
+  branch only corrected the strip when `contextLost` was set. But
+  `resume()` — fired synchronously inside the Start gesture (the
+  Safari rule) — settles on the browser's own clock, so a start that
+  completes while the context is still 'suspended' honestly writes
+  "Stopped" with `contextLost === false` (no suspend loss was ever
+  surfaced), and the later 'running' transition found the recovery
+  branch dark and no-op'd: the strip stayed wedged at "Stopped" while
+  the engine ran (the critique's live-run observation). The branch now
+  also refreshes the sentence from the same authoritative
+  `isEngineLive()` read. Two gates make the refresh strictly an
+  UPGRADE — a running transition can raise a stale "Stopped" to "Live"
+  but never demote anything: an engine that is not live (track lost,
+  failed start) keeps its sentence, and a shown operator failure (the
+  error register) keeps its recovery copy. Start gating, meters, and
+  bypass were already correct at start-success; the fix is
+  sentence-only (no meter stop/restart churn).
+- **Evidence**: `tests/test-audio-lifecycle.js` — the harness's
+  `resume()` stub used to flip state to 'running' SYNCHRONOUSLY, which
+  is more synchronous than any browser and is exactly what hid the
+  wedge; it is now deferred (`__settleResume()`), so §A's normal start
+  travels the real interleaving (start completes "Stopped", resume
+  settles, the corrected transition carries it to Live) and new §J
+  isolates the critique's repro on a fresh sandbox: the wedge state
+  asserted byte-for-byte (strip "Stopped", lamp off, Start DISABLED,
+  no error, meters started/never stopped, engine started + track
+  live), then the late 'running' corrects to Live with zero meter
+  churn, plus both guard rails (a running transition while the engine
+  is dead does not demote the "Mic was unplugged." loss; one while an
+  error is shown does not erase the failed-switch copy).
+  `tests/test-preset-persistence-honesty.js` §L reproduces both
+  defensive guards for real (a user preset vanished behind the UI's
+  back; a factory entry listed then de-listed mid-session): the exact
+  quiet sentence shows, the alert recorder stays at zero, no load
+  happens (display state and live chain untouched). §M is the grep
+  gate: every file in src/ is scanned for alert CALL tokens
+  (`alert(`/`window.alert`) — zero remain, and the gate needs no
+  comment-stripping because the tokens cannot appear in prose that
+  merely mentions the rule. **Regression proof**: against the pre-fix
+  sources (git-stash), the new checks fail exactly — A1/J2 against old
+  main.js (the wedge), L1/L2/M1 against old presets-ui.js (the
+  dialogs) — and pass with the fixes. Full suite **23/23 files / 1928
+  checks green**.
+- **Residuals (disclosed)**: the fix deliberately does not touch the
+  contextLost recovery path's existing behavior of overwriting a
+  "Mic muted." transient note after a genuine suspend→resume cycle
+  (pre-existing semantics, unreachable without a suspend loss
+  intervening); the sovereignty finding stays open as backlog per the
+  cycle-2 close; evidence for this entry is the deterministic vm
+  harness (the honest deferred-resume stub IS the instrument for a
+  state-machine fix) — no visual render trip, as nothing visual
+  changed beyond a 4 s note line the panel already owned.

@@ -315,6 +315,7 @@ function createEnv(options) {
     promptResponse: '',
     confirmResponse: true,
     confirmCalls: 0,
+    alertCalls: 0,
     consoleErrors: 0,
     domEvents: []
   };
@@ -383,7 +384,12 @@ function createEnv(options) {
       env.confirmCalls += 1; // R2-3: must stay 0 — Delete is two-step in-panel
       return env.confirmResponse;
     },
-    alert: function () {},
+    // P3-5: must stay 0 everywhere — the Load defensive guards ride the
+    // quiet .preset-note line since refinement entry 5; a recorded call
+    // means a browser dialog crept back into the panel.
+    alert: function () {
+      env.alertCalls += 1;
+    },
     localStorage: storage
   };
   sandbox.window = sandbox;
@@ -1207,6 +1213,104 @@ async function main() {
         toast.querySelector('.agent-toast-undo-failed') === null &&
         env.domEvents.filter(function (event) { return event.type === 'agentui:undo'; }).length === 1,
       'K6 save retry: only the successful retry marks and emits undo success'
+    );
+  }
+
+  // ------------------------------------------------------------------
+  console.log('L. P3-5: Load defensive paths — the quiet note, never a browser dialog');
+  // ------------------------------------------------------------------
+  {
+    var env = freshSeededEnv();
+    var sandbox = env.sandbox;
+    env.installModel(sandbox.DEFAULT_PRESET.nodes);
+    function liveChainIds() {
+      return sandbox.ChainCanvas.getCurrentModel().map(function (n) {
+        return n.id;
+      }).join('|');
+    }
+    var modelBefore = liveChainIds();
+
+    // The user-preset guard: "Baseline" is listed and selected, but the
+    // store loses it behind the UI's back — exactly another tab having
+    // removed it out from under us (the guard's own comment scenario).
+    delete env.storage.__box[STORAGE_KEY];
+    env.panel.byId['load-preset-btn'].__fire('click');
+    var note = noteElement(env);
+    check(
+      !!note && note.style.display !== 'none' &&
+        note.textContent === 'Could not load that preset — it may have been removed.',
+      'L1: a vanished USER preset surfaces the quiet .preset-note refusal (exact sentence)'
+    );
+    check(env.alertCalls === 0, 'L1: the browser alert was NEVER called (the PS-3 remnant is gone)');
+    check(
+      env.panel.byId['current-preset-name'].textContent === 'Unsaved chain' &&
+        env.panel.byId['unsaved-indicator'].style.display !== 'none',
+      'L1: no load happened — display state untouched (still unsaved/modified)'
+    );
+    check(liveChainIds() === modelBefore, 'L1: the live chain was NOT replaced');
+
+    // The factory guard: the dropdown lists a factory entry whose name the
+    // library no longer reports (it changed mid-session — the guard's own
+    // comment scenario).
+    var factoryStub = {
+      payload: [{ name: 'Warm Ballad', nodes: [] }],
+      list: function () {
+        return factoryStub.payload;
+      }
+    };
+    sandbox.FactoryPresets = factoryStub;
+    sandbox.PresetsUI.refreshPresetSelect('factory:Warm Ballad');
+    var groupEl = env.panel.byId['preset-select'].children[0];
+    check(
+      String(groupEl.tagName).toLowerCase() === 'optgroup' && groupEl.label === 'Factory' &&
+        groupEl.children.length === 1 && groupEl.children[0].selected === true,
+      'L2 setup: the factory group rendered with "Warm Ballad" listed+selected'
+    );
+    // The stub select computes .value from DIRECT children only — surface
+    // the nested selection the way a real <select> would.
+    groupEl.selected = true;
+    groupEl.__value = 'factory:Warm Ballad';
+    factoryStub.payload = []; // the library changed mid-session
+    env.panel.byId['load-preset-btn'].__fire('click');
+    note = noteElement(env);
+    check(
+      !!note && note.style.display !== 'none' &&
+        note.textContent === 'Could not load that preset — it may have been removed.',
+      'L2: a vanished FACTORY preset surfaces the same quiet refusal'
+    );
+    check(env.alertCalls === 0, 'L2: the browser alert was NEVER called');
+    check(liveChainIds() === modelBefore, 'L2: the live chain was NOT replaced');
+    check(
+      env.promptCalls.length === 0 && env.confirmCalls === 0 && env.alertCalls === 0,
+      'L2: the whole panel flow stays dialog-free (prompt/confirm/alert all zero)'
+    );
+  }
+
+  // ------------------------------------------------------------------
+  console.log('M. P3-5 source gate: zero browser alert calls in shipped src');
+  // ------------------------------------------------------------------
+  {
+    // The R2-3 "no browser dialogs" rule, now enforced surface-wide for
+    // alert: no src file may carry an alert CALL (the bare token with a
+    // call paren) or a window.alert reference at all. Comments that
+    // MENTION the rule spell the other dialogs without these tokens, so
+    // the gate needs no comment-stripping and cannot be silenced by one.
+    var srcDir = path.join(ROOT, 'src');
+    var files = fs.readdirSync(srcDir).filter(function (f) {
+      return /\.js$/.test(f);
+    }).sort();
+    var offenders = [];
+    files.forEach(function (file) {
+      var text = fs.readFileSync(path.join(srcDir, file), 'utf8');
+      if (/(?:\bwindow\s*\.\s*alert\b|\balert\s*\()/.test(text)) {
+        offenders.push(file);
+      }
+    });
+    check(files.length >= 30, 'M1: scanned the whole src directory (' + files.length + ' files)');
+    check(
+      offenders.length === 0,
+      'M1: zero alert call tokens across shipped src (offenders: ' +
+        (offenders.join(', ') || 'none') + ')'
     );
   }
 

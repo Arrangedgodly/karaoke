@@ -1287,3 +1287,62 @@ Depth "3 ms", Rate "1.5 Hz"; the span's computed style still the mono
 readout register (ui-monospace, tabular-nums, 11.2px); every % readout
 on the live surface is 0.X-free. No residuals. Ledger:
 [refinement.md](refinement.md) entry 4.
+
+## FINISH-5 — Last browser dialogs routed quiet + late-resume strip wedge fixed — `awaiting-approval`
+
+Refinement entry 5 (`$impeccable harden`, critique P3-5 partial scope):
+two latent `window.alert` calls survived in `src/presets-ui.js`'s Load
+defensive guards, and an AudioContext resuming after start completion
+could wedge the status strip at "Stopped". The manual +24 dB /
+mid-show limiter-removal sovereignty finding remains recorded as
+deliberate design (human outranks policy) — untouched, per the cycle-2
+close.
+
+**What changed**:
+
+1. **The last two browser dialogs** (`src/presets-ui.js`): both Load
+   defensive guards — a factory entry whose name the library no longer
+   reports (it changed mid-session) and a user preset removed by
+   another tab between dropdown render and click — now surface through
+   the panel's established quiet `.preset-note` line (`showPresetNote`,
+   the vehicle PS-4 introduced and issue #8 reused for every refusal),
+   sentence verbatim. They guard operator-facing load failures, not
+   developer edges, so the note is the correct channel (the critique's
+   own fix note; the ?dev harness has no stake here). The stale doc
+   claim that the app "reserves alerts/confirms for the PS-3 defensive
+   paths" is corrected: the surface now ships zero
+   alert/confirm/prompt calls — the R2-3 rule held surface-wide.
+2. **The late-resume wedge** (`src/main.js`, `handleContextState`): the
+   'running' branch only corrected the strip when `contextLost` was
+   set. But `resume()` — fired synchronously inside the Start gesture
+   (the Safari rule) — settles on the browser's own clock, so a start
+   completing while the context is still 'suspended' honestly writes
+   "Stopped" with `contextLost === false` (no suspend loss was ever
+   surfaced), and the later 'running' transition no-op'd: the strip
+   stayed wedged at "Stopped" while the engine ran. The branch now
+   refreshes the sentence from the same authoritative `isEngineLive()`
+   read, gated so a running transition can only RAISE the strip —
+   never demoting a shown loss (engine not live) or erasing an
+   operator failure (the error register). Start gating, meters, and
+   bypass were already correct at start-success; the fix is
+   sentence-only. No audio-path changes.
+
+**Evidence**: `tests/test-audio-lifecycle.js` 64→84 checks — the
+context stub's `resume()` used to flip state synchronously (more
+synchronous than any browser; exactly what hid the bug) and is now
+deferred (`__settleResume()`), so §A's normal start travels the real
+interleaving and new §J isolates the critique's repro: the wedge state
+asserted byte-for-byte (strip "Stopped", lamp off, Start disabled, no
+error, meters running, engine started + track live), the late
+'running' corrects to Live with zero meter churn, and both guard rails
+hold (dead-engine and error-register transitions change nothing).
+`tests/test-preset-persistence-honesty.js` 171→183 checks — §L
+reproduces both defensive guards (vanished user preset; factory entry
+de-listed mid-session): the exact quiet sentence shows, the alert
+recorder (the stub is now a recorder) stays at zero, no load happens;
+§M greps every src file for alert call tokens — zero remain, enforced.
+**Regression proof**: against the pre-fix sources (git-stash), the new
+checks fail exactly — A1/J2 (the wedge) and L1/L2/M1 (the dialogs) —
+and pass with the fixes. Full suite 23/23 files / 1928 checks green.
+No residuals beyond the disclosed backlog sovereignty finding. Ledger:
+[refinement.md](refinement.md) entry 5.

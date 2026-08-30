@@ -197,12 +197,24 @@ function makeStream(deviceId) {
 
 function makeAudioContext() {
   var stateListeners = [];
+  var resumeWaiters = [];
   var ctx = {
     state: 'suspended',
     sampleRate: 48000,
+    // Refinement entry 5 (P3-5): a REAL browser's resume() settles on its
+    // own clock — the state flip and the statechange it fires happen when
+    // the promise resolves, NOT synchronously at the call. The old stub
+    // flipped synchronously, which is more synchronous than any browser
+    // and hid the late-resume wedge section J reproduces: a start that
+    // completes while the state is still 'suspended' writes "Stopped",
+    // and the 'running' transition that follows must correct it.
     resume: function () {
-      ctx.state = 'running';
-      return Promise.resolve();
+      if (ctx.state === 'running') {
+        return Promise.resolve();
+      }
+      return new Promise(function (resolve) {
+        resumeWaiters.push(resolve);
+      });
     },
     addEventListener: function (type, fn) {
       if (type === 'statechange') {
@@ -223,6 +235,24 @@ function makeAudioContext() {
       stateListeners.slice().forEach(function (fn) {
         fn({ type: 'statechange' });
       });
+    },
+    // Settle a pending resume(): flip to 'running', fire statechange
+    // (which drives the engine's emit -> main.js synchronously), then
+    // resolve the resume promise itself. Returns whether a resume was
+    // actually pending.
+    __settleResume: function () {
+      var waiters = resumeWaiters.splice(0);
+      if (waiters.length === 0) {
+        return false;
+      }
+      ctx.state = 'running';
+      stateListeners.slice().forEach(function (fn) {
+        fn({ type: 'statechange' });
+      });
+      waiters.forEach(function (resolve) {
+        resolve();
+      });
+      return true;
     }
   };
   createdContexts.push(ctx);
@@ -411,6 +441,15 @@ async function main() {
     }
     resolveGumAt(0, deviceId);
     await settle();
+    // P3-5: settle the context's pending resume() AFTER the start
+    // continuation has run — the honest interleaving, where start()
+    // completes while the state is still 'suspended' (strip honestly
+    // writes "Stopped") and the resume settles a beat later. The late
+    // 'running' transition is what must carry the strip to Live; before
+    // the fix it no-op'd and every one of these starts would wedge.
+    if (createdContexts[createdContexts.length - 1].__settleResume()) {
+      await settle();
+    }
   }
 
   // --------------------------------------------------------------------
@@ -640,6 +679,115 @@ async function main() {
   await settle();
   check(statusText(els) === 'Mic was unplugged.' && !isLiveVisible(), 'I1: track end on the FINAL live session leaves no Live');
   check(startBtn.disabled === false && MT.stopped > 0, 'I1: recovery (Start) and meters-stopped hold');
+
+  // --------------------------------------------------------------------
+  console.log('J. P3-5: a context resuming only after start completion (the late-resume wedge)');
+  // --------------------------------------------------------------------
+  // The critique's live-run observation, reproduced on a fresh sandbox
+  // with the honest deferred-resume context: start() completes while
+  // the state is still 'suspended' (the strip honestly writes
+  // "Stopped", Start is disabled, meters run) and — because no suspend
+  // loss was ever surfaced — contextLost is false, so the 'running'
+  // transition that follows used to find handleContextState's recovery
+  // branch dark and no-op, wedging the strip at "Stopped" while the
+  // engine ran.
+  {
+    var sandbox2 = createSandbox();
+    loadSrc(sandbox2, 'src/audio-engine.js');
+    loadSrc(sandbox2, 'src/main.js');
+    var els2 = sandbox2.__els;
+    var MT2 = sandbox2.__meterTaps;
+    var AE2 = sandbox2.AudioEngine;
+    var startBtn2 = els2['start-button'];
+    var statusWrap2 = els2['status'];
+    var statusText2 = els2['status-text'];
+    var deviceSelect2 = els2['input-device-select'];
+
+    deviceList = [{ kind: 'audioinput', deviceId: 'd1', label: 'Mic One' }];
+
+    // Start and let the start continuation COMPLETE with the resume
+    // still pending — deliberately NO settleResume here (the wedge setup).
+    startBtn2.__fire('click');
+    check(gumQueue.length === 1, 'J1: the start request is pending');
+    resolveGumAt(0, 'd1');
+    await settle();
+
+    // The wedge state, byte-for-byte the critique's observation: the
+    // start SUCCEEDED (Start disabled, meters running, no error) but
+    // the context is still 'suspended', so the honest start-time read
+    // wrote "Stopped".
+    check(
+      statusText2.textContent === 'Stopped',
+      'J1: start completed with the resume pending — the strip reads "Stopped"'
+    );
+    check(!statusWrap2.classList.contains('live'), 'J1: the lamp is off');
+    check(startBtn2.disabled === true, 'J1: Start is DISABLED (the start itself succeeded)');
+    check(!statusWrap2.classList.contains('error'), 'J1: no error register — this is not a loss');
+    check(MT2.started === 1 && MT2.stopped === 0, 'J1: meters are running (started once, never stopped)');
+    check(AE2.isStarted === true && AE2.isTrackLive === true, 'J1: the engine is started with a live track');
+
+    // The resume settles — 'suspended' -> 'running' fires statechange.
+    check(
+      createdContexts[createdContexts.length - 1].__settleResume(),
+      'J2 setup: the late resume was still pending and has just settled'
+    );
+    await settle();
+
+    check(statusText2.textContent === 'Live', 'J2: the late running transition corrects the strip to Live');
+    check(statusWrap2.classList.contains('live'), 'J2: the lamp is on');
+    check(startBtn2.disabled === true, 'J2: Start stays gated (no spurious re-enable)');
+    check(!statusWrap2.classList.contains('error'), 'J2: no error raised');
+    check(
+      MT2.started === 1 && MT2.stopped === 0,
+      'J2: the correction is sentence-only — no meter stop/restart churn'
+    );
+
+    // Guard rail 1: a running transition must never DEMOTE a shown loss.
+    // Kill the track (engine dead), then fire a spurious 'running'
+    // transition — the loss copy and its error register must survive.
+    lastCreatedTrack.__fire('ended');
+    await settle();
+    check(statusText2.textContent === 'Mic was unplugged.', 'J3 setup: the track loss owns the strip');
+    createdContexts[createdContexts.length - 1].__setState('running');
+    await settle();
+    check(
+      statusText2.textContent === 'Mic was unplugged.' &&
+        statusWrap2.classList.contains('error') &&
+        !statusWrap2.classList.contains('live'),
+      'J3: a running transition while the engine is dead does NOT demote the loss copy'
+    );
+
+    // Guard rail 2: a running transition must never ERASE a shown
+    // operator failure while the engine is live (a failed switch).
+    startBtn2.__fire('click'); // the one-click recovery
+    check(gumQueue.length === 1, 'J4 setup: the recovery start is pending');
+    resolveGumAt(0, 'd1');
+    await settle();
+    createdContexts[createdContexts.length - 1].__settleResume(); // context already 'running' — a no-op
+    await settle();
+    check(
+      statusText2.textContent === 'Live' && statusWrap2.classList.contains('live'),
+      'J4 setup: the recovery start is Live again'
+    );
+
+    deviceSelect2.value = 'dX'; // not in deviceList -> gUM rejects
+    deviceSelect2.__fire('change');
+    check(gumQueue.length === 1, 'J4 setup: the doomed switch is pending');
+    var nf2 = new Error('Requested device not found');
+    nf2.name = 'NotFoundError';
+    rejectGumAt(0, nf2);
+    await settle();
+    check(
+      statusWrap2.classList.contains('error') && statusWrap2.classList.contains('live'),
+      'J4 setup: a failed switch shows operator error copy while the lamp stays truthful'
+    );
+    createdContexts[createdContexts.length - 1].__setState('running');
+    await settle();
+    check(
+      statusWrap2.classList.contains('error') && statusText2.textContent.indexOf('gone') !== -1,
+      'J4: a running transition does NOT erase the shown switch-failure copy'
+    );
+  }
 
   // --------------------------------------------------------------------
   if (failures.length === 0) {

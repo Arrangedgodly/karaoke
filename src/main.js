@@ -474,6 +474,25 @@ console.log('App scaffold loaded');
         }
         // else: the track was lost while suspended — the track-lost loss
         // state below already owns the strip and Start; leave it.
+        return;
+      }
+      // Refinement entry 5 (P3-5): a context that only settles to
+      // 'running' AFTER start() completed. resume() is fired
+      // synchronously inside the Start gesture (the Safari rule on the
+      // button handler) but settles on the browser's own clock, so the
+      // start-success path above can honestly read state 'suspended'
+      // and write "Stopped" — and because no suspend loss was ever
+      // surfaced, contextLost is still false, the branch above stays
+      // silent, and the strip stays wedged at "Stopped" while the
+      // engine runs. This observer is the only one left that can
+      // correct it: refresh the sentence from the same authoritative
+      // read. The two gates make the refresh strictly an upgrade — a
+      // running transition can raise a stale "Stopped" to "Live" but
+      // never demote anything: an engine that is not live (track lost,
+      // failed start) keeps its sentence, and a shown operator failure
+      // (the error register) keeps its recovery copy.
+      if (isEngineLive() && !(statusWrapper && statusWrapper.classList.contains('error'))) {
+        setStatus('Live', true);
       }
       return;
     }

@@ -49,6 +49,13 @@
 // #8 failure consequences, the .preset-note quiet refusals, and the
 // overwrite-on-collision semantics are unchanged from the dialog era.
 //
+// Refinement entry 5 (P3-5, 2026-08-29): the LAST two browser dialogs —
+// latent PS-3-era alert calls in the Load handler's defensive guards (a
+// factory entry or user preset that vanished between the dropdown render
+// and the click) — now route through the same quiet .preset-note line.
+// The surface ships zero alert/confirm/prompt calls (suite-enforced by
+// tests/test-preset-persistence-honesty.js section M).
+//
 // This file owns two independent bits of state, both purely DOM-display
 // concerns — neither is persisted anywhere, and both reset to their
 // initial "nothing loaded/saved yet" values on every page load:
@@ -399,13 +406,15 @@
   /**
    * Show the quiet inline note under the preset controls (created
    * lazily on first use, auto-hidden again after 4 s — a note, not a
-   * modal; the app reserves alerts/confirms for the PS-3 defensive
-   * paths and deletions). PS-4 introduced it for factory-refusal
-   * notes; issue #8 reuses the SAME element/vehicle for persistence
-   * failure notes ("Could not save/delete …") so every quiet refusal
-   * in this panel reads identically. Best-effort by construction: with
-   * no parent to anchor it to (a bare harness DOM) it is a silent
-   * no-op, never a thrown error out of a click handler.
+   * modal). PS-4 introduced it for factory-refusal notes; issue #8
+   * reused the SAME element/vehicle for persistence failure notes
+   * ("Could not save/delete …"); refinement entry 5 (P3-5) moved the two
+   * remaining PS-3 defensive Load guards onto it as well, so every quiet
+   * refusal in this panel reads identically and the surface opens no
+   * browser dialogs at all — the R2-3 rule, finally held everywhere.
+   * Best-effort by construction: with no parent to anchor it to (a bare
+   * harness DOM) it is a silent no-op, never a thrown error out of a
+   * click handler.
    *
    * @param {string} text
    */
@@ -587,7 +596,10 @@
       if (!factoryPreset) {
         // Defensive — the dropdown only lists names the library itself
         // reported, so this needs the library to have changed mid-session.
-        window.alert('Could not load that preset — it may have been removed.');
+        // Refinement entry 5 (P3-5): routed through the quiet .preset-note
+        // line like every other refusal in this panel — this and the user
+        // preset guard below were the surface's last two browser dialogs.
+        showPresetNote('Could not load that preset — it may have been removed.');
         return;
       }
       window.ChainCanvas.loadModel(factoryPreset.nodes);
@@ -603,7 +615,9 @@
       // Defensive — shouldn't normally happen since the dropdown only ever
       // lists names PresetStore itself reported as saved, but guards
       // against e.g. another tab having removed it out from under us.
-      window.alert('Could not load that preset — it may have been removed.');
+      // Refinement entry 5 (P3-5): the quiet note, same as the factory
+      // guard above — no browser dialog anywhere on the surface.
+      showPresetNote('Could not load that preset — it may have been removed.');
       return;
     }
 

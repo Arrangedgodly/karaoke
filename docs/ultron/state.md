@@ -478,3 +478,31 @@ green. No residuals. Next: entry 5 (harden, the two window.alerts +
 late-context-resume strip wedge).
 
 ### FIN-4 (polish): APPROVED 2026-08-29. Next: entry 5 (harden).
+
+**Entry 5 (harden, P3-5 partial) landed 2026-08-29 — awaiting user
+approval**: (1) the two latent PS-3-era browser dialogs in
+presets-ui.js's Load defensive guards (factory entry / user preset
+vanishing between dropdown render and click) now route through the
+panel's established quiet .preset-note line, sentence verbatim — the
+surface ships zero alert/confirm/prompt calls, enforced by a new
+source gate (§M test-preset-persistence-honesty.js: zero alert call
+tokens across src) and §L behavioral repros of both guards. (2) The
+late-context-resume wedge: handleContextState's 'running' branch only
+acted when contextLost was set, so a context settling after start
+completion (resume() fires in the gesture, resolves on the browser's
+clock) left the strip wedged at "Stopped" while the engine ran — it now
+refreshes the sentence from the same authoritative isEngineLive() read,
+gated so a running transition can only raise the strip (never demotes a
+shown loss or erases an operator error); Start/meters/bypass were
+already correct, the fix is sentence-only. The lifecycle harness's
+resume() stub is now honestly deferred (the synchronous flip hid the
+bug): §J reproduces the exact interleaving + both guard rails (+20
+checks; §L/§M +12). Regression proof: new checks fail against pre-fix
+sources and pass with the fixes. No audio-path changes; the +24 dB /
+limiter-removal sovereignty finding stays deliberate design, untouched.
+Suite 23/23 / 1928 green. All five checklist entries landed — next:
+closing critique + final document refresh per the trigger note.
+
+### FIN-5 (harden): APPROVED 2026-08-29 — all five refinements done.
+Pending: closing critique + final document refresh. DEFERRED: user reports
+another PR/merge landed — reconcile first.
