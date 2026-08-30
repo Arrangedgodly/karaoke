@@ -511,3 +511,9 @@ another PR/merge landed — reconcile first.
 cycle-3 experimental + discrete disclosures preserved inside it; suite
 23/23 / 1927 green; branch pushed. Remaining finishing work: closing
 critique + final document refresh.
+
+### Consolidation to main (2026-08-30): cycle-3-shelved-effects fast-forward
+merged into main and pushed — main now carries cycle 3 (four effects),
+finishing refinements R1–R5, PR #17, and PR #18 together. Finishing phase
+still owes the closing critique (prior run cancelled by user mid-flight;
+scratch 2026-08-30T05-10-A remains) + final document refresh.
