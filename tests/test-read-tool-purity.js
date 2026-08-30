@@ -572,10 +572,14 @@ async function main() {
     var mutationsBefore = env.agentUi.mutations.length;
 
     var caps = await getTool(sandbox, 'get_capabilities').execute({});
+    var soundGuide = await getTool(sandbox, 'get_capabilities').execute({
+      focus: 'sound_design'
+    });
     var chain = await getTool(sandbox, 'get_chain').execute({});
     var listed = await getTool(sandbox, 'list_presets').execute({});
     check(
-      !!caps && !!caps.app && !!chain && chain.schemaVersion === 1 &&
+      !!caps && !!caps.app && !!soundGuide && soundGuide.focus === 'sound_design' &&
+        !!chain && chain.schemaVersion === 1 &&
         !!listed && listed.count === 1,
       'D1: all three read tools resolved real payloads'
     );

@@ -542,6 +542,17 @@ async function main() {
     'A12: compact payload held (' + capsLen + ' chars — PR #18 ceiling discipline)');
   check(caps.summary === undefined,
     'A13: no prose summary in the compact readout (disclosure rides experimental + chainRules)');
+  var soundGuide = await getCapabilities.execute({ focus: 'sound_design' });
+  check(soundGuide.focus === 'sound_design' &&
+    soundGuide.vocabulary.deeper.some(function (step) { return /does not lower pitch/i.test(step); }),
+    'A14: deeper guidance is honest about timbre shaping rather than pitch shifting');
+  check(soundGuide.vocabulary.ghostly.some(function (step) { return /reverb/i.test(step); }) &&
+    soundGuide.vocabulary.ghostly.some(function (step) { return /delay/i.test(step); }),
+    'A15: ghostly guidance combines space and echo without requiring a named tool');
+  check(soundGuide.intensity && /lowest/i.test(soundGuide.intensity.slight),
+    'A16: slight requests select the low end of a recommended range');
+  check(JSON.stringify(soundGuide).length <= 1500,
+    'A17: sound-design payload held (' + JSON.stringify(soundGuide).length + ' chars)');
 
   // ====================================================================
   console.log('B. set_chain: all four effects, incl. key "A" / scale "Minor"');

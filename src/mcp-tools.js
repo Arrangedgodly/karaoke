@@ -1135,6 +1135,40 @@
     'A runtime watchdog watches the output analyser: peak above the ceiling +0.5 dB sustained >250 ms, or ~1 s of monotonic band-energy rise, forces the output to silence with a UI alert — restoring it is human-only.'
   ];
 
+  /**
+   * Compact translation help for non-technical sound requests. The
+   * browser agent interprets the user's language; the page stays LLM-free
+   * and returns host-authored, policy-safe starting points. This is a
+   * focused get_capabilities response so the normal policy index remains
+   * below Chrome's preliminary 1.5K output guidance.
+   */
+  var SOUND_DESIGN_GUIDE = {
+    app: 'karaoke-chain-builder',
+    focus: 'sound_design',
+    workflow: {
+      edit: 'Call get_chain first and preserve choices unless the user asks for a rebuild.',
+      apply: 'Reuse an existing node with set_param; add_node only when that effect is missing.',
+      verify: 'These are starting points. Describe changes and ask the human to listen.'
+    },
+    intensity: {
+      slight: 'Use the lowest value in each range and make 1-2 changes.',
+      moderate: 'Use the middle of each range.',
+      strong: 'Use the upper end, still inside policy.'
+    },
+    vocabulary: {
+      deeper: ['eq lowGain +2..+4 dB', 'eq highGain -1..-3 dB', 'This shapes timbre; it does not lower pitch.'],
+      light_reverb: ['reverb mix 10..25%'],
+      ghostly: ['reverb mix 40..60%', 'delay 180..320 ms, feedback 15..30%, mix 10..25%', 'optional chorus mix 10..25%'],
+      warm: ['eq lowGain +1..+3 dB', 'eq highGain -1..-2 dB', 'reverb mix 15..30%'],
+      bright: ['eq highGain +2..+4 dB', 'eq lowGain -1..-3 dB'],
+      clear: ['eq lowGain -2..-4 dB', 'compressor threshold -12..-18 dB, ratio 2..3', 'reverb mix 0..15%'],
+      thick: ['chorus depth 2..4 ms, rate 0.8..1.8 Hz, mix 15..35%'],
+      gritty: ['distortion drive 0.15..0.4, tone 0.4..0.7, output -6..-3 dB'],
+      robotic: ['autotune retune 0..40 ms, mix 70..100%', 'use Chromatic when the song key is unknown']
+    },
+    boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
+  };
+
   // ---------------------------------------------------------------------
   // MC-3 read-tool helpers. Every app read here is guarded: an absent or
   // damaged dependency produces honest degraded fields, never a throw
@@ -1710,7 +1744,10 @@
    *
    * @returns {Object}
    */
-  function buildCapabilitiesResult() {
+  function buildCapabilitiesResult(input) {
+    if (input && input.focus === 'sound_design') {
+      return freshCopy(SOUND_DESIGN_GUIDE);
+    }
     var nodeTypes = {};
     registryTypes().forEach(function (type) {
       var params = {};
@@ -3830,7 +3867,7 @@
   }
 
   /**
-   * No-argument tools (get_capabilities, get_chain, list_presets): the
+   * No-argument tools (get_chain, list_presets): the
    * only structural rule is input-is-an-object.
    *
    * @param {*} input
@@ -3838,6 +3875,28 @@
    */
   function validateNoArgs(input, problems) {
     checkInputObject(input, problems);
+  }
+
+  /**
+   * get_capabilities: default to the compact policy index; optionally
+   * return the plain-language sound-design guide.
+   *
+   * @param {*} input
+   * @param {Array<Object>} problems
+   */
+  function validateGetCapabilities(input, problems) {
+    var inputObject = checkInputObject(input, problems);
+    if (problems.length > 0 || inputObject.focus === undefined) {
+      return;
+    }
+    if (inputObject.focus !== 'policy' && inputObject.focus !== 'sound_design') {
+      problems.push(
+        problem('focus', "must be 'policy' or 'sound_design'; got " + displayValue(inputObject.focus), [
+          'policy',
+          'sound_design'
+        ])
+      );
+    }
   }
 
   /**
@@ -4091,7 +4150,7 @@
    *
    * @param {string} name - the tool's registered name.
    * @param {Function} validator - (input, problems) => void.
-   * @param {Function} buildResult - () => Object.
+   * @param {Function} buildResult - (input) => Object.
    * @returns {Function} execute(input, options) -> Promise<Object>.
    */
   function readExecute(name, validator, buildResult) {
@@ -4102,7 +4161,7 @@
         if (problems.length > 0) {
           return Promise.resolve(invalidArgumentsResult(name, problems));
         }
-        return Promise.resolve(buildResult());
+        return Promise.resolve(buildResult(input));
       } catch (err) {
         return Promise.resolve(schemaLayerFaultResult(name, err));
       }
@@ -4283,17 +4342,24 @@
     return {
       name: 'get_capabilities',
       description:
-        'Return supported node types, parameter names, units, safe ranges, out-of-range ' +
-        'behavior, core chain rules, and human-only controls. Use when constructing or ' +
-        'correcting a chain request.',
+        'Translate a plain-language voice goal or inspect safety policy. Use ' +
+        "focus='sound_design' for requests like deeper, a little reverb, ghostly, warm, " +
+        "clear, thick, gritty, or robotic. Use focus='policy' (the default) for node " +
+        'parameters, safe ranges, chain rules, and human-only controls.',
       inputSchema: {
         type: 'object',
-        properties: {},
+        properties: {
+          focus: {
+            type: 'string',
+            enum: ['policy', 'sound_design'],
+            description: 'policy for ranges and rules; sound_design for adjective-to-effect guidance.'
+          }
+        },
         required: [],
         additionalProperties: false
       },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
-      execute: readExecute('get_capabilities', validateNoArgs, buildCapabilitiesResult)
+      execute: readExecute('get_capabilities', validateGetCapabilities, buildCapabilitiesResult)
     };
   }
 
