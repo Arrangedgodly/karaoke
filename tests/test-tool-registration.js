@@ -69,12 +69,6 @@ function check(cond, label) {
   }
 }
 
-function sleep(ms) {
-  return new Promise(function (resolve) {
-    setTimeout(resolve, ms);
-  });
-}
-
 // Order-insensitive structural equality for the plain-JSON shapes the
 // schema/annotation layer uses (same helper as the presets-policy test).
 function deepEqual(a, b) {
@@ -110,6 +104,24 @@ function sameMembers(arr, other) {
     rest.splice(j, 1);
   }
   return true;
+}
+
+function walkSchema(schema, visit) {
+  if (!schema || typeof schema !== 'object') {
+    return;
+  }
+  visit(schema);
+  if (schema.properties && typeof schema.properties === 'object') {
+    Object.keys(schema.properties).forEach(function (name) {
+      walkSchema(schema.properties[name], visit);
+    });
+  }
+  if (schema.items) {
+    walkSchema(schema.items, visit);
+  }
+  if (Array.isArray(schema.oneOf)) {
+    schema.oneOf.forEach(function (entry) { walkSchema(entry, visit); });
+  }
 }
 
 // The fixed def order McpTools.getDefs() promises (its contract block).
@@ -310,9 +322,19 @@ async function main() {
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/mcp-tools.js'); // self-registers through the shim at parse
 
-  // Let the shim's sequential registration queue drain (10 chained
-  // registerTool promises) before observing the registries.
-  await sleep(20);
+  // Await the public lifecycle promise instead of sleeping and sampling
+  // while the browser may still be accepting the sequential batch.
+  check(
+    sandbox.McpTools.registrationReady &&
+      typeof sandbox.McpTools.registrationReady.then === 'function',
+    'A0: McpTools exposes the asynchronous registration lifecycle'
+  );
+  var registrationResult = await sandbox.McpTools.registrationReady;
+  check(
+    registrationResult.registered.join(',') === EXPECTED_ORDER.join(',') &&
+      registrationResult.failed.length === 0,
+    'A0: registrationReady resolves with all 10 tools accepted and no failures'
+  );
 
   // --------------------------------------------------------------------
   console.log('A. the 10 defs McpTools.getDefs() returns');
@@ -333,6 +355,39 @@ async function main() {
     );
   });
   check(allDefsWellFormed, 'A1: every def has a name, a non-empty description, an inputSchema object, an annotations object, and an execute function');
+
+  check(
+    defs.every(function (d) { return d.name.length <= 30; }),
+    'A2: every tool name stays within Chrome\'s preliminary 30-character guidance'
+  );
+  check(
+    defs.every(function (d) { return d.description.length <= 500; }),
+    'A2: every tool description stays within Chrome\'s preliminary 500-character guidance'
+  );
+  var parameterDescriptionsWithinBudget = true;
+  var parameterNamesWithinBudget = true;
+  defs.forEach(function (d) {
+    walkSchema(d.inputSchema, function (schema) {
+      if (typeof schema.description === 'string' && schema.description.length > 150) {
+        parameterDescriptionsWithinBudget = false;
+      }
+      if (schema.properties) {
+        Object.keys(schema.properties).forEach(function (name) {
+          if (name.length > 30) {
+            parameterNamesWithinBudget = false;
+          }
+        });
+      }
+    });
+  });
+  check(
+    parameterDescriptionsWithinBudget,
+    'A2: every parameter description stays within Chrome\'s preliminary 150-character guidance'
+  );
+  check(
+    parameterNamesWithinBudget,
+    'A2: every parameter name stays within Chrome\'s preliminary 30-character guidance'
+  );
 
   // getDefs() promises FRESH objects — a caller mutating one result must
   // never poison the next registration.
@@ -376,8 +431,9 @@ async function main() {
         s.type === 'object' &&
         s.properties && typeof s.properties === 'object' && !Array.isArray(s.properties) &&
         Array.isArray(s.required) &&
-        s.required.every(function (r) { return typeof r === 'string'; }),
-      'B2: ' + tool.name + ' — inputSchema is an object-typed JSON Schema (plain properties object, string[] required)'
+        s.required.every(function (r) { return typeof r === 'string'; }) &&
+        s.additionalProperties === false,
+      'B2: ' + tool.name + ' — inputSchema is a closed object schema (plain properties, string[] required)'
     );
     check(
       deepEqual(tool.annotations, EXPECTED_ANNOTATIONS[tool.name]),
@@ -441,8 +497,10 @@ async function main() {
   );
   check(
     setChain.properties.chain &&
-      sameMembers(setChain.properties.chain.required, ['schemaVersion', 'name', 'nodes']),
-    'C3: set_chain\'s chain object requires [schemaVersion, name, nodes]'
+      sameMembers(setChain.properties.chain.required, ['schemaVersion', 'name', 'nodes']) &&
+      setChain.properties.chain.additionalProperties === false &&
+      setChain.properties.chain.properties.nodes.items.additionalProperties === false,
+    'C3: set_chain\'s fixed chain and node objects reject undeclared properties'
   );
 
   var addNode = byName(apiRegisterCalls, 'add_node').inputSchema;
@@ -509,9 +567,14 @@ async function main() {
   check(
     !!capsResult &&
       capsResult.app === 'karaoke-chain-builder' &&
-      Array.isArray(capsResult.nodeTypes) &&
-      capsResult.nodeTypes.length === 6,
-    'D1: the registered get_capabilities resolves the real capabilities payload (6 live node types)'
+      capsResult.nodeTypes &&
+      Object.keys(capsResult.nodeTypes).length === 6,
+    'D1: get_capabilities resolves the compact policy for all 6 live node types'
+  );
+  check(
+    JSON.stringify(capsResult).length <= 1500,
+    'D1: get_capabilities stays within Chrome\'s preliminary 1,500-character output guidance (' +
+      JSON.stringify(capsResult).length + ' characters)'
   );
 
   var chainResult = await byName(apiRegisterCalls, 'get_chain').execute({});

@@ -226,42 +226,26 @@ async function main() {
   // --------------------------------------------------------------------
 
   var caps = await getCapabilities.execute({});
-  check(!!caps && Array.isArray(caps.nodeTypes), 'A1: capabilities publish nodeTypes');
-
-  var limiterCaps = null;
-  for (var i = 0; i < caps.nodeTypes.length; i++) {
-    if (caps.nodeTypes[i].type === 'limiter') {
-      limiterCaps = caps.nodeTypes[i];
-      break;
-    }
-  }
-  var ceilingCaps = null;
-  if (limiterCaps) {
-    for (var j = 0; j < limiterCaps.params.length; j++) {
-      if (limiterCaps.params[j].name === 'ceiling') {
-        ceilingCaps = limiterCaps.params[j];
-        break;
-      }
-    }
-  }
   check(
-    !!ceilingCaps && ceilingCaps.agent && ceilingCaps.agent.treatment === 'reject',
+    !!caps && caps.nodeTypes && typeof caps.nodeTypes === 'object',
+    'A1: capabilities publish the nodeTypes policy index'
+  );
+
+  var ceilingCaps = caps.nodeTypes && caps.nodeTypes.limiter
+    ? caps.nodeTypes.limiter.ceiling
+    : null;
+  check(
+    !!ceilingCaps && ceilingCaps.action === 'reject',
     'A1: limiter ceiling carries a published agent range with treatment reject'
   );
   check(
-    !!ceilingCaps && ceilingCaps.agent.min === -12 && ceilingCaps.agent.max === -3,
+    !!ceilingCaps && ceilingCaps.range[0] === -12 && ceilingCaps.range[1] === -3,
     'A1: published limiter ceiling range is [-12, -3] dB'
   );
-  var CEIL_MIN = ceilingCaps ? ceilingCaps.agent.min : -12;
-  var CEIL_MAX = ceilingCaps ? ceilingCaps.agent.max : -3;
+  var CEIL_MIN = ceilingCaps ? ceilingCaps.range[0] : -12;
+  var CEIL_MAX = ceilingCaps ? ceilingCaps.range[1] : -3;
 
-  var budgetRule = null;
-  for (var k = 0; k < caps.chainRules.length; k++) {
-    if (caps.chainRules[k].id === 'gain-budget-12db') {
-      budgetRule = caps.chainRules[k];
-      break;
-    }
-  }
+  var budgetRule = caps.chainRules && caps.chainRules['gain-budget-12db'];
   check(
     !!budgetRule,
     'A1: the gain-budget-12db rule is published (the +12 dB limit is asserted from the engine below)'
