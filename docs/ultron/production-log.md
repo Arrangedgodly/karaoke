@@ -1130,3 +1130,47 @@ help-completeness gate (a future family without lines fails the suite).
 Render-level spot check printed the verbatim gate + autotune card help
 wiring (titles/spans/describedby all match). Full suite 23/23 files /
 1823 checks green. Ledger: [refinement.md](refinement.md) entry 1.
+
+## FINISH-2 — EXP badge raised to the 11px floor — `awaiting-approval`
+
+Refinement entry 2 (`$impeccable typeset`, critique P2-2): the
+experimental badge rendered at 0.625rem (computed 10px) on BOTH
+placements (card header "Experimental" tag + palette chip "EXP" tag),
+under the design system's own 11px floor — while the CSS comment and
+DESIGN.md claimed it compliant.
+
+**What changed** (appearance-only; `styles/main.css` + docs + test):
+
+1. `.node-experimental-badge` font-size 0.625rem → **0.6875rem** (11px
+   computed — the legend-initials floor precedent; DESIGN.md's 11px
+   Floor Rule). One rule fixes both placements: the chip-scoped rule has
+   never set a size, so card + chip render identical type and cannot
+   drift.
+2. Side padding 0.3rem → **0.35rem** (the critique's fix note — hold the
+   tag's optical proportions at the larger size). Weight 700, 0.06em
+   tracking, amber-on-Module-Card (6.65) unchanged: still a quiet status
+   tag, no new loudness.
+3. Both misstatements corrected: the CSS comment now states the floor
+   honestly (and names the old false claim); DESIGN.md's badge spec and
+   the `.impeccable/design.json` sidecar (description + css snippet)
+   carry the corrected 0.6875rem.
+
+**Evidence**: `tests/test-palette-cards-cycle3.js` +138 lines — new
+section I parses the real main.css (comments stripped) and asserts the
+floor on the shared rule (0.6875rem = 11px ≥ floor), no chip-scoped size
+override, the initials rules at the same 0.6875rem, the quiet tag
+treatment intact, both live placements wearing the one class, and
+DESIGN.md + design.json agreeing with the stylesheet (re-shrink or doc
+drift fails the suite). Render-level worst case (headless Chrome, real
+stylesheet, canvas.js-faithful DOM): computed 11px on both placements;
+chip badge 35×16.2px single-line, zero overflow in the real 200px
+palette flank (167px chip) and a 220px-flank variant (187px chip), chip
+height 38px unchanged; card badge 100.6×16.2px single-line, header one
+24px row, no chevron overlap at production width (939px card at
+1440×900); chip aria-label unchanged ("Add Autotune to chain
+(experimental)"). Detector type scan 13 → 12 findings (the badge's
+0.625rem off-ramp advisory gone; remainder the standing adjudicated
+set). Full suite 23/23 files / 1836 checks green. Residual (disclosed,
+pre-existing): below a ~680px window the squeezed card's badge overlaps
+the chevron — measured at the old 10px too. Ledger:
+[refinement.md](refinement.md) entry 2.

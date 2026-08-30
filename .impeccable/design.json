@@ -562,9 +562,9 @@
       "name": "Experimental Badge",
       "kind": "chip",
       "refersTo": "card-module",
-      "description": "A status tag, never a control — the full \"Experimental\" tag after the module label in the node-card header (a compact \"EXP\" twin pins right on the palette chip). Signal Amber 1px bezel + amber text on Module Card ground; mono silkscreen at 0.625rem/700, 0.06em tracking; deliberately no focus ring and no pointer affordance. Autotune only, driven by NodeTypes.isExperimental.",
+      "description": "A status tag, never a control — the full \"Experimental\" tag after the module label in the node-card header (a compact \"EXP\" twin pins right on the palette chip). Signal Amber 1px bezel + amber text on Module Card ground; mono silkscreen at 0.6875rem/700 (the 11px floor, the legend-initials size), 0.06em tracking; deliberately no focus ring and no pointer affordance. Autotune only, driven by NodeTypes.isExperimental.",
       "html": "<span class=\"ds-exp-badge\">Experimental</span>",
-      "css": ".ds-exp-badge { flex: none; padding: 0.1rem 0.3rem; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-card); color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }"
+      "css": ".ds-exp-badge { flex: none; padding: 0.1rem 0.35rem; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-card); color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }"
     },
     {
       "name": "Fader (Param Slider)",

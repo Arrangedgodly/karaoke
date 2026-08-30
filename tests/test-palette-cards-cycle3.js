@@ -35,6 +35,13 @@
 //      (row + control title, .sr-only span, same-row aria-describedby);
 //      autotune's Key line additionally carries the experimental-status +
 //      fixed-20-ms-delay disclosure in operator terms.
+//   I. TYPE FLOOR (finishing entry 2, critique P2-2): the experimental
+//      badge's ONE shared CSS rule renders BOTH placements (chip 'EXP' +
+//      card 'Experimental') at the 11px floor — 0.6875rem, the
+//      legend-initials size — with no chip-scoped size override, the
+//      quiet tag treatment intact (700 / 0.06em / widened side padding),
+//      and all three documentation sources (main.css, DESIGN.md,
+//      .impeccable/design.json) agreeing on the corrected value.
 //
 // Browser-use inspection was not exercised in this worker (same honest
 // note as TEST-1/UI-1/DIST-1/...): these are DOM-construction checks on
@@ -791,6 +798,137 @@ check(
 check(
   !/Experimental/.test(helpCards[atIdx].children[1].children[0].children[1].title),
   'the status sentence rides the FIRST row only (said once per card)'
+);
+
+// ----------------------------------------------------------------------
+// I. Type floor (finishing entry 2, critique P2-2) — the EXP badge was
+// shipped at 0.625rem (computed 10px) on BOTH placements, under the
+// system's 11px floor, while the CSS comment + DESIGN.md claimed
+// compliance. The fix is one line in styles/main.css (both placements
+// share the single .node-experimental-badge rule; the chip-scoped rule
+// below it only adds margin-left:auto), so this section guards the REAL
+// stylesheet (parsed from styles/main.css, comments stripped) instead of
+// a fake DOM getComputedStyle: rule present, size at the floor, no
+// placement override, tag treatment quiet, and every documentation
+// source agreeing. A future re-shrink of the badge fails here.
+// ----------------------------------------------------------------------
+console.log('I. badge type floor (finishing entry 2)');
+
+var RAW_CSS = '\n' + fs.readFileSync(path.join(ROOT, 'styles', 'main.css'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, ''); // strip comments — declarations only
+
+function cssRule(selector) {
+  var idx = RAW_CSS.indexOf('\n' + selector + ' {');
+  if (idx === -1) { return null; }
+  var open = RAW_CSS.indexOf('{', idx);
+  var depth = 1;
+  var i = open + 1;
+  while (i < RAW_CSS.length && depth > 0) {
+    if (RAW_CSS[i] === '{') { depth += 1; }
+    else if (RAW_CSS[i] === '}') { depth -= 1; }
+    i += 1;
+  }
+  return depth === 0 ? RAW_CSS.slice(open + 1, i - 1) : null;
+}
+
+function cssDecl(body, prop) {
+  var m = body.match(new RegExp('(?:^|[;\\s])' + prop + '\\s*:\\s*([^;]+)'));
+  return m ? m[1].trim() : null;
+}
+
+var REM_ROOT_PX = 16; // root html font-size (unchanged by this entry)
+var badgeRule = cssRule('.node-experimental-badge');
+check(badgeRule !== null, 'styles/main.css carries the .node-experimental-badge rule');
+
+var badgeSize = badgeRule && cssDecl(badgeRule, 'font-size');
+var badgePx = badgeSize && /rem$/.test(badgeSize)
+  ? parseFloat(badgeSize) * REM_ROOT_PX
+  : NaN;
+check(
+  badgePx === 11,
+  'badge font-size is 0.6875rem (computed ' + badgePx + 'px = the 11px floor)'
+);
+check(
+  badgePx >= 11,
+  'badge font-size meets the 11px floor (was 0.625rem/10px, critique P2-2)'
+);
+
+// The chip placement's scoped rule must not reset the size — the two
+// placements render identical type from the one rule above.
+var chipBadgeRule = cssRule('.node-chip .node-experimental-badge');
+check(
+  chipBadgeRule !== null && cssDecl(chipBadgeRule, 'font-size') === null,
+  'chip-scoped rule adds no font-size (both placements share the 11px size)'
+);
+
+// The floor precedent: the legend initials (.node-card::before /
+// .node-chip::before) are the declared 0.6875rem floor the badge joins.
+ ['.node-card::before', '.node-chip::before'].forEach(function (sel) {
+  var initials = cssRule(sel);
+  check(
+    initials !== null && cssDecl(initials, 'font-size') === '0.6875rem',
+    sel + ' initials stay at 0.6875rem (the badge joins the same floor)'
+  );
+});
+
+// Quiet status marker, unchanged: weight/tracking per the existing tag
+// treatment, padding widened (not shrunk) to compensate the size lift,
+// amber-on-card colors untouched.
+check(
+  badgeRule && cssDecl(badgeRule, 'font-weight') === '700' &&
+    cssDecl(badgeRule, 'letter-spacing') === '0.06em',
+  'tag treatment unchanged: 700 weight, 0.06em tracking'
+);
+var badgePadding = badgeRule && cssDecl(badgeRule, 'padding');
+check(
+  badgePadding === '0.1rem 0.35rem',
+  'side padding widened to 0.35rem (proportions held at the larger size)'
+);
+check(
+  badgeRule && cssDecl(badgeRule, 'color') === 'var(--accent)' &&
+    cssDecl(badgeRule, 'background') === 'var(--bg-card)',
+  'amber text on Module Card ground unchanged (no new loudness)'
+);
+
+// The DOM end of the same guarantee: both live placements wear the one
+// class the rule governs (chip badge from section C, card badge from the
+// section H render — one class, one rule, two placements).
+var liveChipBadge = chipFor('autotune').findByClass('node-experimental-badge');
+var liveCardBadge = helpCards[atIdx].findByClass('node-experimental-badge');
+check(
+  !!liveChipBadge && !!liveCardBadge &&
+    liveChipBadge.className === liveCardBadge.className &&
+    liveCardBadge.className.indexOf('node-experimental-badge') !== -1,
+  'both placements render through the one .node-experimental-badge class'
+);
+
+// Documentation agrees with the stylesheet (the critique's misstatements):
+// DESIGN.md's badge spec and the design.json sidecar component snippet.
+var designMd = fs.readFileSync(path.join(ROOT, 'DESIGN.md'), 'utf8');
+var badgeSpecLine = (designMd.split('\n').filter(function (l) {
+  return l.indexOf('**Experimental badge') !== -1;
+})[0]) || '';
+check(
+  badgeSpecLine.indexOf('0.6875rem/700') !== -1 &&
+    badgeSpecLine.indexOf('0.625rem') === -1,
+  'DESIGN.md badge spec documents 0.6875rem (misstatement corrected)'
+);
+var designJson = JSON.parse(
+  fs.readFileSync(path.join(ROOT, '.impeccable', 'design.json'), 'utf8')
+);
+var sidecar = designJson.components.filter(function (c) {
+  return c.name === 'Experimental Badge';
+})[0];
+check(
+  !!sidecar &&
+    sidecar.css.indexOf('font-size: 0.6875rem') !== -1 &&
+    sidecar.css.indexOf('0.625rem') === -1,
+  'design.json sidecar css matches the stylesheet (0.6875rem)'
+);
+check(
+  !!sidecar && sidecar.description.indexOf('0.6875rem') !== -1 &&
+    sidecar.description.indexOf('0.625rem') === -1,
+  'design.json sidecar description matches the stylesheet (0.6875rem)'
 );
 
 // ----------------------------------------------------------------------

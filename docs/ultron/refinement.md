@@ -8,7 +8,7 @@ first · distortion readout normalized 0–100 · all issues in scope.
 | # | Command | Finding | Status |
 |---|---------|---------|--------|
 | 1 | `$impeccable clarify` | P2-1: four cycle-3 effects (gate, distortion, chorus, autotune) ship with zero plain-language param help — the wall cycle-2 round 1 tore down for the original six. | **done-pending-approval** |
-| 2 | `$impeccable typeset` | P2-2: EXP badge renders at 10px on both placements — below the 11px floor; CSS comment + DESIGN.md misstate it as compliant. | queued |
+| 2 | `$impeccable typeset` | P2-2: EXP badge renders at 10px on both placements — below the 11px floor; CSS comment + DESIGN.md misstate it as compliant. | **done-pending-approval** |
 | 3 | `$impeccable layout` | P2-3: palette is 10 flat ungrouped chips (was 6) — chunking violation at the decision point. | queued |
 | 4 | `$impeccable polish` | P3-4: distortion Drive/Tone read "0.25%"/"0.7%" (0–1 scale + %) vs surface 0–100% convention — user approved normalizing to 0–100. | queued |
 | 5 | `$impeccable harden` | P3-5 (partial): two latent `window.alert`s + late-context-resume can wedge the strip at "Stopped". The manual +24 dB / limiter-removal sovereignty finding stays recorded as deliberate design (backlog), per cycle-2 close. | queued |
@@ -68,3 +68,51 @@ document refresh required after the loop.
   Drive/Tone still read "0.25%"/"0.7%" until entry 4 lands — the help
   lines deliberately avoid referencing the readout numbers so both
   conventions read true.
+
+### Entry 2 — `$impeccable typeset` (P2-2 EXP badge under the 11px floor) — done-pending-approval
+
+- **Files changed**: `styles/main.css` (the UI-2 badge block only:
+  font-size 0.625→0.6875rem, side padding 0.3→0.35rem, comment
+  corrected), `DESIGN.md` (badge spec value), `.impeccable/design.json`
+  (sidecar description + css snippet), `tests/test-palette-cards-cycle3.js`
+  (+138: new section I). No src/ JS, no markup, no audio/MCP — the badge
+  factory and its single-source status wiring are byte-identical.
+- **Mechanism**: both placements already render through ONE rule
+  (`.node-experimental-badge`; the chip-scoped rule adds only
+  `margin-left: auto`), so one size lift fixes both placements at once:
+  0.6875rem = 11px computed, the legend-initials floor precedent that
+  DESIGN.md's 11px Floor Rule already declares. Side padding widened
+  0.3→0.35rem (the critique's fix note: compensate at the larger size);
+  weight 700 / 0.06em tracking / amber-on-Module-Card (6.65) untouched —
+  still a quiet status tag, no new loudness. Both misstatements
+  corrected: the CSS comment (which claimed "above the 11px card floor
+  at 0.625rem" — 0.625rem IS 10px) now states the floor honestly and
+  names the correction; DESIGN.md's badge spec and the design.json
+  sidecar snippet carry the corrected value so no doc can re-contradict
+  the stylesheet.
+- **Evidence**: test section I parses the REAL main.css (comments
+  stripped) and asserts: rule present; font-size 0.6875rem = computed
+  11px, meeting the floor; the chip-scoped rule sets NO font-size (the
+  two placements cannot drift); the legend-initials rules (`.node-card
+  ::before` / `.node-chip::before`) hold the same 0.6875rem; tag
+  treatment (700 / 0.06em) and amber-on-card colors unchanged; padding
+  widened; both live DOM placements wear the one class; DESIGN.md +
+  design.json agree with the stylesheet — any future re-shrink or doc
+  drift fails the suite. Render-level check (headless Chrome, real
+  stylesheet, canvas.js-faithful DOM): computed 11px on BOTH placements;
+  chip badge 35×16.2px single-line with the chip at 167px in the real
+  200px palette flank and 187px at a 220px-flank variant —
+  scrollWidth === clientWidth both times (zero overflow; chip height
+  38px unchanged, badge under the 20px legend square, density kept);
+  card badge 100.6×16.2px single-line, header one 24px row, no
+  chevron overlap at production width (939px card at 1440×900); chip
+  aria-label still "Add Autotune to chain (experimental)". Detector
+  type scan: 13 → 12 findings — the badge's 0.625rem off-ramp advisory
+  is gone; the remaining 12 are the standing adjudicated set, untouched.
+  Full suite **23/23 files / 1836 checks green**.
+- **Residuals (disclosed)**: in a sub-production ~240px canvas column
+  (window narrower than ~680px; the venue default is 1440×900) the
+  squeezed card's badge rides over the collapse chevron — measured
+  pre-existing at the old 10px too (17.3px overlap vs 26.8px now; label
+  ellipsization is the designed shrink path), a standing narrow-window
+  edge outside this entry's appearance-only scope.

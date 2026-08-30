@@ -417,3 +417,18 @@ tests/test-palette-cards-cycle3.js §H; suite 23/23 / 1823 green. Next:
 entry 2 (typeset, EXP badge 11px floor).
 
 ### FIN-1 (clarify): APPROVED 2026-08-29. Next: entry 2 (typeset).
+
+**Entry 2 (typeset, P2-2 EXP badge floor) landed 2026-08-29 — awaiting
+user approval**: badge raised 0.625→0.6875rem (computed 11px, the
+legend-initials floor) on BOTH placements through the one shared CSS
+rule (chip rule never set a size — cannot drift); side padding
+0.3→0.35rem; CSS comment + DESIGN.md spec + design.json sidecar
+corrected to match the stylesheet. New §I floor gate in
+tests/test-palette-cards-cycle3.js; headless-Chrome render check: no
+wrap/overflow at the real 200px palette flank (or a 220px variant) or at
+production card width; header rhythm, chip density, aria-label unchanged.
+Detector 13→12 (badge off-ramp advisory gone). Suite 23/23 / 1836 green.
+Residual (pre-existing, disclosed): sub-~680px-window card squeeze.
+Next: entry 3 (layout, palette grouping).
+
+### FIN-2 (typeset): APPROVED 2026-08-29. Next: entry 3 (layout).

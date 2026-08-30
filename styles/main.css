@@ -1220,19 +1220,24 @@ select.control {
    control, so no focus ring and no pointer affordance. Screen-reader
    access is by content, never title-only: the tag's text is announced in
    the header flow on the card, and the chip's aria-label carries the
-   status pre-add. Text sits above the 11px card floor at 0.625rem because
-   it is an all-caps tag with 0.06em tracking (same micro-type rationale
-   as the legend initials); contrast is text-on-bg-card amber (6.65 per
-   rq5), above the muted-legend floor the card's own labels use. */
+   status pre-add. Text sits AT the 11px floor, 0.6875rem — the
+   legend-initials size. Refinement entry 2 ($impeccable typeset, critique
+   P2-2) caught the cycle-3 tag a step below at 0.625rem (10px), which
+   this comment had misstated as above the floor. The all-caps tag keeps
+   its 0.06em tracking (same micro-type rationale as the legend initials)
+   and widens its side padding to 0.35rem so the tag's optical
+   proportions survive the one-step lift — still a quiet status marker;
+   contrast is text-on-bg-card amber (6.65 per rq5), above the
+   muted-legend floor the card's own labels use. */
 .node-experimental-badge {
   flex: none;
-  padding: 0.1rem 0.3rem;
+  padding: 0.1rem 0.35rem;
   border: 1px solid var(--accent);
   border-radius: 3px;
   color: var(--accent);
   background: var(--bg-card);
   font-family: var(--font-readout);
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
