@@ -506,3 +506,8 @@ closing critique + final document refresh per the trigger note.
 ### FIN-5 (harden): APPROVED 2026-08-29 — all five refinements done.
 Pending: closing critique + final document refresh. DEFERRED: user reports
 another PR/merge landed — reconcile first.
+
+### PR #18 reconciliation (2026-08-29): compact WebMCP contract merged;
+cycle-3 experimental + discrete disclosures preserved inside it; suite
+23/23 / 1927 green; branch pushed. Remaining finishing work: closing
+critique + final document refresh.
