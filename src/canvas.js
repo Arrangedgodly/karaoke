@@ -85,6 +85,162 @@
   var dragActive = false;
 
   // ---------------------------------------------------------------------
+  // FEW-2 (cycle 4): FREE POSITIONING + TIDY. Sections are absolutely
+  // positioned inside the bounded canvas panel (the panel keeps internal
+  // scrolling via .canvas). The coordinate space is the CHAIN LIST's
+  // content box (top-left of .chain-list = {0, 0}); each card is a
+  // full-width row translated by `transform: translate(x, y)`, so x/y are
+  // STYLE ONLY — the DOM order always equals the chain order (PD-4), and
+  // a move can never reorder anything. All logical positions live in the
+  // `positions` map below (never read back out of the style), snap-
+  // quantized to GRID_PITCH on every write.
+  //
+  // Persistence rides FEW-1's store seam: saved on MOVE-END (never per
+  // pointermove) via saveCurrentChain(chainModel, positions); the store's
+  // prune/normalize rules keep the slot garbage-free on removes. TIDY
+  // recomputes the incumbent vertical stack (x = TIDY_X, one row pitch
+  // per node in chain order) while PRESERVING each entry's scale/flow —
+  // it rewrites only x/y, never a wholesale layout clear.
+  // ---------------------------------------------------------------------
+  var GRID_PITCH = 16; // the snap quantum (px) — one shared constant
+  var TIDY_X = GRID_PITCH; // the incumbent stack's left edge (grid-aligned)
+  var TIDY_ROW_PITCH = GRID_PITCH * 10; // 160px — one tidy row per section
+  var positions = {}; // id -> {x, y, scale, flow} (scale/flow carried, FEW-5/6 wire them)
+  var zCounter = 0; // bring-to-front counter (pointerdown order)
+  var positionDrag = null; // the live grip drag, if any
+
+  function snapToGrid(v) {
+    return Math.round(v / GRID_PITCH) * GRID_PITCH;
+  }
+
+  function applyPositionToCard(card, x, y) {
+    card.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+  }
+
+  function bringCardToFront(card) {
+    zCounter += 1;
+    card.style.zIndex = String(zCounter);
+  }
+
+  /** The incumbent vertical stack for the CURRENT chain order, preserving
+   *  each node's existing scale/flow (TIDY rewrites only x/y). */
+  function tidyStackLayout() {
+    var layout = {};
+    chainModel.forEach(function (entry, i) {
+      var prev = positions[entry.id] || {};
+      layout[entry.id] = {
+        x: TIDY_X,
+        y: i * TIDY_ROW_PITCH,
+        scale: typeof prev.scale === 'number' && isFinite(prev.scale) ? prev.scale : 1,
+        flow: prev.flow === 'horizontal' ? 'horizontal' : 'vertical'
+      };
+    });
+    return layout;
+  }
+
+  /** First free grid slot down the tidy column (FEW-7 will generalize). */
+  function firstFreeSlotY() {
+    for (var k = 0; k < 512; k++) {
+      var y = k * TIDY_ROW_PITCH;
+      var taken = Object.keys(positions).some(function (id) {
+        return positions[id].x === TIDY_X && positions[id].y === y;
+      });
+      if (!taken) {
+        return y;
+      }
+    }
+    return snapToGrid(Object.keys(positions).length * TIDY_ROW_PITCH);
+  }
+
+  function placeNewNode(id) {
+    positions[id] = { x: TIDY_X, y: firstFreeSlotY(), scale: 1, flow: 'vertical' };
+    return positions[id];
+  }
+
+  /** The live layout map (passed to the store; the store prunes unknown ids). */
+  function currentLayout() {
+    return positions;
+  }
+
+  /** Keep the list tall enough that the lowest card stays reachable in the
+   *  panel's internal scroll (absolute cards do not size their container). */
+  function refreshBoardExtent() {
+    var maxY = 0;
+    Object.keys(positions).forEach(function (id) {
+      if (positions[id].y > maxY) {
+        maxY = positions[id].y;
+      }
+    });
+    chainListEl.style.minHeight = (maxY + TIDY_ROW_PITCH) + 'px';
+  }
+
+  function applyPositionsToCards() {
+    var cardEls = chainListEl.querySelectorAll('.node-card');
+    Array.prototype.forEach.call(cardEls, function (card) {
+      var pos = positions[card.getAttribute('data-node-id')];
+      if (pos) {
+        applyPositionToCard(card, pos.x, pos.y);
+      }
+    });
+    refreshBoardExtent();
+  }
+
+  /** TIDY: restore the incumbent vertical stack for every node. Saves the
+   *  tidied layout through the FEW-1 store (x/y only — scale/flow kept). */
+  function tidyChain() {
+    positions = tidyStackLayout();
+    applyPositionsToCards();
+    if (window.Persistence) {
+      window.Persistence.saveCurrentChain(chainModel, positions);
+    }
+  }
+
+  // The grip pointer-drag: MOVES POSITION (snap-quantized), never an
+  // order. move/up listeners live on document (active only mid-drag) so a
+  // drag never dies when the pointer leaves the handle.
+  function onPositionPointerMove(event) {
+    if (!positionDrag) {
+      return;
+    }
+    var x = snapToGrid(positionDrag.originX + ((event && event.clientX ? event.clientX : 0) - positionDrag.startX));
+    var y = snapToGrid(positionDrag.originY + ((event && event.clientY ? event.clientY : 0) - positionDrag.startY));
+    var pos = positions[positionDrag.id];
+    if (pos && (pos.x !== x || pos.y !== y)) {
+      pos.x = x;
+      pos.y = y;
+      applyPositionToCard(positionDrag.card, x, y);
+      positionDrag.moved = true;
+      refreshBoardExtent();
+    }
+  }
+
+  function onPositionPointerEnd() {
+    if (!positionDrag) {
+      return;
+    }
+    var drag = positionDrag;
+    positionDrag = null;
+    dragActive = false;
+    // Persist on MOVE-END only — never per pointermove.
+    if (drag.moved && window.Persistence) {
+      window.Persistence.saveCurrentChain(chainModel, positions);
+    }
+  }
+
+  function initPositionDragWiring() {
+    if (typeof document.addEventListener !== 'function' ||
+        document.__chainCanvasPointerWired) {
+      return;
+    }
+    document.__chainCanvasPointerWired = true;
+    document.addEventListener('pointermove', onPositionPointerMove);
+    document.addEventListener('pointerup', onPositionPointerEnd);
+    document.addEventListener('pointercancel', onPositionPointerEnd);
+  }
+
+  initPositionDragWiring();
+
+  // ---------------------------------------------------------------------
   // DISPLAY REGISTER (redesign item 1, Single Face Chassis) — the
   // dot-matrix line etched along the canvas panel's TOP EDGE: one
   // accent-marked machine line ("MODULE · PARAM · VALUE", displayScale
@@ -602,6 +758,13 @@
     } else {
       chainListEl.appendChild(card);
     }
+    // FEW-2: with the chain Sortable retired (PD-1) this click/keyboard
+    // path IS the palette add verb — the new section lands at the FIRST
+    // FREE GRID SLOT (palette drag-drops may degrade to the same slot
+    // until FEW-7 wires drop-point placement).
+    var pos = placeNewNode(card.getAttribute('data-node-id'));
+    applyPositionToCard(card, pos.x, pos.y);
+    refreshBoardExtent();
     commitStructuralChange();
   }
 
@@ -625,7 +788,7 @@
     // OLD, pre-change model (e.g. a just-dropped-in node would never
     // actually make it into the autosave slot).
     if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel);
+      window.Persistence.saveCurrentChain(chainModel, positions);
     }
     // PS-3: a drag-driven add/remove/reorder is a user EDIT — mark unsaved.
     if (window.PresetsUI) {
@@ -720,7 +883,7 @@
 
     var handle = document.createElement('span');
     handle.className = 'node-drag-handle';
-    handle.title = 'Drag to reorder';
+    handle.title = 'Drag to move';
 
     var gripIcon = document.createElement('span');
     gripIcon.className = 'node-drag-icon';
@@ -828,7 +991,7 @@
       // updatedParams` assignment just above is already reflected in
       // chainModel with zero extra work — no recompute needed here.
       if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel);
+        window.Persistence.saveCurrentChain(chainModel, positions);
       }
       // PS-3: a param tweak is a user EDIT — mark the currently-displayed
       // preset (if any) as having unsaved changes. Unlike the saveCurrentChain()
@@ -893,7 +1056,7 @@
       // reading through it right here would silently save the OLD,
       // pre-removal model.
       if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel);
+        window.Persistence.saveCurrentChain(chainModel, positions);
       }
       // PS-3: removing a node is a user EDIT — mark unsaved.
       if (window.PresetsUI) {
@@ -904,13 +1067,55 @@
       if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
         window.AgentUI.noteHumanEdit();
       }
+      // FEW-2: drop the removed node's board position too (the store
+      // would prune it on save anyway; keeping the live map exact means
+      // currentLayout() is always garbage-free).
+      delete positions[id];
+    });
+
+    // FEW-2: pointerdown anywhere on the section brings it to FRONT
+    // (z-order only — DOM order still equals chain order, PD-4).
+    card.addEventListener('pointerdown', function () {
+      bringCardToFront(card);
+    });
+
+    // FEW-2: the GRIP now MOVES POSITION (snap-quantized to GRID_PITCH),
+    // never an order. The drag itself resolves on the document-level
+    // pointermove/up handlers (initPositionDragWiring); this listener
+    // only ARMS it. dragActive goes true for the whole gesture so agent
+    // mutations queue behind it (MC-4 discipline, unchanged consumer).
+    handle.addEventListener('pointerdown', function (event) {
+      if (positionDrag) {
+        return; // one gesture at a time
+      }
+      if (event && typeof event.button === 'number' && event.button !== 0) {
+        return; // primary pointer only
+      }
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      var pos = positions[id] || placeNewNode(id);
+      bringCardToFront(card);
+      dragActive = true;
+      positionDrag = {
+        card: card,
+        id: id,
+        startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
+        startY: event && typeof event.clientY === 'number' ? event.clientY : 0,
+        originX: pos.x,
+        originY: pos.y,
+        moved: false
+      };
     });
 
     return card;
   }
 
   // ---------------------------------------------------------------------
-  // SortableJS wiring (Part E).
+  // SortableJS wiring (Part E) — FEW-2/PD-1: THE CHAIN SORTABLE IS
+  // RETIRED. Order changes move to cord editing (FEW-4); the grip now
+  // MOVES POSITION (see the FEW-2 block above), and the DOM order always
+  // equals the chain order (PD-4). Only the PALETTE instance survives.
   // ---------------------------------------------------------------------
 
   // Palette list: source-only. `pull: 'clone'` leaves the original chip in
@@ -928,6 +1133,12 @@
   // exactly the element the default '>*' selector would have picked
   // (chips are direct children). Chip drag behavior is unchanged; the
   // headers are inert to the pointer.
+  //
+  // FEW-2 honesty note: with no chain-side receiver, a palette CLONE drag
+  // no longer lands anywhere (SortableJS reverts it). The committed add
+  // verbs this task are the chip CLICK and keyboard activation (both
+  // addNodeType, first-free-slot placement); drop-point placement is
+  // FEW-7's scope.
   var paletteSortable = new window.Sortable(paletteListEl, {
     group: { name: 'chain-group', pull: 'clone', put: false },
     sort: false,
@@ -936,50 +1147,6 @@
     animation: 150,
     onStart: function () { dragActive = true; },
     onEnd: function () { dragActive = false; },
-  });
-
-  // Chain list: the real signal chain. `handle` restricts drag-initiation
-  // to each card's .node-drag-handle (Part C) so the slider and remove
-  // button never trigger a reorder. onStart/onEnd maintain the MC-4 drag
-  // flag (see `dragActive` above). onEnd is SortableJS's canonical
-  // drag-finished event (it fires after the drop's onAdd/onSort commit
-  // handlers, on drop anywhere including a cancelled-outside drop), so the
-  // flag going false means both the DOM and `chainModel` are already final
-  // — a mutation that was queued behind the drag can safely read/replace
-  // the model at that point.
-  var chainSortable = new window.Sortable(chainListEl, {
-    group: { name: 'chain-group', pull: true, put: true },
-    handle: '.node-drag-handle',
-    forceFallback: true,
-    animation: 150,
-    onStart: function () { dragActive = true; },
-    onEnd: function () { dragActive = false; },
-
-    // A palette item was dropped in. Replace the cloned palette DOM node
-    // with a real, stateful node-card (Part C) — NOT a model
-    // recompute/buildGraph call; that happens in onSort below, which fires
-    // right after this for the same drop (see the file-level comment on
-    // why the two are split like this).
-    onAdd: function (evt) {
-      var clonedItem = evt.item;
-      var type = clonedItem.getAttribute('data-node-type');
-      var card = createNodeCard(type, defaultParamsForType(type));
-      clonedItem.replaceWith(card);
-    },
-
-    // Fires for ANY committed change to this list's contents/order — both
-    // a palette drop (alongside onAdd, which runs first) and a pure
-    // in-list reorder (alongside onUpdate). This is the SINGLE place model
-    // recompute + AudioGraph.buildGraph() happen for drag-driven changes,
-    // so a drop-and-reorder-in-one-drag never double-fires buildGraph.
-    // SortableJS only fires this on an actual committed DOM-order change —
-    // never during pointermove/dragover, and not at all for a drag that's
-    // picked up and dropped back in its original position (no reorder to
-    // commit). R2-2: the body now lives in commitStructuralChange()
-    // (shared verbatim with the keyboard add path addNodeType()).
-    onSort: function () {
-      commitStructuralChange();
-    },
   });
 
   /**
@@ -1062,8 +1229,17 @@
    * anyway, since the two prefixes are different strings.
    *
    * @param {Array<{id: string, type: string, params: Object}>} model
+   * @param {Object<string, {x: number, y: number, scale?: number, flow?: string}>} [layout]
+   *   FEW-2: the saved layout (FEW-1's store form). When provided, each
+   *   entry is applied EXACTLY (snapped to the grid); nodes WITHOUT an
+   *   entry are carried forward if they already sit on the board (an
+   *   agent rebuild keeps surviving nodes where the operator left them),
+   *   else auto-placed at the first free grid slot. When omitted the same
+   *   rules run against an empty saved map — so a fresh preset load ends
+   *   tidy while an autosave restore passed its layout round-trips
+   *   exactly.
    */
-  function loadModel(model) {
+  function loadModel(model, layout) {
     chainListEl.innerHTML = '';
     nodesById = {};
 
@@ -1089,6 +1265,31 @@
     });
 
     recomputeModelFromDom();
+
+    // FEW-2: resolve the board's positions for the freshly-loaded chain
+    // (saved entry > carried-forward seat > first free slot), then paint.
+    // The store already sanitized whatever it handed us; the isFinite
+    // guards here keep a hostile DIRECT caller from poisoning the map.
+    var previous = positions;
+    positions = {};
+    chainModel.forEach(function (entry) {
+      var saved = layout ? layout[entry.id] : null;
+      if (saved && typeof saved.x === 'number' && isFinite(saved.x) &&
+          typeof saved.y === 'number' && isFinite(saved.y)) {
+        positions[entry.id] = {
+          x: snapToGrid(saved.x),
+          y: snapToGrid(saved.y),
+          scale: typeof saved.scale === 'number' && isFinite(saved.scale) ? saved.scale : 1,
+          flow: saved.flow === 'horizontal' ? 'horizontal' : 'vertical'
+        };
+      } else if (previous[entry.id]) {
+        positions[entry.id] = previous[entry.id];
+      } else {
+        placeNewNode(entry.id);
+      }
+    });
+    applyPositionsToCards();
+
     updateEmptyHint();
     refreshRegisterState();
     rebuildGraph();
@@ -1103,15 +1304,16 @@
     // paired with a PresetsUI.markModified() call: a load is by definition
     // a CLEAN state matching whatever was just loaded, not a modification.
     if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel);
+      window.Persistence.saveCurrentChain(chainModel, positions);
     }
   }
 
   /**
-   * MC-4: is a user drag (palette or chain list) currently in progress?
-   * Maintained exclusively by the SortableJS onStart/onEnd handlers above;
-   * read by src/mcp-tools.js to serialize agent mutations behind user
-   * drags (OQ-7). Pure read — never mutates anything.
+   * MC-4: is a user drag currently in progress (a palette clone drag or,
+   * since FEW-2, a grip POSITION drag)? Maintained exclusively by the
+   * gesture start/end handlers above; read by src/mcp-tools.js to
+   * serialize agent mutations behind user drags (OQ-7). Pure read — never
+   * mutates anything.
    *
    * @returns {boolean}
    */
@@ -1188,7 +1390,7 @@
     // autosave slot reflects the tuned value, not the last structural
     // state. chainModel is synchronously current (see above).
     if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel);
+      window.Persistence.saveCurrentChain(chainModel, positions);
     }
     // PS-3: an agent param edit is an EDIT of whatever preset was
     // displayed — the same markModified() a human slider move fires.
@@ -1380,6 +1582,22 @@
       applyFlow(next);
     });
     flowPanel.appendChild(flowButton);
+
+    // FEW-2: the TIDY control rides the same chrome zone as the flow
+    // toggle (existing .control vocabulary, VIS-1 — no new chrome). One
+    // click restores the incumbent vertical stack for every node; it
+    // rewrites ONLY x/y in the layout store, preserving each entry's
+    // scale/flow (see tidyChain()).
+    var tidyButton = document.createElement('button');
+    tidyButton.type = 'button';
+    tidyButton.className = 'control tidy-toggle';
+    tidyButton.setAttribute('aria-label', 'Tidy the board: restore the default stacked layout');
+    tidyButton.textContent = 'TIDY';
+    tidyButton.addEventListener('click', function () {
+      tidyChain();
+    });
+    flowPanel.appendChild(tidyButton);
+
     applyFlow(readFlowPreference());
   }
 
@@ -1392,6 +1610,17 @@
     isDragActive: isDragActive,
     // Issue #5: the parameter-only write path (see updateNodeParam above).
     updateNodeParam: updateNodeParam,
+    // FEW-2 seams: the grid constants (tests + FEW-5/6/7 consumers), the
+    // live layout map (read-only by convention — callers must not mutate),
+    // TIDY, and the palette click/keyboard add verb (the drag-add twin
+    // with the chain Sortable retired per PD-1).
+    GRID_PITCH: GRID_PITCH,
+    TIDY_ROW_PITCH: TIDY_ROW_PITCH,
+    TIDY_X: TIDY_X,
+    snapToGrid: snapToGrid,
+    currentLayout: currentLayout,
+    tidyChain: tidyChain,
+    addNodeType: addNodeType
   };
 
   // The display-register feed consumed by src/param-controls.js (guarded

@@ -144,3 +144,111 @@ Fresh cycle-4 file; cycle-3's log is archived under cycle-3/.
   slot identical; A1/A2 full {x,y,scale,flow} round-trip; C3 preset
   load prunes to tidy; D/E hostile layouts/envelopes never throw.
 - Verdict: T-FEW-1 PASS — tests/test-autosave-layout-store.js
+
+## FEW-2 — Free positioning + TIDY
+
+- Status: `awaiting-approval` (owner FE, after FEW-1; FEW-3/5/6/7/8 gate
+  on this approval).
+- Context: cycle-4 M1 canvas task — the consumer of FEW-1's layout store.
+  Sections become absolutely positioned rows of the bounded chain list,
+  translated to board seats by JS (`transform: translate(x, y)`), so
+  POSITION IS STYLE ONLY: the DOM order always equals the chain order
+  (PD-4) and the grip pointer-drag can never reorder. The chain-list
+  Sortable is retired per PD-1 (the palette keeps its own — exactly ONE
+  SortableJS instance remains in the app). Wrapped by the overlord
+  wrap-up worker after the dispatched FE worker hit its 10-minute budget
+  stop; the tree was verified green and every acceptance criterion
+  covered before this record was written.
+
+### What landed (files)
+- `src/canvas.js` — the position engine: `GRID_PITCH = 16` snap quantum
+  (one shared constant quantizing every x/y write), `TIDY_X`/`TIDY_ROW_PITCH`
+  (160px) incumbent stack geometry, JS `zIndex` bring-to-front on
+  pointerdown (paint only, DOM untouched), grip pointer-drag MOVES
+  POSITION with persistence on MOVE-END ONLY through
+  `saveCurrentChain(model, layout)` (never per pointermove), TIDY button
+  (`.control.tidy-toggle` in the flow-toggle chrome zone) restoring the
+  stack by rewriting ONLY x/y (scale/flow preserved per entry),
+  `loadModel(model, layout)` applying a saved layout exactly with
+  absent-entry auto-place (tidy stack / first free grid slot), removal
+  pruning the live layout map, and the list's scrollable min-height
+  maintained against the lowest seat. Chain Sortable NOT constructed.
+- `src/main.js` — the load half of the seam: reads
+  `Persistence.loadInitialLayout()` beside `loadInitialModel()` and passes
+  it as `loadModel(model, layout)`'s second argument ({} → tidy stack,
+  exactly what FEW-1's migration produces).
+- `styles/main.css` — `.node-card` becomes `position: absolute`
+  (left/right/top 0, JS-translated, `will-change: transform`); the TIDY
+  control rides the EXISTING `.canvas-panel .flow-toggle` chrome rule as
+  a selector group (`.tidy-toggle`) — no new chrome vocabulary (VIS-1).
+- `tests/test-board-positioning-few2.js` — NEW, 27 checks in the
+  committed zero-dep vm harness against the REAL src/canvas.js. Sections:
+  A wiring (exactly one Sortable, the palette's); B loadModel auto-layout
+  tidy stack with no layout; C grip drag moves position snap-quantized
+  with model AND DOM order byte-stable across the drag; D reload
+  round-trip (saved layout reapplies exactly); E TIDY rewrites only x/y;
+  F removal prunes the live layout map; G palette add places at the first
+  free grid slot and the terminal limiter stays terminal.
+- `tests/test-control-layer-pattern-machine.js`,
+  `tests/test-palette-cards-cycle3.js`,
+  `tests/test-undo-conflict-safety.js` — adapted to the retired chain
+  Sortable: they now assert the STRICTER post-FEW-2 behavior (zero
+  chain-list Sortable, exactly one palette instance) and the undo test's
+  human-add path uses the REAL add verb (`ChainCanvas.addNodeType`) —
+  same commit chokepoint, same revision-bump coverage. The CSS-audit
+  helper learned selector GROUPS (`.flow-toggle, .tidy-toggle`) taking
+  the earliest authored rule. No test was weakened.
+
+### Decisions
+- Snap = one grid constant (`GRID_PITCH = 16`), quantized on every write
+  (drag end AND tidy AND auto-place) so a saved layout can never hold an
+  off-grid coordinate.
+- Bring-to-front is a JS zIndex counter — never a DOM move — because DOM
+  order IS chain order (PD-4); the test asserts byte-stability of both
+  the model and the serialized DOM across a full drag.
+- Persistence fires on MOVE-END only; pointermove is pure paint, so the
+  autosave key is untouched during a drag.
+- Palette adds (FEW-7's full interplay comes later) already land at the
+  first free grid slot down the tidy column; FEW-7 generalizes.
+
+### Validation (wrap-up worker, 2026-08-30)
+- `node tests/run.js` → **exit 0, 27/27 files, 2177 checks, all green**
+  (takeover-baseline 26/26 / 2150; the new file contributes 27 — the
+  runner globs the tests directory, so it is inside the suite count).
+- `node tests/test-board-positioning-few2.js` isolated → PASS, exit 0.
+- Acceptance as written: move/tidy/reload round-trip (D+E), order
+  provably untouched by moves — graph + model byte-stable (C), suite
+  green. All three acceptance clauses hold.
+- Known non-goals left to their own tasks (deliberate, not unfinished
+  FEW-2 scope): QA-1's full pointer-utility suite (the FEW-2 test uses
+  the harness's existing synthetic events only), FEW-3 cords, FEW-5
+  resize, FEW-7 palette-drop interplay, FEW-8 collapse interplay.
+- Verdict: T-FEW-2 PASS — tests/test-board-positioning-few2.js
+
+### Verification (ultron-overlord, 2026-08-30)
+- Independent evidence: `node tests/run.js` → exit 0, **27/27 files / 2177
+  checks, all green**; `node tests/test-board-positioning-few2.js` isolated
+  → PASS, exit 0.
+- Read the diff: exactly ONE `new window.Sortable` remains
+  (src/canvas.js:1142 — the palette's; chain-list instance fully retired).
+  Grip drag writes only `positions[id].x/y` + `transform`; test C8 does a
+  REAL byte-compare (`JSON.stringify` of model AND DOM order) across a full
+  pointerdown→move→up drag. loadModel re-derives the model from DOM
+  (`recomputeModelFromDom`), add/remove keep DOM order = chain order (G
+  asserts `domOrder() === idsBefore.concat([newId])`). Snap quantization
+  (`snapToGrid`/`GRID_PITCH=16`) on every write; `bringCardToFront` is a
+  zIndex counter asserted by C2. TIDY (`.control.tidy-toggle` in the
+  flow chrome) calls `tidyChain()` → tidy stack x/y only, scale/flow kept.
+- Persistence: `git diff src/persistence.js` EMPTY (FEW-1 store untouched);
+  move-end save confirmed at `onPositionPointerEnd` →
+  `saveCurrentChain(chainModel, positions)` (C5: zero saves during
+  pointermove; C7: exactly one save on move-end).
+- src/main.js diff minimal (7 lines: `loadInitialLayout()` passed as
+  `loadModel`'s second arg); zero Sortable references left in main.js.
+- One honest seam (disclosed by the worker, gated to FEW-7 by the plan):
+  with the chain receiver retired, a palette CLONE-drag reverts — the
+  committed add verbs are chip CLICK/keyboard via `addNodeType`
+  (first-free-slot placement, G2–G4 green). Palette Sortable itself is
+  untouched and FEW-7 owns drop-point placement, so FEW-2's acceptance
+  (move/tidy/reload round-trip; order byte-stable; suite green) holds.
+- Verdict: T-FEW-2 PASS — tests/test-board-positioning-few2.js

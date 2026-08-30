@@ -586,8 +586,13 @@ console.log('App scaffold loaded');
         // replaces the old direct buildGraph([]) call rather than adding a
         // second graph build alongside it.
         var initialModel = window.Persistence ? window.Persistence.loadInitialModel() : [];
+        // FEW-2: the layout half of the same slot — the saved board
+        // positions (FEW-1's store seam). {} (nothing saved, a legacy
+        // payload, or a preset-load baseline) means every section takes
+        // the incumbent tidy stack; nothing is synthesized here.
+        var initialLayout = window.Persistence ? window.Persistence.loadInitialLayout() : null;
         if (window.ChainCanvas) {
-          window.ChainCanvas.loadModel(initialModel);
+          window.ChainCanvas.loadModel(initialModel, initialLayout);
         } else {
           window.AudioGraph.buildGraph(initialModel);
         }

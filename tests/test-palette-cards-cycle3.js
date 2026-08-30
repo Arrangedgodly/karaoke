@@ -463,8 +463,8 @@ check(
   'flat palette list carries 10 chips + 3 group headers as direct children'
 );
 check(
-  windowStub.Sortable.instances.length === 2,
-  'both SortableJS instances wired (palette + chain)'
+  windowStub.Sortable.instances.length === 1,
+  'exactly ONE SortableJS instance wired (palette only — the chain instance is retired per FEW-2/PD-1)'
 );
 
 // ----------------------------------------------------------------------
@@ -1247,7 +1247,7 @@ check(
 
 // The palette Sortable scopes drag items to the chips: with headers
 // interleaved, the default '>*' would make a header grabbable. The chain
-// instance keeps its default (no draggable override).
+// instance is RETIRED (FEW-2/PD-1: grip drag moves POSITION, never order).
 var paletteSortableInstance = null;
 var chainSortableInstance = null;
 windowStub.Sortable.instances.forEach(function (inst) {
@@ -1260,9 +1260,8 @@ check(
   'palette Sortable restricts drag items to .node-chip (headers are pointer-inert)'
 );
 check(
-  !!chainSortableInstance &&
-    chainSortableInstance.opts.draggable === undefined,
-  'chain Sortable keeps its default drag items (drag path untouched)'
+  chainSortableInstance === null,
+  'NO chain-list Sortable is constructed (retired per FEW-2/PD-1 — position is style, DOM order equals chain order)'
 );
 
 // ----------------------------------------------------------------------

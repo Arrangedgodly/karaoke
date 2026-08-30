@@ -681,3 +681,20 @@ wired (FEW-2). Evidence: 74-check tests/test-autosave-layout-store.js;
 suite 26/26 files / 2150 checks green.) Next unblocked: FEW-2 (after
 approval), QA-1 + DAT-1 parallel per M1.
 FEW-1 auto-approved (ultron-overlord) — evidence: tests/test-autosave-layout-store.js — budget 5:00, actual ~5:07 + verify
+
+### FEW-2 dispatched 2026-08-30 (production-overlord worker; wrapped by wrap-up worker)
+**Active task: FEW-2 — status `awaiting-approval`** (free positioning + TIDY:
+sections absolutely positioned inside the bounded canvas panel, grip
+pointer-drag MOVES POSITION snap-quantized to GRID_PITCH=16 with persistence
+on MOVE-END only via saveCurrentChain(model, layout); pointerdown brings to
+front as JS zIndex (paint, never DOM — DOM order = chain order, PD-4);
+chain-list Sortable RETIRED per PD-1 (palette's remains, exactly one
+instance); TIDY control in the flow-toggle chrome zone rewrites ONLY x/y
+(preserving scale/flow); loadModel(model, layout) applies saved layouts with
+tidy-stack/first-free-slot auto-place and removal prunes the layout map.
+Worker stopped at its 10-min budget mid-task; wrap-up verified the tree
+meets every acceptance criterion and is green. Evidence: 27-check
+tests/test-board-positioning-few2.js (sections A–G); suite 27/27 files /
+2177 checks green.) Next unblocked after approval: FEW-3, FEW-5, FEW-6,
+FEW-8 (FEW-7 additionally after FEW-3); QA-1 + DAT-1 still parallel.
+FEW-2 auto-approved (ultron-overlord) — evidence: tests/test-board-positioning-few2.js — budget 10:00, actual ~10:07 + wrap 2:38 + verify

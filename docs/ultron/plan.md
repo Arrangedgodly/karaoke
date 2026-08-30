@@ -73,7 +73,7 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
 - Acceptance: round-trip save/reload keeps positions; legacy autosave
   loads to tidy stack; preset load leaves layout tidy; unit-gated.
 
-**FEW-2 — Free positioning + TIDY** · medium · pending (after FEW-1)
+**FEW-2 — Free positioning + TIDY** · medium · completed (after FEW-1)
 - Sections become absolutely positioned inside the bounded canvas
   panel; grip pointer-drag MOVES position (snap-quantized to the grid
   pitch constant; no order change); pointerdown brings to front;

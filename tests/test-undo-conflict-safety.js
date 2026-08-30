@@ -533,15 +533,9 @@ function createEnv() {
 
 // ----------------------------------------------------------------------
 // Shared helpers over an env.
+// (FEW-2/PD-1 note: the chain-list Sortable no longer exists — the human
+// add verb is ChainCanvas.addNodeType, used directly by case (b) below.)
 // ----------------------------------------------------------------------
-function chainOpts(env) {
-  for (var i = 0; i < env.sortables.length; i++) {
-    if (env.sortables[i].el === env.byId['chain-list']) {
-      return env.sortables[i].opts;
-    }
-  }
-  throw new Error('test bug: chain-list sortable was never constructed');
-}
 
 function modelOf(env) {
   return env.sandbox.ChainCanvas.getCurrentModel();
@@ -784,15 +778,12 @@ async function main() {
     }
   );
 
-  // (b) drag-add through the REAL SortableJS handlers ------------------
+  // (b) palette-add through the REAL add verb (FEW-2/PD-1: the chain
+  // Sortable is retired; the chip click/keyboard path addNodeType IS the
+  // human add — same commit chokepoint, same revision bump) ------------
   function humanDragAdd(env) {
-    var opts = chainOpts(env);
-    var chip = env.sandbox.document.createElement('div');
-    chip.setAttribute('data-node-type', 'gain');
-    env.byId['chain-list'].appendChild(chip);
-    opts.onAdd({ item: chip }); // the REAL onAdd: chip -> stateful card
-    opts.onSort(); // the REAL onSort: recompute + rebuild + bump
-    return 'drag-add gain';
+    env.sandbox.ChainCanvas.addNodeType('gain'); // the REAL add verb: card + commit + bump
+    return 'palette-add gain';
   }
   await conflictCase(
     '(b) drag',
@@ -800,8 +791,9 @@ async function main() {
     function (env, label) {
       check(
         modelOf(env).length === 7 &&
-          modelOf(env)[6].type === 'gain',
-        label + ': the human drag-add is live (7 nodes, terminal gain)'
+          modelOf(env)[5].type === 'gain' &&
+          modelOf(env)[6].type === 'limiter',
+        label + ': the human palette-add is live (7 nodes; the terminal limiter STAYS terminal per the add policy)'
       );
     },
     function (env, label) {

@@ -399,7 +399,15 @@ var RAW_CSS = '\n' + fs.readFileSync(path.join(ROOT, 'styles', 'main.css'), 'utf
   .replace(/\/\*[\s\S]*?\*\//g, '');
 
 function cssRule(selector) {
-  var idx = RAW_CSS.indexOf('\n' + selector + ' {');
+  // FEW-2: selector GROUPS — a rule may LEAD with this selector followed by
+  // more selectors (e.g. the flow-toggle + tidy-toggle chrome rule). Search
+  // both forms and take the EARLIEST hit so the first authored rule wins.
+  var idxExact = RAW_CSS.indexOf('\n' + selector + ' {');
+  var idxGroup = RAW_CSS.indexOf('\n' + selector + ',');
+  var idx;
+  if (idxExact === -1) { idx = idxGroup; }
+  else if (idxGroup === -1) { idx = idxExact; }
+  else { idx = Math.min(idxExact, idxGroup); }
   if (idx === -1) { return null; }
   var open = RAW_CSS.indexOf('{', idx);
   var depth = 1;
@@ -814,8 +822,8 @@ windowStub.Sortable.instances.forEach(function (inst) {
   if (inst.el === chainListEl) { chainInstance = inst; }
 });
 check(
-  !!chainInstance && chainInstance.opts.handle === '.node-drag-handle',
-  'the chain Sortable drags ONLY from the explicit grip zone (.node-drag-handle)'
+  chainInstance === null,
+  'FEW-2/PD-1: NO chain-list Sortable exists — the grip is a POSITION drag (scoped to .node-drag-handle in src/canvas.js), never a reorder'
 );
 
 var handle = deepFind(rebuilt, function (el) {

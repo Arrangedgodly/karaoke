@@ -1690,7 +1690,17 @@ select.control {
    =========================================================================== */
 
 .node-card {
-  position: relative;
+  /* FEW-2 free positioning: every section is an absolutely positioned
+     FULL-WIDTH row of the chain list (left:0; right:0; top:0), translated
+     to its board seat by JS (`transform: translate(x, y)` — snap-grid
+     quantized in src/canvas.js). Position is STYLE ONLY: the DOM order
+     always equals the chain order (PD-4), so the bring-to-front z-order
+     (JS zIndex) is paint, never order. The list's scrollable extent is
+     maintained by JS (min-height against the lowest seat). */
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
   flex: none;
   display: grid;
   grid-template-columns: 8.5rem 1fr;
@@ -1702,6 +1712,7 @@ select.control {
   border-top: 1px solid var(--pm-groove-cut);
   box-shadow: inset 0 1px 0 var(--pm-groove-lip);
   min-width: 0;
+  will-change: transform;
 }
 
 /* The focus LIFT (the honest-risk solve): a touched section's print
@@ -3232,7 +3243,11 @@ input.preset-name-input:focus-visible {
    14.4px, a mono size matching nothing on the surface (the size bug the
    ladder audit caught). At the panel scope it wins the cascade and rides
    the ladder's per-control value tier like every other state readout. */
-.canvas-panel .flow-toggle {
+/* FEW-2: the TIDY control rides the SAME chrome zone and the SAME rule
+   (the existing .control + panel-scope vocabulary — VIS-1: no new chrome
+   vocabulary, just one more key in the flow-toggle's row). */
+.canvas-panel .flow-toggle,
+.canvas-panel .tidy-toggle {
   display: block;
   padding: 0.3rem 0.8rem;
   border-color: var(--pm-key-edge);
@@ -3244,7 +3259,8 @@ input.preset-name-input:focus-visible {
   color: var(--pm-print);
 }
 
-.flow-toggle:not(:disabled):hover {
+.flow-toggle:not(:disabled):hover,
+.tidy-toggle:not(:disabled):hover {
   border-color: var(--pm-print);
   color: var(--pm-print-hi);
 }
@@ -3254,6 +3270,13 @@ input.preset-name-input:focus-visible {
   left: 0.9rem;
   bottom: 0.4rem;
   margin: 0;
+}
+
+.canvas-panel:not(.flow-horizontal) .tidy-toggle {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 0.4rem;
+  margin-left: 8.5rem;
 }
 
 /* HORIZONTAL MODE — the cycle-1 reading: MIC IN at the left, chain runs
