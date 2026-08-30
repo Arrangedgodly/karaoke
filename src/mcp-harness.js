@@ -23,7 +23,7 @@
 //     live in the DevTools WebMCP pane; the header states which world
 //     the panel itself is driving (McpServer.isAvailable()).
 //   - It never registers anything with McpServer (read-only
-//     isAvailable()/listRegistered() at build time only).
+//     isAvailable()/listRegistered() for status only).
 //   - It never touches localStorage — all harness state (prefills the
 //     user edited, run counters, log lines, undo-depth estimate) is
 //     in-memory; reload resets everything.
@@ -74,6 +74,7 @@
   var panelEl = null;
   var panelOpen = false;
   var chipMirrorEl = null;
+  var statusLineEl = null;
   var logEl = null;
   var undoBtnEl = null;
   var undoDepthEl = null;
@@ -130,6 +131,37 @@
     } catch (err) {
       return String(value);
     }
+  }
+
+  /**
+   * Refresh the WebMCP status after the asynchronous registration batch
+   * settles. This avoids reporting a stale zero-tool snapshot when the
+   * harness is built before registerTool() promises finish.
+   *
+   * @param {boolean} webmcpOn
+   */
+  function refreshRegistrationStatus(webmcpOn) {
+    if (!statusLineEl) {
+      return;
+    }
+    if (!webmcpOn) {
+      statusLineEl.textContent = 'WebMCP: off · invoking definitions directly';
+      return;
+    }
+    var registeredCount = 0;
+    try {
+      var registered = window.McpServer && window.McpServer.listRegistered
+        ? window.McpServer.listRegistered()
+        : [];
+      if (Array.isArray(registered)) {
+        registeredCount = registered.length;
+      }
+    } catch (err) {
+      registeredCount = 0;
+    }
+    statusLineEl.textContent = registeredCount > 0
+      ? 'WebMCP: on · ' + registeredCount + ' registered'
+      : 'WebMCP: on · registration pending';
   }
 
   /**
@@ -611,7 +643,6 @@
     header.appendChild(titlebar);
 
     var webmcpOn = false;
-    var registeredCount = 0;
     try {
       webmcpOn = !!(
         window.McpServer &&
@@ -621,23 +652,24 @@
     } catch (err) {
       webmcpOn = false;
     }
+    statusLineEl = el('div', 'mcp-harness-statusline', 'WebMCP status unavailable');
+    header.appendChild(statusLineEl);
+    refreshRegistrationStatus(webmcpOn);
     try {
-      var registered = window.McpServer && window.McpServer.listRegistered
-        ? window.McpServer.listRegistered()
-        : [];
-      if (Array.isArray(registered)) {
-        registeredCount = registered.length;
+      if (
+        webmcpOn &&
+        window.McpTools &&
+        window.McpTools.registrationReady &&
+        typeof window.McpTools.registrationReady.then === 'function'
+      ) {
+        window.McpTools.registrationReady.then(
+          function () { refreshRegistrationStatus(true); },
+          function () { refreshRegistrationStatus(true); }
+        );
       }
     } catch (err) {
-      registeredCount = 0;
+      // Initial honest status remains visible.
     }
-    var statusText = webmcpOn
-      ? 'WebMCP: on — tools also live in DevTools pane'
-      : 'WebMCP: off — invoking defs directly';
-    if (webmcpOn && registeredCount > 0) {
-      statusText += ' · ' + registeredCount + ' registered';
-    }
-    header.appendChild(el('div', 'mcp-harness-statusline', statusText));
 
     var initialChipState = 'unavailable';
     try {
