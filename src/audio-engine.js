@@ -30,10 +30,11 @@
   //    the AudioContext may still be 'running' — the UI must not show Live.
   //  - switchGeneration: a monotonic request-generation token. Every
   //    device-switch request captures the current value; a completion whose
-  //    captured value is no longer current (a NEWER request — or a Start —
-  //    happened meanwhile) is STALE: its stream is stopped and discarded
-  //    and the completion rejects with a tagged AbortError, so an older
-  //    getUserMedia resolving LAST can never replace the newer stream.
+  //    captured value is no longer current (a NEWER request — or a full
+  //    session teardown — happened meanwhile) is STALE: its stream is
+  //    stopped and discarded and the completion rejects with a tagged
+  //    AbortError, so an older getUserMedia resolving LAST can never
+  //    replace a newer or already-ended session.
   //  - trackListeners: the listeners attached to the ACTIVE track, kept so
   //    they can be removed exactly when the stream they belong to stops
   //    being active (switch, teardown) — no dead stream's 'ended' can fire
@@ -95,10 +96,14 @@
   }
 
   /** Full teardown of the stream session (NOT the AudioContext, which is
-   *  reused): stop tracks, drop listeners, disconnect the source node.
-   *  Leaves the engine in the pre-start shape so a subsequent start()
-   *  builds everything fresh. */
+   *  reused): invalidate pending device replacements, stop tracks, drop
+   *  listeners, and disconnect the source node. Leaves the engine in the
+   *  pre-start shape so a subsequent start() builds everything fresh. */
   function teardownSession() {
+    // A replacement requested for this session cannot become current after
+    // the session has ended. Its continuation observes the newer generation,
+    // stops the late stream, and rejects as stale before reconnecting audio.
+    switchGeneration++;
     detachTrackListeners();
     stopStream(mediaStream);
     if (sourceNode) {
@@ -257,9 +262,8 @@
     // — RQ-1's "keep the existing node" would keep a dead one forever.
     // Discard whatever is left so the code below builds everything fresh.
     teardownSession();
-    // Also invalidate any in-flight device-switch completion: a Start is
-    // the newest lifecycle request and must win over an older switch.
-    switchGeneration++;
+    // teardownSession() also invalidated any in-flight device-switch
+    // completion: this Start owns the next session, not an older switch.
 
     // ---- Async continuation: awaiting from here on is fine ----
     var stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });

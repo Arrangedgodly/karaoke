@@ -505,7 +505,13 @@ async function main() {
   // Persistence: the fast path's ChainCanvas.updateNodeParam /
   // applyCandidateViaUi route through Persistence.saveCurrentChain when
   // the module is present — count writes through a recorder stub.
-  var ctx = { undoPushes: 0, persistenceWrites: 0 };
+  var ctx = {
+    undoPushes: 0,
+    persistenceWrites: 0,
+    presetSaves: 0,
+    presetRemoves: 0,
+    presetUiWrites: 0
+  };
   var realPushUndo = sandbox.AgentUI.pushUndo;
   sandbox.AgentUI.pushUndo = function (entry) {
     ctx.undoPushes += 1;
@@ -514,6 +520,33 @@ async function main() {
   sandbox.Persistence = {
     saveCurrentChain: function () {
       ctx.persistenceWrites += 1;
+    }
+  };
+  sandbox.PresetStore = {
+    save: function () {
+      ctx.presetSaves += 1;
+      return { ok: true, overwrote: false };
+    },
+    listNames: function () {
+      return [];
+    },
+    remove: function () {
+      ctx.presetRemoves += 1;
+      return { ok: true, removed: true };
+    }
+  };
+  sandbox.PresetsUI = {
+    refreshPresetSelect: function () {
+      ctx.presetUiWrites += 1;
+    },
+    setCurrentPreset: function () {
+      ctx.presetUiWrites += 1;
+    },
+    clearModified: function () {
+      ctx.presetUiWrites += 1;
+    },
+    markModified: function () {
+      ctx.presetUiWrites += 1;
     }
   };
 
@@ -588,6 +621,74 @@ async function main() {
     intervalRecords.set.length === intervalBase,
     'A2: pre-abort created NO polling interval at all'
   );
+
+  // (a3) save_preset has its own synchronous persistence path. It must
+  // honor the same execution-options contract before touching storage.
+  var saveCtrl = new AbortController();
+  saveCtrl.abort();
+  var saveBefore = {
+    saves: ctx.presetSaves,
+    removes: ctx.presetRemoves,
+    uiWrites: ctx.presetUiWrites,
+    undoPushes: ctx.undoPushes,
+    toasts: liveToasts(sandbox).length,
+    events: domEvents.length
+  };
+  var resA3 = await getTool(sandbox, 'save_preset').execute(
+    { name: 'Cancelled Save' },
+    { signal: saveCtrl.signal }
+  );
+  check(
+    isAbortedResult(resA3, 'save_preset'),
+    'A3: pre-aborted save_preset resolves the stable ABORTED refusal'
+  );
+  check(
+    ctx.presetSaves === saveBefore.saves &&
+      ctx.presetRemoves === saveBefore.removes &&
+      ctx.presetUiWrites === saveBefore.uiWrites &&
+      ctx.undoPushes === saveBefore.undoPushes &&
+      liveToasts(sandbox).length === saveBefore.toasts &&
+      domEvents.length === saveBefore.events,
+    'A3: pre-aborted save_preset performs NO store write, UI refresh, toast, event, or undo push'
+  );
+
+  // (a4) The first aborted read is false and the second is true. This
+  // models cancellation after the reversible reads but at the final
+  // boundary immediately before PresetStore.save().
+  var boundaryChecks = 0;
+  var boundarySignal = {};
+  Object.defineProperty(boundarySignal, 'aborted', {
+    get: function () {
+      boundaryChecks += 1;
+      return boundaryChecks >= 2;
+    }
+  });
+  var resA4 = await getTool(sandbox, 'save_preset').execute(
+    { name: 'Boundary Save' },
+    { signal: boundarySignal }
+  );
+  check(
+    boundaryChecks === 2 && isAbortedResult(resA4, 'save_preset'),
+    'A4: save_preset rechecks cancellation at the last safe boundary before persistence'
+  );
+  check(
+    ctx.presetSaves === saveBefore.saves &&
+      ctx.presetRemoves === saveBefore.removes &&
+      ctx.presetUiWrites === saveBefore.uiWrites &&
+      ctx.undoPushes === saveBefore.undoPushes &&
+      liveToasts(sandbox).length === saveBefore.toasts &&
+      domEvents.length === saveBefore.events,
+    'A4: last-boundary abort performs NO store write, UI refresh, toast, event, or undo push'
+  );
+
+  // Keep later set_param cases independent when this new contract is
+  // red. A broken save_preset currently leaves success UI behind.
+  sandbox.AgentUI.clearUndo();
+  liveToasts(sandbox).forEach(function (toast) {
+    toast.remove();
+  });
+  domEvents.length = 0;
+  ctx.undoPushes = 0;
 
   // --------------------------------------------------------------------
   console.log('B. ABORT DURING DRAG WAIT: cancelled while queued behind a human drag');

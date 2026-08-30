@@ -260,8 +260,11 @@ function makeElement(tag) {
 
 // ----------------------------------------------------------------------
 // The sandbox. `opts.worklet`: 'ok' (addModule resolves), 'fail'
-// (addModule rejects), 'absent' (no audioWorklet at all). The interval
-// latch is a CAPTURED callback the harness fires by hand (the hidden
+// (addModule rejects), 'no-constructor' (audioWorklet exists but the
+// window-global AudioWorkletNode constructor does not), or 'absent' (no
+// audioWorklet at all). The fixture mirrors the browser API: audioWorklet
+// belongs to the context while AudioWorkletNode belongs to window. The
+// interval latch is a CAPTURED callback the harness fires by hand (the hidden
 // browser cadence ~1 s is simulated with a controllable performance.now
 // cursor, which is what meter-taps's own now() reads).
 // ----------------------------------------------------------------------
@@ -296,26 +299,27 @@ function createSandbox(opts) {
       return a;
     }
   };
-  if (opts.worklet === 'ok' || opts.worklet === 'fail') {
+  if (opts.worklet === 'ok' || opts.worklet === 'fail' || opts.worklet === 'no-constructor') {
     ctx.audioWorklet = {
       addModule: function (url) {
         addModuleUrls.push(url);
-        return opts.worklet === 'ok' ? Promise.resolve() : Promise.reject(new Error('stub addModule failure'));
+        return opts.worklet === 'fail' ? Promise.reject(new Error('stub addModule failure')) : Promise.resolve();
       }
     };
-    ctx.AudioWorkletNode = function (c, name, nodeOpts) {
-      var n = makeBaseNode('AudioWorkletNode');
-      n.__processorName = name;
-      n.__nodeOpts = nodeOpts;
-      n.port = { onmessage: null };
-      n.port.__deliver = function (msg) {
-        if (typeof n.port.onmessage === 'function') {
-          n.port.onmessage({ data: msg });
-        }
-      };
-      createdWorklets.push(n);
-      return n;
+  }
+
+  function AudioWorkletNode(c, name, nodeOpts) {
+    var n = makeBaseNode('AudioWorkletNode');
+    n.__processorName = name;
+    n.__nodeOpts = nodeOpts;
+    n.port = { onmessage: null };
+    n.port.__deliver = function (msg) {
+      if (typeof n.port.onmessage === 'function') {
+        n.port.onmessage({ data: msg });
+      }
     };
+    createdWorklets.push(n);
+    return n;
   }
 
   var sandbox = {
@@ -358,6 +362,10 @@ function createSandbox(opts) {
     cancelAnimationFrame: function () {}
   };
   sandbox.window = sandbox;
+  if (opts.worklet === 'ok' || opts.worklet === 'fail') {
+    sandbox.AudioWorkletNode = AudioWorkletNode;
+  }
+  sandbox.__audioContext = ctx;
   sandbox.__canvasEl = canvasEl;
   sandbox.__destination = destination;
   sandbox.__sourceNode = sourceNode;
@@ -537,6 +545,11 @@ async function testWorkletMode() {
   // ------------------------------------------------------------------
   console.log('A. WORKLET WIRING: the audio-thread tap is live');
   // ------------------------------------------------------------------
+  check(
+    sandbox.__audioContext.AudioWorkletNode === undefined &&
+      typeof sandbox.AudioWorkletNode === 'function',
+    'A1: fixture matches Chrome API shape (constructor is window-global, not an AudioContext property)'
+  );
   check(
     sandbox.__addModuleUrls.length === 1 && sandbox.__addModuleUrls[0] === 'src/watchdog-worklet.js',
     'A1: addModule loaded the worklet by page-relative URL (src/watchdog-worklet.js)'
@@ -766,6 +779,7 @@ async function main() {
   testProcessor();
   await testWorkletMode();
   await testFallbackMode('fail', 'addModule-rejects');
+  await testFallbackMode('no-constructor', 'no-window-AudioWorkletNode');
   await testFallbackMode('absent', 'no-audioWorklet');
 
   if (failures.length === 0) {

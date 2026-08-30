@@ -1125,11 +1125,189 @@ async function main() {
     dismissAllToasts(env);
     var prevented = fireKeyboardUndo(env);
     await settle();
+    var recoveryToast = newestToast(env);
+    var recoveryBtn = undoButton(recoveryToast);
     check(
       prevented === false &&
         paramOf(env, 'n5', 'mix') === 80 &&
+        sandbox.AgentUI.canUndo() === true &&
+        !!recoveryToast &&
+        recoveryToast.querySelector('.agent-toast-conflict') !== null &&
+        !!recoveryBtn &&
+        recoveryBtn.textContent === 'Undo anyway',
+      'R3b: Cmd/Ctrl+Z REFUSED the conflicted entry and recreated its confirm affordance'
+    );
+  }
+
+  // --------------------------------------------------------------------
+  console.log('R4. failed confirmed restore requires a fresh confirmation');
+  // --------------------------------------------------------------------
+  {
+    var env = createEnv();
+    var sandbox = env.sandbox;
+    var restoreAttempts = 0;
+    var shouldFail = true;
+    var operatorState = 'agent result';
+
+    sandbox.AgentUI.pushUndo({
+      label: 'test conflicted restore',
+      restore: function () {
+        restoreAttempts += 1;
+        if (shouldFail) {
+          throw new Error('injected restore failure');
+        }
+        operatorState = 'restored snapshot';
+      }
+    });
+    sandbox.AgentUI.reportMutation({
+      source: 'agent',
+      summary: 'Agent applied test conflicted restore'
+    });
+
+    operatorState = 'human edit one';
+    sandbox.AgentUI.noteHumanEdit();
+    var btn = undoButton(newestToast(env));
+    btn.__fire('click'); // surface the conflict
+    btn.__fire('click'); // confirm, but restore throws
+
+    var retainedToast = newestToast(env);
+    var retryBtn = undoButton(retainedToast);
+    check(
+      restoreAttempts === 1 &&
+        operatorState === 'human edit one' &&
         sandbox.AgentUI.canUndo() === true,
-      'R3b: Cmd/Ctrl+Z REFUSED the conflicted entry (human state intact, entry kept)'
+      'R4a: the failed confirmed restore left human state intact and retained the entry'
+    );
+    check(
+      !!retryBtn &&
+        retryBtn.textContent === 'Undo' &&
+        retryBtn.getAttribute('data-confirm-undo') !== 'true' &&
+        retainedToast.querySelector('.agent-toast-undo-failed') !== null,
+      'R4a: restore failure resets the stale confirmation token and leaves an explicit retry'
+    );
+
+    shouldFail = false;
+    operatorState = 'human edit two';
+    sandbox.AgentUI.noteHumanEdit();
+    retryBtn.__fire('click'); // must only ask again, not restore
+    check(
+      restoreAttempts === 1 &&
+        operatorState === 'human edit two' &&
+        sandbox.AgentUI.canUndo() === true &&
+        retryBtn.textContent === 'Undo anyway' &&
+        retryBtn.getAttribute('data-confirm-undo') === 'true',
+      'R4b: after another human edit, the first retry only asks for fresh confirmation'
+    );
+
+    retryBtn.__fire('click'); // fresh explicit confirmation
+    check(
+      restoreAttempts === 2 &&
+        operatorState === 'restored snapshot' &&
+        sandbox.AgentUI.canUndo() === false &&
+        retainedToast.getAttribute('data-undone') === 'true',
+      'R4c: the second retry confirmation restores and consumes the retained entry'
+    );
+  }
+
+  // --------------------------------------------------------------------
+  console.log('R5. a keyboard restore failure recreates visible recovery UI');
+  // --------------------------------------------------------------------
+  {
+    var env = createEnv();
+    var sandbox = env.sandbox;
+    var restoreAttempts = 0;
+    var shouldFail = true;
+
+    sandbox.AgentUI.pushUndo({
+      label: 'test expired toast restore',
+      restore: function () {
+        restoreAttempts += 1;
+        if (shouldFail) {
+          throw new Error('injected keyboard restore failure');
+        }
+      }
+    });
+    sandbox.AgentUI.reportMutation({
+      source: 'agent',
+      summary: 'Agent applied test expired toast restore'
+    });
+    dismissAllToasts(env);
+
+    var prevented = fireKeyboardUndo(env);
+    var recoveryToast = newestToast(env);
+    var recoveryBtn = undoButton(recoveryToast);
+    check(
+      prevented === true &&
+        restoreAttempts === 1 &&
+        sandbox.AgentUI.canUndo() === true &&
+        !!recoveryToast &&
+        recoveryToast.querySelector('.agent-toast-undo-failed') !== null &&
+        !!recoveryBtn,
+      'R5a: failed Cmd/Ctrl+Z recreates a visible failure toast with a retry button'
+    );
+
+    shouldFail = false;
+    if (recoveryBtn) {
+      recoveryBtn.__fire('click');
+    }
+    check(
+      restoreAttempts === 2 &&
+        sandbox.AgentUI.canUndo() === false &&
+        !!recoveryToast &&
+        recoveryToast.getAttribute('data-undone') === 'true' &&
+        recoveryToast.querySelector('.agent-toast-undo-failed') === null,
+      'R5b: retry from the recovery toast succeeds and clears its failure state'
+    );
+  }
+
+  // --------------------------------------------------------------------
+  console.log('R6. retry stays associated with its mutation toast');
+  // --------------------------------------------------------------------
+  {
+    var env = createEnv();
+    var sandbox = env.sandbox;
+    var shouldFail = true;
+
+    sandbox.AgentUI.pushUndo({
+      label: 'test associated restore',
+      restore: function () {
+        if (shouldFail) {
+          throw new Error('injected associated restore failure');
+        }
+      }
+    });
+    sandbox.AgentUI.reportMutation({
+      source: 'agent',
+      summary: 'Agent applied test associated restore'
+    });
+    var mutationToast = newestToast(env);
+    sandbox.AgentUI.undo();
+
+    sandbox.AgentUI.reportMutation({
+      source: 'agent',
+      summary: 'Agent request refused: unrelated test request',
+      rejected: true,
+      errorText: 'Unrelated refusal'
+    });
+    var refusalToast = newestToast(env);
+    var associatedRetry = undoButton(mutationToast);
+    check(
+      refusalToast !== mutationToast &&
+        !!associatedRetry &&
+        undoButton(refusalToast) === null,
+      'R6a: an intervening refusal does not steal the retained entry retry button'
+    );
+
+    shouldFail = false;
+    if (associatedRetry) {
+      associatedRetry.__fire('click');
+    }
+    check(
+      mutationToast.getAttribute('data-undone') === 'true' &&
+        mutationToast.querySelector('.agent-toast-undone') !== null &&
+        refusalToast.getAttribute('data-undone') !== 'true' &&
+        refusalToast.querySelector('.agent-toast-undone') === null,
+      'R6b: retry success updates only the associated mutation toast, never the refusal'
     );
   }
 

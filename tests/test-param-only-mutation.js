@@ -27,12 +27,14 @@
 //        - toast + undo behave as today (one summary toast, one undo
 //          entry; Undo restores — through the full path, which is fine).
 //
-//   B. THE RAMP. Every one of the six node types routes its param write
-//      through the shared helper with scheduled automation (gain gainDb,
-//      compressor threshold, eq midGain, delay mix, reverb mix, limiter
-//      release — plus delay's clamped timeMs and the two crossfade sides
-//      of a mix change), and the host-param-ramps 10-20 ms promise is
-//      checked against the real RAMP_S constant. A pure-math click-risk
+//   B. THE RAMP. Every registered parameter dispatch branch routes its
+//      write through the shared helper with scheduled automation: gain;
+//      compressor threshold/ratio/attack/release; EQ low/mid/high; delay
+//      time/feedback/mix; reverb mix; and limiter ceiling/release. Unit
+//      conversions and both crossfade sides are checked. Each write must
+//      preserve its node instance without rebuilding or ducking the graph,
+//      and the host-param-ramps 10-20 ms promise is checked against the real
+//      RAMP_S constant. A pure-math click-risk
 //      probe (the OfflineAudioContext-style discontinuity-energy
 //      comparison, computed headlessly) shows the 15 ms linear ramp
 //      removes the jump discontinuity a bare .value write leaves.
@@ -769,17 +771,19 @@ async function main() {
   );
 
   // --------------------------------------------------------------------
-  console.log('B. the shared ramp: all six node types schedule their writes');
+  console.log('B. the shared ramp: every registered parameter dispatch branch schedules its writes');
   // --------------------------------------------------------------------
-  // One param per type through the real tool, each asserting (i) the fast
-  // path was taken (no buildGraph), (ii) the physical instance survived
-  // (===), (iii) the write reached the AudioParam as a 10-20 ms schedule
-  // with the unit-converted target, never a bare .value write.
+  // Every registered param through the real tool, each asserting (i) the
+  // fast path was taken with no rebuild or gate duck, (ii) the physical
+  // instance survived (===), and (iii) the write reached the right
+  // AudioParam as a 10-20 ms schedule with the unit-converted target,
+  // never a bare .value write.
   var cases = [
     {
       // +1 dB stays inside the +12 dB budget on the default chain (the
       // compressor+limiter makeup estimate already spends ~10.8 dB of it).
       label: 'gain gainDb 0 -> +1 (n1, dB->linear conversion)',
+      type: 'gain',
       nodeId: 'n1',
       param: 'gainDb',
       value: 1,
@@ -793,6 +797,7 @@ async function main() {
       // budget-safe direction from the default -16 (and inside the agent
       // range [-40, -8]).
       label: 'compressor threshold -16 -> -8 (n2)',
+      type: 'compressor',
       nodeId: 'n2',
       param: 'threshold',
       value: -8,
@@ -802,17 +807,96 @@ async function main() {
       target: -8
     },
     {
-      label: 'eq midGain 0 -> +6 (n3)',
+      label: 'compressor ratio 4 -> 5 (n2)',
+      type: 'compressor',
+      nodeId: 'n2',
+      param: 'ratio',
+      value: 5,
+      getParam: function () {
+        return instances0.n2.ratio;
+      },
+      target: 5
+    },
+    {
+      label: 'compressor attack 0.01 -> 0.02 s (n2)',
+      type: 'compressor',
+      nodeId: 'n2',
+      param: 'attack',
+      value: 0.02,
+      getParam: function () {
+        return instances0.n2.attack;
+      },
+      target: 0.02
+    },
+    {
+      label: 'compressor release 0.25 -> 0.3 s (n2)',
+      type: 'compressor',
+      nodeId: 'n2',
+      param: 'release',
+      value: 0.3,
+      getParam: function () {
+        return instances0.n2.release;
+      },
+      target: 0.3
+    },
+    {
+      label: 'eq lowGain 0 -> -3 dB (n3)',
+      type: 'eq',
+      nodeId: 'n3',
+      param: 'lowGain',
+      value: -3,
+      getParam: function () {
+        return instances0.n3.low.gain;
+      },
+      target: -3
+    },
+    {
+      label: 'eq midGain 0 -> +3 dB (n3)',
+      type: 'eq',
       nodeId: 'n3',
       param: 'midGain',
-      value: 6,
+      value: 3,
       getParam: function () {
         return instances0.n3.mid.gain;
       },
-      target: 6
+      target: 3
+    },
+    {
+      label: 'eq highGain 0 -> -2 dB (n3)',
+      type: 'eq',
+      nodeId: 'n3',
+      param: 'highGain',
+      value: -2,
+      getParam: function () {
+        return instances0.n3.high.gain;
+      },
+      target: -2
+    },
+    {
+      label: 'delay timeMs 300 -> 420 ms (n4, ms->s conversion)',
+      type: 'delay',
+      nodeId: 'n4',
+      param: 'timeMs',
+      value: 420,
+      getParam: function () {
+        return instances0.n4.delayNode.delayTime;
+      },
+      target: 0.42
+    },
+    {
+      label: 'delay feedback 25 -> 45% (n4, percent->linear conversion)',
+      type: 'delay',
+      nodeId: 'n4',
+      param: 'feedback',
+      value: 45,
+      getParam: function () {
+        return instances0.n4.feedbackGain.gain;
+      },
+      target: 0.45
     },
     {
       label: 'delay mix 25 -> 60 (n4, both crossfade sides)',
+      type: 'delay',
       nodeId: 'n4',
       param: 'mix',
       value: 60,
@@ -827,16 +911,33 @@ async function main() {
     },
     {
       label: 'reverb mix 20 -> 65 (n5)',
+      type: 'reverb',
       nodeId: 'n5',
       param: 'mix',
       value: 65,
       getParam: function () {
         return instances0.n5.wetGain.gain;
       },
-      target: wetAt(65)
+      target: wetAt(65),
+      extraParam: function () {
+        return instances0.n5.dryGain.gain;
+      },
+      extraTarget: dryAt(65)
+    },
+    {
+      label: 'limiter ceiling -3 -> -4 dB (n6)',
+      type: 'limiter',
+      nodeId: 'n6',
+      param: 'ceiling',
+      value: -4,
+      getParam: function () {
+        return instances0.n6.threshold;
+      },
+      target: -4
     },
     {
       label: 'limiter release 50 -> 150 ms (n6, ms->s conversion)',
+      type: 'limiter',
       nodeId: 'n6',
       param: 'release',
       value: 150,
@@ -847,11 +948,28 @@ async function main() {
     }
   ];
 
+  var registeredBranches = [];
+  sandbox.NodeTypes.getAllTypes().forEach(function (type) {
+    sandbox.NodeTypes.getParamSpec(type).forEach(function (spec) {
+      registeredBranches.push(type + '.' + spec.id);
+    });
+  });
+  var coveredBranches = cases.map(function (tc) {
+    return tc.type + '.' + tc.param;
+  });
+  check(
+    registeredBranches.slice().sort().join(',') === coveredBranches.slice().sort().join(','),
+    'B: the table covers every registered branch exactly once (' +
+      coveredBranches.length + ' cases)'
+  );
+
   for (var c = 0; c < cases.length; c++) {
     var tc = cases[c];
     var param = tc.getParam();
     var before = {
       buildGraph: buildGraphCalls,
+      loadModel: records.loadModelCalls,
+      gateAutomation: gate.gain.__automation.length,
       automation: param.__automation.length,
       instance: AG.getNodeInstance(tc.nodeId),
       extraAutomation: tc.extraParam ? tc.extraParam().__automation.length : 0
@@ -894,6 +1012,14 @@ async function main() {
     check(
       buildGraphCalls === before.buildGraph,
       tc.label + ': ZERO buildGraph calls — fast path taken'
+    );
+    check(
+      records.loadModelCalls === before.loadModel,
+      tc.label + ': ZERO ChainCanvas.loadModel calls — cards were not rebuilt'
+    );
+    check(
+      gate.gain.__automation.length === before.gateAutomation,
+      tc.label + ': ZERO chain-gate automation — output was not ducked'
     );
   }
 
