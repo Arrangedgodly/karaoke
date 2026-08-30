@@ -1155,25 +1155,25 @@
     app: 'karaoke-chain-builder',
     focus: CAPABILITY_FOCUS.SOUND_DESIGN,
     workflow: {
-      edit: 'Call get_chain first and preserve choices unless the user asks for a rebuild.',
-      apply: 'Reuse an existing node with set_param; add_node only when that effect is missing.',
-      verify: 'These are starting points. Describe changes and ask the human to listen.'
+      edit: 'Call get_chain first; preserve nodes unless the user asks to rebuild.',
+      apply: 'Use set_param on existing nodes; add_node only for a missing effect.',
+      verify: 'Describe changes and ask the human to listen.'
     },
     intensity: {
-      slight: 'Use the lowest value in each range and make 1-2 changes.',
+      slight: 'Use the first listed value in each range and make 1-2 changes.',
       moderate: 'Use the middle of each range.',
-      strong: 'Use the upper end, still inside policy.'
+      strong: 'Use the last listed value, still inside policy.'
     },
     vocabulary: {
       deeper: ['eq lowGain +2..+4 dB', 'eq highGain -1..-3 dB', 'This shapes timbre; it does not lower pitch.'],
       light_reverb: ['reverb mix 10..25%'],
-      ghostly: ['reverb mix 40..60%', 'delay 180..320 ms, feedback 15..30%, mix 10..25%', 'optional chorus mix 10..25%'],
+      ghostly: ['reverb mix 25..50%', 'delay timeMs 180..320 ms', 'delay feedback 15..30%', 'delay mix 10..25%', 'chorus mix 10..25% (optional)'],
       warm: ['eq lowGain +1..+3 dB', 'eq highGain -1..-2 dB', 'reverb mix 15..30%'],
       bright: ['eq highGain +2..+4 dB', 'eq lowGain -1..-3 dB'],
-      clear: ['eq lowGain -2..-4 dB', 'compressor threshold -12..-18 dB, ratio 2..3', 'reverb mix 0..15%'],
-      thick: ['chorus depth 2..4 ms, rate 0.8..1.8 Hz, mix 15..35%'],
-      gritty: ['distortion drive 0.15..0.4, tone 0.4..0.7, output -6..-3 dB'],
-      robotic: ['autotune retune 0..40 ms, mix 70..100%', 'use Chromatic when the song key is unknown']
+      clear: ['eq lowGain -2..-4 dB', 'reverb mix 0..15%'],
+      thick: ['chorus depthMs 2..4 ms', 'chorus rateHz 0.8..1.8 Hz', 'chorus mix 15..35%'],
+      gritty: ['distortion drive 0.15..0.4', 'distortion tone 0.4..0.7', 'distortion output -6..-3 dB'],
+      robotic: ['autotune retune 40..0 ms', 'autotune mix 70..100%', 'autotune scale Chromatic', 'EXPERIMENTAL: verify by ear before a show.']
     },
     boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
   };

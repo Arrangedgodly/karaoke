@@ -462,6 +462,7 @@ async function main() {
   var getCapabilitiesSchema = byName(apiRegisterCalls, 'get_capabilities').inputSchema;
   check(
     getCapabilitiesSchema.required.length === 0 &&
+      Object.keys(getCapabilitiesSchema.properties).length === 1 &&
       getCapabilitiesSchema.properties.focus &&
       sameMembers(getCapabilitiesSchema.properties.focus.enum, ['policy', 'sound_design']),
     'C1: get_capabilities accepts optional focus [policy, sound_design]'
@@ -588,6 +589,13 @@ async function main() {
     'D1: get_capabilities stays within Chrome\'s preliminary 1,500-character output guidance (' +
       JSON.stringify(capsResult).length + ' characters)'
   );
+  var explicitPolicyResult = await byName(apiRegisterCalls, 'get_capabilities').execute({
+    focus: 'policy'
+  });
+  check(
+    deepEqual(explicitPolicyResult, capsResult),
+    'D1: explicit policy focus is byte-equivalent to the default compact response'
+  );
   var soundDesignResult = await byName(apiRegisterCalls, 'get_capabilities').execute({
     focus: 'sound_design'
   });
@@ -605,12 +613,31 @@ async function main() {
     'D1: sound_design guidance stays within Chrome\'s preliminary 1,500-character output guidance (' +
       JSON.stringify(soundDesignResult).length + ' characters)'
   );
+  soundDesignResult.vocabulary.deeper[0] = 'mutated by caller';
+  var freshSoundDesignResult = await byName(apiRegisterCalls, 'get_capabilities').execute({
+    focus: 'sound_design'
+  });
+  check(
+    freshSoundDesignResult.vocabulary.deeper[0] !== 'mutated by caller',
+    'D1: sound_design returns a fresh defensive copy on every call'
+  );
   var invalidFocus = await byName(apiRegisterCalls, 'get_capabilities').execute({
     focus: 'make-it-cool'
   });
   check(
-    !!invalidFocus && invalidFocus.error === true && invalidFocus.code === 'INVALID_ARGUMENTS',
-    'D1: an unknown get_capabilities focus resolves INVALID_ARGUMENTS'
+    !!invalidFocus &&
+      invalidFocus.error === true &&
+      invalidFocus.code === 'INVALID_ARGUMENTS' &&
+      invalidFocus.problems[0].path === 'focus' &&
+      sameMembers(invalidFocus.problems[0].allowed, ['policy', 'sound_design']),
+    'D1: an unknown get_capabilities focus returns corrective allowed values'
+  );
+  var nonStringFocus = await byName(apiRegisterCalls, 'get_capabilities').execute({ focus: 42 });
+  check(
+    !!nonStringFocus &&
+      nonStringFocus.code === 'INVALID_ARGUMENTS' &&
+      nonStringFocus.problems[0].path === 'focus',
+    'D1: a non-string get_capabilities focus resolves INVALID_ARGUMENTS'
   );
 
   var chainResult = await byName(apiRegisterCalls, 'get_chain').execute({});

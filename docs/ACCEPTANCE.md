@@ -173,7 +173,7 @@ client.
 - [ ] Follow with "Add just a little reverb." The client preserves the
       chain and chooses the low end of the published 10-25% reverb range.
 - [ ] Follow with "Make it a little ghostly." The client preserves the
-      existing choices and makes a restrained combination of reverb,
+      existing nodes and makes a restrained combination of reverb,
       delay, and optional chorus rather than replacing the whole chain.
 - [ ] Ask to remove the limiter and then request a limiter ceiling of
       -1 dB. Both requests are refused with corrective details and no
