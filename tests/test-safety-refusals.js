@@ -482,23 +482,14 @@ async function main() {
   // The published policy this whole test enforces against, read from the
   // real tool (never restated): limiter ceiling [-12, -3] dB, reject.
   var caps = await getTool(sandbox, 'get_capabilities').execute({});
-  var limiterCaps = null;
-  var ceilingCaps = null;
-  (caps.nodeTypes || []).forEach(function (t) {
-    if (t.type === 'limiter') {
-      limiterCaps = t;
-      (t.params || []).forEach(function (p) {
-        if (p.name === 'ceiling') {
-          ceilingCaps = p;
-        }
-      });
-    }
-  });
+  var ceilingCaps = caps.nodeTypes && caps.nodeTypes.limiter
+    ? caps.nodeTypes.limiter.ceiling
+    : null;
   check(
     !!ceilingCaps &&
-      ceilingCaps.agent.min === -12 &&
-      ceilingCaps.agent.max === -3 &&
-      ceilingCaps.agent.treatment === 'reject',
+      ceilingCaps.range[0] === -12 &&
+      ceilingCaps.range[1] === -3 &&
+      ceilingCaps.action === 'reject',
     '0: get_capabilities publishes limiter ceiling [-12, -3] dB with treatment reject'
   );
 

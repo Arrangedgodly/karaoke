@@ -8,7 +8,7 @@ A live karaoke vocal chain in your browser: mic in → effects (reverb, delay, c
 
 The console's dark pro-audio look — amber lamps, legible from two meters — as it sits before you press Start, with the default chain ready to go.
 
-## For judges — the 60-second path
+## For judges: the 60-second path
 
 Everything below works on the deployed site, no local setup, no Chrome flags.
 
@@ -19,16 +19,29 @@ Everything below works on the deployed site, no local setup, no Chrome flags.
 
 **No agent handy?** Open **https://karaoke.arrangedgodly.com/?dev** — an **Agent Harness** panel appears where you can run all 10 WebMCP tools directly with example inputs and watch change summaries, refusals, and Undo live. Start with `get_capabilities`, then `set_chain` (prefilled with a valid example), then hit Undo.
 
-### Local / Chrome-only setup (secondary)
+### No MCP server or side package
 
-To drive the tools from desktop Chrome instead:
+This is browser-native **WebMCP**, not a conventional local or remote MCP server. The top-level page registers its tools directly with `document.modelContext.registerTool(...)` during normal page load. A supported ChatGPT/Codex built-in browser discovers those page-scoped tools automatically while the page is open.
+
+Judges do not need an MCP package, manifest, connector, API key, local process, browser extension, `?dev`, or separate connection. The Devpost Plugin helps with the competition workflow, and Chrome's Model Context Tool Inspector helps developers inspect tools. Neither is part of this app's runtime.
+
+The implementation is split into two plain browser scripts:
+
+- `src/mcp-server.js` is the small in-page WebMCP registration adapter. Despite the historical filename, it is not a server and has no transport.
+- `src/mcp-tools.js` defines the ten page tools and connects each tool to the same visible model, canvas, audio graph, policy, toast, and Undo paths used by the human interface.
+
+See [RQ-6: WebMCP competition and judge-client contract](docs/ultron/research/rq6-webmcp-competition-client.md) for the source-backed architecture review.
+
+### Optional Chrome diagnostics
+
+These steps are useful for development, but they are not the competition's built-in-browser path and are not prerequisites for judges:
 
 1. Go to `chrome://flags/#enable-webmcp-testing`, set it to **Enabled**, and restart Chrome.
 2. Open the app as usual.
 3. Open DevTools (**F12**) → **Application** → **WebMCP** — you should see the app's 10 tools listed there, and you can run any of them by hand.
-4. To chat with a natural-language agent today: install the **Model Context Tool Inspector** Chrome extension (it's separate from Gemini) and prompt it there.
+4. Optionally install the **Model Context Tool Inspector** Chrome extension to exercise the tools through a development agent.
 
-**Honest status:** Gemini in Chrome does not yet talk to WebMCP tools (as of late August 2026 — Google says it's coming). Everything above works today with the DevTools pane and the Inspector extension; when Gemini support ships, the same steps apply. Worth re-checking [developer.chrome.com/docs/ai/webmcp](https://developer.chrome.com/docs/ai/webmcp) now and then.
+Chrome's flag, DevTools pane, Inspector extension, and this project's `?dev` harness are independent diagnostic paths. Passing one of them does not by itself prove that the ChatGPT/Codex built-in browser discovered and used the tools.
 
 ## Who controls what
 
@@ -128,9 +141,9 @@ Across the top, the status strip shows whether the engine is **Stopped** or **Li
 
 The right panel is **Presets**, and it ships with a built-in factory library — Classic Karaoke, Warm Ballad, Rock Night, Phone Call Gag, Big Room, and Clean Speech — load-only starting points grouped above your own saved presets, so a fresh install has good sounds before you save anything. Once you've got a sound you like, hit **Save As…**, type a name right there in the panel, and press **Save** — it's stored for next time. Use the dropdown + **Load** to bring one back, or **Delete** to remove one you don't need anymore (click it twice — the first click just asks "DELETE?" and backs off if you change your mind). Your chain also auto-saves as you go, so if you close the app by accident, reopening it picks up right where you left off.
 
-### 🤖 Agent control (optional, experimental)
+### Agent control (optional, experimental)
 
-Everything in the judges' section above also works locally: the app exposes its chain-building controls as WebMCP tools, so you can ask in plain language — "give me a warm ballad vocal with light hall reverb" — and watch the chain build itself, with a plain summary of every change and one-click **Undo**. This is entirely optional, and manual control always remains the primary way to work the app — especially for live events. See **Local / Chrome-only setup** above for the Chrome flags path, or open `http://localhost:8000/?dev` for the Agent Harness.
+Everything in the judges' section above also works locally: the app exposes its chain-building controls as WebMCP tools, so you can ask in plain language — "give me a warm ballad vocal with light hall reverb" — and watch the chain build itself, with a plain summary of every change and one-click **Undo**. This is entirely optional, and manual control always remains the primary way to work the app, especially for live events. See **Optional Chrome diagnostics** above for the Chrome path, or open `http://localhost:8000/?dev` for the Agent Harness.
 
 ### ⚠️ If something sounds wrong — Emergency Bypass
 

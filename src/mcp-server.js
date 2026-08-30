@@ -1,4 +1,4 @@
-// Permanent WebMCP shim for the Node-Based Web Audio Chain Builder.
+// In-page WebMCP registration adapter for the Karaoke Chain Builder.
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single
 // `window.X` export pattern as the rest of this project. Only external
@@ -6,15 +6,10 @@
 // index.html), and every use of it is guarded so this shim also works
 // when AgentUI is absent. No localStorage; no other dependencies.
 //
-// MC-1 scope (docs/ultron/plan.md): hardens the MC-0 spike into the
-// permanent registration surface. MC-2 defines the 8 real tool schemas
-// in the ModelContextTool shape and registers them through
-// McpServer.registerTools(); MC-3/4 implement their execute functions.
-// The MC-0 connectivity canary was removed at MC-3 (its function and
-// init()'s registration call were deleted, per this header's own
-// instruction) once the real read tools went live — this file now
-// registers nothing itself; the 8 real tools self-register from
-// src/mcp-tools.js at parse time.
+// This file has no server process, protocol transport, manifest, or
+// connector. It adapts the app's definitions to the browser's imperative
+// WebMCP API; the 10 production tools self-register from src/mcp-tools.js
+// at top-level page load.
 //
 // API facts this shim encodes (RQ-1, docs/ultron/research/
 // rq1-webmcp-api.md; live-verified on localhost 2026-08-27):
@@ -27,7 +22,7 @@
 //   - Re-register on every page load (no persistence across loads).
 //
 // =====================================================================
-// MCP-SERVER SHIM — window.McpServer (AUTHORITATIVE)
+// WEBMCP REGISTRATION ADAPTER — window.McpServer (legacy public name)
 // =====================================================================
 //
 // Registration
@@ -69,8 +64,9 @@
 //                  API UNTOUCHED (plain object per live-verified RQ-1),
 //                  then AgentUI.setState('tools-ready')
 //   inner throws → a synchronous throw OR promise rejection is CAUGHT
-//                  and resolved (never propagated to the API — the API
-//                  has no error channel, errors travel as result text)
+//                  and resolved as a structured result. Domain refusals
+//                  also use structured values so corrective detail is
+//                  preserved for the calling agent.
 //                  as exactly:
 //                    { error: true,
 //                      tool: <name>,
@@ -113,15 +109,11 @@
 // Lifecycle (self-init at load, DOMContentLoaded-safe)
 //   Detect the API as above. Absent → silent no-op for the app plus
 //     ONE console.info (the chip already reads 'unavailable' at load).
-//     Present → nothing further to register: the 8 real tools self-
+//     Present → nothing further to register: the 10 real tools self-
 //     registered from src/mcp-tools.js at parse time via registerTools
 //     (). Registration state is observable via listRegistered() (the
-//     MC-6 dev harness). KNOWN GAP since the canary's removal: nothing
-//     emits AgentUI.setState('tools-ready') on successful batch
-//     registration anymore (init()'s old canary path did); the wrapper
-//     still sets 'acting'/'tools-ready' around each execute. That
-//     load-time wiring lands with MC-4, which owns the mutation tools'
-//     lifecycle.
+//     dev harness). src/mcp-tools.js publishes the registration promise
+//     and marks AgentUI tools-ready after at least one successful tool.
 // =====================================================================
 (function () {
   'use strict';

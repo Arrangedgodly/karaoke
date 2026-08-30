@@ -221,13 +221,10 @@
 //                     current-preset name restored — exactly what the
 //                     human Load path's own undo story is). Success
 //                     additionally carries { loaded, namespace, nodeCount }.
-//   get_capabilities -> the structured capability object (app, summary,
-//                     nodeTypes with per-param nominal+agent ranges,
-//                     chainRules, orderGuidance, starterChains,
-//                     safetyNotes, factoryPresets — the factory library
-//                     names + the issue-#12 preset-retrieval workflow
-//                     (get_preset/load_preset)) — see the MC-3 policy
-//                     block below.
+//   get_capabilities -> a compact capability index: node types with
+//                     per-param unit/range/action, core chain-rule
+//                     summaries, and human-only controls. Detailed
+//                     corrective policy stays in focused refusal results.
 //   validator bug-> { error: true, code: 'SCHEMA_LAYER_FAULT', ... }
 //     (a caught internal failure of THIS layer — nothing was applied).
 //
@@ -1663,6 +1660,7 @@
   }
 
   /**
+  /**
    * MCP-1 (cycle 3): the experimental-status lookup for
    * get_capabilities. ONE source of truth — the type's OWN registration
    * (`experimental: true` in NodeTypes.register; node-autotune.js,
@@ -1695,121 +1693,74 @@
   };
 
   /**
-   * get_capabilities' payload: the live node registry (falling back to
-   * the static snapshot) enriched with the static rq3 agent ranges and
-   * descriptions, plus the chain rules / order guidance / starters /
-   * safety notes. MCP-1 (cycle 3): each type carries its EXPERIMENTAL
-   * badge (`experimental: true` + note) from the single-source lookup
-   * above, and DISCRETE params (autotune key/scale) publish their legal
-   * `values` list instead of a numeric range.
+   * A compact index of the agent-facing node policy. Chrome recommends
+   * keeping each WebMCP tool result near 1,500 characters. The previous
+   * payload repeated detailed prose, starter chains, and preset help on
+   * every call and serialized to more than 15,000 characters. Expected
+   * refusals already return focused corrective detail, so this read tool
+   * carries only the data needed to construct a valid request.
+   *
+   * Shape:
+   *   nodeTypes.<type>.<param> = {unit, range:[min,max], action}
+   *   nodeTypes.<type>.<param> = {unit, values:[...], action} (discrete,
+   *     cycle 3 — the value list IS the range; action is 'reject')
+   *   experimental.<type> = short disclosure (cycle 3 — single-source
+   *     lookup above; omit nothing that the operator badge shows)
+   *   chainRules.<stable-rule-id> = concise rule summary
    *
    * @returns {Object}
    */
   function buildCapabilitiesResult() {
-    var nodeTypes = registryTypes().map(function (type) {
-      var info = TYPE_INFO[type] || {};
-      var params = paramSpecsFor(type).map(function (spec) {
+    var nodeTypes = {};
+    registryTypes().forEach(function (type) {
+      var params = {};
+      paramSpecsFor(type).forEach(function (spec) {
         var policy =
           (AGENT_PARAM_POLICY[type] && AGENT_PARAM_POLICY[type][spec.id]) || null;
         if (isDiscreteSpec(spec)) {
-          // Discrete param: the value list IS the range. `agent` carries
-          // the same list with treatment 'reject' — an illegal string is
-          // rejected with this list inline.
-          return {
-            name: spec.id,
+          // Discrete param (cycle 3): the value list IS the range, and an
+          // illegal string is rejected with this list inline.
+          params[spec.id] = {
             unit: spec.unit || '',
-            discrete: true,
             values: spec.values.slice(),
-            accepts: 'one of the listed strings, or its raw 0..' +
-              (spec.values.length - 1) + ' enum',
-            default: spec.default,
-            agent: {
-              values: spec.values.slice(),
-              treatment: 'reject'
-            },
-            description: policy
-              ? policy.description
-              : 'Discrete param; the legal values are listed (registry drift — no agent policy entry).'
+            action: 'reject'
+          };
+        } else {
+          params[spec.id] = {
+            unit: spec.unit || '',
+            range: policy
+              ? [policy.min, policy.max]
+              : [spec.min, spec.max],
+            action: policy ? policy.treatment : 'clamp'
           };
         }
-        return {
-          name: spec.id,
-          unit: spec.unit || '',
-          nominal: { min: spec.min, max: spec.max },
-          default: spec.default,
-          agent: policy
-            ? {
-                min: policy.min,
-                max: policy.max,
-                unit: policy.unit,
-                treatment: policy.treatment
-              }
-            : {
-                min: spec.min,
-                max: spec.max,
-                unit: spec.unit || '',
-                treatment: 'clamp'
-              },
-          description: policy
-            ? policy.description
-            : 'No agent policy is registered for this param (registry drift — the node files and the policy table disagree); the nominal range applies and values are clamped.'
-        };
       });
-      var label = info.label || type;
-      try {
-        if (window.NodeTypes && typeof window.NodeTypes.getLabel === 'function') {
-          var live = window.NodeTypes.getLabel(type);
-          if (typeof live === 'string' && live.length > 0) {
-            label = live;
-          }
-        }
-      } catch (err) {
-        // Live label unavailable — static fallback stands.
-      }
-      var experimental = isExperimentalType(type);
-      var entry = {
-        type: type,
-        label: label,
-        description: info.description || '',
-        experimental: experimental,
-        params: params
-      };
-      if (experimental) {
-        entry.experimentalNote =
-          label + ' is EXPERIMENTAL — new DSP still under audio-quality review. ' +
-          'It is fully operable (add/tune/persist like any type), but expect to verify ' +
-          'its sound by ear before relying on it mid-show.';
-      }
-      return entry;
+      nodeTypes[type] = params;
     });
-    // PS-4 / issue #12: one-line disclosure of the factory library plus
-    // the preset-retrieval workflow. (The PS-4-era note said no load_preset
-    // tool would exist by design — issue #12 reversed that: preset
-    // discovery was a dead end for agents, since list_presets only names
-    // them. get_preset retrieves a listed preset's full nodes and
-    // load_preset applies one through the same policy + UI path as
-    // set_chain.) Empty names (bare harness, module absent) still
-    // disclose the mechanism honestly.
-    var factoryNames = factoryPresets().map(function (preset) {
-      return preset.name;
+    var experimental = {};
+    registryTypes().forEach(function (type) {
+      if (isExperimentalType(type)) {
+        experimental[type] =
+          'EXPERIMENTAL — new DSP still under audio-quality review; operable, verify by ear mid-show risk.';
+      }
     });
-    var factoryNote =
-      'Factory preset library (read-only; the human Presets panel lists it under "Factory"): ' +
-      (factoryNames.length > 0 ? factoryNames.join(', ') + '. ' : '') +
-      'Preset workflow: list_presets names both namespaces (factory + user), get_preset(name, namespace?) returns a ' +
-      'preset\'s complete nodes, and load_preset(name, namespace?) applies one through the same loudness policy and ' +
-      'visible UI path as set_chain (undo restores the prior chain and prior preset name). set_chain with a preset\'s ' +
-      'nodes remains equally valid.';
     return {
       app: 'karaoke-chain-builder',
-      summary:
-        'Live-vocal effect chain builder for karaoke: gain, EQ, compressor, delay, reverb, plus noise gate, distortion, chorus, and autotune (experimental), around a required terminal safety limiter. Read chainRules before mutating — set_chain/add_node/remove_node/set_param validate every change against that loudness-safety policy, and each param\'s agent range (or discrete value list) is listed under nodeTypes.',
       nodeTypes: nodeTypes,
-      chainRules: freshCopy(CHAIN_RULES),
-      orderGuidance: freshCopy(ORDER_GUIDANCE),
-      starterChains: freshCopy(STARTER_CHAINS),
-      safetyNotes: freshCopy(SAFETY_NOTES),
-      factoryPresets: { names: factoryNames, note: factoryNote }
+      chainRules: {
+        'limiter-required-terminal': 'Exactly one limiter, always last.',
+        'gain-budget-12db':
+          'gainDb sum + 0.57*|compressor thresholds| + 0.57*|limiter ceiling| <= 12 dB.',
+        'eq-limits':
+          'At most 2 EQ nodes; boost sum <=12 dB; at most one band >=6 dB.',
+        'compound-loop-guard':
+          'Reject delay feedback >=55% with EQ boost sum >=6 dB.',
+        'gain-node-count': 'At most 6 gain nodes.',
+        'compressor-node-count': 'At most one compressor plus the limiter.',
+        'node-count-cap': 'At most 16 total nodes.'
+      },
+      experimental: experimental,
+      humanOnly: ['Start and audio input', 'Bypass', 'watchdog restore']
     };
   }
 
@@ -4332,15 +4283,14 @@
     return {
       name: 'get_capabilities',
       description:
-        "Read this app's agent surface before anything else: the registered node types " +
-        '(gain, compressor, eq, delay, reverb, limiter) with every parameter name, unit, ' +
-        'range and default, plus chain-order conventions and the loudness rules mutations ' +
-        'are held to. Call this first so later calls use real param names and pre-comply ' +
-        'with policy.',
+        'Return supported node types, parameter names, units, safe ranges, out-of-range ' +
+        'behavior, core chain rules, and human-only controls. Use when constructing or ' +
+        'correcting a chain request.',
       inputSchema: {
         type: 'object',
         properties: {},
-        required: []
+        required: [],
+        additionalProperties: false
       },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
       execute: readExecute('get_capabilities', validateNoArgs, buildCapabilitiesResult)
@@ -4354,14 +4304,14 @@
     return {
       name: 'get_chain',
       description:
-        'Read the current effect chain as a preset-shaped object: {schemaVersion: 1, name, ' +
-        'nodes: [{id, type, params}]} in signal order, MIC IN to OUT. Use before any edit to ' +
-        'learn real node ids and current param values; set_param and remove_node address ' +
-        'nodes by that id, and the object round-trips into set_chain.',
+        'Return the current effect chain as {schemaVersion: 1, name, nodes: [{id, type, ' +
+        'params}]} in MIC IN to OUT order. Use when a task needs current node ids or values; ' +
+        'the result round-trips into set_chain.',
       inputSchema: {
         type: 'object',
         properties: {},
-        required: []
+        required: [],
+        additionalProperties: false
       },
       // Issue #11: the returned node ids and name are stored/user- or
       // agent-authored content (set_chain assigns the ids), not
@@ -4419,14 +4369,17 @@
                       description: "Param names to values for this type; omit for the type's defaults."
                     }
                   },
-                  required: ['id', 'type']
+                  required: ['id', 'type'],
+                  additionalProperties: false
                 }
               }
             },
-            required: ['schemaVersion', 'name', 'nodes']
+            required: ['schemaVersion', 'name', 'nodes'],
+            additionalProperties: false
           }
         },
-        required: ['chain']
+        required: ['chain'],
+        additionalProperties: false
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: mutationExecute('set_chain', validateSetChain, planSetChain)
@@ -4440,12 +4393,9 @@
     return {
       name: 'add_node',
       description:
-        "Add one node of a registered type, optionally with initial params keyed by that " +
-        "type's real param names and units (get_capabilities lists them per type). " +
-        'position is the 0-based insert index; omitting it appends at the end — which is ' +
-        'rejected when a terminal limiter is present, since nothing may sit after it ' +
-        '(insert upstream instead). The host assigns the new node\'s id and returns it in ' +
-        'the result; loudness policy is enforced at apply time.',
+        'Add one effect node, optionally with initial parameters. position is a 0-based ' +
+        'insert index; omit it to append. Because the limiter must stay last, insert new ' +
+        'effects upstream of it. The host returns the new node id after policy validation.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4466,7 +4416,8 @@
             description: '0-based index in the nodes array to insert at; omit to append at the end.'
           }
         },
-        required: ['type']
+        required: ['type'],
+        additionalProperties: false
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: mutationExecute('add_node', validateAddNode, planAddNode)
@@ -4492,7 +4443,8 @@
             description: "Id of the node to remove, exactly as get_chain returns it (e.g. 'node-3' or 'n1')."
           }
         },
-        required: ['nodeId']
+        required: ['nodeId'],
+        additionalProperties: false
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: mutationExecute('remove_node', validateRemoveNode, planRemoveNode)
@@ -4506,13 +4458,10 @@
     return {
       name: 'set_param',
       description:
-        "Set one parameter on one existing node: the node id from get_chain, the param's " +
-        "real name for that node's type, and the new value in the param's own unit (dB, %, " +
-        'ms, s, or ratio — get_capabilities lists them). DISCRETE params (autotune key/scale) ' +
-        'take one of their listed strings (or its raw enum) instead of a number. Param-name ' +
-        'and value-type checks are structural; the published agent range is enforced at apply ' +
-        'time (out-of-range values reject or clamp per the param\'s treatment, and the full ' +
-        'chain — gain budget included — is re-validated with the new value).',
+        'Set one parameter on an existing node using its get_chain id, the parameter name, ' +
+        'and a value in the parameter\'s own unit. DISCRETE params (autotune key/scale) take ' +
+        'one of their listed strings instead of a number. The app applies the published ' +
+        'range behavior and revalidates the full chain before changing visible state.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4527,12 +4476,11 @@
           value: {
             type: ['number', 'string'],
             description:
-              "New value in the param's own unit as a number; for DISCRETE params " +
-              "(get_capabilities marks them discrete and lists their values) one of the " +
-              'listed strings, e.g. key "A" or scale "Minor".'
+              "New value in the param's own unit; DISCRETE params (key/scale) take one of their listed strings."
           }
         },
-        required: ['nodeId', 'param', 'value']
+        required: ['nodeId', 'param', 'value'],
+        additionalProperties: false
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: mutationExecute('set_param', validateSetParam, planSetParam)
@@ -4554,7 +4502,8 @@
       inputSchema: {
         type: 'object',
         properties: {},
-        required: []
+        required: [],
+        additionalProperties: false
       },
       // Issue #11: the listed user names are user-/agent-authored strings
       // (save_preset writes whatever name it was given); the untrusted-
@@ -4573,14 +4522,9 @@
     return {
       name: 'get_preset',
       description:
-        'Retrieve one listed preset\'s COMPLETE preset-shaped object — {name, nodes: ' +
-        '[{id, type, params}]} exactly as the factory library or the user store holds ' +
-        'it — without loading anything. The name must match list_presets exactly; ' +
-        'namespace is optional and only needed when the name exists in BOTH groups ' +
-        '(otherwise the call resolves the stable AMBIGUOUS_NAMESPACE result). Unknown ' +
-        'names resolve PRESET_NOT_FOUND with every available name and the nearest ' +
-        'matches. Inspect a preset first, then load it with load_preset (or feed its ' +
-        'nodes to set_chain).',
+        'Return one preset\'s complete {name, nodes} object without loading it. The name ' +
+        'must match list_presets. Give namespace only when the same name exists in both ' +
+        'factory and user stores. Missing or ambiguous names return corrective details.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4593,11 +4537,11 @@
             type: 'string',
             enum: ['factory', 'user'],
             description:
-              "Which namespace to read: 'factory' (the shipped read-only library) or 'user' " +
-              '(saved presets). Optional — omit it when the name exists in only one of them.'
+              'Optional source: factory (shipped read-only) or user (saved). Omit when the name exists in only one source.'
           }
         },
-        required: ['name']
+        required: ['name'],
+        additionalProperties: false
       },
       // Issue #12 (+ #11's matrix): read-only, and the returned name/nodes
       // are stored or user-/agent-authored content (user preset names are
@@ -4615,15 +4559,9 @@
     return {
       name: 'load_preset',
       description:
-        'Load one listed preset as the live chain — the same workflow as the human ' +
-        'Presets-panel Load button, through the same loudness policy and visible UI ' +
-        'path set_chain uses: the preset\'s nodes are validated against every chain ' +
-        'rule (a preset that fails policy refuses with nothing applied), the canvas ' +
-        'rebuilds, the preset name is shown, and the change gets a summary toast plus ' +
-        'one-click Undo that restores the prior chain AND the prior preset name. The ' +
-        'name must match list_presets exactly; namespace is optional and only needed ' +
-        'when the name exists in both the factory library and the user store. Use ' +
-        'get_preset first to inspect a preset without loading it.',
+        'Load one listed preset through the same policy and visible UI path as the human ' +
+        'Load button. Success rebuilds the canvas, shows the preset name and summary, and ' +
+        'offers Undo. Give namespace only when a name exists in both preset stores.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4636,11 +4574,11 @@
             type: 'string',
             enum: ['factory', 'user'],
             description:
-              "Which namespace to load from: 'factory' (the shipped read-only library) or " +
-              "'user' (saved presets). Optional — omit it when the name exists in only one of them."
+              'Optional source: factory (shipped read-only) or user (saved). Omit when the name exists in only one source.'
           }
         },
-        required: ['name']
+        required: ['name'],
+        additionalProperties: false
       },
       // Issue #12: a mutation (readOnlyHint false). untrustedContentHint
       // true: its results and toast echo the caller-requested preset name
@@ -4888,12 +4826,10 @@
     return {
       name: 'save_preset',
       description:
-        'Save the current chain as a named preset (name is 1-40 characters, trimmed). Saving under an ' +
-        "existing preset's name overwrites it (no auto-numbering); presets persist locally and also appear in " +
-        "the app's Presets panel for the human host. Undo deletes the preset if this call created it, or " +
-        'restores the previous content if it overwrote one. If the write cannot be persisted (storage quota ' +
-        'exhausted, blocked, or unavailable), the call resolves the stable PRESET_SAVE_FAILED refusal with ' +
-        'applied:false and NOTHING changes — no preset is created, no undo entry is pushed.',
+        'Save the current chain under a 1-40 character name and show it in the human ' +
+        'Presets panel. An existing name is overwritten. Undo deletes a new preset or ' +
+        'restores overwritten content. Persistence failures return PRESET_SAVE_FAILED ' +
+        'without changing preset or Undo state.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4904,7 +4840,8 @@
             description: 'Preset name, 1-40 characters (trimmed); overwrites an existing preset with the same name.'
           }
         },
-        required: ['name']
+        required: ['name'],
+        additionalProperties: false
       },
       // Issue #11: save_preset is a mutation (readOnlyHint false), but its
       // results echo the caller-authored name (saved, the toast summary,
@@ -4939,8 +4876,13 @@
     ];
   }
 
+  // Public registration lifecycle. Consumers such as the dev harness
+  // can await this promise instead of sampling the adapter's registry
+  // while the browser is still accepting tools one by one.
+  var registrationReady = Promise.resolve({ registered: [], failed: [] });
   window.McpTools = {
-    getDefs: getDefs
+    getDefs: getDefs,
+    registrationReady: registrationReady
   };
 
   // Self-init: hand the defs to the shim the moment this script parses
@@ -4950,7 +4892,9 @@
   // when present the defs register in the order above. Re-run on every
   // load — nothing persists (RQ-1).
   if (window.McpServer && typeof window.McpServer.registerTools === 'function') {
-    window.McpServer.registerTools(window.McpTools.getDefs()).then(
+    registrationReady = window.McpServer.registerTools(window.McpTools.getDefs());
+    window.McpTools.registrationReady = registrationReady;
+    registrationReady.then(
       function (result) {
         // Chip contract (FEW-1): 'tools-ready' once at least one tool is
         // actually registered. The MC-0 echo canary used to carry this from

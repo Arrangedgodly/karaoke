@@ -266,29 +266,25 @@
   -->
   <script src="src/agent-ui.js"></script>
   <!--
-    MC-0 — WebMCP spike: registers one test tool ("echo") when the WebMCP
-    API is present (chrome://flags/#enable-webmcp-testing), silent no-op
-    otherwise. See src/mcp-server.js header + docs/ultron/research/
-    rq1-webmcp-api.md. Loads after agent-ui.js so it can drive the agent
-    chip via the FEW-1 contract.
+    WebMCP registration adapter: detects the top-level page's imperative
+    API and registers definitions supplied by src/mcp-tools.js. Despite
+    the historical filename, this is browser code, not an MCP server or
+    transport. Loads after agent-ui.js so tool activity can drive the
+    shared status chip.
   -->
   <script src="src/mcp-server.js"></script>
   <!--
-    MC-2 — the 8 real agent tool definitions (window.McpTools,
-    src/mcp-tools.js): ModelContextTool-shaped schemas + structural
-    argument validation, honest NOT_IMPLEMENTED stubs until MC-3/MC-4
-    implement the bodies (MC-6's harness reuses McpTools.getDefs()).
-    Loads after mcp-server.js and self-registers through
-    McpServer.registerTools(); the node-*.js files above are already
-    loaded, so the schemas/validation read the real node registry via
-    window.NodeTypes. No WebMCP API → the shim's one batch diagnostic;
-    the app is otherwise untouched.
+    The 10 production WebMCP tool definitions (window.McpTools): schemas,
+    validation, read operations, policy-checked mutations, visible
+    summaries, and Undo. Loads after mcp-server.js and self-registers at
+    top level through the adapter. The node-*.js files above are already
+    loaded, so schemas and validation use the live node registry.
   -->
   <script src="src/mcp-tools.js"></script>
   <!--
     MC-6 — dev test harness (agent simulator): a fixed right-side overlay
     panel (src/mcp-harness.js, built entirely from JS — no markup here)
-    that lists all 8 tools from McpTools.getDefs() with editable JSON
+    that lists all 10 tools from McpTools.getDefs() with editable JSON
     args and Run buttons invoking def.execute() DIRECTLY (defs-direct
     path — works with WebMCP absent; the portfolio agent-free demo), plus
     an agentui:* event stream and a real AgentUI undo bar. ?dev GATED:

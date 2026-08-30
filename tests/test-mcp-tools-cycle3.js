@@ -499,56 +499,49 @@ async function main() {
   console.log('A. capabilities readout: cycle-3 types + experimental badge');
   // ====================================================================
   var caps = await getCapabilities.execute({});
-  var byType = {};
-  caps.nodeTypes.forEach(function (entry) {
-    byType[entry.type] = entry;
-  });
-  check(caps.nodeTypes.length === 10, 'A1: readout lists all 10 registered types');
+  // Merged contract (PR #18 compact shape + cycle-3 disclosure):
+  //   nodeTypes.<type>.<param> = {unit, range, action} | {unit, values, action}
+  //   experimental.<type> = disclosure note (autotune only)
+  var byType = caps.nodeTypes;
+  var typeKeys = Object.keys(byType);
+  check(typeKeys.length === 10, 'A1: readout lists all 10 registered types');
   check(!!byType.autotune && !!byType.gate && !!byType.distortion && !!byType.chorus,
     'A2: gate/distortion/chorus/autotune all present in the readout');
-  check(byType.autotune.experimental === true && typeof byType.autotune.experimentalNote === 'string' &&
-    /EXPERIMENTAL/i.test(byType.autotune.experimentalNote),
-    'A3: autotune carries the experimental badge + note');
-  ['gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter', 'gate', 'distortion', 'chorus'].forEach(function (t) {
-    check(byType[t] && byType[t].experimental === false && byType[t].experimentalNote === undefined,
-      'A4: ' + t + ' is NOT badged (autotune only)');
-  });
+  check(caps.experimental && typeof caps.experimental.autotune === 'string' &&
+    /EXPERIMENTAL/i.test(caps.experimental.autotune),
+    'A3: autotune carries the experimental disclosure note');
+  check(Object.keys(caps.experimental || {}).length === 1 &&
+    caps.experimental.gate === undefined,
+    'A4: autotune is the ONLY badged type');
   check(sandbox.NodeTypes.isExperimental('autotune') === true &&
     sandbox.NodeTypes.isExperimental('gate') === false,
     'A5: the registry itself is the badge source (NodeTypes.isExperimental)');
-  var atParams = {};
-  byType.autotune.params.forEach(function (p) {
-    atParams[p.name] = p;
-  });
-  check(atParams.key && atParams.key.discrete === true && Array.isArray(atParams.key.values) &&
-    atParams.key.values.length === 12 && atParams.key.values[9] === 'A' && atParams.key.default === 'C',
-    'A6: key publishes its 12-value discrete list (C..B, default C)');
-  check(atParams.scale && atParams.scale.discrete === true &&
-    deepEqual(atParams.scale.values, ['Chromatic', 'Major', 'Minor']),
+  var atParams = byType.autotune;
+  check(atParams.key && Array.isArray(atParams.key.values) &&
+    atParams.key.values.length === 12 && atParams.key.values[9] === 'A' &&
+    atParams.key.action === 'reject',
+    'A6: key publishes its 12-value discrete list (C..B), action reject');
+  check(atParams.scale && deepEqual(atParams.scale.values, ['Chromatic', 'Major', 'Minor']),
     'A7: scale publishes its 3-value discrete list');
-  check(atParams.key.agent && deepEqual(atParams.key.agent.values, atParams.key.values) &&
-    atParams.key.agent.treatment === 'reject',
-    'A8: key agent policy = the same value list, treatment reject');
-  check(atParams.key.nominal === undefined && atParams.key.accepts &&
-    /enum/.test(atParams.key.accepts),
-    'A9: discrete params carry no numeric nominal — an accepts line instead');
-  check(atParams.retune && atParams.retune.agent.min === 0 && atParams.retune.agent.max === 500,
-    'A10: autotune numeric params still publish agent ranges (retune 0-500)');
+  check(atParams.key.range === undefined,
+    'A8: discrete params carry no numeric range (the list IS the range)');
+  check(atParams.retune && deepEqual(atParams.retune.range, [0, 500]),
+    'A9: autotune numeric params still publish ranges (retune 0-500)');
   ['gate', 'distortion', 'chorus'].forEach(function (t) {
-    var drift = (byType[t].params || []).some(function (p) {
-      return /registry drift/.test(p.description || '');
-    });
-    check(!drift && byType[t].params.length >= 3,
-      'A11: ' + 't'.slice(0, 0) + t + ' params carry real agent policies (no drift placeholder)');
+    var pids = Object.keys(byType[t]);
+    check(pids.length >= 3 && pids.every(function (pid) {
+      return byType[t][pid].range || byType[t][pid].values;
+    }),
+      'A10: ' + t + ' params all publish a range or value list');
   });
-  var gateThreshold = byType.gate.params.filter(function (p) {
-    return p.name === 'threshold';
-  })[0];
-  check(gateThreshold && gateThreshold.agent.min === -80 && gateThreshold.agent.max === 0 &&
-    gateThreshold.agent.treatment === 'reject',
-    'A12: gate threshold publishes agent range [-80, 0] reject');
-  check(/autotune|Autotune/.test(caps.summary) && /experimental/.test(caps.summary),
-    'A13: the readout summary names autotune as experimental');
+  check(byType.gate.threshold && deepEqual(byType.gate.threshold.range, [-80, 0]) &&
+    byType.gate.threshold.action === 'reject',
+    'A11: gate threshold publishes range [-80, 0] reject');
+  var capsLen = JSON.stringify(caps).length;
+  check(capsLen < 4000,
+    'A12: compact payload held (' + capsLen + ' chars — PR #18 ceiling discipline)');
+  check(caps.summary === undefined,
+    'A13: no prose summary in the compact readout (disclosure rides experimental + chainRules)');
 
   // ====================================================================
   console.log('B. set_chain: all four effects, incl. key "A" / scale "Minor"');
@@ -885,22 +878,16 @@ async function main() {
   vm.createContext(bare);
   loadSrc(bare, 'src/mcp-tools.js');
   var bareCaps = await getTool(bare, 'get_capabilities').execute({});
-  check(bareCaps.nodeTypes.length === 10,
+  check(Object.keys(bareCaps.nodeTypes).length === 10,
     'G1: bare harness (no node files): snapshot still lists 10 types');
-  var bareAt = bareCaps.nodeTypes.filter(function (t) {
-    return t.type === 'autotune';
-  })[0];
-  check(bareAt && bareAt.experimental === true && /EXPERIMENTAL/.test(bareAt.experimentalNote),
-    'G2: bare harness: autotune still badged via the snapshot fallback');
-  var bareKey = bareAt.params.filter(function (p) {
-    return p.name === 'key';
-  })[0];
-  check(bareKey && bareKey.discrete === true && bareKey.values.length === 12,
+  check(bareCaps.experimental && typeof bareCaps.experimental.autotune === 'string' &&
+    /EXPERIMENTAL/.test(bareCaps.experimental.autotune) &&
+    Object.keys(bareCaps.experimental).length === 1,
+    'G2: bare harness: autotune still badged via the snapshot fallback (only autotune)');
+  check(bareCaps.nodeTypes.autotune.key && Array.isArray(bareCaps.nodeTypes.autotune.key.values) &&
+    bareCaps.nodeTypes.autotune.key.values.length === 12,
     'G3: bare harness: key value list mirrored in the snapshot');
-  var bareOther = bareCaps.nodeTypes.filter(function (t) {
-    return t.type === 'gate';
-  })[0];
-  check(bareOther && bareOther.experimental === false,
+  check(bareCaps.experimental.gate === undefined,
     'G4: bare harness: gate not badged');
   var addDef = getTool(bare, 'add_node');
   check(addDef.inputSchema.properties.type.enum.length === 10,

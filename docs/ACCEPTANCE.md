@@ -150,11 +150,45 @@ schedulers and the real audio thread):
       with the engine live, and clears when the tab comes back.
 - [ ] Date / operator / result: ____________
 
-## 4. Real-browser WebMCP exercise of all ten tools
+## 4. Competition client: primary WebMCP acceptance
+
+This is the judge path. Chrome DevTools and `?dev` are useful isolation
+checks, but neither proves discovery or tool use in the competition
+client.
+
+- [ ] Open the normal deployed URL in a supported ChatGPT/Codex built-in
+      browser. Do not use `?dev`, a browser extension, a local MCP server,
+      a manifest, or a separate connection.
+- [ ] The address-bar Site tools control appears and lists exactly 10
+      page-scoped tools:
+      `get_capabilities`, `get_chain`, `set_chain`, `add_node`,
+      `remove_node`, `set_param`, `list_presets`, `get_preset`,
+      `load_preset`, `save_preset`.
+- [ ] Ask for a direct preset load. The client selects `load_preset`, the
+      visible chain and preset name update, a summary appears, and Undo
+      restores both.
+- [ ] Ask for a natural-language sound goal without naming a tool. The
+      client selects suitable tools and leaves a coherent, visible chain
+      with the limiter still terminal.
+- [ ] Ask to remove the limiter and then request a limiter ceiling of
+      -1 dB. Both requests are refused with corrective details and no
+      partial state change.
+- [ ] Give an invalid parameter name, then correct it from the returned
+      details. The second call succeeds without requiring a fixed tool
+      sequence.
+- [ ] With the real microphone running, the human Bypass button and
+      spacebar work before, during, and after client-driven steps. The
+      agent never starts audio, selects the microphone, engages Bypass,
+      or restores watchdog-muted output.
+- [ ] Record desktop-app version, model, account, date, discovered tool
+      count, prompts, tool selections, and result: _____________________
+
+## 5. Optional Chrome diagnostic: exercise all ten tools
 
 The committed registration/schema gate is automated
-(`tests/test-tool-registration.js`); this walks the REAL browser surface
-end to end. Chrome with `chrome://flags/#enable-webmcp-testing` Enabled.
+(`tests/test-tool-registration.js`). This section isolates Chrome's
+implementation with `chrome://flags/#enable-webmcp-testing` enabled; it
+is secondary evidence, not a substitute for section 4.
 
 - [ ] DevTools → **Application → WebMCP**: all 10 tools listed in this
       order:
@@ -200,7 +234,7 @@ end to end. Chrome with `chrome://flags/#enable-webmcp-testing` Enabled.
       chain and preset state return exactly (`get_chain` matches).
 - [ ] Date / operator / result: ____________
 
-## 5. Latency readout sanity
+## 6. Latency readout sanity
 
 The status strip's LATENCY readout is the context-reported
 `baseLatency + outputLatency` estimate (src/status-readouts.js) — sanity,
@@ -216,14 +250,14 @@ not a lab measurement.
       matches the chain length.
 - [ ] Date / operator / result: ____________
 
-## 6. Live-deployment smoke — https://karaoke.arrangedgodly.com/
+## 7. Live-deployment smoke: https://karaoke.arrangedgodly.com/
 
 The deployed build must be the same app the local checks ran against.
 
 - [ ] Loads over HTTPS with no console errors; Start works and the mic
       permission flow behaves.
-- [ ] `get_chain` (DevTools WebMCP pane, or `?dev` harness) returns the
-      default chain. All 10 tools from section 4 are registered.
+- [ ] `get_chain` in the built-in browser returns the default chain. All
+      10 tools from section 4 are discovered on the normal URL.
 - [ ] `get_preset` reads a deployed factory preset without changing the
       live chain; `load_preset` applies it and Undo restores the prior
       chain and displayed preset name.
@@ -232,24 +266,11 @@ The deployed build must be the same app the local checks ran against.
       after a reload.
 - [ ] Latency/meters live; Bypass works.
 - [ ] Version sanity: the deployed chain behavior matches local (same
-      refusals on the limiter/ceiling attempts from section 4).
+      refusals on the limiter/ceiling attempts from sections 4 and 5).
 - [ ] Date / operator / result: ____________
 
-## 7. Competition client and public demo
+## 8. Public demo evidence
 
-The DevTools pane and `?dev` harness prove the browser registration path,
-but they do not replace the client and recording that judges will use.
-
-- [ ] Open the deployed URL in the Codex or ChatGPT in-app browser that
-      will be used for the competition. Confirm the client discovers all
-      10 tools without the `?dev` harness.
-- [ ] Through that client, run one accepted mutation and one safety
-      refusal. Confirm the visible chain changes only for the accepted
-      mutation, Undo restores it, and removing the limiter is refused.
-- [ ] With the engine running on the real microphone, confirm the human
-      Bypass button and spacebar still work before, during, and after the
-      client-driven steps. The agent must never start the engine, choose
-      the microphone, engage Bypass, or restore watchdog-muted output.
 - [ ] Record a public YouTube demo under three minutes with audio. Use
       spoken or owned audio, not a copyrighted karaoke backing track.
 - [ ] The video shows the accepted mutation, visible shared-state change,
