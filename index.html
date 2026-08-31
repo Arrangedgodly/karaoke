@@ -416,6 +416,13 @@
   -->
   <script src="src/mcp-server.js"></script>
   <!--
+    Preset panel adapter, followed by issue #20's one mutation interface.
+    ChainEditing depends on Canvas/Persistence/AgentUI/PresetsUI and must be
+    available before the production WebMCP definitions and main bootstrap.
+  -->
+  <script src="src/presets-ui.js"></script>
+  <script src="src/chain-editing.js"></script>
+  <!--
     The 10 production WebMCP tool definitions (window.McpTools): schemas,
     validation, read operations, policy-checked mutations, visible
     summaries, and Undo. Loads after mcp-server.js and self-registers at
@@ -438,7 +445,6 @@
     load only — reopen by reloading with ?dev.
   -->
   <script src="src/mcp-harness.js"></script>
-  <script src="src/presets-ui.js"></script>
   <!--
     VIS-5 — MIC IN / OUT level meters (window.Meters, src/meters.js):
     canvas lamp-bar meter components created from JS at the two .anchor

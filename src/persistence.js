@@ -10,15 +10,11 @@
 // PS-2 scope: everything under the single localStorage key STORAGE_KEY
 // below ('karaoke-autosave-v1'). Two entry points (plus FEW-1's layout
 // seam, described further down):
-//   - saveCurrentChain() serializes AudioGraph's current model (via
-//     PresetSchema.serialize()) and writes it to that key. It is called by
-//     src/canvas.js on EVERY change to the chain — structural (add/remove/
-//     reorder, via the onSort/remove-button chokepoints) AND a plain param
-//     tweak (via each card's onParamsChanged callback) — so the autosave
-//     slot always reflects exactly what's currently on screen. This is
-//     purely event-driven: there is no timer/interval anywhere in this
-//     file, and nothing here calls setInterval/setTimeout. If canvas.js
-//     never calls saveCurrentChain(), nothing is ever (re)saved.
+//   - saveCurrentChain() serializes the supplied accepted model (via
+//     PresetSchema.serialize()) and writes it to that key. ChainEditing
+//     calls it after every accepted logical edit; Canvas calls it after a
+//     layout-only move or resize. This is purely event-driven: there is no
+//     timer/interval anywhere in this file.
 //   - loadInitialModel() is called exactly once, by src/main.js, right
 //     after AudioEngine.start() resolves successfully. It reads/validates
 //     whatever is under STORAGE_KEY and returns a ready-to-load
@@ -187,10 +183,9 @@
   }
 
   /**
-   * Serialize the current model and write it to localStorage under
-   * STORAGE_KEY. Called by src/canvas.js after every structural change and
-   * every param tweak (see file-level comment above) — never on its own
-   * timer.
+   * Serialize an accepted model and write it to localStorage under
+   * STORAGE_KEY. ChainEditing calls this after logical transactions;
+   * Canvas calls it after layout-only gestures — never on a timer.
    *
    * FEW-1: the written payload is now the versioned ENVELOPE (see
    * AUTOSAVE_VERSION above) — chain wire form unchanged, plus a pruned,
@@ -209,23 +204,8 @@
    *
    * @param {Array<{id: string, type: string, params: Object}>} [model] -
    *   optional. When omitted, falls back to window.AudioGraph.getModel().
-   *   canvas.js always passes its OWN `chainModel` explicitly instead of
-   *   relying on that fallback, and this is deliberate, not a redundant
-   *   belt-and-suspenders: AudioGraph.buildGraph() commits a structural
-   *   change to its internal model ASYNCHRONOUSLY (glitch-free rewiring
-   *   ducks the chain gate, then finishes the swap ~20ms later on a
-   *   setTimeout — see buildGraph()'s own comments in src/audio-graph.js),
-   *   so AudioGraph.getModel() still reflects the OLD, pre-change model for
-   *   a brief window immediately after rebuildGraph() returns. canvas.js's
-   *   own `chainModel`, by contrast, is recomputed synchronously from the
-   *   DOM (recomputeModelFromDom()) before rebuildGraph() is even called,
-   *   so it is already exactly right at the moment saveCurrentChain() runs.
-   *   Reading through AudioGraph.getModel() at that same moment would
-   *   silently persist the WRONG (stale) model — e.g. a just-added node
-   *   would never make it into the autosave slot at all unless some later,
-   *   unrelated change happened to trigger another save afterward. The
-   *   optional param exists so a future/standalone caller with no fresher
-   *   model already in hand still has a sane default to fall back to.
+   *   Production mutation callers pass the authoritative model explicitly;
+   *   the fallback remains for standalone consumers.
    * @param {Object<string, {x: number, y: number, scale?: number, flow?: string}>|null} [layout]
    *
    * Wrapped in try/catch: localStorage.setItem() can throw (e.g. quota
@@ -249,18 +229,25 @@
       } else {
         layoutToSave = layout;
       }
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          autosaveVersion: AUTOSAVE_VERSION,
-          chain: serialized,
-          layout: sanitizeLayout(layoutToSave, knownIds)
-        })
-      );
+      var payload = JSON.stringify({
+        autosaveVersion: AUTOSAVE_VERSION,
+        chain: serialized,
+        layout: sanitizeLayout(layoutToSave, knownIds)
+      });
+      localStorage.setItem(STORAGE_KEY, payload);
+
+      // Issue #20: setItem returning is not proof of persistence. Some
+      // storage shims/privacy modes silently drop a write, so verify the
+      // exact bytes through the same slot before reporting saved:true.
+      if (localStorage.getItem(STORAGE_KEY) !== payload) {
+        throw new Error('Autosave verification failed: storage did not retain the written payload.');
+      }
       announceSaveState(true);
+      return { saved: true };
     } catch (err) {
       console.error('Persistence: failed to save chain to localStorage', err);
       announceSaveState(false);
+      return { saved: false, error: err };
     }
   }
 
@@ -413,8 +400,8 @@
    * `{id, type, params}[]` array — either the autosaved chain, or (when
    * nothing valid is saved) a fresh, independent copy of
    * window.DEFAULT_PRESET.nodes so the caller can freely mutate the result
-   * (e.g. hand it straight to ChainCanvas.loadModel(), which will) without
-   * risk of mutating the shared DEFAULT_PRESET data itself.
+   * (e.g. submit it to ChainEditing.apply(), which will) without risk of
+   * mutating the shared DEFAULT_PRESET data itself.
    *
    * FEW-1: unchanged in shape and behavior — layout rides the SEPARATE
    * loadInitialLayout() seam so this function's array contract (main.js,

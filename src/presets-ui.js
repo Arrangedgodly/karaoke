@@ -2,16 +2,17 @@
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single
 // `window.X` export pattern as the rest of this project. Depends on
-// window.PresetStore (src/preset-store.js), window.ChainCanvas
-// (src/canvas.js), and window.FactoryPresets (src/factory-presets.js,
+// window.PresetStore (src/preset-store.js), window.ChainEditing
+// (src/chain-editing.js), window.ChainCanvas (read-only Save As snapshots),
+// and window.FactoryPresets (src/factory-presets.js,
 // PS-4 — optional at runtime, see factoryPresets() below) — all already
 // loaded by the time this file runs, per index.html's script order.
 //
 // PS-3 scope: wires the real Presets panel markup in index.html
 // (#save-preset-btn/#preset-select/#load-preset-btn/#delete-preset-btn/
 // #current-preset-name/#unsaved-indicator) up to window.PresetStore
-// (named, user-managed saved presets) and window.ChainCanvas
-// (getCurrentModel()/loadModel(), the live on-screen chain).
+// (named, user-managed saved presets), ChainCanvas.getCurrentModel() for
+// Save As, and ChainEditing.apply() for every preset load.
 //
 // PS-4 scope: the dropdown gains two <optgroup> groups — "Factory"
 // (window.FactoryPresets' six shipped presets, first) and "Yours"
@@ -25,8 +26,8 @@
 // ('factory:Warm Ballad') so they can never collide with — or shadow — a
 // user preset of the same name (the optgroups also separate them
 // visually). Factory semantics: Load applies the factory nodes through
-// the SAME ChainCanvas.loadModel path a user-preset Load uses (the store
-// is never consulted for factory content); Delete refuses factory
+// the SAME ChainEditing transaction a user-preset Load uses (the store is
+// never consulted for factory content); Delete refuses factory
 // selections with a quiet inline note (never a modal, never
 // store.remove); Save As… is unchanged and always writes the USER store —
 // saving under a factory name creates a separate user preset beside it.
@@ -64,13 +65,9 @@
 //     yet this session — displayed as "Unsaved chain").
 //   - the `#unsaved-indicator` element's visibility: whether the live chain
 //     has drifted from `currentPresetName`'s last-saved/loaded state.
-//     src/canvas.js calls markModified() (one of this file's exports; the
-//     full display write path — setCurrentPreset/clearModified/
-//     refreshPresetSelect — is exported too, per the VIS-3 note at the
-//     bottom of the IIFE) at its three user-EDIT chokepoints (onSort, the
-//     remove-button handler, and a param-tweak's onParamsChanged callback)
-//     — never on a load, which is a clean state by definition, not an
-//     edit.
+//     ChainEditing.markAcceptedEdit() calls this module's markModified()
+//     only after an accepted human or agent edit. Preset loads instead set
+//     the named clean baseline after their transaction commits.
 (function () {
   'use strict';
 
@@ -111,7 +108,6 @@
   // see showPresetNote) and the timer hiding it again.
   var presetNoteEl = null;
   var presetNoteTimer = null;
-
   // R2-3: the inline Save As naming row (lazily created on first use —
   // see openNamingRow) and its pieces. `namingRowOpen` mirrors the row's
   // display state so the Enter/Escape keydown handler only ever acts
@@ -409,15 +405,20 @@
 
   /**
    * PS-4/Guided Patchbay: the ONE factory-load path — resolves a factory
-   * preset by name and applies it through ChainCanvas.loadModel exactly
-   * as before, with the same clean display state (name shown, unsaved
-   * dot hidden, human-edit revision bumped). Shared by BOTH the
-   * dropdown+Load button's factory branch and the Presets tab's curated
-   * cards, so there is exactly one factory-load code path, never two
-   * that could drift.
+   * preset by name and submits it through the same applyLoadedPreset()
+   * -> ChainEditing.apply() transaction the dropdown+Load button's
+   * factory branch and every user-preset load use (defined further down
+   * this file, alongside getDisplayState()). ChainEditing owns the
+   * display-state update (the request's `preset` field) as part of the
+   * atomic transaction, so a rejected/rolled-back load can never leave
+   * the name/unsaved-dot display ahead of what actually committed —
+   * this function no longer touches setCurrentPreset/clearModified
+   * directly. Shared by BOTH the dropdown+Load button's factory branch
+   * and the Presets tab's curated cards, so there is exactly one
+   * factory-load code path, never two that could drift.
    *
    * @param {string} name - the preset's plain (unprefixed) name.
-   * @returns {boolean} whether the load applied.
+   * @returns {boolean} whether a load was submitted.
    */
   function loadFactoryPreset(name) {
     var factoryPreset = findFactoryPreset(name);
@@ -428,14 +429,7 @@
       showPresetNote('Could not load that preset — it may have been removed.');
       return false;
     }
-    // freshSeats (#16 stale-seats finding): a preset load REPLACES the
-    // board — matching node ids do not inherit their current seats;
-    // every section takes the first-free stack (the documented tidy
-    // layout).
-    window.ChainCanvas.loadModel(factoryPreset.nodes, null, { freshSeats: true });
-    setCurrentPreset(factoryPreset.name);
-    clearModified();
-    noteHumanEditGuarded();
+    applyLoadedPreset(factoryPreset);
     return true;
   }
 
@@ -653,10 +647,9 @@
   }
 
   /**
-   * Called by src/canvas.js at each of its three user-EDIT chokepoints
-   * (onSort, the remove-button handler, a param tweak's onParamsChanged) —
-   * never on a load, which is a clean state, not an edit. Exposed on this
-   * module's export (see the export note at the bottom of this IIFE).
+   * Called by ChainEditing after an accepted human or agent edit — never
+   * while a candidate is merely staged, and never for a preset load (which
+   * establishes a clean named baseline). Exposed on this module's export.
    */
   function markModified() {
     if (unsavedIndicatorEl) {
@@ -676,12 +669,35 @@
     }
   }
 
+  function getDisplayState() {
+    return {
+      name: currentPresetName,
+      modified: !!(unsavedIndicatorEl && unsavedIndicatorEl.style.display !== 'none')
+    };
+  }
+
+  function applyLoadedPreset(preset) {
+    if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
+      throw new Error('ChainEditing is required for every preset mutation.');
+    }
+    window.ChainEditing.apply({
+      source: 'preset',
+      candidate: preset.nodes,
+      layout: null,
+      renderOptions: { freshSeats: true },
+      forceStructural: true,
+      preset: { name: preset.name, modified: false }
+    }).catch(function (err) {
+      console.error('Presets panel: load failed', err);
+      showPresetNote('Could not apply that preset. The previous chain was restored when possible.');
+    });
+  }
+
   /**
-   * Issue #6: bump the agent-undo state revision — called at this
-   * panel's three HUMAN mutation entry points (a successful Save As /
-   * overwrite, a Load, a successful Delete). The agent save_preset path
-   * writes through PresetStore/PresetsUI exports directly, never these
-   * button handlers, so agent edits do not bump and pure-agent undo
+   * Issue #6: bump the agent-undo state revision after a successful human
+   * Delete. Load revisions now belong to ChainEditing, while Save As owns
+   * its successful-write callback in commitNamingRow(). The agent
+   * save_preset path never reaches this button handler, so pure-agent undo
    * sequences keep today's semantics. Guarded: a page (or test sandbox)
    * without window.AgentUI simply skips it.
    */
@@ -706,12 +722,11 @@
     }
 
     // PS-4: factory selections resolve from window.FactoryPresets — the
-    // user store is never consulted — then apply through the SAME model
-    // path a user-preset Load uses (loadFactoryPreset -> ChainCanvas
-    // .loadModel, which also re-baselines the autosave internally, see
-    // src/canvas.js), with the same clean display state (name shown,
-    // unsaved dot hidden). This is also the Presets tab's card click
-    // path — one factory-load code path, not two.
+    // user store is never consulted — then apply through loadFactoryPreset()
+    // (defensive refusal + applyLoadedPreset() -> the SAME ChainEditing
+    // transaction a user-preset Load uses), with the same clean display
+    // state (name shown, unsaved dot hidden). This is also the Presets
+    // tab's card click path — one factory-load code path, not two.
     if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
       loadFactoryPreset(value.slice(FACTORY_VALUE_PREFIX.length));
       return;
@@ -729,14 +744,9 @@
       return;
     }
 
-    // ChainCanvas.loadModel() also updates the autosave baseline
-    // internally (see src/canvas.js) — nothing extra needed here for that.
-    // freshSeats: same as the factory branch — a preset load re-places the
-    // board (first-free stack), never inherits current seats.
-    window.ChainCanvas.loadModel(result.nodes, null, { freshSeats: true });
-    setCurrentPreset(result.name);
-    clearModified();
-    noteHumanEditGuarded();
+    // ChainEditing updates the accepted graph, board, and autosave baseline
+    // as one transaction — nothing extra is needed here.
+    applyLoadedPreset(result);
   });
 
   // R2-3: Delete is two-step in-panel — no browser confirm(). The first
@@ -842,6 +852,7 @@
     markModified: markModified,
     setCurrentPreset: setCurrentPreset,
     clearModified: clearModified,
-    refreshPresetSelect: refreshPresetSelect
+    refreshPresetSelect: refreshPresetSelect,
+    getDisplayState: getDisplayState
   };
 })();

@@ -155,32 +155,28 @@ function installStartedEngine(sandbox) {
   };
 }
 
-// ChainCanvas stub with a controllable loadModel (sections A/B): records
-// every call, optionally throws N times before accepting, and mirrors the
-// real one's model ownership.
-function installChainCanvasStub(sandbox, seedModel, throwTimes) {
+// ChainEditing harness for sections A/B. The Canvas adapter records
+// accepted-state renders and can fail N renders so the real transaction
+// module must perform and report rollback.
+function installChainEditingHarness(sandbox, seedModel, throwTimes) {
   var model = copyModel(seedModel || []);
-  var state = { model: model, loadCalls: 0, thrown: 0, throwTimes: throwTimes || 0 };
+  var state = { model: model, renderCalls: 0, thrown: 0, throwTimes: throwTimes || 0 };
   sandbox.__canvasState = state;
   sandbox.ChainCanvas = {
     getCurrentModel: function () { return copyModel(state.model); },
+    getCurrentLayout: function () { return {}; },
     isDragActive: function () { return false; },
-    loadModel: function (next) {
-      state.loadCalls += 1;
+    renderModel: function (next) {
+      state.renderCalls += 1;
       if (state.thrown < state.throwTimes) {
         state.thrown += 1;
-        throw new Error('harnes: loadModel failure #' + state.thrown);
+        throw new Error('harness: renderModel failure #' + state.thrown);
       }
       state.model = copyModel(next);
-      if (sandbox.AudioGraph && sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          state.model.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
-      }
+      return true;
     }
   };
+  loadSrc(sandbox, 'src/chain-editing.js');
 }
 
 // The minimal valid two-node chain every mutation below edits.
@@ -199,7 +195,7 @@ async function main() {
     var sbA = createBaseSandbox();
     sbA.AudioEngine = { isStarted: false };
     loadSrc(sbA, 'src/preset-schema.js');
-    installChainCanvasStub(sbA, seedChain(), 0);
+    installChainEditingHarness(sbA, seedChain(), 0);
     loadSrc(sbA, 'src/mcp-tools.js');
 
     var setChainA = getTool(sbA, 'set_chain');
@@ -219,9 +215,9 @@ async function main() {
       'A1: set_chain pre-Start resolves the stable ENGINE_NOT_STARTED refusal (retryable)'
     );
     check(
-      sbA.__canvasState.loadCalls === 0 &&
+      sbA.__canvasState.renderCalls === 0 &&
         JSON.stringify(sbA.__canvasState.model) === JSON.stringify(seedChain()),
-      'A2: NOTHING was applied — loadModel never ran, the model is byte-identical'
+      'A2: NOTHING was applied — the accepted-state renderer never ran, the model is byte-identical'
     );
     // Reads stay available pre-Start (the parity rule gates MUTATIONS).
     var chainRead = await getTool(sbA, 'get_chain').execute({});
@@ -243,9 +239,62 @@ async function main() {
       }
     });
     check(
-      resA2 && resA2.applied === true && sbA.__canvasState.loadCalls === 1,
+      resA2 && resA2.applied === true && sbA.__canvasState.renderCalls === 1,
       'A4: the SAME call applies once the engine has started'
     );
+
+    // A queued WebMCP mutation must preserve the same lifecycle refusal if
+    // the source transition ends stopped while it is waiting at the seam.
+    var transitionA = sbA.ChainEditing.beginEngineTransition();
+    await transitionA.ready;
+    var queuedA = setChainA.execute({
+      chain: {
+        schemaVersion: 1,
+        name: 'stopped while queued',
+        nodes: [
+          { id: 'x1', type: 'reverb', params: { mix: 30 } },
+          { id: 'l1', type: 'limiter', params: { ceiling: -6 } }
+        ]
+      }
+    });
+    await Promise.resolve();
+    sbA.AudioEngine.isStarted = false;
+    transitionA.release(false);
+    var resA3 = await queuedA;
+    check(
+      resA3 && resA3.error === true && resA3.code === 'ENGINE_NOT_STARTED' &&
+        resA3.retry === true,
+      'A5: a queued WebMCP edit preserves ENGINE_NOT_STARTED when the source transition stops'
+    );
+    check(
+      sbA.__canvasState.renderCalls === 1,
+      'A6: the stopped queued WebMCP edit reaches no accepted-state renderer'
+    );
+
+    var lossPromises = [];
+    ['suspended', 'closed'].forEach(function (state) {
+      var sbLoss = createBaseSandbox();
+      sbLoss.AudioEngine = {
+        isStarted: true,
+        isTrackLive: true,
+        sourceNode: {},
+        audioContext: { state: state }
+      };
+      loadSrc(sbLoss, 'src/preset-schema.js');
+      installChainEditingHarness(sbLoss, seedChain(), 0);
+      loadSrc(sbLoss, 'src/mcp-tools.js');
+      lossPromises.push(getTool(sbLoss, 'set_chain').execute({
+        chain: { schemaVersion: 1, name: state, nodes: seedChain() }
+      }).then(function (lossResult) {
+        check(
+          lossResult && lossResult.code === 'ENGINE_NOT_STARTED' && lossResult.retry === true,
+          'A7: WebMCP preserves ENGINE_NOT_STARTED while the context is ' + state
+        );
+        check(sbLoss.__canvasState.renderCalls === 0,
+          'A8: a ' + state + ' context reaches no accepted-state renderer');
+      }));
+    });
+    await Promise.all(lossPromises);
   }
 
   // ====================================================================
@@ -256,7 +305,7 @@ async function main() {
     var sbB = createBaseSandbox();
     sbA_engine_setup(sbB);
     loadSrc(sbB, 'src/preset-schema.js');
-    installChainCanvasStub(sbB, seedChain(), 1); // FIRST loadModel (the apply) throws
+    installChainEditingHarness(sbB, seedChain(), 1); // FIRST render (the apply) throws
     loadSrc(sbB, 'src/mcp-tools.js');
 
     var setChainB = getTool(sbB, 'set_chain');
@@ -272,8 +321,8 @@ async function main() {
     });
     check(
       resB && resB.error === true && resB.code === 'SCHEMA_LAYER_FAULT' &&
-        resB.rollback === 'restored',
-      'B1: the crash resolves SCHEMA_LAYER_FAULT with rollback:"restored"'
+        resB.rollback && resB.rollback.attempted === true && resB.rollback.succeeded === true,
+      'B1: the crash resolves SCHEMA_LAYER_FAULT with successful rollback status'
     );
     check(
       typeof resB.hint === 'string' && /restored/i.test(resB.hint) &&
@@ -281,7 +330,7 @@ async function main() {
       'B2: the hint says the previous chain was RESTORED — the false "nothing changed" claim is gone'
     );
     check(
-      sbB.__canvasState.loadCalls === 2 &&
+      sbB.__canvasState.renderCalls === 2 &&
         JSON.stringify(sbB.__canvasState.model) === JSON.stringify(seedChain()),
       'B3: the snapshot restore actually ran (apply attempt + restore) and the model is back to the seed'
     );
@@ -291,7 +340,7 @@ async function main() {
     var sbB2 = createBaseSandbox();
     sbA_engine_setup(sbB2);
     loadSrc(sbB2, 'src/preset-schema.js');
-    installChainCanvasStub(sbB2, seedChain(), 2); // apply AND restore throw
+    installChainEditingHarness(sbB2, seedChain(), 2); // apply AND restore render throw
     loadSrc(sbB2, 'src/mcp-tools.js');
     var resB2 = await getTool(sbB2, 'set_chain').execute({
       chain: {
@@ -304,8 +353,9 @@ async function main() {
       }
     });
     check(
-      resB2 && resB2.error === true && resB2.rollback === 'failed' &&
-        /Reload the page/.test(resB2.hint),
+      resB2 && resB2.error === true && resB2.rollback &&
+        resB2.rollback.attempted === true && resB2.rollback.succeeded === false &&
+        /reload the page/i.test(resB2.hint),
       'B4: when the restore also fails the result says rollback:"failed" and tells the operator to reload'
     );
   }
@@ -506,7 +556,7 @@ async function main() {
     sbF.AudioEngine = { isStarted: true, audioContext: { state: 'running' } };
     sbF.AudioBypass = { isEngaged: function () { return true; } };
     sbF.MeterTaps = { isTripped: function () { return true; } };
-    installChainCanvasStub(sbF, seedChain(), 0);
+    installChainEditingHarness(sbF, seedChain(), 0);
     loadSrc(sbF, 'src/preset-schema.js');
     loadSrc(sbF, 'src/mcp-tools.js');
     var chainF = await getTool(sbF, 'get_chain').execute({});
@@ -518,7 +568,7 @@ async function main() {
     );
 
     var sbF2 = createBaseSandbox();
-    installChainCanvasStub(sbF2, seedChain(), 0);
+    installChainEditingHarness(sbF2, seedChain(), 0);
     loadSrc(sbF2, 'src/preset-schema.js');
     loadSrc(sbF2, 'src/mcp-tools.js');
     var chainF2 = await getTool(sbF2, 'get_chain').execute({});

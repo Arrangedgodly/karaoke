@@ -38,14 +38,11 @@
 //   engine as the knob, rendered as a short horizontal instrument
 //   trimmer.
 //
-// Two side effects on every commit, deliberately kept separate (see the
-// comments on AudioGraph.updateNodeParams() in src/audio-graph.js and
-// NodeTypes.applyParam() in src/node-types.js for the full reasoning):
-//   - AudioGraph.updateNodeParams() — model bookkeeping only.
-//   - NodeTypes.applyParam() — the LIVE AudioNode write.
-// buildGraph() is NEVER called from this file — a continuous drag fires
-// many commits per second and must route through the click-safe ramp, not
-// the duck/rebuild machinery.
+// A gesture emits a normalized `{param, value}` intent and performs no
+// graph, live-node, persistence, preset, revision, or Undo write itself.
+// ChainEditing owns those effects and calls updateControl only after the
+// value is accepted. A continuous drag therefore keeps the no-rebuild
+// parameter path without creating a second mutation owner here.
 //
 // THE DISPLAY REGISTER FEED: every commit, focus, and external write also
 // calls window.CanvasRegister.showParam(module, param, value, help) — the
@@ -65,11 +62,11 @@
   'use strict';
 
   // ---------------------------------------------------------------------
-  // Issue #5 — rendered-row registry (for updateControl below).
+  // Issue #5/#20 — rendered-row registry (for updateControl below).
   //
   // render() keeps each row's elements in closure scope, which is exactly
-  // right for the human path but leaves no way for an OUTSIDE writer (the
-  // agent set_param fast path, via ChainCanvas.updateNodeParam) to move
+  // right for the human path but leaves no way for the accepted-state
+  // Canvas adapter to move
   // the visible control without re-rendering the whole card. This map is
   // the minimal bridge: render() registers, per model-entry id, one
   // "apply an externally-set value" closure per param row (it moves the
@@ -83,10 +80,9 @@
   /**
    * Move ONE already-rendered param row's visible control to a new value —
    * the knob rotation / pad selection / trim cap and the mono value span,
-   * never a re-render. Used by ChainCanvas.updateNodeParam (src/canvas.js)
-   * so an agent set_param applied through the parameter-only fast path
-   * (issue #5, src/mcp-tools.js) shows up on the section exactly like a
-   * human knob move would, without rebuilding any card.
+   * never a re-render. Used by ChainCanvas.renderNodeParam after
+   * ChainEditing accepts a parameter-only change, so human and WebMCP
+   * edits appear identically without rebuilding any card.
    *
    * Purely presentational + bookkeeping on this render's working copy; it
    * deliberately does NOT touch AudioGraph or any live AudioNode (the
@@ -439,6 +435,8 @@
         registerShow(moduleLabel, spec.label, valueText, helpText || '');
       }
 
+      var restoreAcceptedVisual = function () {};
+
       // -----------------------------------------------------------------
       // The ONE commit pipeline (unchanged in behavior from the fader
       // stack): human-edit bump -> value display -> working-copy re-sync
@@ -448,21 +446,11 @@
       // verbatim).
       // -----------------------------------------------------------------
       function commitValue(newValue) {
-        if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-          window.AgentUI.noteHumanEdit();
-        }
-
-        var valueText = formatValue(newValue, spec.unit, spec.displayScale);
-        if (valueDisplay) {
-          valueDisplay.textContent = valueText;
-        }
-        feedRegister(valueText);
-
         // Issue #5: re-sync the working copy from the model entry FIRST,
         // overlaid on this render's defaults, before applying this row's
         // change. modelEntry is the canvas's live nodeState object (the
         // same reference ChainCanvas keeps current, including via
-        // updateNodeParam's agent writes), so this makes an agent-written
+        // renderNodeParam's accepted writes), so this makes an accepted
         // sibling param immune to being reverted by the next human move —
         // belt-and-suspenders alongside the workingParams update inside
         // updateControl's apply() closure below.
@@ -470,17 +458,19 @@
         workingParams[spec.id] = newValue;
         var updatedParams = Object.assign({}, workingParams);
 
-        window.AudioGraph.updateNodeParams(modelEntry.id, updatedParams);
-
-        window.NodeTypes.applyParam(
-          modelEntry.type,
-          window.AudioGraph.getNodeInstance(modelEntry.id),
-          spec.id,
-          newValue
-        );
-
+        // Issue #20: this module translates the gesture only. Canvas
+        // forwards this normalized param intent to ChainEditing, which
+        // owns the live write, model acceptance, persistence, preset
+        // dirtiness, and one human revision bump. Keep the control on the
+        // accepted value until ChainEditing renders the committed value.
+        var acceptedValue = Object.prototype.hasOwnProperty.call(modelEntry.params || {}, spec.id)
+          ? modelEntry.params[spec.id]
+          : initialValue;
+        restoreAcceptedVisual(acceptedValue);
+        workingParams[spec.id] = acceptedValue;
+        feedRegister(formatValue(acceptedValue, spec.unit, spec.displayScale));
         if (typeof onParamsChanged === 'function') {
-          onParamsChanged(updatedParams);
+          onParamsChanged(updatedParams, { param: spec.id, value: newValue });
         }
       }
 
@@ -533,6 +523,11 @@
           }
           return -1;
         }
+
+        restoreAcceptedVisual = function (value) {
+          var index = valueIndex(value);
+          renderPadState(index < 0 ? selectedIndex : index);
+        };
 
         function selectPad(index, options) {
           if (index < 0 || index >= padButtons.length) {
@@ -632,7 +627,7 @@
       // semantic engine for BOTH shapes (knob + trim): focusable,
       // announced, native arrow/Home/End/PageUp/PageDown, label[for],
       // aria-describedby, and the 'input' event contract every existing
-      // consumer (canvas fast path, undo-conflict tests, agent tooling)
+      // consumer (Canvas accepted-state adapter and test tooling)
       // already speaks.
       // -----------------------------------------------------------------
       var input = document.createElement('input');
@@ -696,6 +691,12 @@
         setVar(knobEl, '--knob-rot', (frac * KNOB_SWEEP_DEG - KNOB_SWEEP_DEG / 2).toFixed(2) + 'deg');
       }
 
+      restoreAcceptedVisual = function (value) {
+        input.value = value;
+        syncKnobVisual(parseFloat(value));
+        valueDisplay.textContent = formatValue(value, spec.unit, spec.displayScale);
+      };
+
       // The 'input' handler — the ONE commit path for both shapes, fired
       // natively (keyboard) and by our drag/wheel dispatches.
       input.addEventListener('input', function () {
@@ -709,7 +710,7 @@
         feedRegister(formatValue(parseFloat(input.value), spec.unit, spec.displayScale));
       });
 
-      // Issue #5: the external-value applier (agent set_param fast path).
+      // Accepted-state value applier (ChainCanvas.renderNodeParam).
       // Moves the ENGINE + the visual + the mono span + the register AND
       // the working copy a later human commit builds from — without it,
       // the next 'input' on a sibling row would build its updatedParams

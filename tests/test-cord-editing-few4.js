@@ -6,18 +6,19 @@
 // jack points render):
 //   - All FOUR link-point types relink end-to-end (mic-out = FIRST,
 //     OUT-end on B's IN = BEFORE B, IN-end on B's OUT = AFTER B,
-//     out-anchor IN = LAST), each through exactly ONE buildGraph call
-//     and ONE autosave (the single commitStructuralChange chokepoint).
+//     out-anchor IN = LAST), each through exactly ONE ChainEditing apply
+//     (the sole logical-mutation chokepoint).
 //   - The revert path (drop nowhere, incompatible target, Escape,
 //     pointercancel, and a drop that moves nothing) leaves model + DOM
 //     + cords BYTE-unchanged and fires ZERO rebuilds — an unplug is an
 //     edit, never an audio change.
 //   - The deliberate-drag threshold: a sub-threshold press+release is a
-//     complete no-op (no ghost, no dragActive, no state).
-//   - MC-4 agent queue: isDragActive() goes true only at DETACH and
-//     false at gesture end, so a queued set_param applies after the
-//     drag's commit (the mcp-tools waitForDragSettle seam, exercised at
-//     the flag it polls).
+//     commits no edit and leaves no ghost or state after release;
+//     dragActive is transiently true from pointer ARM.
+//   - MC-4 agent queue: isDragActive() goes true at pointer arm and false
+//     at gesture end, so a queued set_param
+//     applies after the drag's commit (the mcp-tools waitForDragSettle
+//     seam, exercised at the flag it polls).
 //   - The ghost + hot-target highlight are paint-only and always
 //     teardown; the FEW-3 DOM contracts survive (layer last child,
 //     nothing cord-related in #chain-list).
@@ -278,6 +279,21 @@ vm.runInContext(
 );
 
 var CC = sandbox.ChainCanvas;
+var seamRequests = [];
+sandbox.ChainEditing = {
+  getModel: function () { return CC.getCurrentModel(); },
+  getLayout: function () { return CC.getCurrentLayout(); },
+  syncLayout: function () {},
+  apply: function (request) {
+    seamRequests.push(request);
+    if (request.candidate) {
+      CC.renderModel(request.candidate, request.layout);
+    } else if (request.change) {
+      CC.renderNodeParam(request.change.nodeId, request.change.param, request.change.value);
+    }
+    return Promise.resolve({ applied: true, saved: true });
+  }
+};
 
 // ----------------------------------------------------------------------
 // Helpers.
@@ -393,7 +409,7 @@ function snapshot() {
 
 // ----------------------------------------------------------------------
 console.log('A. jack points render with the FEW-3 contracts intact');
-CC.loadModel(model3());
+CC.renderModel(model3());
 check(jackEls().length === 8, 'A1: 3 nodes -> 8 jack points (mic-out + out-in + 3 in + 3 out)');
 check(
   !!jackAt('mic-out') && !!jackAt('out-in') &&
@@ -413,6 +429,7 @@ check(
 );
 var baseBuild = buildCount;
 var baseSaves = saves.length;
+var baseSeam = seamRequests.length;
 
 // ----------------------------------------------------------------------
 console.log('B. deliberate-drag threshold: a click on a jack is not an unplug');
@@ -451,16 +468,17 @@ check(
 );
 drop(seatIn('n3'));
 check(domOrder().join('|') === 'n2|n1|n3', 'C5: n1\'s OUT on n3\'s IN -> n1 inserted BEFORE n3 (n2, n1, n3)');
-check(buildCount === baseBuild + 1, 'C6: exactly ONE buildGraph per committed relink');
-check(saves.length === baseSaves + 1, 'C7: exactly ONE autosave per committed relink');
+check(seamRequests.length === baseSeam + 1, 'C6: exactly ONE ChainEditing request per committed relink');
+check(buildCount === baseBuild && saves.length === baseSaves,
+  'C7: the Canvas adapter performs no graph or persistence write itself');
 check(
   segRoute().join('|') === 'mic>n2|n2>n1|n1>n3|n3>out',
   'C8: the cords re-route to the committed order'
 );
 check(modelIds().join('|') === 'n2|n1|n3', 'C9: the canvas model follows the DOM (recompute ran)');
 check(
-  JSON.stringify(sandbox.__lastBuilt.map(function (e) { return e.id; })) === '["n2","n1","n3"]',
-  'C10: the audio graph was built with the NEW order (the single duck/rebuild)'
+  JSON.stringify(seamRequests[seamRequests.length - 1].candidate.map(function (e) { return e.id; })) === '["n2","n1","n3"]',
+  'C10: the normalized ChainEditing candidate carries the NEW order'
 );
 check(
   !ghostEl() && anyHotJack().length === 0 && CC.isDragActive() === false,
@@ -469,9 +487,10 @@ check(
 
 // ----------------------------------------------------------------------
 console.log('D. relink 2/4 — a section\'s IN end on B\'s OUT jack inserts AFTER B');
-CC.loadModel(model3());
+CC.renderModel(model3());
 baseBuild = buildCount;
 baseSaves = saves.length;
+baseSeam = seamRequests.length;
 grabJack('section-in', 'n3');
 move({ x: 90, y: 400 }); // detach
 move(seatOut('n1'));
@@ -479,14 +498,15 @@ check(jackAt('section-out', 'n1').classList.contains('cord-jack-hot'),
   'D1: an IN end finds section OUT jacks compatible');
 drop(seatOut('n1'));
 check(domOrder().join('|') === 'n1|n3|n2', 'D2: n3\'s IN on n1\'s OUT -> n3 inserted AFTER n1 (n1, n3, n2)');
-check(buildCount === baseBuild + 1 && saves.length === baseSaves + 1,
-  'D3: one rebuild, one autosave (chokepoint discipline holds)');
+check(seamRequests.length === baseSeam + 1 && buildCount === baseBuild && saves.length === baseSaves,
+  'D3: one seam request and zero adapter-owned graph/persistence writes');
 
 // ----------------------------------------------------------------------
 console.log('E. relink 3/4 — the mic-out point links the dragged node FIRST');
-CC.loadModel(model3());
+CC.renderModel(model3());
 baseBuild = buildCount;
 baseSaves = saves.length;
+baseSeam = seamRequests.length;
 grabJack('section-in', 'n2');
 move({ x: 60, y: 240 }); // detach
 move(MIC_OUT);
@@ -494,27 +514,29 @@ check(jackAt('mic-out').classList.contains('cord-jack-hot'),
   'E1: the mic-out point highlights for an IN end');
 drop(MIC_OUT);
 check(domOrder().join('|') === 'n2|n1|n3', 'E2: mic-out links n2 as the FIRST node');
-check(buildCount === baseBuild + 1 && saves.length === baseSaves + 1,
-  'E3: one rebuild, one autosave');
+check(seamRequests.length === baseSeam + 1 && buildCount === baseBuild && saves.length === baseSaves,
+  'E3: one seam request and zero adapter-owned graph/persistence writes');
 
 // ----------------------------------------------------------------------
 console.log('F. relink 4/4 — the Voice Out rail\'s jack links the dragged node LAST');
-CC.loadModel(model3());
+CC.renderModel(model3());
 baseBuild = buildCount;
 baseSaves = saves.length;
+baseSeam = seamRequests.length;
 grabJack('section-out', 'n1');
 move({ x: 120, y: 120 }); // detach
 move(OUT_IN);
 check(jackAt('out-in').classList.contains('cord-jack-hot'),
   'F1: the Voice Out rail\'s jack highlights for an OUT end');
 drop(OUT_IN);
-check(domOrder().join('|') === 'n2|n3|n1', 'F2: out-in links n1 as the LAST node (the fixed rail jack is the chain\'s end port)');
-check(buildCount === baseBuild + 1 && saves.length === baseSaves + 1,
-  'F3: one rebuild, one autosave');
+check(domOrder().join('|') === 'n2|n3|n1',
+  'F2: out-in links n1 as the LAST node (the fixed rail jack is the chain\'s end port)');
+check(seamRequests.length === baseSeam + 1 && buildCount === baseBuild && saves.length === baseSaves,
+  'F3: one seam request and zero adapter-owned graph/persistence writes');
 
 // ----------------------------------------------------------------------
 console.log('G. revert — drop nowhere leaves model + DOM + cords byte-unchanged');
-CC.loadModel(model3());
+CC.renderModel(model3());
 baseBuild = buildCount;
 baseSaves = saves.length;
 var g0 = snapshot();
@@ -585,7 +607,7 @@ check(CC.isDragActive() === false, 'I4: the flag releases after the drop-nowhere
 
 // ----------------------------------------------------------------------
 console.log('J. agent queue — a queued set_param applies only after the gesture');
-CC.loadModel(model3());
+CC.renderModel(model3());
 baseBuild = buildCount;
 baseSaves = saves.length;
 grabJack('section-out', 'n1');
@@ -596,14 +618,14 @@ check(CC.isDragActive() === true, 'J1: isDragActive() is true mid-edit (the mcp-
 var queuedWhileDragging = CC.isDragActive();
 var appliedEarly = false;
 if (!queuedWhileDragging) {
-  CC.updateNodeParam('n1', 'level', 9);
+  CC.renderNodeParam('n1', 'level', 9);
   appliedEarly = true;
 }
 check(queuedWhileDragging && !appliedEarly, 'J2: the mutation stays queued while the drag is live');
 move(seatIn('n3'));
 drop(seatIn('n3')); // commits n2, n1, n3
 check(CC.isDragActive() === false, 'J3: the flag releases at the drag\'s end (the queue drains)');
-CC.updateNodeParam('n1', 'level', 9); // the drained queued write
+CC.renderNodeParam('n1', 'level', 9); // the drained queued write
 var applied = CC.getCurrentModel().filter(function (e) { return e.id === 'n1'; })[0];
 check(!!applied && applied.params.level === 9, 'J4: the queued set_param applies AFTER the commit');
 check(domOrder().join('|') === 'n2|n1|n3', 'J5: the committed order survived the queued write');
@@ -618,7 +640,7 @@ check(
     canvasFaceEl.children[canvasFaceEl.children.length - 1] === cordLayer(),
   'K1: MIC IN / OUT live on their fixed rails (not in the face); the layer is still the face\'s last child'
 );
-CC.loadModel([]);
+CC.renderModel([]);
 check(cordPaths().length === 1 && jackEls().length === 2,
   'K2: empty chain -> the bypass cord + exactly the two PANEL jacks (mic-out, out-in) — nothing draggable'
 );
@@ -627,7 +649,7 @@ check(jackAt('section-in', 'n1') === null && jackAt('section-out', 'n1') === nul
 grabJack('mic-out'); // panel anchors are fixed hardware, never drag sources
 move({ x: 100, y: 100 });
 drop({ x: 100, y: 100 });
-check(buildCount > 0 && domOrder().length === 0, 'K4: grabbing a panel anchor edits nothing (drop targets only)');
+check(seamRequests.length > 0 && domOrder().length === 0, 'K4: grabbing a panel anchor edits nothing (drop targets only)');
 
 if (failures.length === 0) {
   console.log('PASS: cord editing (FEW-4)');

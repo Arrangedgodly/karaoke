@@ -1,5 +1,5 @@
 // Chain canvas for the VOXCHAIN — drag-and-drop build /
-// reorder / remove, the loadModel rebuild, the parameter-only fast path,
+// reorder / remove, accepted-model rendering, in-place parameter rendering,
 // and (redesign item 1) the canvas panel's Pattern Machine chrome: the
 // display register and the panel-print SECTION anatomy each chain entry
 // renders as (see createNodeCard + buildDisplayRegister below).
@@ -19,16 +19,11 @@
 // the grip/header drags MOVE POSITION (FEW-2).
 //
 // Model bookkeeping (Part D of the task spec): `chainModel`/`nodesById`
-// below are THIS file's own source of truth for "what nodes exist, in what
-// order, with what params" — kept in sync with the DOM (via the Sortable
-// callbacks) and with each node's live params (via each card's
-// ParamControls onParamsChanged callback). Every STRUCTURAL change (add,
-// remove, reorder) calls AudioGraph.buildGraph() with the fresh array,
-// exactly once, from exactly one place each. A plain param tweak (a slider
-// move on an already-placed node) never calls buildGraph() — that's UI-4's
-// existing contract (AudioGraph.updateNodeParams()/NodeTypes.applyParam()
-// handle that path directly, see src/param-controls.js) and this file
-// doesn't change it.
+// are the Canvas adapter's accepted rendered copy. Human gestures produce
+// normalized candidates/intents for ChainEditing; only that module commits
+// the live graph, accepts logical state, persists, updates preset state,
+// and records revision/Undo. ChainEditing calls renderModel or
+// renderNodeParam only after acceptance, keeping this file presentational.
 (function () {
   'use strict';
 
@@ -113,6 +108,13 @@
   var zCounter = 0; // bring-to-front counter (pointerdown order)
   var positionDrag = null; // the live grip drag, if any
   var resizeDrag = null; // the live width-resize drag, if any
+
+  function requireChainEditing() {
+    if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
+      throw new Error('ChainEditing is required for every chain mutation.');
+    }
+    return window.ChainEditing;
+  }
 
   function snapToGrid(v) {
     return Math.round(v / GRID_PITCH) * GRID_PITCH;
@@ -316,8 +318,13 @@
     positionDrag = null;
     dragActive = false;
     // Persist on MOVE-END only — never per pointermove.
-    if (drag.moved && window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
+    if (drag.moved) {
+      if (window.ChainEditing && typeof window.ChainEditing.syncLayout === 'function') {
+        window.ChainEditing.syncLayout(currentLayout());
+      }
+      if (window.Persistence) {
+        window.Persistence.saveCurrentChain(chainModel, positions);
+      }
     }
   }
 
@@ -355,8 +362,13 @@
     resizeDrag = null;
     dragActive = false;
     // Same discipline as a seat move: persist on END only.
-    if (drag.moved && window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
+    if (drag.moved) {
+      if (window.ChainEditing && typeof window.ChainEditing.syncLayout === 'function') {
+        window.ChainEditing.syncLayout(currentLayout());
+      }
+      if (window.Persistence) {
+        window.Persistence.saveCurrentChain(chainModel, positions);
+      }
     }
   }
 
@@ -738,10 +750,9 @@
   // Fixed semantics (town-hall Q4, unchangeable):
   //   - CORDS EDIT ORDER, NEVER GATE AUDIO. Grabbing a jack starts an
   //     EDIT; audio changes ONLY on a completed relink — a drop on a
-  //     compatible point — committed as ONE structural commit through
-  //     the existing commitStructuralChange() chokepoint (DOM reorder
-  //     -> recompute -> rebuildGraph duck -> autosave -> revision
-  //     bump). Unplugging can never remove audio: mid-drag the model,
+  //     compatible point — submitted as ONE candidate through the
+  //     existing commitStructuralChange() -> ChainEditing chokepoint.
+  //     Unplugging can never remove audio: mid-drag the model,
   //     the DOM, and the painted cords are byte-unchanged, and drop
   //     nowhere (or Escape, or pointercancel) reverts the edit with
   //     ZERO rebuilds. Per-node bypass stays DECLINED elsewhere; a cord
@@ -768,8 +779,8 @@
   //   - DELIBERATE-DRAG GUARD: the pointer must travel at least
   //     CORD_DETACH_THRESHOLD px before the end detaches — a click on a
   //     jack is not an unplug, and a sub-threshold release leaves no
-  //     state at all. dragActive (MC-4) goes true at DETACH and false
-  //     at gesture end, so agent mutations QUEUE behind the edit
+  //     committed state at all. dragActive (MC-4) goes true at pointer ARM
+  //     and false at gesture end, so agent mutations QUEUE behind the edit
   //     exactly as they queue behind a palette or grip drag (mcp-tools
   //     already polls isDragActive() — no new seam).
   //   - The commit reorders the DOM (.insertBefore, DOM ORDER = CHAIN
@@ -1046,7 +1057,6 @@
         return; // deliberate-drag guard: not yet an unplug
       }
       cordDrag.detached = true;
-      dragActive = true; // MC-4: agent mutations now queue behind the edit
       cordDrag.anchorPt = anchorPointFor(cordDrag.id, cordDrag.endKind);
     }
     var pt = pointerToLayer({ clientX: cx, clientY: cy });
@@ -1102,7 +1112,7 @@
       return; // a drop that moves nothing commits nothing (no-op)
     }
     applyDomOrder(order);
-    commitStructuralChange(); // DOM reorder -> recompute -> rebuild duck -> autosave -> revision bump, ONCE
+    commitStructuralChange(); // DOM order -> one ChainEditing transaction
   }
 
   // ---------------------------------------------------------------------
@@ -1276,8 +1286,10 @@
    *  marked locked. Purely presentational (aria-hidden — every semantic
    *  already lives on the board's own cards/cords); reads chainModel via
    *  domCardIds()/nodesById so it can never drift from what's actually on
-   *  screen. Called from every structural-change chokepoint alongside
-   *  renderCords() (commitStructuralChange(), loadModel()). */
+   *  screen. Called from renderModel() alongside renderCords() — the one
+   *  place ChainEditing repaints an accepted model, so the strip updates
+   *  on every source (human/agent/preset/startup/undo), not just a human
+   *  commit. */
   function renderSignalOrderStrip() {
     if (!signalOrderEl) {
       return;
@@ -1320,28 +1332,6 @@
     });
     addArrow();
     addStep('Safe out', 'signal-order-safe');
-  }
-
-  /**
-   * Rebuild the live audio graph from the current `chainModel`, exactly
-   * once, via AudioGraph.buildGraph(). No-ops (does not throw) if the
-   * engine hasn't started yet — buildGraph() requires a live
-   * AudioContext/sourceNode (see src/audio-graph.js), and there is nothing
-   * to build against before AudioEngine.start() has resolved. This is the
-   * ONE guarded chokepoint every structural change (add/remove/reorder)
-   * routes through — never called from anywhere else in this file, and
-   * never called merely because a pointer moved during a drag (SortableJS
-   * only fires the callbacks that call this on an actual committed change,
-   * not on every dragover/pointermove).
-   */
-  function rebuildGraph() {
-    if (!window.AudioEngine || !window.AudioEngine.isStarted) {
-      return;
-    }
-    var modelForBuild = chainModel.map(function (entry) {
-      return { id: entry.id, type: entry.type, params: entry.params };
-    });
-    window.AudioGraph.buildGraph(modelForBuild);
   }
 
   // ---------------------------------------------------------------------
@@ -1747,10 +1737,10 @@
    * safe-output invariant), so the card is inserted immediately BEFORE a
    * limiter that currently occupies the last position. With no terminal
    * limiter (or an empty chain) it appends at the end. Commits through
-   * commitStructuralChange() — the SAME chokepoint the SortableJS onSort
-   * handler uses — so autosave (PS-2), the unsaved dot (PS-3), and the
-   * human-edit revision bump (Issue #6) all fire exactly as they do for a
-   * drag-add. No agent toast class: this is a human action.
+   * commitStructuralChange() — the SAME ChainEditing adapter the cord and
+   * removal gestures use — so graph acceptance, autosave (PS-2), the
+   * unsaved dot (PS-3), and the human-edit revision bump (Issue #6) stay
+   * one transaction. No agent toast class: this is a human action.
    *
    * @param {string} type - the node type to add (from the chip's
    *   data-node-type, itself from the registry-driven palette loop).
@@ -1777,40 +1767,40 @@
   }
 
   /**
-   * R2-2 factoring: the SINGLE post-structural-change commit — model
-   * recompute, empty-hint flip, graph rebuild, autosave, unsaved dot,
-   * human-edit revision bump. Previously the body of the SortableJS onSort
-   * handler; now shared verbatim with addNodeType() above so a keyboard
-   * add and a drag add are indistinguishable downstream.
+   * R2-2 factoring: the SINGLE human structural adapter. It translates the
+   * provisional DOM gesture into a candidate, restores the accepted render,
+   * and submits the candidate to ChainEditing. Keyboard add, cord reorder,
+   * and removal are therefore indistinguishable downstream.
    */
   function commitStructuralChange() {
     recomputeModelFromDom();
     updateEmptyHint();
-    rebuildGraph();
     renderCords(); // FEW-3: an add (or any order change) re-routes the cords
-    renderSignalOrderStrip();
-    // PS-2: persist the chain after every structural add/remove/reorder.
-    // Pass chainModel explicitly rather than AudioGraph.getModel() — see
-    // the comment on Persistence.saveCurrentChain() for why: AudioGraph's
-    // own model commits asynchronously, ~20ms after rebuildGraph()
-    // returns, so reading through it right here would silently save the
-    // OLD, pre-change model (e.g. a just-dropped-in node would never
-    // actually make it into the autosave slot).
-    if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
-    }
-    // PS-3: a drag-driven add/remove/reorder is a user EDIT — mark unsaved.
-    if (window.PresetsUI) {
-      window.PresetsUI.markModified();
-    }
-    // Issue #6: a HUMAN add/reorder (palette drag OR keyboard add — both
-    // human actions) — bump the state revision so a stale agent Undo
-    // entry can no longer auto-apply over it. The agent write path uses
-    // loadModel() directly, never this commit path, so agent edits do
-    // not bump.
-    if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-      window.AgentUI.noteHumanEdit();
-    }
+    // Issue #20: in the production page, the gesture stops here. The
+    // ChainEditing module decides whether the candidate is accepted and
+    // owns graph commit, persistence, preset dirtiness, and the one human
+    // revision bump. The DOM is provisional until that promise settles;
+    // ChainEditing renders the accepted candidate on success and restores
+    // the previous accepted model on failure.
+    var editing = requireChainEditing();
+    var candidateModel = getCurrentModel();
+    var candidateLayout = currentLayout();
+    // The gesture may have provisionally reordered/added/removed DOM in
+    // order to express its candidate. Put the last accepted render back
+    // synchronously, before graph staging begins, so an operator never
+    // sees a chain that has not yet become live.
+    renderModel(
+      editing.getModel(),
+      typeof editing.getLayout === 'function' ? editing.getLayout() : null
+    );
+    editing.apply({
+      source: 'human',
+      candidate: candidateModel,
+      layout: candidateLayout,
+      forceStructural: true
+    }).catch(function (err) {
+      console.error('ChainCanvas: human structural edit was not accepted', err);
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -1980,35 +1970,25 @@
     // in the chain) passes along whatever this node's CURRENT tuned values
     // are — reordering must never reset an already-tuned param back to its
     // type default.
-    window.ParamControls.render(paramsContainer, nodeState, function (updatedParams) {
-      nodeState.params = updatedParams;
-      // Deliberately no rebuildGraph() call here — a plain param tweak is
-      // not a structural change (see file-level comment above and Part D
-      // of the task spec). ParamControls itself already applies the live
-      // AudioParam change directly; this callback only needs to keep this
-      // card's bookkeeping current for the next structural rebuild.
-      //
-      // PS-2: a param tweak DOES still need to be persisted, though — the
-      // autosave slot must reflect the node's current tuned value, not just
-      // its value as of the last structural change. Saving here is separate
-      // from (and never triggers) rebuildGraph()/buildGraph() above.
-      //
-      // Pass chainModel explicitly rather than letting Persistence fall
-      // back to AudioGraph.getModel(): nodeState is the SAME object
-      // reference chainModel already holds for this id (see the file-level
-      // model-bookkeeping comment above), so the `nodeState.params =
-      // updatedParams` assignment just above is already reflected in
-      // chainModel with zero extra work — no recompute needed here.
-      if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel, positions);
+    window.ParamControls.render(paramsContainer, nodeState, function (_updatedParams, change) {
+      // Issue #20: ParamControls supplies a normalized one-param intent.
+      // ChainEditing applies it against the accepted model when its queue
+      // reaches this edit, so two fast edits on different cards cannot
+      // overwrite one another with stale whole-model candidates.
+      if (change) {
+        requireChainEditing().apply({
+          source: 'human',
+          change: {
+            nodeId: nodeState.id,
+            param: change.param,
+            value: change.value
+          }
+        }).catch(function (err) {
+          console.error('ChainCanvas: human parameter edit was not accepted', err);
+        });
+        return;
       }
-      // PS-3: a param tweak is a user EDIT — mark the currently-displayed
-      // preset (if any) as having unsaved changes. Unlike the saveCurrentChain()
-      // call just above, this is purely a display concern (the "• unsaved
-      // changes" indicator), not persistence.
-      if (window.PresetsUI) {
-        window.PresetsUI.markModified();
-      }
+      throw new Error('ParamControls must provide a normalized change intent.');
     });
 
     // Wrap-AFTER-render: ParamControls has by now placed its .param-row
@@ -2057,36 +2037,13 @@
       event.stopPropagation();
       card.remove();
       delete nodesById[id];
-      recomputeModelFromDom();
-      updateEmptyHint();
-        // Structural change (Part D) — recompute then rebuild, exactly once,
-      // immediately (not deferred to some other event).
-      rebuildGraph();
-      // PS-2: persist the chain after this structural change too. Pass
-      // chainModel explicitly (already recomputed above) rather than
-      // AudioGraph.getModel() — see the comment on
-      // Persistence.saveCurrentChain() for why: AudioGraph's own model
-      // commits asynchronously, ~20ms after rebuildGraph() returns, so
-      // reading through it right here would silently save the OLD,
-      // pre-removal model.
-      if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel, positions);
-      }
-      // PS-3: removing a node is a user EDIT — mark unsaved.
-      if (window.PresetsUI) {
-        window.PresetsUI.markModified();
-      }
-      // Issue #6: a HUMAN removal — bump the state revision so a stale
-      // agent Undo entry can no longer auto-apply over it.
-      if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-        window.AgentUI.noteHumanEdit();
-      }
       // FEW-2: drop the removed node's board position too (the store
       // would prune it on save anyway; keeping the live map exact means
       // currentLayout() is always garbage-free).
       delete positions[id];
       delete cardHugW[id];
-      renderCords(); // FEW-3: the chain closes over the removed seat
+      // Same one structural gesture adapter used by add and cord reorder.
+      commitStructuralChange();
     });
 
     // FEW-2: pointerdown anywhere on the section brings it to FRONT
@@ -2195,6 +2152,8 @@
         id: id,
         startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
         originW: cardWidth(id),
+        hadStoredWidth: Object.prototype.hasOwnProperty.call(pos, 'w'),
+        originStoredW: pos.w,
         moved: false
       };
     });
@@ -2218,15 +2177,14 @@
   /**
    * Called once by src/main.js right after AudioEngine.start() resolves
    * successfully. Removes the "not started yet" gating class so the
-   * palette/canvas read as active instead of dimmed/inert. Purely visual —
-   * rebuildGraph()'s own window.AudioEngine.isStarted check (above) is the
-   * actual functional guard against building a graph with no audioContext/
-   * sourceNode to build against, so a stray drag that somehow completes
-   * before this is called still can't throw.
+   * palette/canvas read as active instead of dimmed/inert. The control is
+   * also a real disabled button before this transition, so a human gesture
+   * cannot submit a mutation before the audio lifecycle is ready.
    */
   function onEngineStarted() {
     if (layoutEl) {
       layoutEl.classList.remove('engine-not-started');
+      layoutEl.inert = false;
     }
     // R2-2: unlock the palette chips at the exact same transition — real
     // disabled attributes come OFF here (they shipped ON in
@@ -2254,6 +2212,73 @@
     // ENGINE LIVE with the live module count (mode returns to 'state';
     // by construction no control has been touched yet at this moment,
     // since the whole panel was pointer-locked and chip-disabled before).
+  }
+
+  /**
+   * Re-gate the board when the live source or audio context is lost. Any
+   * gesture armed against the old session is paint-only from this point:
+   * cancel it without committing or persisting, then disable every human
+   * entry point until main.js reports a successful Start again.
+   */
+  function onEngineStopped() {
+    if (cordDrag) {
+      cancelCordDrag();
+    }
+    var layoutRestored = false;
+    if (positionDrag) {
+      var movedPos = positions[positionDrag.id];
+      if (movedPos) {
+        movedPos.x = positionDrag.originX;
+        movedPos.y = positionDrag.originY;
+        applyPositionToCard(
+          positionDrag.card,
+          positionDrag.originX,
+          positionDrag.originY,
+          positionDrag.id
+        );
+        layoutRestored = true;
+      }
+      positionDrag = null;
+    }
+    if (resizeDrag) {
+      var resizedPos = positions[resizeDrag.id];
+      if (resizedPos) {
+        if (resizeDrag.hadStoredWidth) {
+          resizedPos.w = resizeDrag.originStoredW;
+        } else {
+          delete resizedPos.w;
+        }
+        applyPositionToCard(
+          resizeDrag.card,
+          resizedPos.x,
+          resizedPos.y,
+          resizeDrag.id
+        );
+        layoutRestored = true;
+      }
+      resizeDrag = null;
+    }
+    if (layoutRestored) {
+      refreshBoardExtent();
+      renderCords();
+    }
+    if (!cordDrag) {
+      dragActive = false;
+    }
+    if (layoutEl) {
+      layoutEl.classList.add('engine-not-started');
+      // Native inert removes every descendant control from focus and event
+      // targeting. The CSS class remains the visual gate; this is its
+      // keyboard and assistive-technology equivalent.
+      layoutEl.inert = true;
+    }
+    var chips = paletteListEl.querySelectorAll('.node-chip');
+    Array.prototype.forEach.call(chips, function (chip) {
+      chip.disabled = true;
+    });
+    if (emptyHintEl) {
+      emptyHintEl.textContent = 'Press Start to power on';
+    }
   }
 
   /**
@@ -2309,7 +2334,7 @@
    *   seats (the documented tidy layout). Agent rebuilds and startup
    *   restores leave it unset and keep the carry-forward rule.
    */
-  function loadModel(model, layout, options) {
+  function renderModel(model, layout, options) {
     // Chain replacement invalidates every in-flight board gesture (the
     // #16 race finding): a cord edit / seat move / width resize armed
     // against the OLD chain must never commit against the replacement
@@ -2399,20 +2424,18 @@
     renderSignalOrderStrip();
 
     updateEmptyHint();
-    rebuildGraph();
+    return true;
+  }
 
-    // PS-3: persist the newly-loaded state as the new autosave baseline.
-    // This makes "load a named preset" (or the initial autosaved/default
-    // load on page open) immediately become what a page reload restores
-    // too, not just what's currently on screen. chainModel is already
-    // synchronously current at this point (recomputeModelFromDom() ran just
-    // above), so this is safe to read right here — same reasoning as every
-    // other saveCurrentChain() call site in this file. Deliberately NOT
-    // paired with a PresetsUI.markModified() call: a load is by definition
-    // a CLEAN state matching whatever was just loaded, not a modification.
-    if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
-    }
+  /** Public full-model mutation entry point; always delegates to the sole seam. */
+  function loadModel(model, layout, options) {
+    return requireChainEditing().apply({
+      source: 'startup',
+      candidate: model,
+      layout: layout,
+      renderOptions: options,
+      forceStructural: true
+    });
   }
 
   /**
@@ -2429,43 +2452,17 @@
   }
 
   /**
-   * Issue #5: apply ONE parameter change to an existing node WITHOUT the
-   * loadModel() rebuild — the parameter-only write path. This is the
-   * canvas-side half of exactly what a human slider move does, split the
-   * same way the human path splits it:
-   *
-   *   human slider move:
-   *     src/param-controls.js input handler  -> AudioGraph.updateNodeParams
-   *                                            + NodeTypes.applyParam
-   *                                            (the live-graph half)
-   *     this file's onParamsChanged callback -> nodeState.params
-   *                                            + Persistence autosave
-   *                                            + PresetsUI.markModified
-   *                                            (the canvas half)
-   *   agent set_param (parameter-only candidate, src/mcp-tools.js):
-   *     the fast path plays the input-handler role (the same
-   *     AudioGraph.updateNodeParams + NodeTypes.applyParam calls), then
-   *     calls THIS function for the canvas half.
-   *
-   * What this function owns: the canvas model bookkeeping (nodeState.params
-   * — the object getCurrentModel()/recomputeModelFromDom() read), the
-   * VISIBLE control (the card's slider position + mono value span via
-   * ParamControls.updateControl — the card is never re-rendered, never
-   * replaced), the autosave (Persistence.saveCurrentChain — the same call
-   * a human param tweak makes, so agent param edits persist identically),
-   * and the unsaved dot (PresetsUI.markModified). It deliberately does NOT
-   * call buildGraph() (nothing structural changed) and does NOT touch any
-   * AudioNode (the caller owns the live write, exactly as param-controls
-   * owns it on the human path).
+   * Render one already-accepted parameter change without replacing its
+   * card. ChainEditing has already updated graph bookkeeping, the live
+   * AudioNode, persistence, preset state, and Undo/revision as applicable.
+   * This adapter owns only Canvas bookkeeping and the visible control.
    *
    * @param {string} nodeId - the node whose param changes.
    * @param {string} paramId - the param's registered id.
    * @param {number} value - the new value, already policy-applied.
-   * @returns {boolean} true when the node was found and updated; false
-   *   when no such node exists in this canvas (the caller falls back to
-   *   the full loadModel() write path — safety over elegance).
+   * @returns {boolean} true when the node was found and rendered.
    */
-  function updateNodeParam(nodeId, paramId, value) {
+  function renderNodeParam(nodeId, paramId, value) {
     if (typeof nodeId !== 'string') {
       return false;
     }
@@ -2481,7 +2478,7 @@
     updated[paramId] = canonicalParamValue(nodeState.type, paramId, value);
     // nodeState is the SAME object reference chainModel holds for this id
     // (file-level model-bookkeeping comment), so this assignment is already
-    // reflected in chainModel for the persistence read below — no
+    // reflected in chainModel for later rendering/readback — no
     // recomputeModelFromDom() needed, same as the human onParamsChanged
     // path.
     nodeState.params = updated;
@@ -2497,18 +2494,15 @@
       // Display-only — never fail the param write for it.
     }
 
-    // PS-2 (same call the human param tweak makes): persist so the
-    // autosave slot reflects the tuned value, not the last structural
-    // state. chainModel is synchronously current (see above).
-    if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
-    }
-    // PS-3: an agent param edit is an EDIT of whatever preset was
-    // displayed — the same markModified() a human slider move fires.
-    if (window.PresetsUI) {
-      window.PresetsUI.markModified();
-    }
     return true;
+  }
+
+  /** Public one-param mutation entry point; always delegates to the sole seam. */
+  function updateNodeParam(nodeId, paramId, value) {
+    return requireChainEditing().apply({
+      source: 'agent',
+      change: { nodeId: nodeId, param: paramId, value: value }
+    });
   }
 
   /**
@@ -2650,13 +2644,21 @@
   }
 
   initBoardChrome();
+  if (layoutEl && layoutEl.classList.contains('engine-not-started')) {
+    onEngineStopped();
+  }
 
   window.ChainCanvas = {
     onEngineStarted: onEngineStarted,
+    onEngineStopped: onEngineStopped,
     loadModel: loadModel,
+    // Issue #20 implementation adapters. Production mutation sources do
+    // not call these directly; ChainEditing owns their sequencing.
+    renderModel: renderModel,
+    renderNodeParam: renderNodeParam,
     getCurrentModel: getCurrentModel,
     isDragActive: isDragActive,
-    // Issue #5: the parameter-only write path (see updateNodeParam above).
+    // Public mutation wrapper; accepted rendering stays in renderNodeParam.
     updateNodeParam: updateNodeParam,
     // FEW-2 seams: the grid constants (tests + FEW-5/6/7 consumers), the
     // live layout map (read-only by convention — callers must not mutate),
@@ -2672,6 +2674,9 @@
     CARD_W_MAX_PX: CARD_W_MAX_PX,
     snapToGrid: snapToGrid,
     currentLayout: currentLayout,
+    // ChainEditing's own currentLayout() helper (src/chain-editing.js)
+    // reads the accepted layout through this exact name.
+    getCurrentLayout: currentLayout,
     addNodeType: addNodeType,
     // Guided Patchbay round: the Presets tab's factory cards derive their
     // family-tag row from a preset's own node types (src/presets-ui.js),

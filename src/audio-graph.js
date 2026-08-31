@@ -174,11 +174,49 @@
   // an earlier call had scheduled, so only the LAST call's model actually
   // gets built.
   var pendingRewireTimer = null;
-  // The factory-fresh instances created by the CURRENTLY-PENDING build's
-  // Phase 1 (see buildGraph): when a superseding build cancels that
-  // rewire, these never-connected orphans are disposed — a Tone-backed
-  // composite holds live resources beyond a disconnect (#16 finding).
-  var pendingRewireCreated = [];
+  var pendingRewireState = null;
+
+  function disposeStagedNodes(model, resolvedNodes, oldNodeInstances) {
+    model.forEach(function (entry, index) {
+      var staged = resolvedNodes[index];
+      if (staged === oldNodeInstances[entry.id]) {
+        return;
+      }
+      try { getNodeOutput(staged).disconnect(); } catch (err) { /* never connected/already gone */ }
+      if (staged && typeof staged.dispose === 'function') {
+        try { staged.dispose(); } catch (err) { /* best-effort release */ }
+      }
+    });
+  }
+
+  function cancelStagedBuild(state, error, restoreGate) {
+    if (pendingRewireState !== state) {
+      return false;
+    }
+    if (pendingRewireTimer !== null) {
+      clearTimeout(pendingRewireTimer);
+      pendingRewireTimer = null;
+    }
+    if (
+      state.signal &&
+      typeof state.signal.removeEventListener === 'function' &&
+      state.onAbort
+    ) {
+      state.signal.removeEventListener('abort', state.onAbort);
+    }
+    pendingRewireState = null;
+    disposeStagedNodes(state.model, state.resolvedNodes, state.oldNodeInstances);
+    if (restoreGate && state.commitStarted) {
+      rampGateTo(state.gate, steadyGateTarget(), state.audioContext);
+    }
+    state.resolve({
+      committed: false,
+      canceled: true,
+      error: error,
+      rollback: { attempted: false, succeeded: true }
+    });
+    return true;
+  }
 
   /**
    * Get the shared chain gate GainNode, creating it on first call if it
@@ -502,6 +540,23 @@
     gate.gain.linearRampToValueAtTime(target, now + FADE_S);
   }
 
+  function steadyGateTarget() {
+    var watchdogLatched =
+      window.MeterTaps &&
+      typeof window.MeterTaps.isTripped === 'function' &&
+      window.MeterTaps.isTripped();
+    return watchdogLatched
+      ? 0
+      : (window.AudioBypass && window.AudioBypass.isEngaged()) ? 0 : 1.0;
+  }
+
+  function graphAbortError() {
+    var err = new Error('AudioGraph.buildGraph: staged build was cancelled before commit.');
+    err.name = 'AbortError';
+    err.code = 'ABORTED';
+    return err;
+  }
+
   /**
    * (Re)build the real Web Audio node chain from the mic source through to
    * the AudioContext destination, per `model`.
@@ -562,10 +617,24 @@
    * processing nodes in between.
    *
    * @param {Array<{id: string, type: string, params: Object}>} model
+   * @param {{signal?: AbortSignal}=} options
+   * @returns {Promise<{committed: boolean, canceled?: boolean, error?: Error,
+   *   rollback?: {attempted: boolean, succeeded: boolean, error?: Error}}>}
+   *   resolves after the deferred rewire. Phase-1 validation/factory errors
+   *   still throw synchronously before the live graph is touched.
    */
-  function buildGraph(model) {
+  function buildGraph(model, options) {
     if (!Array.isArray(model)) {
       throw new Error('AudioGraph.buildGraph: model must be an array.');
+    }
+    var signal = options && options.signal;
+    if (signal && signal.aborted) {
+      return Promise.resolve({
+        committed: false,
+        canceled: true,
+        error: graphAbortError(),
+        rollback: { attempted: false, succeeded: true }
+      });
     }
 
     var audioContext = window.AudioEngine && window.AudioEngine.audioContext;
@@ -585,6 +654,10 @@
     // first rebuild that establishes the gate itself.
     var attenuator = getOutputAttenuator();
     var oldNodeInstances = nodeInstances; // current live map, captured now
+    var oldFirstChainNode = firstChainNode;
+    var oldModel = currentModel.map(function (entry) {
+      return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params || {}) };
+    });
 
     // ---- Phase 1 (SYNCHRONOUS, happens immediately, before any ducking) ----
     // Resolve every model entry to an AudioNode object RIGHT NOW: reuse the
@@ -643,10 +716,9 @@
           );
         }
         var fresh = factory(audioContext, entry.params || {});
-        // Created-but-never-committed instances are THIS build's disposal
-        // responsibility (see pendingRewireCreated below): a Tone-backed
-        // composite holds worklet clocks and internal nodes a plain
-        // disconnect never releases.
+        // Created-but-never-committed instances are this staged build's
+        // disposal responsibility. A Tone-backed composite holds worklet
+        // clocks and internal nodes that a plain disconnect never releases.
         createdThisBuild.push(fresh);
         return fresh;
       });
@@ -669,158 +741,233 @@
     // rapid successive calls — e.g. a user editing quickly — so only the
     // LAST call's model ends up actually built; the gate is already ducked
     // or ducking from the earlier call, so re-ducking here is harmless).
-    if (pendingRewireTimer !== null) {
-      clearTimeout(pendingRewireTimer);
-      pendingRewireTimer = null;
-      // The superseded build's Phase 1 created factory-fresh instances that
-      // never committed (commit is deferred) and never connected (no
-      // .connect() runs in Phase 1) — the NEXT build's Phase 1 resolves
-      // against the still-live oldNodeInstances map, so it cannot reuse
-      // them either. Without this, rapid superseding rebuilds abandoned
-      // newly-created Tone.js effects undisposed (#16 finding): a Tone node
-      // keeps internal nodes and a JS-tick clock alive after a mere
-      // disconnect, so orphans leak for the session. Plain AudioNodes have
-      // no dispose() — the guard makes this a no-op for them, they were
-      // always GC-eligible.
-      pendingRewireCreated.forEach(function (node) {
-        if (node && typeof node.dispose === 'function') {
-          try { node.dispose(); } catch (e) { /* already gone */ }
-        }
-      });
-      pendingRewireCreated = [];
+    if (pendingRewireState) {
+      var supersededState = pendingRewireState;
+      cancelStagedBuild(
+        supersededState,
+        new Error('AudioGraph.buildGraph: staged build was superseded.'),
+        true
+      );
     }
 
-    rampGateTo(gate, 0.0001, audioContext);
+    return new Promise(function (resolve) {
+      var stagedState = {
+        model: model,
+        resolvedNodes: resolvedNodes,
+        oldNodeInstances: oldNodeInstances,
+        resolve: resolve,
+        signal: signal,
+        onAbort: null,
+        gate: gate,
+        audioContext: audioContext,
+        commitStarted: false
+      };
+      pendingRewireState = stagedState;
 
-    pendingRewireCreated = createdThisBuild;
-    pendingRewireTimer = setTimeout(function () {
-      pendingRewireTimer = null;
-      pendingRewireCreated = [];
-      pendingRewireTimer = null;
-
-      // Teardown: fully disconnect the OLD topology. Nodes being reused are
-      // only DISCONNECTED here, never destroyed — their object identity and
-      // internal state survive; they get reconnected fresh below. Nodes not
-      // present in the new model are disconnected and simply not carried
-      // forward into the new nodeInstances map, making them GC-eligible.
-      if (firstChainNode) {
-        try { sourceNode.disconnect(firstChainNode); } catch (e) { /* already gone */ }
-      }
-      // AE-7: disconnect each entry's OUTPUT specifically, via
-      // getNodeOutput() — a composite type (e.g. EQ) only ever has its
-      // internal filters wired to each other via their OWN .connect() calls
-      // made once at construction time (see src/node-eq.js); the only edge
-      // buildGraph() itself ever put on such a node is the one leaving its
-      // output into whatever came next, so that's the only edge it needs to
-      // (and should) sever here. For a plain single-node type, getNodeOutput()
-      // falls through to the node itself, so this is a no-op behavioral
-      // change from before.
-      //
-      // Adapter-backed instances (src/tone-adapter.js composites) also get
-      // dispose() called here when their id is NOT carried forward: a Tone
-      // node keeps internal nodes and a JS-tick clock alive after a mere
-      // disconnect, so dropped instances must be explicitly released.
-      // Carried-forward identity is decided by object identity — resolved
-      // nodes for reuse ARE the old instance objects (Phase 1) — which also
-      // covers the id-same-type-changed case (fresh factory instance, old
-      // instance dropped). Plain AudioNodes and native composites have no
-      // dispose(): the typeof guard makes this a no-op for every one of
-      // them, so existing types' teardown behavior is byte-for-byte what
-      // it was before this hook existed.
-      var carriedForward = {};
-      model.forEach(function (entry, i) {
-        if (resolvedNodes[i] === oldNodeInstances[entry.id]) {
-          carriedForward[entry.id] = true;
+      function cancelBeforeCommit() {
+        if (!stagedState.commitStarted) {
+          cancelStagedBuild(stagedState, graphAbortError(), false);
         }
-      });
-      Object.keys(oldNodeInstances).forEach(function (id) {
-        var old = oldNodeInstances[id];
-        try { getNodeOutput(old).disconnect(); } catch (e) { /* already gone */ }
-        if (!carriedForward[id] && old && typeof old.dispose === 'function') {
-          try { old.dispose(); } catch (e) { /* already gone */ }
-        }
-      });
-
-      // Rebuild: wire the new topology fresh, using the node objects already
-      // resolved/created in Phase 1. This happens strictly AFTER teardown
-      // (not overlapping it) — see the file-level/function-level comment
-      // above about the edge-collision bug this avoids.
-      // AE-7: walk the chain using each resolved node's INPUT (the
-      // connection point for whatever comes before it) and OUTPUT (the
-      // connection point for whatever comes after it) rather than assuming
-      // they're the same object — true for a plain single-node type (where
-      // getNodeInput()/getNodeOutput() both fall through to the node
-      // itself) but false for a composite type like EQ, whose real input
-      // (the low-shelf filter) and real output (the high-shelf filter) are
-      // two different AudioNode objects. `nodeInstances`/`newNodeInstances`
-      // still store the ORIGINAL (possibly composite) value per id — never
-      // just its .input or .output — so AudioGraph.getNodeInstance(id)
-      // keeps returning something NodeTypes.applyParam can reach every
-      // internal piece of (e.g. EQ's .low/.mid/.high — see src/node-eq.js).
-      var newNodeInstances = {};
-      var newFirstNode = null;
-      var previousOutput = sourceNode;
-      model.forEach(function (entry, i) {
-        var node = resolvedNodes[i];
-        var nodeInput = getNodeInput(node);
-        var nodeOutput = getNodeOutput(node);
-        previousOutput.connect(nodeInput);
-        if (previousOutput === sourceNode) {
-          newFirstNode = nodeInput;
-        }
-        newNodeInstances[entry.id] = node;
-        previousOutput = nodeOutput;
-      });
-      previousOutput.connect(gate);
-      // MC-4: connect the gate into the host-owned output attenuator (NOT
-      // straight to destination — the attenuator is a permanent fixture of
-      // the graph shape). Idempotent (a no-op on an already-connected pair,
-      // per the Web Audio spec) but must still happen here every rebuild:
-      // without a path onward to destination, the audio thread never
-      // evaluates the gate's gain automation at all — silent forever, and
-      // rampGateTo()/AudioBypass's own ramps on this same node become
-      // inert. The attenuator's own ->destination edge was made once, at
-      // its creation inside getOutputAttenuator(), and is deliberately NOT
-      // touched by this teardown/rebuild: teardown above disconnects only
-      // nodes in oldNodeInstances, so chainGate -> attenuator ->
-      // destination persists across every rebuild.
-      gate.connect(attenuator);
-      if (newFirstNode === null) {
-        newFirstNode = gate;
       }
 
-      // Commit new state.
-      nodeInstances = newNodeInstances;
-      firstChainNode = newFirstNode;
-      currentModel = model.map(function (entry) {
-        return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params || {}) };
-      });
+      if (signal && typeof signal.addEventListener === 'function') {
+        stagedState.onAbort = cancelBeforeCommit;
+        signal.addEventListener('abort', cancelBeforeCommit, { once: true });
+      }
 
-      // Un-duck — but NOT unconditionally to 1.0. Two states besides
-      // "audible" can own the gate's correct steady state:
-      //   - If AudioBypass is currently engaged, the chain gate's
-      //     correct steady state is 0 (muted), not 1 — naively restoring
-      //     to 1.0 here would silently DISENGAGE Bypass as a side effect
-      //     of an unrelated chain edit, which would be a real safety bug
-      //     (Bypass must stay engaged independent of chain edits, per
-      //     its own AE-3 design).
-      //   - If FEW-3's watchdog is latched (issue #3), the gate belongs
-      //     at the watchdog's mute level WHATEVER Bypass's state is: a
-      //     rebuild racing a live trip must never schedule an upward
-      //     ramp that reopens tripped output. Only the human "Restore
-      //     output" button (src/meter-taps.js) may lift the latch;
-      //     MeterTaps' defend-the-mute loop is the backstop if anything
-      //     else tries. The typeof guard keeps this safe in harnesses
-      //     that load audio-graph.js without meter-taps.js.
-      var watchdogLatched =
-        window.MeterTaps &&
-        typeof window.MeterTaps.isTripped === 'function' &&
-        window.MeterTaps.isTripped();
-      var target = watchdogLatched
-        ? 0
-        : (window.AudioBypass && window.AudioBypass.isEngaged()) ? 0 : 1.0;
-      rampGateTo(gate, target, audioContext);
-    }, FADE_S * 1000 + 5);
+      // Leave one microtask boundary in which an AbortSignal can cancel
+      // staged factories before the gate ducks or any live edge changes.
+      Promise.resolve().then(function () {
+        if (pendingRewireState !== stagedState) {
+          return;
+        }
+        if (signal && signal.aborted) {
+          cancelBeforeCommit();
+          return;
+        }
+        stagedState.commitStarted = true;
+        if (signal && typeof signal.removeEventListener === 'function' && stagedState.onAbort) {
+          signal.removeEventListener('abort', stagedState.onAbort);
+        }
+        rampGateTo(gate, 0.0001, audioContext);
+        pendingRewireTimer = setTimeout(function () {
+          pendingRewireTimer = null;
+          pendingRewireState = null;
+          try {
+
+            // Teardown: fully disconnect the OLD topology. Nodes being reused are
+            // only DISCONNECTED here, never destroyed — their object identity and
+            // internal state survive; they get reconnected fresh below. Nodes not
+            // present in the new model are disconnected and simply not carried
+            // forward into the new nodeInstances map, making them GC-eligible.
+            if (firstChainNode) {
+              try { sourceNode.disconnect(firstChainNode); } catch (e) { /* already gone */ }
+            }
+            // AE-7: disconnect each entry's OUTPUT specifically, via
+            // getNodeOutput() — a composite type (e.g. EQ) only ever has its
+            // internal filters wired to each other via their OWN .connect() calls
+            // made once at construction time (see src/node-eq.js); the only edge
+            // buildGraph() itself ever put on such a node is the one leaving its
+            // output into whatever came next, so that's the only edge it needs to
+            // (and should) sever here. For a plain single-node type, getNodeOutput()
+            // falls through to the node itself, so this is a no-op behavioral
+            // change from before.
+            //
+            // Adapter-backed instances (src/tone-adapter.js composites) also get
+            // dispose() called here when their id is NOT carried forward: a Tone
+            // node keeps internal nodes and a JS-tick clock alive after a mere
+            // disconnect, so dropped instances must be explicitly released.
+            // Carried-forward identity is decided by object identity — resolved
+            // nodes for reuse ARE the old instance objects (Phase 1) — which also
+            // covers the id-same-type-changed case (fresh factory instance, old
+            // instance dropped). Plain AudioNodes and native composites have no
+            // dispose(): the typeof guard makes this a no-op for every one of
+            // them, so existing types' teardown behavior is byte-for-byte what
+            // it was before this hook existed.
+            var carriedForward = {};
+            model.forEach(function (entry, i) {
+              if (resolvedNodes[i] === oldNodeInstances[entry.id]) {
+                carriedForward[entry.id] = true;
+              }
+            });
+            Object.keys(oldNodeInstances).forEach(function (id) {
+              var old = oldNodeInstances[id];
+              try { getNodeOutput(old).disconnect(); } catch (e) { /* already gone */ }
+            });
+
+            // Rebuild: wire the new topology fresh, using the node objects already
+            // resolved/created in Phase 1. This happens strictly AFTER teardown
+            // (not overlapping it) — see the file-level/function-level comment
+            // above about the edge-collision bug this avoids.
+            // AE-7: walk the chain using each resolved node's INPUT (the
+            // connection point for whatever comes before it) and OUTPUT (the
+            // connection point for whatever comes after it) rather than assuming
+            // they're the same object — true for a plain single-node type (where
+            // getNodeInput()/getNodeOutput() both fall through to the node
+            // itself) but false for a composite type like EQ, whose real input
+            // (the low-shelf filter) and real output (the high-shelf filter) are
+            // two different AudioNode objects. `nodeInstances`/`newNodeInstances`
+            // still store the ORIGINAL (possibly composite) value per id — never
+            // just its .input or .output — so AudioGraph.getNodeInstance(id)
+            // keeps returning something NodeTypes.applyParam can reach every
+            // internal piece of (e.g. EQ's .low/.mid/.high — see src/node-eq.js).
+            var newNodeInstances = {};
+            var newFirstNode = null;
+            var previousOutput = sourceNode;
+            model.forEach(function (entry, i) {
+              var node = resolvedNodes[i];
+              var nodeInput = getNodeInput(node);
+              var nodeOutput = getNodeOutput(node);
+              previousOutput.connect(nodeInput);
+              if (previousOutput === sourceNode) {
+                newFirstNode = nodeInput;
+              }
+              newNodeInstances[entry.id] = node;
+              previousOutput = nodeOutput;
+            });
+            previousOutput.connect(gate);
+            // MC-4: connect the gate into the host-owned output attenuator (NOT
+            // straight to destination — the attenuator is a permanent fixture of
+            // the graph shape). Idempotent (a no-op on an already-connected pair,
+            // per the Web Audio spec) but must still happen here every rebuild:
+            // without a path onward to destination, the audio thread never
+            // evaluates the gate's gain automation at all — silent forever, and
+            // rampGateTo()/AudioBypass's own ramps on this same node become
+            // inert. The attenuator's own ->destination edge was made once, at
+            // its creation inside getOutputAttenuator(), and is deliberately NOT
+            // touched by this teardown/rebuild: teardown above disconnects only
+            // nodes in oldNodeInstances, so chainGate -> attenuator ->
+            // destination persists across every rebuild.
+            gate.connect(attenuator);
+            if (newFirstNode === null) {
+              newFirstNode = gate;
+            }
+
+            // Commit new state.
+            nodeInstances = newNodeInstances;
+            firstChainNode = newFirstNode;
+            currentModel = model.map(function (entry) {
+              return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params || {}) };
+            });
+
+            // Un-duck — but NOT unconditionally to 1.0. Two states besides
+            // "audible" can own the gate's correct steady state:
+            //   - If AudioBypass is currently engaged, the chain gate's
+            //     correct steady state is 0 (muted), not 1 — naively restoring
+            //     to 1.0 here would silently DISENGAGE Bypass as a side effect
+            //     of an unrelated chain edit, which would be a real safety bug
+            //     (Bypass must stay engaged independent of chain edits, per
+            //     its own AE-3 design).
+            //   - If FEW-3's watchdog is latched (issue #3), the gate belongs
+            //     at the watchdog's mute level WHATEVER Bypass's state is: a
+            //     rebuild racing a live trip must never schedule an upward
+            //     ramp that reopens tripped output. Only the human "Restore
+            //     output" button (src/meter-taps.js) may lift the latch;
+            //     MeterTaps' defend-the-mute loop is the backstop if anything
+            //     else tries. The typeof guard keeps this safe in harnesses
+            //     that load audio-graph.js without meter-taps.js.
+            rampGateTo(gate, steadyGateTarget(), audioContext);
+
+            // Dispose dropped adapter-backed instances only after every new edge
+            // connected and bookkeeping committed. Until here they remain usable
+            // for the rollback path below.
+            Object.keys(oldNodeInstances).forEach(function (id) {
+              var old = oldNodeInstances[id];
+              if (!carriedForward[id] && old && typeof old.dispose === 'function') {
+                try { old.dispose(); } catch (e) { /* best-effort release */ }
+              }
+            });
+            resolve({ committed: true });
+          } catch (rewireError) {
+            var rollback = { attempted: true, succeeded: false };
+            try {
+              // Remove any partially-created candidate topology.
+              if (newFirstNode) {
+                try { sourceNode.disconnect(newFirstNode); } catch (e) { /* absent edge */ }
+              } else {
+                try { sourceNode.disconnect(gate); } catch (e) { /* absent edge */ }
+              }
+              resolvedNodes.forEach(function (node) {
+                try { getNodeOutput(node).disconnect(); } catch (e) { /* absent edge */ }
+              });
+
+              // Reconnect the captured old topology. Old adapter instances have
+              // deliberately not been disposed yet.
+              var restoreOutput = sourceNode;
+              var restoredFirst = null;
+              oldModel.forEach(function (entry) {
+                var oldNode = oldNodeInstances[entry.id];
+                if (!oldNode) {
+                  throw new Error('AudioGraph rollback: old node "' + entry.id + '" is unavailable.');
+                }
+                var oldInput = getNodeInput(oldNode);
+                restoreOutput.connect(oldInput);
+                if (restoreOutput === sourceNode) {
+                  restoredFirst = oldInput;
+                }
+                restoreOutput = getNodeOutput(oldNode);
+              });
+              restoreOutput.connect(gate);
+              gate.connect(attenuator);
+              firstChainNode = restoredFirst || gate;
+              nodeInstances = oldNodeInstances;
+              currentModel = oldModel;
+              rampGateTo(gate, steadyGateTarget(), audioContext);
+              rollback.succeeded = true;
+            } catch (rollbackError) {
+              rollback.error = rollbackError;
+              // Bookkeeping remains on the last accepted graph even though the
+              // physical topology is now explicitly uncertain.
+              firstChainNode = oldFirstChainNode;
+              nodeInstances = oldNodeInstances;
+              currentModel = oldModel;
+            }
+            disposeStagedNodes(model, resolvedNodes, oldNodeInstances);
+            resolve({ committed: false, error: rewireError, rollback: rollback });
+          }
+        }, FADE_S * 1000 + 5);
+      });
+    });
   }
 
   window.AudioGraph = {

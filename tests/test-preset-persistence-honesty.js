@@ -439,9 +439,6 @@ function createEnv(options) {
     },
     isDragActive: function () {
       return false;
-    },
-    loadModel: function (model) {
-      env.installModel(model);
     }
   };
 
@@ -1283,6 +1280,43 @@ async function main() {
     check(
       env.promptCalls.length === 0 && env.confirmCalls === 0 && env.alertCalls === 0,
       'L2: the whole panel flow stays dialog-free (prompt/confirm/alert all zero)'
+    );
+
+    // Issue #20: a real preset selection delegates to ChainEditing and a
+    // rejected transaction cannot replace the canvas or establish a clean
+    // preset display baseline.
+    factoryStub.payload = [{
+      name: 'Warm Ballad',
+      nodes: [{ id: 'warm-limiter', type: 'limiter', params: { ceiling: -6, release: 150 } }]
+    }];
+    sandbox.PresetsUI.refreshPresetSelect('factory:Warm Ballad');
+    groupEl = env.panel.byId['preset-select'].children[0];
+    groupEl.selected = true;
+    groupEl.__value = 'factory:Warm Ballad';
+    var presetApplyRequest = null;
+    sandbox.ChainEditing = {
+      apply: function (request) {
+        presetApplyRequest = request;
+        var rejection = new Error('preset graph rejected');
+        rejection.code = 'CHAIN_APPLY_FAILED';
+        rejection.rollback = { attempted: true, succeeded: true };
+        return Promise.reject(rejection);
+      }
+    };
+    modelBefore = liveChainIds();
+    env.panel.byId['load-preset-btn'].__fire('click');
+    await Promise.resolve();
+    check(
+      presetApplyRequest && presetApplyRequest.source === 'preset' &&
+        presetApplyRequest.forceStructural === true &&
+        presetApplyRequest.preset.name === 'Warm Ballad',
+      'L3: the real preset adapter submits its normalized load through ChainEditing'
+    );
+    check(
+      liveChainIds() === modelBefore &&
+        env.panel.byId['current-preset-name'].textContent === 'Unsaved chain' &&
+        env.panel.byId['unsaved-indicator'].style.display !== 'none',
+      'L3: rejected preset work preserves the previous canvas and dirty display baseline'
     );
   }
 

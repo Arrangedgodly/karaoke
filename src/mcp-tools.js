@@ -8,11 +8,9 @@
 // window.NodeTypes + the six src/node-*.js files (loaded earlier) for the
 // live node-type registry; window.PresetSchema (src/preset-schema.js,
 // loaded earlier) for authoritative chain-shape validation;
-// window.ChainCanvas (src/canvas.js) for model access — getCurrentModel
-// (read-only; the same source the UI itself uses) and, since MC-4,
-// loadModel as THE single write path every mutation applies through
-// (since issue #5, plus updateNodeParam for the parameter-only set_param
-// fast path — see applyParamOnlyViaUi below);
+// window.ChainEditing (src/chain-editing.js) for the accepted model and
+// the sole chain-mutation seam; window.ChainCanvas (src/canvas.js) is a
+// read-only display adapter for non-mutation tool context;
 // window.PresetStore (src/preset-store.js: listNames/load read-only since
 // MC-3; save/remove since MC-5 — the same single persistence path the
 // UI's Save As/Delete buttons use); window.FactoryPresets
@@ -30,8 +28,8 @@
 // window.AgentUI (src/agent-ui.js) for mutation toasts (reportMutation)
 // and the bounded undo stack (pushUndo); window.DEFAULT_PRESET (name
 // only) for the pre-start note. No DIRECT localStorage access — all
-// persistence goes through PresetStore (named presets) or the loadModel
-// autosave baseline.
+// persistence goes through PresetStore (named presets) or ChainEditing's
+// autosave transaction.
 //
 // MC-2 scope (docs/ultron/plan.md): the tool DEFINITIONS in the
 // ModelContextTool shape (RQ-1, docs/ultron/research/rq1-webmcp-api.md) —
@@ -41,21 +39,19 @@
 // type, numeric values within the app's own NOMINAL paramSpec ranges.
 //
 // MC-3 scope: the three READ tools are implemented for real — get_chain
-// (the live ChainCanvas model serialized in the exact set_chain shape),
+// (the ChainEditing accepted model serialized in the exact set_chain shape),
 // list_presets (PresetStore's own list API), and get_capabilities (the
 // live node registry PLUS the RQ-3 loudness-safety policy stated as
 // rules, translated into the app's actual param units — see the MC-3
 // policy block below), so agents pre-comply instead of discovering the
 // limits by rejection (OQ-8 content owner). MC-4 made the four MUTATION
 // tools (set_chain, add_node, remove_node, set_param) live through the
-// single UI write path with the full rq3 reject/clamp table enforced.
+// ChainEditing seam with the full rq3 reject/clamp table enforced.
 //
 // MC-5 scope (docs/ultron/plan.md task MC-5): save_preset goes live
 // (PresetStore save/remove — the UI Save/Delete flows' own persistence
-// path); every APPLIED mutation takes a pre-apply exact-state snapshot
-// (deep-cloned model + preset display state — the OQ-6 snapshot
-// decision) pushed to AgentUI's bounded (20) undo stack with a
-// restore() closure that re-applies through the same single write path;
+// path); ChainEditing gives every APPLIED chain mutation an exact-state
+// Undo snapshot and restore through the same seam;
 // mutation disclosures upgrade to human-readable one-line summaries
 // (MC-4's basic ones are retired); refused mutations additionally toast
 // { rejected: true } so the operator sees refusals, not just the agent.
@@ -740,6 +736,11 @@
    */
   var DRAG_QUEUE_TIMEOUT_MS = 5000;
   var DRAG_POLL_MS = 50;
+  // Agent mutations include policy planning before ChainEditing.apply().
+  // Serialize that whole read-plan-apply unit so two simultaneous tool
+  // calls cannot both plan from the same accepted pre-state and have the
+  // later candidate overwrite the earlier one.
+  var agentMutationQueue = Promise.resolve();
 
   /**
    * Counter for the node ids this layer mints on add_node (the tool takes
@@ -1366,6 +1367,12 @@
    */
   function readCurrentModel() {
     try {
+      if (window.ChainEditing && typeof window.ChainEditing.getModel === 'function') {
+        var accepted = window.ChainEditing.getModel();
+        if (Array.isArray(accepted)) {
+          return accepted;
+        }
+      }
       if (window.ChainCanvas && typeof window.ChainCanvas.getCurrentModel === 'function') {
         var model = window.ChainCanvas.getCurrentModel();
         if (Array.isArray(model)) {
@@ -1960,14 +1967,13 @@
   // CHAIN_LIMITS, MAKEUP_DB_PER_THRESHOLD_DB, HOST_OWNED_PARAMS) so
   // disclosure and enforcement share one source. Pipeline per mutation:
   //   (1) structural validation (the shared validators below),
-  //   (2) serialize vs user drags — queue until ChainCanvas reports the
+  //   (2) serialize vs user drags — wait until ChainCanvas reports the
   //       drag done, bounded by DRAG_QUEUE_TIMEOUT_MS (OQ-7),
-  //   (3) read the live model (ChainCanvas.getCurrentModel — the UI's own
-  //       source, read-only), validate the candidate against the rq3
-  //       policy above, and
-  //   (4) apply through ChainCanvas.loadModel — the SAME model+rebuild
-  //       path src/presets-ui.js's Load button uses; never a parallel
-  //       write path — then disclose via AgentUI.reportMutation.
+  //   (3) read ChainEditing's accepted model, validate the candidate
+  //       against the rq3 policy above, and
+  //   (4) submit through ChainEditing.apply — the SAME transaction seam
+  //       src/presets-ui.js and human gestures use; never a parallel write
+  //       path — then disclose via AgentUI.reportMutation.
   // ---------------------------------------------------------------------
 
   /**
@@ -2754,291 +2760,6 @@
   }
 
   /**
-   * THE write path: apply a fully-validated candidate through
-   * ChainCanvas.loadModel — exactly what src/presets-ui.js's Load button
-   * calls — so agent mutations and the UI can never diverge into parallel
-   * model owners. loadModel recomputes the canvas model, rebuilds the
-   * cards, rebuilds the audio graph (a guarded no-op before Start — the
-   * model-only pre-Start behavior the UI itself has) and re-baselines the
-   * autosave.
-   *
-   * Reuse catch-up: AudioGraph.buildGraph() reuses live node instances by
-   * id AND TYPE (issue #1 — never on id alone) and deliberately does NOT
-   * re-apply params to reused instances, so params that changed on a
-   * surviving node are pushed to the live node the same way the UI's own
-   * slider path does it (NodeTypes.applyParam direct writes, per
-   * src/param-controls.js). New nodes — including ids whose TYPE changed,
-   * which get a fresh factory-built replacement — have their params from
-   * the factory at creation.
-   *
-   * @param {Array<Object>} candidate - fully-validated model entries.
-   */
-  function applyCandidateViaUi(candidate) {
-    if (!window.ChainCanvas || typeof window.ChainCanvas.loadModel !== 'function') {
-      throw new Error('McpTools: ChainCanvas.loadModel is not available — no write path to the chain model.');
-    }
-    // Issue #1 (P0): a live instance is a legitimate catch-up target only
-    // when it satisfies the SAME id-AND-type guard buildGraph() applies
-    // when deciding what to reuse — i.e. when the model the live graph was
-    // actually built from still types this entry's id as entry.type.
-    // AudioGraph.getModel() is read BEFORE loadModel here on purpose: the
-    // graph's model and its instance map commit together on buildGraph()'s
-    // deferred rewire (~20ms later), so this pre-apply snapshot types
-    // EXACTLY the instances getNodeInstance() hands back below, making
-    // this decision mirror the reuse decision the rebuild is about to
-    // make. For an id whose type changed, the rebuild factories a fresh
-    // instance with the entry's params applied at creation, so pushing
-    // params at the old, wrong-typed instance would at best die inside
-    // applyParam's per-write try/catch and at worst scribble onto a node
-    // the rewire is about to disconnect for good — skip it, exactly like
-    // buildGraph skips it.
-    var liveTypes = {};
-    try {
-      if (window.AudioGraph && typeof window.AudioGraph.getModel === 'function') {
-        window.AudioGraph.getModel().forEach(function (entry) {
-          liveTypes[entry.id] = entry.type;
-        });
-      }
-    } catch (err) {
-      // Same best-effort contract as instance capture below: a miss just
-      // means no live catch-up.
-    }
-    var reusable = {};
-    candidate.forEach(function (entry) {
-      if (liveTypes[entry.id] !== entry.type) {
-        return; // New id, or an id whose type changed — fresh instance, no catch-up.
-      }
-      try {
-        var inst =
-          window.AudioGraph && typeof window.AudioGraph.getNodeInstance === 'function'
-            ? window.AudioGraph.getNodeInstance(entry.id)
-            : null;
-        if (inst) {
-          reusable[entry.id] = inst;
-        }
-      } catch (err) {
-        // Instance capture is best-effort; a miss just means no live catch-up.
-      }
-    });
-    // Deep copy: loadModel takes ownership of the array it is handed (its
-    // nodesById stores the very object references) — hand it copies so the
-    // enforcement engine's candidate can never be mutated through app state.
-    var modelForUi = candidate.map(function (entry) {
-      return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
-    });
-    window.ChainCanvas.loadModel(modelForUi);
-    candidate.forEach(function (entry) {
-      var inst = reusable[entry.id];
-      if (!inst) {
-        return;
-      }
-      Object.keys(entry.params).forEach(function (key) {
-        try {
-          if (window.NodeTypes && typeof window.NodeTypes.applyParam === 'function') {
-            window.NodeTypes.applyParam(entry.type, inst, key, entry.params[key]);
-          }
-        } catch (err) {
-          // One bad write must not abort the remaining catch-up writes.
-        }
-      });
-    });
-    // An agent mutation is an EDIT of whatever preset was displayed — the
-    // same markModified() the canvas fires at its own user-edit
-    // chokepoints (the preset-name display itself stays host-managed
-    // until MC-5's save_preset).
-    try {
-      if (window.PresetsUI && typeof window.PresetsUI.markModified === 'function') {
-        window.PresetsUI.markModified();
-      }
-    } catch (err) {
-      // Display-only.
-    }
-  }
-
-  // ---------------------------------------------------------------------
-  // Issue #5 — the PARAMETER-ONLY fast path (set_param).
-  //
-  // applyCandidateViaUi() above is the full write path: loadModel
-  // recomputes the canvas model, REPLACES every chain card, rebuilds the
-  // audio graph (ducking the chain gate to near-silence around the
-  // surgery), and re-baselines the autosave. That is the right hammer for
-  // a structural change and the WRONG one for a param tweak: the human
-  // slider path already updates the visible control, the model, the
-  // autosave, and the LIVE AudioParam on the existing node without ever
-  // touching buildGraph(). A set_param candidate is param-only by
-  // definition — same ids, same types, same order, exactly one param
-  // value changed (the #1 guard already ensured type match for the
-  // catch-up) — so it can ride the human path's exact primitives instead:
-  //
-  //   AudioGraph.updateNodeParams + NodeTypes.applyParam  (the half the
-  //     param-controls input handler owns — model bookkeeping + the
-  //     click-safe ramped live write), then
-  //   ChainCanvas.updateNodeParam  (the half the canvas onParamsChanged
-  //     callback owns — card slider/span in place with NO card re-render,
-  //     canvas model bookkeeping, Persistence autosave, markModified).
-  //
-  // Net effect on a valid param edit: no loadModel, no buildGraph, no
-  // chain-gate duck, no card replacement — and the param moves through
-  // the same 10-20 ms ramp a human slider move uses (host-param-ramps).
-  // Safety over elegance: ANY miss (absent dependency, a candidate that
-  // is not exactly one param change, a live instance whose id+type does
-  // not match the graph's model — issue #1's guard — or a mid-apply
-  // throw) makes applyParamOnlyViaUi() return false and the caller falls
-  // back to applyCandidateViaUi(), which reconciles everything by
-  // construction. Undo restores keep using the full path unchanged.
-  // ---------------------------------------------------------------------
-
-  /**
-   * Decide whether a candidate differs from the live model by EXACTLY ONE
-   * param value on one node, with no structural difference of any kind
-   * (same length, same order, same ids, same types). That is the shape
-   * planSetParam produces — and the only shape entitled to the fast path.
-   *
-   * @param {Array<Object>} liveModel - the post-drag-settle read the plan
-   *   was computed against.
-   * @param {Array<Object>} candidate - the planned model.
-   * @returns {{id: string, type: string, param: string, value: number,
-   *   params: Object}|null} the single change, or null when the candidate
-   *   is structural, multi-param, or not a finite numeric change.
-   */
-  function paramOnlyChange(liveModel, candidate) {
-    if (!Array.isArray(liveModel) || !Array.isArray(candidate)) {
-      return null;
-    }
-    if (liveModel.length !== candidate.length || candidate.length === 0) {
-      return null;
-    }
-    var change = null;
-    for (var i = 0; i < candidate.length; i++) {
-      var live = liveModel[i];
-      var next = candidate[i];
-      if (!live || !next || live.id !== next.id || live.type !== next.type) {
-        return null; // added/removed/moved/retyped — structural.
-      }
-      var liveParams = live.params || {};
-      var nextParams = next.params || {};
-      var keys = Object.keys(liveParams).concat(Object.keys(nextParams));
-      var seen = {};
-      for (var k = 0; k < keys.length; k++) {
-        var key = keys[k];
-        if (seen[key]) {
-          continue;
-        }
-        seen[key] = true;
-        if (liveParams[key] === nextParams[key]) {
-          continue;
-        }
-        if (change) {
-          return null; // More than one param value differs.
-        }
-        // MCP-1 (cycle 3): a DISCRETE param's string value (autotune
-        // key/scale) is exactly as single-param as a number — the human
-        // select-commit path pushes the same string through these exact
-        // primitives (NodeTypes.applyParam maps it; ParamControls'
-        // row.apply sets the select), so the fast path is entitled to it
-        // too. Any other non-numeric write stays off this path.
-        var nextVal = nextParams[key];
-        var valOk =
-          (typeof nextVal === 'number' && isFinite(nextVal)) ||
-          typeof nextVal === 'string';
-        if (!valOk) {
-          return null; // A deletion or non-scalar write — not this path.
-        }
-        change = {
-          id: next.id,
-          type: next.type,
-          param: key,
-          value: nextVal,
-          params: nextParams
-        };
-      }
-    }
-    return change;
-  }
-
-  /**
-   * Apply a param-only candidate through the human slider path's own
-   * primitives — NO ChainCanvas.loadModel (so no card replacement), NO
-   * AudioGraph.buildGraph (so no chain-gate duck and no graph surgery),
-   * and NO loadModel autosave re-baseline (Persistence runs exactly as a
-   * human edit instead, via ChainCanvas.updateNodeParam).
-   *
-   * @param {Array<Object>} liveModel - the model read the plan was
-   *   computed against (the diff base).
-   * @param {Array<Object>} candidate - the planned model.
-   * @returns {boolean} true when the fast path applied the change; false
-   *   when anything is missing/mismatched or the apply threw — the caller
-   *   then uses applyCandidateViaUi() (the full write path), which
-   *   reconciles model, cards, graph and persistence by construction.
-   */
-  function applyParamOnlyViaUi(liveModel, candidate) {
-    if (!(
-      window.ChainCanvas &&
-      typeof window.ChainCanvas.updateNodeParam === 'function' &&
-      window.AudioGraph &&
-      typeof window.AudioGraph.getModel === 'function' &&
-      typeof window.AudioGraph.getNodeInstance === 'function' &&
-      typeof window.AudioGraph.updateNodeParams === 'function' &&
-      window.NodeTypes &&
-      typeof window.NodeTypes.applyParam === 'function'
-    )) {
-      return false; // A bare/damaged harness — the full path's guards apply.
-    }
-    var change = paramOnlyChange(liveModel, candidate);
-    if (!change) {
-      return false;
-    }
-    // Issue #1's id-AND-type guard, mirrored from applyCandidateViaUi(): a
-    // live instance is a legitimate write target only when the model the
-    // live graph was actually built from still types this id as this type.
-    // A mismatch means the rebuild the full path performs is REQUIRED
-    // (fresh factory-built replacement) — never write onto the stale node.
-    var liveType;
-    try {
-      window.AudioGraph.getModel().forEach(function (entry) {
-        if (entry.id === change.id) {
-          liveType = entry.type;
-        }
-      });
-    } catch (err) {
-      return false;
-    }
-    if (liveType !== change.type) {
-      return false;
-    }
-    var instance = null;
-    try {
-      instance = window.AudioGraph.getNodeInstance(change.id);
-    } catch (err) {
-      return false;
-    }
-    if (!instance) {
-      return false; // Nothing live to update in place — rebuild instead.
-    }
-    try {
-      // (1) AudioGraph's model bookkeeping — the same call the human
-      // path's input handler makes (src/param-controls.js). Copies
-      // internally, so handing it the candidate's params object is safe.
-      window.AudioGraph.updateNodeParams(change.id, change.params);
-      // (2) The LIVE write — the same click-safe ramped applyParam the
-      // human path uses (scheduled over ~15 ms by
-      // window.AudioParamRamp, per the host-param-ramps disclosure).
-      window.NodeTypes.applyParam(change.type, instance, change.param, change.value);
-      // (3) The canvas half — card slider/value-span in place (no card
-      // re-render), canvas model bookkeeping, Persistence autosave and
-      // markModified exactly as a human slider move. A `false` return
-      // (stale id, mid-flight card change) falls back to the full path,
-      // which reconciles everything.
-      if (window.ChainCanvas.updateNodeParam(change.id, change.param, change.value) !== true) {
-        return false;
-      }
-    } catch (err) {
-      return false; // Safety > elegance — the full path reconciles.
-    }
-    return true;
-  }
-
-  /**
    * Success disclosure (FEW-1 contract): one-line summary + affected node
    * ids + clamped param names. Guarded — agent feedback can never fail a
    * mutation. MC-5 upgrades this to full summaries + undo snapshots.
@@ -3094,19 +2815,14 @@
   }
 
   // ---------------------------------------------------------------------
-  // MC-5 — change summaries, exact-state snapshots + undo, save_preset.
+  // MC-5 — change summaries and save_preset.
   //
-  // Three pieces, all layered on the MC-4 machinery above:
+  // Two pieces, layered on the MC-4 machinery above:
   //   (1) summary/label formatters (human-readable one-liners for
   //       reportMutation toasts + the compact undo labels);
-  //   (2) the snapshot pipeline: deep clone of the pre-apply model +
-  //       preset display state -> AgentUI.pushUndo({label, restore}),
-  //       where restore() re-applies through applyCandidateViaUi (the
-  //       SAME single write path) and mirrors presets-ui's display
-  //       operations; the FEW-1 stack cap (20) is the only bound — this
-  //       layer keeps no second undo stack;
-  //   (3) save_preset: PresetStore.save through the UI Save flow's own
+  //   (2) save_preset: PresetStore.save through the UI Save flow's own
   //       steps, with undo that deletes (created) or re-saves (overwrote).
+  // Chain-mutation snapshots and restores are owned by ChainEditing.
   // ---------------------------------------------------------------------
 
   /**
@@ -3283,68 +2999,6 @@
   }
 
   /**
-   * Structure-clone a pure-JSON value through JSON — the ES5-safe
-   * equivalent of structuredClone for this app's model data. FULL depth:
-   * the result shares no references with the source at any level, so a
-   * snapshot taken this way is immune to every later mutation (the model
-   * entries are {id, type, params-of-numbers}; JSON round-trips them
-   * exactly, and values are primitives so there is no deeper structure
-   * to miss).
-   *
-   * @param {*} value
-   * @returns {*}
-   */
-  function deepCloneJson(value) {
-    return JSON.parse(JSON.stringify(value));
-  }
-
-  /**
-   * The undo-snapshot copy of a chain model: PresetSchema.serialize (the
-   * authoritative shape — the same wire format save_preset persists)
-   * followed by a structure clone for full immunity, falling back to a
-   * hand-rolled clone when the schema module is absent (e.g. a bare test
-   * harness).
-   *
-   * @param {Array<Object>} model - the pre-apply model (already a fresh
-   *   read from ChainCanvas, but cloned again here regardless).
-   * @returns {Array<Object>} a fully detached copy.
-   */
-  function snapshotModelNodes(model) {
-    try {
-      if (window.PresetSchema && typeof window.PresetSchema.serialize === 'function') {
-        return deepCloneJson(window.PresetSchema.serialize('__undo_snapshot__', model).nodes);
-      }
-    } catch (err) {
-      // Serialize refused (should not happen) — hand-clone below.
-    }
-    return model.map(function (entry) {
-      return {
-        id: entry.id,
-        type: entry.type,
-        params: deepCloneJson(entry.params || {})
-      };
-    });
-  }
-
-  /**
-   * Capture the full pre-apply undo state for a mutation: the model (as
-   * read post-drag-settle, the exact base the plan was computed against)
-   * plus the preset display state (name + unsaved dot) read BEFORE the
-   * apply's markModified() fires.
-   *
-   * @param {Array<Object>} model
-   * @returns {{nodes: Array<Object>, presetName: string|null, unsaved: boolean|null}}
-   */
-  function captureUndoSnapshot(model) {
-    var display = readPresetDisplay();
-    return {
-      nodes: snapshotModelNodes(model),
-      presetName: display.name,
-      unsaved: display.unsaved
-    };
-  }
-
-  /**
    * Best-effort undo push (AgentUI enforces the {label, restore} shape
    * and the 20-entry cap; FEW-1 owns the only stack).
    *
@@ -3359,48 +3013,6 @@
     } catch (err) {
       // Undo affordance is best-effort; the mutation itself stands.
     }
-  }
-
-  /**
-   * The restore() closure for a mutation snapshot: re-applies the
-   * snapshotted nodes through applyCandidateViaUi — the SAME single
-   * write path the mutation used (loadModel + live-instance catch-up +
-   * markModified), deliberately WITHOUT re-running the policy engine: a
-   * snapshot restores what the HUMAN had (which may legitimately sit
-   * outside the agent ranges — e.g. the factory default's limiter
-   * ceiling), never what an agent may request. Then it restores the
-   * preset display through the PresetsUI exports (VIS-3: the real single
-   * write path — the name display, and the unsaved dot via markModified
-   * when the snapshot was modified / clearModified when it was clean).
-   * Never throws, whatever is missing or damaged underneath.
-   *
-   * @param {{nodes: Array<Object>, presetName: string|null, unsaved: boolean|null}} snapshot
-   * @returns {Function}
-   */
-  function makeSnapshotRestore(snapshot) {
-    return function () {
-      try {
-        applyCandidateViaUi(snapshot.nodes);
-        presetsUiSetCurrentPreset(snapshot.presetName);
-        if (snapshot.unsaved === true) {
-          try {
-            if (window.PresetsUI && typeof window.PresetsUI.markModified === 'function') {
-              window.PresetsUI.markModified();
-            }
-          } catch (err) {
-            // Display-only.
-          }
-        } else if (snapshot.unsaved === false) {
-          presetsUiClearModified();
-        }
-        // unsaved === null: indicator was absent at snapshot time — leave
-        // whatever display state applyCandidateViaUi produced.
-      } catch (err) {
-        // AgentUI.undo() catches restore() throws; this keeps the console
-        // clean for EXPECTED absences (e.g. ChainCanvas gone). The entry
-        // stays popped either way — a partial restore is never retried.
-      }
-    };
   }
 
   // ---------------------------------------------------------------------
@@ -3788,8 +3400,8 @@
    * pre-scan, per-param policy, every chain rule) — a preset that fails
    * policy refuses like a set_chain carrying the same nodes would, with
    * nothing applied. The candidate is the policy-applied node list; the
-   * preset's own display name is what the postApply hook shows (and what
-   * the result's `loaded` field carries).
+   * preset's own display name is included in ChainEditing's post-commit
+   * preset state (and in the result's `loaded` field).
    */
   function planLoadPreset(input, model) {
     var resolved = resolvePresetByName(input.name, input.namespace);
@@ -4382,10 +3994,9 @@
 
   /**
    * The mutation-tool body (MC-4 + MC-5): validate structurally, queue
-   * behind any in-progress user drag, then plan against the LIVE model
-   * (policy enforcement), snapshot the pre-apply state (MC-5), apply
-   * through the single UI write path, push the undo entry, disclose
-   * (summary toast), and resolve the contract's success/rejection
+   * behind any in-progress user drag, then plan against the accepted
+   * model (policy enforcement), apply through ChainEditing, disclose the
+   * result (summary toast), and resolve the success/rejection
    * object. Refusals (invalid args, runtime rejections, BUSY, layer
    * faults) additionally toast { rejected: true } and push NO undo
    * entry. Never throws; a caught crash of THIS layer resolves
@@ -4398,15 +4009,10 @@
    * @param {Object} [hooks] - optional per-tool extensions (issue #12's
    *   load_preset is the first consumer; the five MC-4/MC-5 mutation
    *   tools pass nothing and get today's behavior byte-for-byte):
-   *   skipParamOnlyFastPath (boolean) — force the FULL loadModel path
+   *   skipParamOnlyFastPath (boolean) — force a structural transaction
    *   even for a param-shaped candidate (a preset load is structural);
-   *   postApply (plan, snapshot) — run after the write succeeded and
-   *   BEFORE the undo entry is pushed, for tool-specific display
-   *   semantics (load_preset shows the preset name + clears the unsaved
-   *   dot, mirroring the human Load path). The snapshot's restore already
-   *   covers whatever the postApply changed as long as the same state
-   *   was captured in captureUndoSnapshot (it captures the preset
-   *   display name + dot). A planner may also return resultExtras
+   *   presetState (plan) — ChainEditing preset display state applied only
+   *   after the live chain commits. A planner may also return resultExtras
    *   ({key: value}) merged into the success result.
    * @returns {Function} execute(input, options) -> Promise<Object>.
    *   Issue #10: execution options are accepted; options.signal (an
@@ -4439,21 +4045,25 @@
         reportAgentRejection(name, invalid);
         return Promise.resolve(invalid);
       }
-      // Pre-Start parity (#15): until the operator presses Start, the
-      // palette/canvas/presets are gated (engine-not-started) — a chain
-      // mutation applied now would change the model invisibly behind the
-      // gate, with no human oversight over an edit they cannot see. On
-      // the real page (window.AudioEngine present) mutations are refused
-      // with one stable, documented result until the engine has started;
-      // reads stay available, and bare harnesses (no AudioEngine) keep
-      // today's model-only behavior so tests exercise the full planning
-      // stack.
-      if (window.AudioEngine && !window.AudioEngine.isStarted) {
+      // The human board is gated until Start, so refuse agent mutations
+      // on a real page until the live engine exists. Read tools remain
+      // available, and model-only harnesses without AudioEngine still run.
+      var engine = window.AudioEngine;
+      var engineContext = engine && engine.audioContext;
+      if (engine && (
+        engine.isStarted === false ||
+        ('isTrackLive' in engine && engine.isTrackLive === false) ||
+        ('sourceNode' in engine && !engine.sourceNode) ||
+        ('audioContext' in engine && !engineContext) ||
+        (engineContext && 'state' in engineContext && engineContext.state !== 'running')
+      )) {
         var notStarted = engineNotStartedResult(name);
         reportAgentRejection(name, notStarted);
         return Promise.resolve(notStarted);
       }
-      return waitForDragSettle(signal).then(function (settled) {
+      var run = agentMutationQueue.then(function () {
+        return waitForDragSettle(signal);
+      }).then(function (settled) {
         if (settled === 'aborted') {
           return abortedResult(name);
         }
@@ -4462,14 +4072,21 @@
           reportAgentRejection(name, busy);
           return busy;
         }
-        // TOCTOU recheck: the signal may have aborted in the same tick the
-        // settle resolved (or even between the poll's drag check and this
-        // line). Re-verify immediately before anything is planned, written
-        // or disclosed — the apply below must never follow a cancellation.
-        if (signalAborted(signal)) {
-          return abortedResult(name);
-        }
-        try {
+        // Wait for an already-accepted human/preset/startup edit before
+        // planning. This keeps the policy candidate based on the model the
+        // ChainEditing queue will actually edit, not a stale pre-commit
+        // snapshot from a simultaneous human gesture.
+        var editing = window.ChainEditing;
+        var ready = editing && typeof editing.whenIdle === 'function'
+          ? editing.whenIdle()
+          : Promise.resolve();
+        return ready.then(function () {
+          // TOCTOU recheck: cancellation may have arrived during drag wait
+          // or while waiting for the shared mutation queue.
+          if (signalAborted(signal)) {
+            return abortedResult(name);
+          }
+          try {
           var model = readCurrentModel(); // fresh, post-drag, read-only copy
           var plan = planner(input, model);
           if (plan.error) {
@@ -4479,108 +4096,94 @@
             reportAgentRejection(name, plan.error);
             return plan.error;
           }
-          // MC-5: the exact-state snapshot — taken AFTER the drag settles
-          // (a queued mutation snapshots the state it will actually edit,
-          // never a stale pre-drag one) and BEFORE the write, from the
-          // same post-settle model read the plan was computed against.
-          var snapshot = captureUndoSnapshot(model);
-          // Issue #5: a candidate that is exactly ONE param change on one
-          // existing same-id same-type node (a set_param by definition;
-          // a structurally identical set_chain qualifies too) rides the
-          // parameter-only fast path — no card replacement, no graph
-          // rebuild, no chain-gate duck, the same click-safe ramp and the
-          // same autosave a human slider move produces. Anything else —
-          // or any miss inside the fast path — falls back to the full
-          // single write path below.
-          if (hooks.skipParamOnlyFastPath) {
-            // Issue #12 (load_preset): loading a preset is a STRUCTURAL
-            // change by definition — always the full loadModel path, never
-            // the param-only fast path, exactly like the human Load button.
-            applyCandidateViaUi(plan.candidate);
-          } else if (!applyParamOnlyViaUi(model, plan.candidate)) {
-            applyCandidateViaUi(plan.candidate);
+          if (!editing || typeof editing.apply !== 'function') {
+            var missingEditing = schemaLayerFaultResult(
+              name,
+              new Error('ChainEditing is required for every WebMCP mutation.')
+            );
+            reportAgentRejection(name, missingEditing);
+            return missingEditing;
           }
-          // Tool-specific post-apply semantics (load_preset's display
-          // writes) run BEFORE the undo push, inside the same try — a
-          // throw here still resolves SCHEMA_LAYER_FAULT with the undo
-          // entry unpushed, the same never-half-applied contract as the
-          // write itself.
-          if (typeof hooks.postApply === 'function') {
-            hooks.postApply(plan, snapshot);
-          }
-          // Pushed only once the apply SUCCEEDED: a thrown write path
-          // resolves SCHEMA_LAYER_FAULT below with nothing to undo.
-          pushUndoEntry(plan.label, makeSnapshotRestore(snapshot));
-          reportAgentMutation(plan.summary, plan.nodeIds, plan.clamped);
-          var result = {
-            applied: true,
-            tool: name,
-            changes: plan.changes,
-            clamped: plan.clamped || [],
-            nodeIds: plan.nodeIds || []
-          };
-          if (plan.note) {
-            result.note = plan.note;
-          }
-          if (plan.resultExtras) {
-            Object.keys(plan.resultExtras).forEach(function (key) {
-              result[key] = plan.resultExtras[key];
-            });
-          }
-          return result;
-        } catch (err) {
-          var applyFault = schemaLayerFaultResult(name, err);
-          // Mid-apply crash (#16 false-'nothing changed' finding): the
-          // full write path (loadModel) commits the VISIBLE model/DOM
-          // before rebuildGraph()'s node-factory pass, so a synchronous
-          // factory failure can leave the board already replaced while
-          // the live graph keeps the prior topology. In that state the
-          // stock "Nothing in the app was changed" hint is FALSE. When a
-          // snapshot exists (the crash was at/after the apply), restore
-          // the pre-edit chain through the same write path and report
-          // the rollback outcome truthfully. Crashes BEFORE the snapshot
-          // (planner/read) changed nothing, so the stock hint stands.
-          if (snapshot) {
-            var rolledBack = false;
-            try {
-              // Raw applyCandidateViaUi (NOT makeSnapshotRestore, which
-              // swallows errors): a restore failure must be REPORTED as
-              // split state, not hidden behind a clean-looking refusal.
-              applyCandidateViaUi(snapshot.nodes);
-              rolledBack = true;
-            } catch (restoreErr) {
-              rolledBack = false;
-            }
-            if (rolledBack) {
-              // The preset display state rides the same snapshot.
-              try {
-                presetsUiSetCurrentPreset(snapshot.presetName);
-                if (snapshot.unsaved === true) {
-                  if (window.PresetsUI && typeof window.PresetsUI.markModified === 'function') {
-                    window.PresetsUI.markModified();
-                  }
-                } else if (snapshot.unsaved === false) {
-                  presetsUiClearModified();
-                }
-              } catch (displayErr) {
-                // Display-only; the chain restore above already ran.
+          // Issue #20: ChainEditing owns the accepted
+          // model, structural/parameter classification, rollback,
+          // persistence truth, preset state, and post-commit Undo snapshot.
+          var presetState = typeof hooks.presetState === 'function'
+            ? hooks.presetState(plan)
+            : null;
+          return editing.apply({
+              source: 'agent',
+              candidate: plan.candidate,
+              forceStructural: !!hooks.skipParamOnlyFastPath,
+              preset: presetState,
+              undoLabel: plan.label,
+              signal: signal
+            }).then(function (editResult) {
+              reportAgentMutation(plan.summary, plan.nodeIds, plan.clamped);
+              var result = {
+                applied: true,
+                tool: name,
+                changes: plan.changes,
+                clamped: plan.clamped || [],
+                nodeIds: plan.nodeIds || []
+              };
+              if (editResult && editResult.saved === false) {
+                result.saved = false;
+                result.warning = editResult.warning;
               }
-              applyFault.rollback = 'restored';
-              applyFault.hint =
-                'The edit failed while applying and the PREVIOUS chain was restored — ' +
-                'the failed edit is not live. This is a bug in the tool layer; please report it.';
-            } else {
-              applyFault.rollback = 'failed';
-              applyFault.hint =
-                'The edit failed while applying AND the restore failed: the visible board ' +
-                'may not match the live sound. Reload the page to reconcile. This is a bug ' +
-                'in the tool layer; please report it.';
-            }
+              if (plan.note) {
+                result.note = plan.note;
+              }
+              if (plan.resultExtras) {
+                Object.keys(plan.resultExtras).forEach(function (key) {
+                  result[key] = plan.resultExtras[key];
+                });
+              }
+              return result;
+            }, function (err) {
+              var rollbackFailed = !!(
+                err &&
+                err.rollback &&
+                err.rollback.succeeded === false
+              );
+              if (!rollbackFailed && (signalAborted(signal) || (err && err.name === 'AbortError'))) {
+                return abortedResult(name);
+              }
+              if (err && err.code === 'ENGINE_NOT_STARTED') {
+                var stopped = engineNotStartedResult(name);
+                reportAgentRejection(name, stopped);
+                return stopped;
+              }
+              var applyFault = schemaLayerFaultResult(name, err);
+              if (err && err.rollback) {
+                applyFault.rollback = {
+                  attempted: !!err.rollback.attempted,
+                  succeeded: !!err.rollback.succeeded
+                };
+                if (applyFault.rollback.succeeded) {
+                  applyFault.hint =
+                    'The edit failed while applying and the previous chain was restored. ' +
+                    'The failed edit is not live; please report this tool-layer failure.';
+                } else {
+                  applyFault.hint =
+                    'The edit failed and rollback also failed. The visible board may not match ' +
+                    'the live sound; reload the page to reconcile, then report this tool-layer failure.';
+                }
+              }
+              reportAgentRejection(name, applyFault);
+              return applyFault;
+            });
+          } catch (err) {
+            var applyFault = schemaLayerFaultResult(name, err);
+            reportAgentRejection(name, applyFault);
+            return applyFault;
           }
-          reportAgentRejection(name, applyFault);
-          return applyFault;
-        }
+        });
       });
+      agentMutationQueue = run.catch(function () {
+        // Refusals are result values, but keep the queue usable even if an
+        // unexpected promise rejection escapes a damaged dependency.
+      });
+      return run;
     };
   }
 
@@ -4905,16 +4508,12 @@
         validatePresetSelector,
         planLoadPreset,
         {
-          // Loading is structural: always the full loadModel path (issue
-          // #5's fast path is for param tweaks only), and after the write
-          // the human-Load display semantics — preset name shown, unsaved
-          // dot cleared (src/presets-ui.js's Load handler order). The
-          // mutationExecute snapshot (taken pre-apply) already captured
-          // the prior name + dot, so the undo entry restores both.
+          // Loading is structural even when the nodes happen to differ by
+          // one parameter. ChainEditing applies the clean preset display
+          // state only after the graph commit and owns its Undo snapshot.
           skipParamOnlyFastPath: true,
-          postApply: function (plan) {
-            presetsUiSetCurrentPreset(plan.resultExtras.loaded);
-            presetsUiClearModified();
+          presetState: function (plan) {
+            return { name: plan.resultExtras.loaded, modified: false };
           }
         }
       )

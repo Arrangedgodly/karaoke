@@ -388,9 +388,8 @@ function loadSrc(sandbox, relPath) {
 }
 
 // ----------------------------------------------------------------------
-// ChainCanvas stub — the read surface the tools use plus the single
-// write path (loadModel) AND the issue-#5 param-only fast-path hook
-// (updateNodeParam), so set_param rides the same route the app does.
+// ChainCanvas adapter stub. ChainEditing owns every mutation; this keeps
+// only accepted rendered model state for assertions.
 // ----------------------------------------------------------------------
 function installChainCanvasStub(sandbox) {
   var canvasModel = [];
@@ -406,17 +405,14 @@ function installChainCanvasStub(sandbox) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
-      canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
-      }
+    getCurrentLayout: function () {
+      return {};
     },
-    updateNodeParam: function (nodeId, paramId, value) {
+    renderModel: function (model) {
+      canvasModel = copyModel(model);
+      return true;
+    },
+    renderNodeParam: function (nodeId, paramId, value) {
       for (var i = 0; i < canvasModel.length; i++) {
         if (canvasModel[i].id === nodeId) {
           var updated = Object.assign({}, canvasModel[i].params);
@@ -476,8 +472,9 @@ async function main() {
   loadSrc(sandbox, 'src/node-bitcrusher.js');
   loadSrc(sandbox, 'src/node-phaser.js');
   loadSrc(sandbox, 'src/preset-schema.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var AG = sandbox.AudioGraph;
   var setChain = getTool(sandbox, 'set_chain');

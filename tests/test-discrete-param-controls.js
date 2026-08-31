@@ -185,8 +185,8 @@ console.log('A. render');
 var container = makeElement('div');
 var modelEntry = { id: 'n1', type: 'test-keys', params: {} };
 var onParamsChangedCalls = [];
-windowStub.ParamControls.render(container, modelEntry, function (p) {
-  onParamsChangedCalls.push(p);
+windowStub.ParamControls.render(container, modelEntry, function (p, change) {
+  onParamsChangedCalls.push({ params: p, change: change });
 });
 
 var rows = container.children;
@@ -262,7 +262,7 @@ check(
 );
 
 // ----------------------------------------------------------------------
-// B. Commit — pad activation reaches applyParam as a string.
+// B. Gesture — pad activation emits a normalized string intent.
 // ----------------------------------------------------------------------
 console.log('B. commit');
 
@@ -273,41 +273,34 @@ var keyPadA = keyGroup.children.filter(function (p) {
 })[0];
 keyPadA.fire('click');
 
-check(applied.length === 1, 'one applyParam call for the change');
 check(
-  applied[0] &&
-    applied[0].paramId === 'key' &&
-    applied[0].value === 'A' &&
-    typeof applied[0].value === 'string',
-  'applyParam received paramId "key" with STRING value "A"'
+  applied.length === 0 && calls.updateNodeParams.length === 0,
+  'ParamControls performs no live or graph write before ChainEditing accepts the intent'
 );
 check(
-  applied[0] && applied[0].node === calls.nodeInstance,
-  'applyParam received the live node instance from AudioGraph.getNodeInstance'
+  onParamsChangedCalls.length === 1 &&
+    onParamsChangedCalls[0].params.key === 'A' &&
+    onParamsChangedCalls[0].change.param === 'key' &&
+    onParamsChangedCalls[0].change.value === 'A' &&
+    typeof onParamsChangedCalls[0].change.value === 'string',
+  'onParamsChanged emits the full candidate params plus normalized STRING key intent'
 );
 check(
-  calls.updateNodeParams.length === 1 &&
-    calls.updateNodeParams[0].id === 'n1' &&
-    calls.updateNodeParams[0].params.key === 'A' &&
-    calls.updateNodeParams[0].params.scale === 'Chromatic' &&
-    calls.updateNodeParams[0].params.mix === 50,
-  'model updated via AudioGraph.updateNodeParams with full params (key A, scale Chromatic, mix 50)'
+  pressedPad(keyGroup).textContent === 'C',
+  'the pad remains on the accepted value until ChainEditing renders acceptance'
 );
-check(
-  onParamsChangedCalls.length === 1 && onParamsChangedCalls[0].key === 'A',
-  'onParamsChanged fired with the updated params object'
-);
-check(
-  pressedPad(keyGroup) === keyPadA,
-  'the activated pad is now the pressed pad'
-);
+
+windowStub.ParamControls.updateControl('n1', 'key', 'A');
+check(pressedPad(keyGroup) === keyPadA, 'the accepted adapter render moves the pressed pad to A');
 
 scaleGroup.children
   .filter(function (p) { return p.textContent === 'Major'; })[0]
   .fire('click');
 check(
-  applied.length === 2 && applied[1].paramId === 'scale' && applied[1].value === 'Major',
-  'scale change reaches applyParam with STRING value "Major"'
+  onParamsChangedCalls.length === 2 &&
+    onParamsChangedCalls[1].change.param === 'scale' &&
+    onParamsChangedCalls[1].change.value === 'Major',
+  'scale change emits a normalized STRING intent'
 );
 
 // ----------------------------------------------------------------------
@@ -324,7 +317,7 @@ check(
   'updateControl moves the pad selection to E in place'
 );
 check(
-  applied.length === 2,
+  applied.length === 0,
   'updateControl commits nothing itself (the caller owns the live write)'
 );
 check(
@@ -340,9 +333,9 @@ check(
 // key write (the workingParams re-sync the commit handler does).
 mixInput.value = '75';
 mixInput.fire('input');
-var lastModel = calls.updateNodeParams[calls.updateNodeParams.length - 1];
+var lastModel = onParamsChangedCalls[onParamsChangedCalls.length - 1].params;
 check(
-  lastModel.params.key === 'E' && lastModel.params.mix === 75,
+  lastModel.key === 'E' && lastModel.mix === 75,
   'later human control move keeps the externally-set key (E) and applies mix 75'
 );
 

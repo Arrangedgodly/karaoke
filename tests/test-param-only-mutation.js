@@ -389,14 +389,10 @@ function loadSrc(sandbox, relPath) {
 }
 
 // ----------------------------------------------------------------------
-// ChainCanvas stub — same shape as the other tool-path tests (loadModel
-// copies + rebuilds the graph), plus issue #5's updateNodeParam, which
-// mirrors the REAL src/canvas.js export's canvas-side responsibilities:
-// update this canvas's model entry, delegate the visible-control move to
-// the REAL ParamControls.updateControl, then run the exact human-edit
-// persistence pair (Persistence.saveCurrentChain + PresetsUI.markModified).
-// Every loadModel/updateNodeParam call is recorded so the tests can prove
-// WHICH write path a mutation took.
+// ChainCanvas adapter stub. ChainEditing owns graph/persistence/preset/Undo;
+// these render methods only copy accepted state into the canvas model and
+// move a visible control in place. Calls are recorded so the test can prove
+// parameter edits do not replace cards.
 // ----------------------------------------------------------------------
 function installChainCanvasStub(sandbox, records) {
   var canvasModel = [];
@@ -412,19 +408,16 @@ function installChainCanvasStub(sandbox, records) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       records.loadModelCalls += 1;
       records.loadModelModels.push(copyModel(model));
       canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
-      }
+      return true;
     },
-    updateNodeParam: function (nodeId, paramId, value) {
+    renderNodeParam: function (nodeId, paramId, value) {
       var entry = null;
       for (var i = 0; i < canvasModel.length; i++) {
         if (canvasModel[i].id === nodeId) {
@@ -437,23 +430,12 @@ function installChainCanvasStub(sandbox, records) {
       }
       entry.params[paramId] = value;
       records.updateNodeParamCalls.push({ nodeId: nodeId, paramId: paramId, value: value });
-      // The real canvas delegates the visible-control move to the REAL
-      // ParamControls.updateControl (slider + mono span in place, no card
-      // re-render); mirror that delegation so the component is exercised
-      // through the same chain of calls the app makes.
       try {
         if (sandbox.ParamControls && typeof sandbox.ParamControls.updateControl === 'function') {
           sandbox.ParamControls.updateControl(nodeId, paramId, value);
         }
       } catch (err) {
         // Display-only in the real canvas too — never fails the write.
-      }
-      if (sandbox.Persistence) {
-        records.persistenceCalls.push(copyModel(canvasModel));
-        sandbox.Persistence.saveCurrentChain(canvasModel);
-      }
-      if (sandbox.PresetsUI) {
-        sandbox.PresetsUI.markModified();
       }
       return true;
     }
@@ -526,7 +508,6 @@ async function main() {
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/param-controls.js');
   loadSrc(sandbox, 'src/default-preset.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var records = {
     loadModelCalls: 0,
@@ -538,15 +519,22 @@ async function main() {
 
   var markModifiedCalls = 0;
   sandbox.PresetsUI = {
+    getDisplayState: function () { return { name: 'Classic', modified: markModifiedCalls > 0 }; },
     markModified: function () {
       markModifiedCalls += 1;
-    }
+    },
+    setPersistenceWarning: function () {}
   };
   sandbox.Persistence = {
-    saveCurrentChain: function () {
-      // recorded by the ChainCanvas stub (it knows the model it passed)
+    saveCurrentChain: function (model) {
+      records.persistenceCalls.push(model.map(function (entry) {
+        return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+      }));
+      return { saved: true };
     }
   };
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var AG = sandbox.AudioGraph;
   var DEFAULTS = sandbox.DEFAULT_PRESET.nodes;
@@ -566,9 +554,9 @@ async function main() {
   // must add ZERO).
   var buildGraphCalls = 0;
   var realBuildGraph = AG.buildGraph;
-  AG.buildGraph = function (model) {
+  AG.buildGraph = function (model, options) {
     buildGraphCalls += 1;
-    return realBuildGraph(model);
+    return realBuildGraph(model, options);
   };
 
   // The equal-power crossfade values the reverb/delay mixes must show.
@@ -588,8 +576,11 @@ async function main() {
       RAMP_S + ' s)'
   );
 
-  sandbox.ChainCanvas.loadModel(DEFAULTS);
-  await settle();
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: DEFAULTS,
+    forceStructural: true
+  });
 
   var instances0 = {};
   AG.getModel().forEach(function (entry) {
@@ -613,7 +604,7 @@ async function main() {
   var gate = AG.getChainGate();
   var gateBase = gate.gain.__automation.length; // duck-detection baseline
   check(buildGraphCalls === 1 && records.loadModelCalls === 1,
-    '0: the seed used exactly one loadModel -> buildGraph');
+    '0: the seed used exactly one ChainEditing graph commit + canvas render');
 
   // --------------------------------------------------------------------
   console.log('A. set_param reverb mix 20 -> 40 on n5 takes the FAST path');
@@ -622,8 +613,8 @@ async function main() {
   // count, stub records, undo/toast counts.
   var base = {
     buildGraph: buildGraphCalls,
-    loadModel: records.loadModelCalls,
-    updateNodeParam: records.updateNodeParamCalls.length,
+    loadModelCalls: records.loadModelCalls,
+    updateNodeParamCalls: records.updateNodeParamCalls.length,
     persistence: records.persistenceCalls.length,
     markModified: markModifiedCalls,
     undoPushes: undoPushes,
@@ -704,8 +695,8 @@ async function main() {
       ', still ' + buildGraphCalls + ')'
   );
   check(
-    records.loadModelCalls === base.loadModel,
-    'A4: ZERO ChainCanvas.loadModel calls during set_param (no card rebuild)'
+    records.loadModelCalls === base.loadModelCalls,
+    'A4: ZERO canvas model renders during set_param (no card rebuild)'
   );
   var gateDuringSetParam = gate.gain.__automation.slice(gateBase);
   check(
@@ -716,11 +707,11 @@ async function main() {
 
   // (d) The card/row update function was called instead of a re-render.
   check(
-    records.updateNodeParamCalls.length === base.updateNodeParam + 1 &&
+    records.updateNodeParamCalls.length === base.updateNodeParamCalls + 1 &&
       records.updateNodeParamCalls[records.updateNodeParamCalls.length - 1].nodeId === 'n5' &&
       records.updateNodeParamCalls[records.updateNodeParamCalls.length - 1].paramId === 'mix' &&
       records.updateNodeParamCalls[records.updateNodeParamCalls.length - 1].value === 40,
-    'A5: ChainCanvas.updateNodeParam was called exactly once with (n5, mix, 40) — the card/row update path, cards not replaced'
+    'A5: ChainCanvas.renderNodeParam was called exactly once with (n5, mix, 40) — the card/row update path, cards not replaced'
   );
 
   // (e) Persistence + unsaved state exactly as a human edit.
@@ -968,7 +959,7 @@ async function main() {
     var param = tc.getParam();
     var before = {
       buildGraph: buildGraphCalls,
-      loadModel: records.loadModelCalls,
+      loadModelCalls: records.loadModelCalls,
       gateAutomation: gate.gain.__automation.length,
       automation: param.__automation.length,
       instance: AG.getNodeInstance(tc.nodeId),
@@ -1014,7 +1005,7 @@ async function main() {
       tc.label + ': ZERO buildGraph calls — fast path taken'
     );
     check(
-      records.loadModelCalls === before.loadModel,
+      records.loadModelCalls === before.loadModelCalls,
       tc.label + ': ZERO ChainCanvas.loadModel calls — cards were not rebuilt'
     );
     check(
@@ -1060,8 +1051,8 @@ async function main() {
   var refuseBase = {
     automation: gainParam.__automation.length,
     buildGraph: buildGraphCalls,
-    loadModel: records.loadModelCalls,
-    updateNodeParam: records.updateNodeParamCalls.length,
+    loadModelCalls: records.loadModelCalls,
+    updateNodeParamCalls: records.updateNodeParamCalls.length,
     persistence: records.persistenceCalls.length,
     markModified: markModifiedCalls,
     undoPushes: undoPushes,
@@ -1086,8 +1077,8 @@ async function main() {
   check(
     gainParam.__automation.length === refuseBase.automation &&
       buildGraphCalls === refuseBase.buildGraph &&
-      records.loadModelCalls === refuseBase.loadModel &&
-      records.updateNodeParamCalls.length === refuseBase.updateNodeParam &&
+      records.loadModelCalls === refuseBase.loadModelCalls &&
+      records.updateNodeParamCalls.length === refuseBase.updateNodeParamCalls &&
       records.persistenceCalls.length === refuseBase.persistence &&
       markModifiedCalls === refuseBase.markModified &&
       undoPushes === refuseBase.undoPushes &&
@@ -1199,6 +1190,22 @@ async function main() {
       humanEdits[0].lowGain === 3 &&
       humanEdits[0].midGain === 6,
     'D3: a human slider move after an agent edit builds on the agent\'s value (midGain stays 6 — no silent revert)'
+  );
+  var lowSpan = null;
+  rows.forEach(function (row) {
+    var parts = findRowParts(row, 'lowGain');
+    if (parts.input) {
+      lowSpan = parts.span;
+    }
+  });
+  check(
+    Number(lowInput.value) === 0 && lowSpan && lowSpan.textContent === '0 dB',
+    'D4: a queued human candidate leaves the last accepted control value visible'
+  );
+  sandbox.ParamControls.updateControl('n3', 'lowGain', 3);
+  check(
+    Number(lowInput.value) === 3 && lowSpan.textContent === '3 dB',
+    'D4: the control changes only when the accepted-state adapter renders it'
   );
 
   // --------------------------------------------------------------------

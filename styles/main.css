@@ -2416,7 +2416,10 @@ select.control {
 
 /* Pre-Start gate, the signal-order strip + build panel: pointer lock
    (the functional gate, unchanged) + the SAME recede + diagonal hatch
-   the canvas face carries below — one grammar, three zones. */
+   the canvas face carries below — one grammar, three zones (Guided
+   Patchbay: retargeted from the retired .palette/.presets zones).
+   src/canvas.js also sets native `inert` on the whole layout, which is
+   the keyboard and accessibility-tree half of this functional gate. */
 .layout.engine-not-started .build,
 .layout.engine-not-started .signal-order {
   position: relative;

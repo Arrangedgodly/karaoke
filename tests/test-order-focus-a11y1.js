@@ -314,6 +314,19 @@ vm.runInContext(
 );
 
 var CC = sandbox.ChainCanvas;
+sandbox.ChainEditing = {
+  getModel: function () { return CC.getCurrentModel(); },
+  getLayout: function () { return CC.getCurrentLayout(); },
+  syncLayout: function () {},
+  apply: function (request) {
+    if (request.candidate) {
+      CC.renderModel(request.candidate, request.layout);
+    } else if (request.change) {
+      CC.renderNodeParam(request.change.nodeId, request.change.param, request.change.value);
+    }
+    return Promise.resolve({ applied: true, saved: true });
+  }
+};
 
 // ----------------------------------------------------------------------
 // Helpers.
@@ -488,7 +501,7 @@ function model3() {
 }
 
 function resetBoard() {
-  CC.loadModel(model3());
+  CC.renderModel(model3());
   focusLog.length = 0;
   documentStub.activeElement = null;
 }
@@ -612,7 +625,7 @@ check(
   'C6: the model equals the DOM order after the removal'
 );
 
-CC.loadModel([
+CC.renderModel([
   { id: 'z9', type: 'gain', params: { level: 1 } },
   { id: 'a1', type: 'gain', params: { level: 2 } },
   { id: 'm5', type: 'limiter', params: { level: 0 } }

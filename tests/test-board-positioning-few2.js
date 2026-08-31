@@ -244,6 +244,19 @@ vm.runInContext(
 );
 
 var CC = sandbox.ChainCanvas;
+sandbox.ChainEditing = {
+  getModel: function () { return CC.getCurrentModel(); },
+  getLayout: function () { return CC.getCurrentLayout(); },
+  syncLayout: function () {},
+  apply: function (request) {
+    if (request.candidate) {
+      CC.renderModel(request.candidate, request.layout);
+    } else if (request.change) {
+      CC.renderNodeParam(request.change.nodeId, request.change.param, request.change.value);
+    }
+    return Promise.resolve({ applied: true, saved: true });
+  }
+};
 
 // ----------------------------------------------------------------------
 // Helpers.
@@ -314,7 +327,7 @@ check(CC.snapToGrid(55) === 48 && CC.snapToGrid(-7) === 0, 'A3: snapToGrid quant
 
 // ----------------------------------------------------------------------
 console.log('B. loadModel auto-layouts the incumbent ROW when no layout is given (vertical flow retired 2026-08-31)');
-CC.loadModel(model());
+CC.renderModel(model());
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({
     n1: { x: 0, y: 16, scale: 1, flow: 'horizontal' },
@@ -404,12 +417,29 @@ check(builds.length === 0, 'C9: a position move never rebuilds the audio graph (
 
 // ----------------------------------------------------------------------
 console.log('D. reload round-trip: the saved layout reapplies exactly');
-CC.loadModel(model(), saves[saves.length - 1].layout);
+CC.renderModel(model(), saves[saves.length - 1].layout);
 check(
   CC.currentLayout().n2.x === 176 && CC.currentLayout().n2.y === 32 &&
     CC.currentLayout().n1.y === 16 && CC.currentLayout().n3.x === 288,
   'D1: loadModel(model, savedLayout) restores every seat exactly (round-trip)'
 );
+
+console.log('E. engine loss cancels provisional layout movement');
+var canceledSeat = JSON.parse(JSON.stringify(CC.currentLayout().n2));
+var savesBeforeLoss = saves.length;
+handleOf('n2').__fire('pointerdown', { clientX: 100, clientY: 100, button: 0 });
+documentStub.__fire('pointermove', { clientX: 180, clientY: 164 });
+check(CC.currentLayout().n2.x !== canceledSeat.x, 'E1: the provisional move is visible before loss');
+CC.onEngineStopped();
+check(
+  CC.currentLayout().n2.x === canceledSeat.x &&
+    CC.currentLayout().n2.y === canceledSeat.y &&
+    CC.isDragActive() === false,
+  'E2: engine loss restores the drag origin and cancels the gesture'
+);
+documentStub.__fire('pointerup', {});
+check(saves.length === savesBeforeLoss, 'E3: the canceled layout never reaches persistence');
+CC.onEngineStarted();
 
 // ----------------------------------------------------------------------
 console.log('F. removal prunes the live layout map');
@@ -418,10 +448,9 @@ check(
   !CC.currentLayout().n3 && Object.keys(CC.currentLayout()).length === 2,
   'F1: removing a node drops its board position (layout garbage-free)'
 );
-var lastSave = saves[saves.length - 1];
 check(
-  !!lastSave.layout && !lastSave.layout.n3,
-  'F2: the post-removal save carries no position for the removed id'
+  !Object.prototype.hasOwnProperty.call(CC.getCurrentLayout(), 'n3'),
+  'F2: the accepted render adapter exposes no position for the removed id'
 );
 
 // ----------------------------------------------------------------------
@@ -439,12 +468,61 @@ check(
   'G3: with no terminal limiter left (removed in F), the add appends at the END of the chain'
 );
 // The terminal-limiter guard still holds when a limiter IS terminal:
-CC.loadModel(model(), null); // n3 (limiter) back, terminal — board tidy
+CC.renderModel(model(), null); // n3 (limiter) back, terminal — board tidy
 CC.addNodeType('gain');
 check(
   domOrder()[domOrder().length - 1] === 'n3',
   'G4: a terminal limiter STAYS terminal across an add (insert-before policy unchanged)'
 );
+
+// ----------------------------------------------------------------------
+console.log('H. production human adapter keeps provisional DOM hidden until acceptance');
+var acceptedBefore = CC.getCurrentModel();
+var layoutBefore = CC.getCurrentLayout();
+var pendingRequest = null;
+var acceptPending = null;
+sandbox.ChainEditing = {
+  getModel: function () { return JSON.parse(JSON.stringify(acceptedBefore)); },
+  getLayout: function () { return JSON.parse(JSON.stringify(layoutBefore)); },
+  apply: function (request) {
+    pendingRequest = request;
+    return new Promise(function (resolve) {
+      acceptPending = function () {
+        acceptedBefore = JSON.parse(JSON.stringify(request.candidate));
+        layoutBefore = JSON.parse(JSON.stringify(request.layout));
+        CC.renderModel(request.candidate, request.layout);
+        resolve({ applied: true, saved: true, mode: 'structural' });
+      };
+    });
+  }
+};
+var acceptedOrderBefore = domOrder();
+CC.addNodeType('gain');
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(acceptedOrderBefore),
+  'H1: the provisional add is synchronously replaced by the last accepted rendering'
+);
+check(
+  pendingRequest && pendingRequest.source === 'human' &&
+    pendingRequest.forceStructural === true &&
+    pendingRequest.candidate.length === acceptedOrderBefore.length + 1,
+  'H2: the human adapter submits one normalized structural candidate to ChainEditing'
+);
+acceptPending();
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(pendingRequest.candidate.map(function (entry) { return entry.id; })),
+  'H3: only acceptance makes the candidate DOM visible'
+);
+
+delete sandbox.ChainEditing;
+vm.runInContext('document.defaultView = window;', sandbox);
+var failedClosed = false;
+try {
+  CC.loadModel(model());
+} catch (err) {
+  failedClosed = /ChainEditing/.test(String(err && err.message));
+}
+check(failedClosed, 'H4: a production-like document fails closed when ChainEditing is missing');
 
 if (failures.length === 0) {
   console.log('PASS: free positioning (FEW-2)');

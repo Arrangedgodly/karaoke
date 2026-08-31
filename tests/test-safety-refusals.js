@@ -337,9 +337,7 @@ function loadSrc(sandbox, relPath) {
 }
 
 // ----------------------------------------------------------------------
-// ChainCanvas stub — the read surface the tools use plus the single
-// write path: loadModel takes ownership of copies and rebuilds the audio
-// graph (the guarded call the real loadModel makes when started).
+// ChainCanvas adapter stub. ChainEditing is the only graph/model writer.
 // ----------------------------------------------------------------------
 function installChainCanvasStub(sandbox) {
   var canvasModel = [];
@@ -355,15 +353,21 @@ function installChainCanvasStub(sandbox) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
+      return true;
+    },
+    renderNodeParam: function (id, param, value) {
+      for (var i = 0; i < canvasModel.length; i++) {
+        if (canvasModel[i].id === id) {
+          canvasModel[i].params[param] = value;
+          return true;
+        }
       }
+      return false;
     }
   };
 }
@@ -394,8 +398,9 @@ async function main() {
   loadSrc(sandbox, 'src/node-reverb.js');
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/default-preset.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var AG = sandbox.AudioGraph;
 
@@ -456,8 +461,11 @@ async function main() {
   // --------------------------------------------------------------------
   console.log('0. seed the live default chain (n6 = terminal limiter @ -3 dB)');
   // --------------------------------------------------------------------
-  sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
-  await settle();
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: sandbox.DEFAULT_PRESET.nodes,
+    forceStructural: true
+  });
 
   var seedSnap = snapshot();
   check(

@@ -7,7 +7,7 @@
 // src/default-preset.js per index.html's script order. IIFE-wrapped with a
 // single `window.FactoryPresets` export — unlike default-preset.js's bare
 // static literal, because the export is a FUNCTION: list() must hand every
-// caller fresh, deep-copied nodes (ChainCanvas.loadModel takes ownership
+// caller fresh, deep-copied nodes (ChainEditing.apply takes ownership
 // of the array it is handed, so handing out the shared literal would let
 // app state silently edit the "library").
 //
@@ -30,7 +30,7 @@
 // — it is fixed, QA-verified CONTENT, not a generated set. The registry
 // governs which node types/params EXIST and validates these chains at
 // load time (every factory Load applies through the same
-// ChainCanvas.loadModel path user presets use), but nothing here is
+// ChainEditing transaction user presets use), but nothing here is
 // derived from the registry at runtime. If a node type or param ever
 // changes incompatibly, these literals must be re-mirrored BY HAND — same
 // discipline as NODE_REGISTRY_SNAPSHOT in src/mcp-tools.js.
@@ -156,7 +156,7 @@
    * List the factory library, in display order (Classic Karaoke first,
    * then the QA-3 five in prompt order). Every call returns FRESH objects
    * with freshly copied params — callers may take ownership of the nodes
-   * (ChainCanvas.loadModel does) without any risk of mutating the library
+   * (ChainEditing.apply does) without any risk of mutating the library
    * itself.
    *
    * @returns {Array<{name: string, nodes: Array<{id: string, type: string, params: Object}>}>}

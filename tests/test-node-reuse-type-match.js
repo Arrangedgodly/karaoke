@@ -192,11 +192,8 @@ function loadSrc(sandbox, relPath) {
 }
 
 // ----------------------------------------------------------------------
-// ChainCanvas stub — just enough of src/canvas.js's exported surface for
-// the mutation tools: getCurrentModel (read-only copy), isDragActive
-// (always idle — no drag queue), and loadModel, which mirrors the real
-// one's essentials for this test: take ownership of copies, then rebuild
-// the audio graph via the same guarded call rebuildGraph() makes.
+// ChainCanvas adapter stub. ChainEditing owns graph mutation and accepted
+// state; this records only the rendered model/parameter view.
 // ----------------------------------------------------------------------
 function installChainCanvasStub(sandbox) {
   var canvasModel = [];
@@ -212,15 +209,21 @@ function installChainCanvasStub(sandbox) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
+      return true;
+    },
+    renderNodeParam: function (id, param, value) {
+      for (var i = 0; i < canvasModel.length; i++) {
+        if (canvasModel[i].id === id) {
+          canvasModel[i].params[param] = value;
+          return true;
+        }
       }
+      return false;
     }
   };
 }
@@ -261,8 +264,9 @@ async function main() {
   loadSrc(sandbox, 'src/audio-param-ramp.js'); // issue #5: the ramp helper the node applyParam handlers call
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-limiter.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
   var applyParamCalls = installApplyParamRecorder(sandbox);
 
   var AG = sandbox.AudioGraph;
@@ -271,8 +275,16 @@ async function main() {
   console.log('A. buildGraph: an id that CHANGES TYPE gets a fresh instance');
   // --------------------------------------------------------------------
 
-  AG.buildGraph([{ id: 'n1', type: 'gain', params: { gainDb: 6 } }]);
-  await settle();
+  var firstBuild = AG.buildGraph([{ id: 'n1', type: 'gain', params: { gainDb: 6 } }]);
+  check(firstBuild && typeof firstBuild.then === 'function',
+    'A0: buildGraph returns a completion promise for the deferred commit');
+  if (firstBuild && typeof firstBuild.then === 'function') {
+    var firstResult = await firstBuild;
+    check(firstResult && firstResult.committed === true,
+      'A0: the promise resolves only after the graph commit');
+  } else {
+    await settle();
+  }
 
   var gainInst = AG.getNodeInstance('n1');
   check(!!gainInst, 'A1: live instance exists for n1 after the first build');
@@ -293,6 +305,47 @@ async function main() {
     modelA.length === 1 && modelA[0].id === 'n1' && modelA[0].type === 'gain',
     'A1: serialized model says one gain node'
   );
+
+  var stagedProbe = null;
+  AG.registerNodeType('probe', function () {
+    stagedProbe = makeBaseNode('ProbeNode');
+    stagedProbe.__disposed = false;
+    stagedProbe.dispose = function () { stagedProbe.__disposed = true; };
+    return stagedProbe;
+  });
+  var superseded = AG.buildGraph([{ id: 'staged', type: 'probe', params: {} }]);
+  var replacement = AG.buildGraph([{ id: 'n1', type: 'gain', params: { gainDb: 6 } }]);
+  var supersededResult = await superseded;
+  var replacementResult = await replacement;
+  check(supersededResult && supersededResult.committed === false && supersededResult.canceled === true,
+    'A1b: a superseded staged build resolves explicitly as cancelled');
+  check(stagedProbe && stagedProbe.__disposed === true,
+    'A1b: a fresh node from cancelled graph work is disposed');
+  check(replacementResult && replacementResult.committed === true && AG.getModel()[0].id === 'n1',
+    'A1b: only the replacement build becomes the accepted live graph');
+
+  var abortProbe = null;
+  AG.registerNodeType('abort-probe', function () {
+    abortProbe = makeBaseNode('AbortProbeNode');
+    abortProbe.__disposed = false;
+    abortProbe.dispose = function () { abortProbe.__disposed = true; };
+    return abortProbe;
+  });
+  var preCommitController = new AbortController();
+  var gateBeforeAbort = AG.getChainGate().gain.value;
+  var canceledBeforeCommit = AG.buildGraph(
+    [{ id: 'abort-staged', type: 'abort-probe', params: {} }],
+    { signal: preCommitController.signal }
+  );
+  preCommitController.abort();
+  var canceledBeforeCommitResult = await canceledBeforeCommit;
+  check(canceledBeforeCommitResult && canceledBeforeCommitResult.committed === false &&
+      canceledBeforeCommitResult.canceled === true,
+    'A1c: aborting staged graph work resolves as cancelled before commit');
+  check(abortProbe && abortProbe.__disposed === true && AG.getModel()[0].id === 'n1',
+    'A1c: the staged node is disposed and the prior live model remains accepted');
+  check(AG.getChainGate().gain.value === gateBeforeAbort,
+    'A1c: pre-commit cancellation does not duck or otherwise touch the live gate');
 
   // The issue's exact shape: a valid model in which the gain id becomes
   // the SOLE TERMINAL LIMITER.
@@ -385,11 +438,14 @@ async function main() {
 
   // Seed a default-chain-shaped live graph (src/default-preset.js's ids):
   // n1 a live GainNode, n6 the terminal limiter.
-  sandbox.ChainCanvas.loadModel([
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: [
     { id: 'n1', type: 'gain', params: { gainDb: 0 } },
     { id: 'n6', type: 'limiter', params: { ceiling: -1, release: 50 } }
-  ]);
-  await settle();
+    ],
+    forceStructural: true
+  });
 
   var oldGain = AG.getNodeInstance('n1');
   var oldN6 = AG.getNodeInstance('n6');

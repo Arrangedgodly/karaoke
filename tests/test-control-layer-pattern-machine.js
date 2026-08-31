@@ -329,6 +329,26 @@ loadSrc('node-delay.js');
 loadSrc('node-autotune.js');
 loadSrc('canvas.js');
 
+var seamRequests = [];
+windowStub.ChainEditing = {
+  getModel: function () { return windowStub.ChainCanvas.getCurrentModel(); },
+  getLayout: function () { return windowStub.ChainCanvas.getCurrentLayout(); },
+  syncLayout: function () {},
+  apply: function (request) {
+    seamRequests.push(request);
+    if (request.candidate) {
+      windowStub.ChainCanvas.renderModel(request.candidate, request.layout);
+    } else if (request.change) {
+      windowStub.ChainCanvas.renderNodeParam(
+        request.change.nodeId,
+        request.change.param,
+        request.change.value
+      );
+    }
+    return Promise.resolve({ applied: true, saved: true });
+  }
+};
+
 // Record at the REGISTRY BOUNDARY (the committed convention): override
 // NodeTypes.applyParam after load so commits are captured without
 // needing each type's real AudioNode composite — param-controls resolves
@@ -430,12 +450,12 @@ function cssDecl(body, prop) {
 // ----------------------------------------------------------------------
 console.log('A. knob wiring (human path + agent fast path)');
 
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'g0', type: 'gain', params: { gainDb: 0 } }
 ]);
 // Structural refresh of the state line happens in STATE mode (before any
 // touch): 1 module, then 2 after a second load.
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'g1', type: 'gain', params: { gainDb: 0 } },
   { id: 'd1', type: 'delay', params: { timeMs: 300, feedback: 25, mix: 25 } }
 ]);
@@ -493,15 +513,14 @@ calls.updateNodeParams.length = 0;
 gainInput.value = '12';
 gainInput.fire('input');
 check(
-  calls.updateNodeParams.length === 1 &&
-    calls.updateNodeParams[0].params.gainDb === 12,
-  'human knob commit updates the model via AudioGraph.updateNodeParams (12)'
+  seamRequests.length === 1 &&
+    seamRequests[0].change.param === 'gainDb' &&
+    seamRequests[0].change.value === 12,
+  'human knob gesture emits one normalized ChainEditing intent (12)'
 );
 check(
-  calls.applyParam.length === 1 &&
-    calls.applyParam[0].paramId === 'gainDb' &&
-    calls.applyParam[0].value === 12,
-  'human knob commit reaches NodeTypes.applyParam with the numeric value'
+  calls.updateNodeParams.length === 0 && calls.applyParam.length === 0,
+  'the control and Canvas adapters perform no graph or live-node write'
 );
 check(
   gainValueSpan.textContent === '12 dB',
@@ -514,7 +533,7 @@ check(
 var persistBefore = calls.persist.length;
 calls.applyParam.length = 0;
 check(
-  windowStub.ChainCanvas.updateNodeParam('g1', 'gainDb', -6) === true,
+  windowStub.ChainCanvas.renderNodeParam('g1', 'gainDb', -6) === true,
   'updateNodeParam (set_param canvas half) applies gainDb -6'
 );
 check(
@@ -534,9 +553,8 @@ check(
   'the canvas model carries -6 after the fast-path move'
 );
 check(
-  calls.persist.length === persistBefore + 1 &&
-    calls.persist[calls.persist.length - 1][0].params.gainDb === -6,
-  'the fast-path move autosaves the new value (PS-2 unchanged)'
+  calls.persist.length === persistBefore,
+  'the accepted render adapter performs no persistence write itself'
 );
 
 // A3. Both directions stay in agreement: a LATER human move on the same
@@ -548,13 +566,14 @@ check(
   windowStub.ChainCanvas.getCurrentModel()[0].params.gainDb === 3,
   'a later human move on the same knob supersedes cleanly (3)'
 );
-windowStub.ChainCanvas.updateNodeParam('g1', 'gainDb', 24);
+windowStub.ChainCanvas.renderNodeParam('g1', 'gainDb', 24);
 gainInput.value = '10';
 gainInput.fire('input');
 check(
   windowStub.ChainCanvas.getCurrentModel()[0].params.gainDb === 10 &&
-    gainInput.value === '10',
-  'a later agent write then human move land on the human value (both paths, one state)'
+    Number(gainInput.value) === 10,
+  'a later accepted write then human move land on the human value (model=' +
+    windowStub.ChainCanvas.getCurrentModel()[0].params.gainDb + ', input=' + gainInput.value + ')'
 );
 
 // ----------------------------------------------------------------------
@@ -562,7 +581,7 @@ check(
 // ----------------------------------------------------------------------
 console.log('B. pad commits');
 
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'a1', type: 'autotune', params: { key: 'C', scale: 'Chromatic', retune: 0, mix: 100 } }
 ]);
 var atCard = cards()[0];
@@ -608,17 +627,14 @@ scaleGroup.children.filter(function (p) {
 })[0].fire('click');
 
 check(
-  calls.applyParam.length === 1 &&
-    calls.applyParam[0].paramId === 'scale' &&
-    calls.applyParam[0].value === 'Minor' &&
-    typeof calls.applyParam[0].value === 'string',
-  'pad click commits the STRING value verbatim to NodeTypes.applyParam'
+  seamRequests[seamRequests.length - 1].change.param === 'scale' &&
+    seamRequests[seamRequests.length - 1].change.value === 'Minor' &&
+    typeof seamRequests[seamRequests.length - 1].change.value === 'string',
+  'pad click emits the STRING value verbatim as a ChainEditing intent'
 );
 check(
-  calls.updateNodeParams.length === 1 &&
-    calls.updateNodeParams[0].params.scale === 'Minor' &&
-    calls.updateNodeParams[0].params.key === 'C',
-  'pad click updates the model with full params (scale Minor, key untouched)'
+  calls.applyParam.length === 0 && calls.updateNodeParams.length === 0,
+  'pad gesture performs no live/model graph write in ParamControls or Canvas'
 );
 check(
   pressed(scaleGroup).textContent === 'Minor',
@@ -627,7 +643,7 @@ check(
 
 // Fast path on a discrete param: moves the pad, no commit.
 calls.applyParam.length = 0;
-windowStub.ChainCanvas.updateNodeParam('a1', 'key', 'F#');
+windowStub.ChainCanvas.renderNodeParam('a1', 'key', 'F#');
 check(
   pressed(keyGroup).textContent === 'F#' &&
     keyGroup.children.filter(function (p) {
@@ -672,7 +688,7 @@ check(
 );
 
 // A control event switches it to MODULE · PARAM · VALUE + the help line.
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'g2', type: 'gain', params: { gainDb: 0 } }
 ]);
 var g2 = cards()[0];
@@ -697,7 +713,7 @@ check(
 // The focus feed: focusing a control answers on the register BEFORE it
 // moves (no commit fired).
 calls.applyParam.length = 0;
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'g3', type: 'gain', params: { gainDb: 0 } }
 ]);
 var g3 = cards()[0];
@@ -767,7 +783,7 @@ check(
 // Session-only: a rebuild (loadModel) re-creates sections expanded.
 collapseBtn.fire('click');
 check(foldCard.classList.contains('collapsed'), 'section folded before the rebuild');
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'g4', type: 'gain', params: { gainDb: 0 } }
 ]);
 var rebuilt = cards()[0];
