@@ -157,14 +157,24 @@
     return clampCardW(undefined);
   }
 
-  /** Measure one card's widest KNOB row (the content hug). Trim and pad
-   *  rows stretch to the available width by construction, so they are
-   *  skipped — only intrinsic rows define the hug. Stripped harnesses
+  /** Measure a LIVE card's widest intrinsic control row (the content
+   *  hug). Trim and pad rows stretch to the available width by
+   *  construction, so they are skipped — only knob rows define the hug.
+   *  Must run AFTER the card is in the document (offsetWidth is 0
+   *  otherwise — the creation-time measurement always read zero, which
+   *  is why the hug never landed until this fix). Stripped harnesses
    *  report no widths and simply keep the default. */
-  function measureCardHug(id, paramsInner) {
+  function ensureCardHug(id, card) {
+    if (cardHugW[id] !== undefined || !card || typeof card.querySelector !== 'function') {
+      return;
+    }
     try {
+      var inner = card.querySelector('.node-params-inner');
+      if (!inner || !inner.children) {
+        return;
+      }
       var hug = 0;
-      Array.prototype.forEach.call(paramsInner.children, function (row) {
+      Array.prototype.forEach.call(inner.children, function (row) {
         if (!row.classList || row.classList.contains('trim-row') ||
             row.classList.contains('pad-row')) {
           return;
@@ -189,6 +199,7 @@
   function applyPositionToCard(card, x, y, id) {
     card.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
     if (id) {
+      ensureCardHug(id, card); // first paint after render — the card is live
       card.style.width = cardWidth(id) + 'px';
     }
   }
@@ -1854,9 +1865,6 @@
       paramsInner.appendChild(row);
     });
     paramsContainer.appendChild(paramsInner);
-    // The content-hug measurement (the card's default width) — after the
-    // wrap, before any seat is applied.
-    measureCardHug(id, paramsInner);
 
     // Chevron toggle. Flips the card's .collapsed class (CSS folds the
     // encoder field away and lays the rail out as the slim groove row)

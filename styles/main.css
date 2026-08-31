@@ -3566,10 +3566,16 @@ input.preset-name-input:focus-visible {
    re-wraps the field to fill. Height HUGS CONTENT (no forced
    min-height) and TIDY aligns the row's tops. */
 .canvas-panel.flow-horizontal .node-card {
-  width: 11rem;
-  min-width: 11rem;
+  /* The CSS numbers are the PRE-JS fallback only — JS paints every
+     card's content-hug width as an inline style (real browsers) or the
+     128px layout-less default. min-width MUST stay at the resize floor
+     (6rem): a larger CSS floor silently overrides the hug and re-opens
+     the right-hand dead space (the defect this block carried through
+     two rounds). */
+  width: 6rem;
+  min-width: 6rem;
   max-width: 24rem;
-  padding: 0.35rem 0.45rem 0.4rem;
+  padding: 0.35rem 0.4rem 0.4rem;
   /* One column: header band over the encoder field. */
   grid-template-columns: 1fr;
   grid-template-rows: auto 1fr;
