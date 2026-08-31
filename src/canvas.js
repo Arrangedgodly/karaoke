@@ -1805,7 +1805,7 @@
     // in the chain) passes along whatever this node's CURRENT tuned values
     // are — reordering must never reset an already-tuned param back to its
     // type default.
-    window.ParamControls.render(paramsContainer, nodeState, function (updatedParams, change) {
+    window.ParamControls.render(paramsContainer, nodeState, function (_updatedParams, change) {
       // Issue #20: ParamControls supplies a normalized one-param intent.
       // ChainEditing applies it against the accepted model when its queue
       // reaches this edit, so two fast edits on different cards cannot
@@ -1824,13 +1824,6 @@
         return;
       }
       throw new Error('ParamControls must provide a normalized change intent.');
-      // PS-3: a param tweak is a user EDIT — mark the currently-displayed
-      // preset (if any) as having unsaved changes. Unlike the saveCurrentChain()
-      // call just above, this is purely a display concern (the "• unsaved
-      // changes" indicator), not persistence.
-      if (window.PresetsUI) {
-        window.PresetsUI.markModified();
-      }
     });
 
     // Wrap-AFTER-render: ParamControls has by now placed its .param-row
