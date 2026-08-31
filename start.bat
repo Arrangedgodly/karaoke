@@ -20,9 +20,9 @@ if %errorlevel%==0 (
     )
 )
 
-echo Starting the Karaoke Chain Builder server...
+echo Starting the VOXCHAIN server...
 echo A new window will open to run it - do NOT close that window while using the app.
 echo.
-start "Karaoke Chain Builder - DO NOT CLOSE while using the app" cmd /k %PYCMD% -m http.server 8000
+start "VOXCHAIN - DO NOT CLOSE while using the app" cmd /k %PYCMD% -m http.server 8000
 timeout /t 2 /nobreak >nul
 start "" http://localhost:8000/

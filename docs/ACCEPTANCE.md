@@ -77,21 +77,33 @@ PA. Start from the factory **Classic Karaoke** preset.
       Node + ffmpeg) and A/B them in the given order; Autotune additionally
       gets one live pass through the mic so the 20 ms engine delay is heard
       on a real voice before a show.
+- [ ] **The four Tone.js effects** (Pitch Shift, Tremolo, Bitcrusher,
+      Phaser) — live, through the mic and PA: pitch shift −5 / +5 semitones
+      clearly transposes without warble artifacts; tremolo at 5 Hz / 70 %
+      is an obvious clean swell; bitcrusher at 3 bits / 40 % mix is the
+      lo-fi telephone crush; phaser at 0.5 Hz / 60 % is a slow, spacey
+      sweep (audible in stereo, safe folded to mono).
 - [ ] **Large-jump click check (issue #5 — ramps shipped, physical listen
       still required)**: the published policy (`get_capabilities` →
-      `host-param-ramps`) promises every param change ramps over 10–20 ms
-      with no instantaneous jump. The ramps ARE in the build now (every
-      live AudioParam write in all ten node handlers is a scheduled 15 ms
-      ramp via `src/audio-param-ramp.js`, and `set_param` applies in place
-      with no card rebuild and no chain-gate duck — both proven
-      headlessly by `tests/test-param-only-mutation.js`, including a
-      math-level discontinuity probe). What automation CANNOT prove is
-      the sound in the room. Walk it with LARGE jumps at event volume:
-      `set_param` gain −24 → +12 dB, reverb mix 0 → 100, delay time
-      300 → 750 ms, compressor threshold −8 → −40 — plus one full
-      min→max slider drag per effect (and, for Autotune's Key/Scale
-      dropdowns, a step through their values) — listening for any click,
-      pop, or zipper. **Any audible click on this line is a hard FAIL.**
+      `host-param-ramps`) promises every AUDIOPARAM-BACKED param change
+      ramps over 10–20 ms with no instantaneous jump, and names exactly
+      three immediate-write exceptions — pitch shift `pitch`, phaser
+      `depth`, and phaser `baseHz` (Tone.js plain properties with no
+      AudioParam underneath). The ramps ARE in the build (every live
+      AudioParam write in the node handlers is a scheduled 15 ms ramp via
+      `src/audio-param-ramp.js`, and `set_param` applies in place with no
+      card rebuild and no chain-gate duck — both proven headlessly by
+      `tests/test-param-only-mutation.js`, including a math-level
+      discontinuity probe). What automation CANNOT prove is the sound in
+      the room. Walk it with LARGE jumps at event volume: `set_param` gain
+      −24 → +12 dB, reverb mix 0 → 100, delay time 300 → 750 ms,
+      compressor threshold −8 → −40 — plus one full min→max slider drag
+      per effect, the three named plain-property exceptions (pitch shift
+      pitch −12 → +12, phaser depth 0 → 100, phaser baseHz 50 → 1500),
+      and, for Autotune's Key/Scale pads, a step through their values —
+      listening for any click, pop, or zipper. **Any audible click on this
+      line is a hard FAIL** (an audible step on one of the three disclosed
+      plain-property exceptions is a finding to record, not a surprise).
 - [ ] Reordering/removing nodes mid-signal: no pop, no dropped audio.
 - [ ] Date / operator / result: ____________
 
@@ -255,7 +267,7 @@ not a lab measurement.
       matches the chain length.
 - [ ] Date / operator / result: ____________
 
-## 7. Live-deployment smoke: https://karaoke.arrangedgodly.com/
+## 7. Live-deployment smoke: https://voxchain.arrangedgodly.com/
 
 The deployed build must be the same app the local checks ran against.
 
@@ -313,18 +325,20 @@ itself as before.
       EQ is clearly audible in the right direction), and a committed
       relink during live audio is one clean duck — no click, no pop, no
       dropped audio. **This line is the one automation cannot prove.**
-- [ ] **Free positioning + TIDY** — grip-drag moves a card with grid
-      snap (no order change); **TIDY** in the canvas chrome restores the
-      tidy stack while preserving each card's scale/flow.
-      *Suite-gated:* `tests/test-board-positioning-few2.js` (graph +
-      model byte-stable under moves) and
-      `tests/test-autosave-layout-store.js` (TIDY rewrites only x/y).
-- [ ] **Reload restores the layout; preset load auto-layouts** — card
+- [ ] **Free positioning + section resize** — grip-drag moves a card with
+      grid snap (no order change, clamped to the non-negative board); the
+      corner mark widens a card (controls re-wrap) with no order or sound
+      change. *Suite-gated:* `tests/test-board-positioning-few2.js`
+      (graph + model byte-stable under moves; freshSeats re-placement) —
+      TIDY and automatic arrangement are RETIRED: nothing moves a card
+      but the operator.
+- [ ] **Reload restores the layout; preset load re-places tidy** — card
       positions survive a reload (legacy autosaves migrate to the tidy
-      stack); loading any preset stacks the board tidy (presets stay
-      chain-only). *Suite-gated:* `tests/test-autosave-layout-store.js`
+      stack); loading any preset re-places the board on the first-free
+      stack (presets stay chain-only; matching node ids do NOT inherit
+      current seats). *Suite-gated:* `tests/test-autosave-layout-store.js`
       (v2 round-trip, idempotent legacy migration, hostile layouts fail
-      soft).
+      soft) and `tests/test-board-positioning-few2.js` (freshSeats).
 - [ ] **Keyboard add unchanged** — palette click / Tab+Enter still adds
       just before the limiter; DOM/tab/screen-reader order equals chain
       order however the cards are scattered, and focusing an overlapped
@@ -337,11 +351,12 @@ itself as before.
       discipline).
 - [ ] Date / operator / result: ____________
 
-Scope note for this pass: card resize (FEW-5), the per-card flow glyph
-(FEW-6), palette drag-drop placement (FEW-7's drag part), and fold
-interplay on the board (FEW-8) are deferred — there is no corner resize
-handle and the canvas-level **FLOW** button still works until FEW-6
-lands. The chain's drag-to-reorder is retired on purpose: ordering is
+Scope note (updated 2026-08-31): card RESIZE shipped (the corner mark);
+the per-card flow glyph, the canvas-level FLOW toggle, and TIDY are
+RETIRED (the board is permanently horizontal and free — nothing arranges
+cards automatically); the palette DRAG is retired with its dead receiver
+(click / Tab+Enter are the add verbs; SortableJS is no longer bundled).
+The chain's drag-to-reorder is retired on purpose: ordering is
 cords-only.
 
 ---

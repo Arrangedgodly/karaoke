@@ -338,6 +338,29 @@ check(
 );
 
 // ----------------------------------------------------------------------
+console.log('B2. freshSeats (2026-08-31, #16 stale-seats finding): preset loads re-place, agent rebuilds carry forward');
+// Move n2 somewhere odd first, so carry-forward vs fresh placement are
+// distinguishable on the next load.
+CC.loadModel(model());
+documentStub.__fire('pointermove', { clientX: 139, clientY: 122 }); // (a live drag arm+move from section C's shape)
+documentStub.__fire('pointerup', {});
+// The default rule (agent rebuild / startup restore): matching ids KEEP
+// their seats.
+var carried = JSON.stringify(CC.currentLayout());
+CC.loadModel(model());
+check(
+  JSON.stringify(CC.currentLayout()) === carried,
+  'B2-1: default loadModel CARRIES FORWARD the current seats (agent rebuild keeps operator placement)'
+);
+// freshSeats (preset load): matching ids do NOT inherit — first-free stack.
+CC.loadModel(model(), null, { freshSeats: true });
+check(
+  CC.currentLayout().n1.x === 0 && CC.currentLayout().n2.x === 144 &&
+    CC.currentLayout().n3.x === 288 && CC.currentLayout().n1.y === 16,
+  'B2-2: freshSeats re-places every section on the incumbent ROW (the documented tidy preset layout)'
+);
+
+// ----------------------------------------------------------------------
 console.log('C. grip pointer-drag MOVES POSITION — never order');
 var modelBefore = JSON.stringify(CC.getCurrentModel());
 var domBefore = JSON.stringify(domOrder());

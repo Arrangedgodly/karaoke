@@ -6,23 +6,17 @@
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single
 // `window.X` export pattern as the rest of this project. Depends on
-// SortableJS (loaded via CDN in index.html, immediately before this file),
 // window.NodeTypes (src/node-types.js), window.ParamControls
 // (src/param-controls.js), window.AudioGraph (src/audio-graph.js), and
 // window.AudioEngine (src/audio-engine.js) — all already loaded by the time
-// this file runs, per index.html's script order.
+// this file runs, per index.html's script order. (SortableJS is RETIRED —
+// 2026-08-31: no drag library remains; see the wiring note below.)
 //
 // UI-3 scope: this is where AE-4's glitch-free rewiring engine and UI-4's
 // generic parameter controls come together into a real, usable feature for
-// the first time. Two connected SortableJS instances (RQ-2's committed
-// research decision, forceFallback:true on both — see
-// docs/ultron/research/rq2-drag-and-drop.md):
-//   - A PALETTE list: one chip per type currently in NodeTypes.getAllTypes()
-//     (today just "gain"; grows automatically as AE-6+ register more types
-//     — never a hardcoded type list here), configured to CLONE into the
-//     chain list on drop (palette itself is not reorderable/droppable-into).
-//   - A CHAIN list: the real signal chain — sortable within itself, and able
-//     to receive clones from the palette.
+// the first time. The add verbs are the palette chip CLICK and keyboard
+// activation (both addNodeType); order changes are CORD EDITS (FEW-4);
+// the grip/header drags MOVE POSITION (FEW-2).
 //
 // Model bookkeeping (Part D of the task spec): `chainModel`/`nodesById`
 // below are THIS file's own source of truth for "what nodes exist, in what
@@ -49,13 +43,11 @@
     return;
   }
 
-  if (typeof window.Sortable === 'undefined') {
-    // SortableJS failed to load (e.g. CDN unreachable). Fail loud in the
-    // console rather than silently leaving a non-functional, unlabeled
-    // palette/canvas on screen.
-    console.error('ChainCanvas: SortableJS (window.Sortable) is not available — check the CDN <script> tag in index.html.');
-    return;
-  }
+  // (SortableJS is RETIRED — 2026-08-31: the chain-side instance left
+  // with PD-1's cord editing, and the palette drag left with the
+  // dead-affordance round the same day. This file has no drag library
+  // dependency anymore; there is deliberately no window.Sortable guard
+  // here.)
 
   // ---------------------------------------------------------------------
   // Model bookkeeping (Part D).
@@ -73,15 +65,13 @@
   var chainModel = [];
   var nodeIdCounter = 0;
 
-  // MC-4 (OQ-7 serialization rule): true while a SortableJS drag is in
-  // progress on EITHER list (a palette drag targets the chain list too, so
-  // both sortables maintain the same single flag — only one drag can be
-  // active at a time anyway, since they share the 'chain-group' group).
-  // Maintained purely from SortableJS's own onStart/onEnd events below and
-  // read via the exported isDragActive() so src/mcp-tools.js can QUEUE
-  // agent mutations behind an in-progress user drag instead of racing the
-  // drop's onSort commit. Purely additive: nothing in this file branches
-  // on it, so drag behavior is bit-for-bit unchanged.
+  // MC-4 (OQ-7 serialization rule): true while ANY board gesture is in
+  // progress — a cord edit (armed at press since the 2026-08-31 race fix),
+  // a seat drag, or a width-resize drag; one gesture owns the pointer at a
+  // time. Read via the exported isDragActive() so src/mcp-tools.js can
+  // QUEUE agent mutations behind an in-progress user gesture instead of
+  // racing its commit; loadModel() cancels any armed gesture before
+  // replacing the board so a stale gesture can never commit afterward.
   var dragActive = false;
 
   // ---------------------------------------------------------------------
@@ -2206,11 +2196,16 @@
    *   entry are carried forward if they already sit on the board (an
    *   agent rebuild keeps surviving nodes where the operator left them),
    *   else auto-placed at the first free grid slot. When omitted the same
-   *   rules run against an empty saved map — so a fresh preset load ends
-   *   tidy while an autosave restore passed its layout round-trips
-   *   exactly.
+   *   rules run against an empty saved map.
+   * @param {{freshSeats?: boolean}} [options]
+   *   freshSeats (2026-08-31, #16 stale-seats finding): skip the
+   *   carry-forward branch entirely — every entry takes the first-free
+   *   stack. Preset loads (src/presets-ui.js) set it: a preset REPLACES
+   *   the board, so matching node ids must not inherit their current
+   *   seats (the documented tidy layout). Agent rebuilds and startup
+   *   restores leave it unset and keep the carry-forward rule.
    */
-  function loadModel(model, layout) {
+  function loadModel(model, layout, options) {
     // Chain replacement invalidates every in-flight board gesture (the
     // #16 race finding): a cord edit / seat move / width resize armed
     // against the OLD chain must never commit against the replacement
@@ -2262,6 +2257,13 @@
     // The store already sanitized whatever it handed us; the isFinite
     // guards here keep a hostile DIRECT caller from poisoning the map.
     var previous = positions;
+    // options.freshSeats (#16 stale-seats finding): a PRESET LOAD replaces
+    // the whole board, so matching node ids do NOT inherit their old seats
+    // — every section takes a first-free slot (the documented tidy stack).
+    // The default (agent rebuilds, startup restore) keeps the
+    // carry-forward rule: surviving sections stay where the operator
+    // left them.
+    var freshSeats = !!(options && options.freshSeats);
     positions = {};
     chainModel.forEach(function (entry) {
       var saved = layout ? layout[entry.id] : null;
@@ -2282,7 +2284,7 @@
           // compatibility; the store normalizes it on save).
           flow: 'horizontal',
         };
-      } else if (previous[entry.id]) {
+      } else if (!freshSeats && previous[entry.id]) {
         positions[entry.id] = previous[entry.id];
       } else {
         placeNewNode(entry.id);

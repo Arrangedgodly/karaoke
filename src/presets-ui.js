@@ -602,7 +602,11 @@
         showPresetNote('Could not load that preset — it may have been removed.');
         return;
       }
-      window.ChainCanvas.loadModel(factoryPreset.nodes);
+      // freshSeats (#16 stale-seats finding): a preset load REPLACES the
+      // board — matching node ids do not inherit their current seats;
+      // every section takes the first-free stack (the documented tidy
+      // layout).
+      window.ChainCanvas.loadModel(factoryPreset.nodes, null, { freshSeats: true });
       setCurrentPreset(factoryPreset.name);
       clearModified();
       noteHumanEditGuarded();
@@ -623,7 +627,9 @@
 
     // ChainCanvas.loadModel() also updates the autosave baseline
     // internally (see src/canvas.js) — nothing extra needed here for that.
-    window.ChainCanvas.loadModel(result.nodes);
+    // freshSeats: same as the factory branch — a preset load re-places the
+    // board (first-free stack), never inherits current seats.
+    window.ChainCanvas.loadModel(result.nodes, null, { freshSeats: true });
     setCurrentPreset(result.name);
     clearModified();
     noteHumanEditGuarded();
