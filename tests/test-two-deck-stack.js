@@ -220,26 +220,49 @@ check(
   check(byId(id) !== null, 'wiring id survives: #' + id);
 });
 
-// The voice deck's three zones, in column order, as its direct children.
+// The voice deck's three zones, in STACKED order, as its direct children
+// (Guided Patchbay round: the old .palette | .canvas-panel | .presets
+// three-column grid is replaced by three stacked zones — the chain face
+// with its fixed Voice In/Out rails, the signal-order strip, and the
+// two-tab build panel that absorbed both the old palette and presets
+// zones).
 var zones = layout ? layout.children : [];
 check(
   zones.length === 3 &&
-    hasClass(zones[0], 'palette') && hasClass(zones[0], 'panel') &&
-    hasClass(zones[1], 'canvas-panel') && hasClass(zones[1], 'panel') &&
-    hasClass(zones[2], 'presets') && hasClass(zones[2], 'panel'),
-  'voice deck zones in order: .palette | .canvas-panel | .presets (one grid, three zones)'
+    hasClass(zones[0], 'canvas-panel') && hasClass(zones[0], 'panel') &&
+    hasClass(zones[1], 'signal-order') && hasClass(zones[1], 'panel') &&
+    hasClass(zones[2], 'build') && hasClass(zones[2], 'panel'),
+  'voice deck zones in order: .canvas-panel | .signal-order | .build (stacked, not a grid)'
 );
 
-// The canvas markup itself is untouched (flow sequence verbatim).
+// The board-frame flanks the scrolling .canvas with two fixed rails, each
+// hosting a real .anchor (MIC IN restored to a real markup element, OUT
+// restored from its 2026-08-31 footer-mirror retirement).
+var boardFrame = descendants(tree, function (n) { return hasClass(n, 'board-frame'); })[0] || null;
+check(
+  !!boardFrame && boardFrame.children.length === 3 &&
+    hasClass(boardFrame.children[0], 'io-rail-in') &&
+    hasClass(boardFrame.children[2], 'io-rail-out'),
+  '.board-frame wraps [Voice In rail, .canvas, Voice Out rail] — the rails are FLEX SIBLINGS of the scrolling face, not children inside it'
+);
+var inRailAnchor = boardFrame && childByClass(boardFrame.children[0], 'anchor');
+var outRailAnchor = boardFrame && childByClass(boardFrame.children[2], 'anchor');
+check(
+  !!inRailAnchor && inRailAnchor.children.length === 0 &&
+    !!outRailAnchor && outRailAnchor.children.length === 0,
+  'both rails carry a real, empty .anchor element (src/meters.js matches by exact text "MIC IN" / "OUT" at runtime — static markup carries no text node in this parser, so an empty anchor node is the correct pin)'
+);
+
+// The canvas markup itself: just the flow list + the state hint (the
+// anchor/arrow pair moved out to the rails — see .board-frame above).
 var canvasEl = byId('chain-canvas');
 var flowTags = canvasEl ? descendants(canvasEl, function () { return true; }).map(function (n) {
   return n.tag + (n.attrs.class ? '.' + n.attrs.class.split(/\s+/)[0] : '');
 }) : [];
 check(
   canvasEl !== null &&
-    JSON.stringify(flowTags) ===
-      JSON.stringify(['div.anchor', 'span.arrow', 'div.chain-list', 'div.empty-hint']),
-  'canvas internals: anchor → arrow → chain-list → empty-hint (MIC relocates to the register at runtime; the OUT anchor is retired — 2026-08-31 cord round)'
+    JSON.stringify(flowTags) === JSON.stringify(['div.chain-list', 'div.empty-hint']),
+  'canvas internals: chain-list → empty-hint only (MIC IN / OUT anchors live in the board-frame rails now, not in-flow)'
 );
 
 // ----------------------------------------------------------------------
@@ -463,24 +486,25 @@ check(
 // ----------------------------------------------------------------------
 console.log('F. voice-deck zones + the one shared disabled grammar');
 
-var paletteRule = cssRule('.palette');
+var buildRule = cssRule('.build');
 var canvasPanelRule = cssRule('.canvas-panel');
-var presetsRule = cssRule('.presets');
+var signalOrderRule = cssRule('.signal-order');
 check(
-  paletteRule && cssDecl(paletteRule, 'background') === 'transparent' &&
-    presetsRule && cssDecl(presetsRule, 'background') === 'transparent' &&
+  buildRule && cssDecl(buildRule, 'background') === 'transparent' &&
+    signalOrderRule && cssDecl(signalOrderRule, 'background') === 'transparent' &&
     canvasPanelRule && cssDecl(canvasPanelRule, 'background') === 'var(--pm-chassis)',
   'all three zones are print on the ONE faceplate (transparent zones over the chassis ground)'
 );
 check(
-  paletteRule && cssDecl(paletteRule, 'border-right') === '1px solid var(--pm-groove-cut)' &&
-    canvasPanelRule && cssDecl(canvasPanelRule, 'border-left') === '1px solid var(--pm-groove-lip)' &&
-    cssDecl(canvasPanelRule, 'border-right') === '1px solid var(--pm-groove-cut)' &&
-    presetsRule && cssDecl(presetsRule, 'border-left') === '1px solid var(--pm-groove-lip)',
-  'zone separators are groove pairs (cut then lip, left to right) — the same grammar the sections use'
+  canvasPanelRule && cssDecl(canvasPanelRule, 'border-bottom') === '1px solid var(--pm-groove-cut)' &&
+    signalOrderRule && cssDecl(signalOrderRule, 'border-bottom') === '1px solid var(--pm-groove-cut)' &&
+    signalOrderRule && cssDecl(signalOrderRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)' &&
+    buildRule && cssDecl(buildRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)',
+  'zone separators are groove pairs (cut then lip, top to bottom now — the stacked twin of the sections\' own grooves)'
 );
 
-// The hatch: the canvas face's exact gradient, now on both flanking zones.
+// The hatch: the canvas face's exact gradient, now on both the strip and
+// the build panel (the old flanking zones' twin).
 function hatchOf(selector) {
   var body = ruleContaining([selector]);
   if (!body) { return null; }
@@ -488,37 +512,28 @@ function hatchOf(selector) {
   return m ? m[1].trim() : null;
 }
 var canvasHatch = hatchOf('.layout.engine-not-started .canvas::before');
-var paletteHatch = hatchOf('.layout.engine-not-started .palette::before');
-var presetsHatch = hatchOf('.layout.engine-not-started .presets::before');
+var buildHatch = hatchOf('.layout.engine-not-started .build::before');
+var signalOrderHatch = hatchOf('.layout.engine-not-started .signal-order::before');
 check(!!canvasHatch, 'the canvas pre-Start hatch rule exists');
 check(
-  !!paletteHatch && !!presetsHatch &&
-    paletteHatch === canvasHatch && presetsHatch === canvasHatch,
-  'both flanking zones gate with the IDENTICAL hatch gradient as the canvas face (one disabled grammar)'
+  !!buildHatch && !!signalOrderHatch &&
+    buildHatch === canvasHatch && signalOrderHatch === canvasHatch,
+  'both the build panel and the signal-order strip gate with the IDENTICAL hatch gradient as the canvas face (one disabled grammar)'
 );
-var gatePalette = ruleContaining(['.layout.engine-not-started .palette']);
+var gateBuild = ruleContaining(['.layout.engine-not-started .build']);
 check(
-  gatePalette && cssDecl(gatePalette, 'opacity') === '0.55' &&
-    cssDecl(gatePalette, 'pointer-events') === 'none',
+  gateBuild && cssDecl(gateBuild, 'opacity') === '0.55' &&
+    cssDecl(gateBuild, 'pointer-events') === 'none',
   'the pre-Start zone gate keeps the functional lock (opacity + pointer-events, unchanged semantics)'
 );
 
 // ----------------------------------------------------------------------
-console.log('G. viewport law — below 900px');
+console.log('G. viewport law — the deck wraps below 900px; the voice deck always stacks');
 
-// Both 900px media blocks: the deck wraps the etch by order; the voice
-// deck stacks 1fr with horizontal grooves. Two blocks share the marker —
-// collect every occurrence and pick by content.
-function mediaBlocks(marker) {
-  var blocks = [];
-  var idx = RAW_CSS.indexOf(marker);
-  while (idx !== -1) {
-    blocks.push(mediaBlockAfterIndex(idx));
-    idx = RAW_CSS.indexOf(marker, idx + 1);
-  }
-  return blocks;
-}
-
+// One 900px media block remains — the system deck's own etch-wrap
+// (Guided Patchbay round: the voice deck's three zones are ALWAYS
+// stacked now, so there is no separate narrow-viewport collapse to
+// author or test — "below 900px the zones stack" is true unconditionally).
 function mediaBlockAfterIndex(idx) {
   var open = RAW_CSS.indexOf('{', idx);
   var depth = 1;
@@ -530,11 +545,12 @@ function mediaBlockAfterIndex(idx) {
   }
   return RAW_CSS.slice(open + 1, i - 1);
 }
-
-var allNarrowBlocks = mediaBlocks('@media (max-width: 900px)');
-var deckMedia = allNarrowBlocks.filter(function (b) { return b.indexOf('.system-etch') !== -1; })[0] || '';
-var layoutMedia = allNarrowBlocks.filter(function (b) { return b.indexOf('.layout') !== -1; })[0] || '';
-check(allNarrowBlocks.length >= 2, 'two <900px blocks exist (deck wrap + voice-deck stack)');
+var narrowIdx = RAW_CSS.indexOf('@media (max-width: 900px)');
+var deckMedia = narrowIdx !== -1 ? mediaBlockAfterIndex(narrowIdx) : '';
+check(
+  narrowIdx !== -1 && RAW_CSS.indexOf('@media (max-width: 900px)', narrowIdx + 1) === -1,
+  'exactly one <900px block remains (the system deck\'s etch wrap) — the voice-deck grid collapse is gone with the grid itself'
+);
 check(
   deckMedia.indexOf('.system-etch') !== -1 &&
     /order:\s*9/.test(deckMedia.slice(deckMedia.indexOf('.system-etch'))),
@@ -555,15 +571,11 @@ check(
   'below 900px BYPASS keeps a row-1 order (ahead of the controls block and the etch), and the controls block wraps INTERNALLY at full width — BYPASS never leaves the visible top, nothing overflows the deck'
 );
 
-var stackedMediaFound = /grid-template-columns:\s*1fr/.test(layoutMedia);
+var layoutRule = cssRule('.layout');
 check(
-  stackedMediaFound,
-  'below 900px the voice deck stacks to one column (palette → face → presets)'
-);
-check(
-  layoutMedia.indexOf('border-bottom: 1px solid var(--pm-groove-cut)') !== -1 &&
-    layoutMedia.indexOf('border-top: 1px solid var(--pm-groove-lip)') !== -1,
-  'the stacked zones carry HORIZONTAL grooves (cut below a zone, lip above the next)'
+  layoutRule && cssDecl(layoutRule, 'display') === 'flex' &&
+    cssDecl(layoutRule, 'flex-direction') === 'column',
+  '.layout is UNCONDITIONALLY a flex column (canvas-panel -> signal-order -> build) — the zones were never side-by-side, so there is no width to stack them below'
 );
 
 // ----------------------------------------------------------------------
