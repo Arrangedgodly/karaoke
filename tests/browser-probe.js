@@ -3,13 +3,14 @@
 // Protocol). NOT part of the auto-discovered suite (run.js picks up
 // tests/test-*.js only); invoke directly:
 //
-//   node tests/browser-probe.js <url> <expression-file>
-//   node tests/browser-probe.js <url> --screenshot <png-path>
+//   node tests/browser-probe.js <url> <expression-file> [WxH]
+//   node tests/browser-probe.js <url> --screenshot [png-path] [WxH]
 //
 // The expression file's contents are evaluated in the page with
 // Runtime.evaluate { awaitPromise: true, returnByValue: true } — write the
 // file as the body of an async function that returns a JSON-serializable
-// value (throw to fail). Mirrors the documented manual CDP procedure
+// value (throw to fail). Viewport defaults to 1440x900; pass e.g. 390x844
+// for the mobile breakpoint. Mirrors the documented manual CDP procedure
 // (docs/ultron/redesign.md "real-browser verification"): fresh profile,
 // fake-mic flags so getUserMedia succeeds without prompts, autoplay allowed
 // so AudioContext starts without a gesture.
@@ -108,12 +109,22 @@ async function main() {
   var mode = args[1];
   var expr = null;
   var shotPath = null;
+  var viewport = '1440,900';
+  var rest = args.slice(2);
+  if (rest.length && /^\d+x\d+$/.test(rest[rest.length - 1])) {
+    viewport = rest.pop().replace('x', ',');
+  }
   if (mode === '--screenshot') {
-    shotPath = args[2] || fail('--screenshot needs a png path');
+    shotPath = rest[0] || fail('--screenshot needs a png path');
   } else {
     expr = fs.readFileSync(mode, 'utf8');
-    if (!fs.existsSync(CHROME)) fail('Chrome not found at ' + CHROME);
+    // Optional trailing png path: capture AFTER the expression ran, so the
+    // raster shows the state the expression drove the page to.
+    if (rest.length && /\.png$/.test(rest[0])) {
+      shotPath = rest.shift();
+    }
   }
+  if (!fs.existsSync(CHROME)) fail('Chrome not found at ' + CHROME);
 
   var profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'browser-probe-'));
   var chrome = spawn(CHROME, [
@@ -125,7 +136,7 @@ async function main() {
     '--use-fake-ui-for-media-stream',
     '--use-fake-device-for-media-stream',
     '--autoplay-policy=no-user-gesture-required',
-    '--window-size=1440,900',
+    '--window-size=' + viewport,
     targetUrl
   ], { stdio: 'ignore' });
 
@@ -148,7 +159,8 @@ async function main() {
     // Wait for the page's load event, then give scripts a beat to run.
     await sleep(1500);
 
-    if (shotPath) {
+    if (expr === null) {
+      // Screenshot-only mode: capture the freshly loaded page.
       var shot = await cdpCall(ws, nextId++, 'Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(shotPath, Buffer.from(shot.data, 'base64'));
       console.log(JSON.stringify({ ok: true, screenshot: shotPath }, null, 2));
@@ -164,6 +176,12 @@ async function main() {
         exitCode = 1;
       } else {
         console.log(JSON.stringify(result.result.value, null, 2));
+        if (shotPath) {
+          // Post-expression raster: the state the expression drove to.
+          var shot2 = await cdpCall(ws, nextId++, 'Page.captureScreenshot', { format: 'png' });
+          fs.writeFileSync(shotPath, Buffer.from(shot2.data, 'base64'));
+          console.log('raster: ' + shotPath);
+        }
       }
     }
     ws.close();

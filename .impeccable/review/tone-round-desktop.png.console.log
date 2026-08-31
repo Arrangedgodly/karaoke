@@ -1,0 +1,4 @@
+[log] %c * Tone.js v15.1.22 *  background: #000; color: #fff
+[warning] [mcp-server] registerTools: WebMCP API not available — 10 tool(s) not registered.
+[log] App scaffold loaded
+[info] [mcp-server] WebMCP API not available in this browser — agent control disabled (this is expected without chrome://flags/#enable-webmcp-testing).
