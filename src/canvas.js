@@ -1286,44 +1286,37 @@
   // ---------------------------------------------------------------------
 
   // VIS-3 silkscreen initials (rq5 redundant encoding): every family chip
-  // carries its 2-letter code alongside the family color, so color is
-  // never the only signal. A lookup (not a type list — the palette loop
-  // below still iterates whatever the registry holds): a future
-  // as-yet-unmapped type falls back to the first two letters of its own
-  // type name, uppercased. VIS-4: familyInitials() makes this map the
-  // single shared source for BOTH surfaces — palette chips (VIS-3) and
-  // node cards (VIS-4) render their legend squares from the same lookup,
-  // so the two can never drift apart.
-  var FAMILY_INITIALS = {
-    gain: 'GN',
-    compressor: 'CP',
-    eq: 'EQ',
-    delay: 'DL',
-    reverb: 'RV',
-    limiter: 'LM',
-    // UI-2 (cycle 3): the four shelved effects, same label-initials
-    // convention as the six above (each value is the first letters of the
-    // DISPLAY label, not the type key — so the gate reads NG for its
-    // "Noise Gate" label, not GA).
-    distortion: 'DI',
-    chorus: 'CH',
-    gate: 'NG',
-    autotune: 'AU'
-  };
+  // carries its 3-letter code alongside the family color, so color is
+  // never the only signal. 2026-08-31 (user direction): the code is the
+  // first three letters of the module's DISPLAY label, uppercased —
+  // derived from the registry's label (single source, no hardcoded map:
+  // a future type codes itself), spaces skipped so "Noise Gate" reads
+  // NOI. VIS-4: familyInitials() is the single shared source for BOTH
+  // surfaces — palette chips (VIS-3) and node cards (VIS-4) render from
+  // the same lookup, so the two can never drift apart.
 
   /**
-   * VIS-4: the one shared family-initials lookup (single source:
-   * FAMILY_INITIALS directly above — never duplicated elsewhere). Used by
-   * renderPalette() for palette chips and createNodeCard() for node
-   * cards. An as-yet-unmapped future type falls back to the first two
-   * letters of its own type name, uppercased — same no-hardcoded-type-
-   * list discipline as renderPalette()'s registry-driven loop.
+   * VIS-4: the one shared family-initials lookup (single source — never
+   * duplicated elsewhere). Used by renderPalette() for palette chips and
+   * createNodeCard() for node cards. The code is the first three LETTERS
+   * of the module's display label, uppercased (spaces and punctuation
+   * skipped); a type with no label falls back to its own type key — the
+   * same no-hardcoded-type-list discipline as renderPalette()'s
+   * registry-driven loop.
    *
    * @param {string} type
-   * @returns {string} 2-letter silkscreen initials
+   * @returns {string} 3-letter silkscreen code (GAIN, COM, DEL, NOI...)
    */
   function familyInitials(type) {
-    return FAMILY_INITIALS[type] || type.slice(0, 2).toUpperCase();
+    var label = type;
+    try {
+      if (window.NodeTypes && typeof window.NodeTypes.getLabel === 'function') {
+        label = window.NodeTypes.getLabel(type) || type;
+      }
+    } catch (err) {
+      /* stripped harness — the type key is the fallback label */
+    }
+    return String(label).replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || String(type).slice(0, 3).toUpperCase();
   }
 
   // ---------------------------------------------------------------------

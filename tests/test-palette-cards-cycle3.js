@@ -359,12 +359,12 @@ loadSrc('node-autotune.js');
 loadSrc('canvas.js');
 
 var NEW_TYPES = [
-  { type: 'distortion', label: 'Distortion', initials: 'DI', params: 3 },
-  { type: 'chorus', label: 'Chorus', initials: 'CH', params: 3 },
-  { type: 'gate', label: 'Noise Gate', initials: 'NG', params: 4 },
+  { type: 'distortion', label: 'Distortion', initials: 'DIS', params: 3 },
+  { type: 'chorus', label: 'Chorus', initials: 'CHO', params: 3 },
+  { type: 'gate', label: 'Noise Gate', initials: 'NOI', params: 4 },
   // experimental: true -> the chip/card badge + the aria-label status
   // suffix (cycle-3 scope: autotune only).
-  { type: 'autotune', label: 'Autotune', initials: 'AU', params: 4, experimental: true }
+  { type: 'autotune', label: 'Autotune', initials: 'AUT', params: 4, experimental: true }
 ];
 
 function chipFor(type) {

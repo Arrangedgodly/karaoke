@@ -204,7 +204,7 @@ measured in the build records (redesign.md item 1/1b tables).
 
 ### Secondary
 - **Ten family tokens (saturated, rq5)** — Gain #D9C37A, Compressor #8CC079, EQ #82A9DE, Delay #B18FDE, Reverb #6FC2C8, Limiter #DE8FB0, Distortion #C0CE97, Chorus #9E9ED1, Gate #9AD5B2, Autotune #D19ED1: the KNOB ARCS (via `--knob-arc` per `data-family`, 6.93–11.07 as non-text arcs on chassis) and the palette chip's 20px legend squares. A section's arcs answer in its menu color.
-- **Ten family silkscreen inks (desaturated, `--pm-family-*`)** — e.g. gain #cdc5ad, eq #aabacf: the rail's 2-letter family code and its 2px left tick (8.66–10.76 on chassis — clears AA even at small print).
+- **Ten family silkscreen inks (desaturated, `--pm-family-*`)** — e.g. gain #cdc5ad, eq #aabacf: the rail's 3-letter family code and its 2px left tick (8.66–10.76 on chassis — clears AA even at small print).
 - **Split-role safety red**: Edge Red #E5484D (rings/bezels only — BYPASS's 2px ring, refusal-toast bezel) and Fill Red #C93A32 (solid fills with white text 5.08 — engaged BYPASS). Never swapped, never white-on-edge-red.
 
 ### Tertiary
