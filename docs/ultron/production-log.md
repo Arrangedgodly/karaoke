@@ -526,3 +526,79 @@ with the revert; the failing check names above are the spec).
   after revert; identical to the 0d911fa verified baseline).
 - `git status` clean except the three docs/ultron/*.md ledger files from
   this wrap-up.
+
+## A11Y-1 — Order-based reading + focus rules (2026-08-30, production-overlord wrap-up)
+
+- Status: `awaiting-approval` (owner A11Y, dependencies FEW-2/FEW-4 both
+  completed). Prior A11Y-1 worker stopped at its budget leaving the suite
+  RED; this wrap-up closed the task.
+
+### What was found
+The worker's untracked test did not parse — a ternary missing its else
+branch (`className ? className + ' '` in the FakeElement classList.add),
+so the file registered 0-ok/1-fail without running a single assertion.
+Two further failures surfaced once it parsed:
+1. **E6 (broken test)** — expected `currentLayout().n3.y === 148`, i.e.
+   raw clientY. The as-built FEW-2 contract snap-quantizes the drag delta
+   to GRID_PITCH=16 (tidy origin 320 + dy 48 → 368). Fixed the assertion
+   to `n3YBefore + CC.snapToGrid(148 - 100)`; no src change.
+2. **F4/F7 (GENUINE gap)** — plan.md A11Y-1 requires "focus rings visible
+   on overlapping cards (bring-to-front on focus)" but canvas.js had NO
+   focus-driven raise: `pointerdown` fronts a card (FEW-2), CSS
+   `:focus-within` is a brightness filter only, so a focused card's ring
+   could paint beneath a previously fronted overlapping neighbor.
+
+### Changes
+- `src/canvas.js` — one 7-line addition beside the FEW-2 pointerdown
+  bring-to-front: a `focusin` listener calling the same
+  `bringCardToFront(card)` (bubbling focusin — 'focus' does not bubble).
+  Z-order ONLY: no focus()/blur() call, no DOM move; monotonic via the
+  existing zCounter. This is the plan-mandated behavior, not a test
+  concession.
+- `tests/test-order-focus-a11y1.js` — kept; fixed the syntax error and
+  the E6 snap expectation (computed via the exported snapToGrid).
+
+### What the suite now gates (41 checks, A–F)
+DOM order = tab order = chain order across every order-changing gesture
+(all four FEW-4 relink types, keyboard add w/ terminal-limiter splice,
+remove x, agent loadModel); tab order computed as a browser does
+(depth-first walk of natively-focusable non-disabled elements — the
+tabindex-less SVG jacks are never stops, 8 jacks verified); cord layer
+aria-hidden + CSS pointer-events none/all split; bring-to-front on
+pointerdown/grip-drag/jack-grab makes zero focus()/blur() calls with
+activeElement untouched; the CSS z-floor (.node-card >= 1,
+.cord-layer 0, :focus-within exists); and the new focus raise (F4/F5/F6,
+monotonic within-card re-raise F7, final DOM=tab=chain F8).
+
+### Validation
+- `node tests/test-order-focus-a11y1.js` → PASS 41 checks.
+- `node tests/run.js` → **30/30 files, 2292 checks ok, exit 0**.
+
+### A11Y-1 verification (2026-08-30, ultron-overlord)
+
+- Own evidence, not the worker's: `node tests/run.js` → **30/30 files,
+  2292 checks ok, exit 0**; `node tests/run.js order-focus` isolated →
+  PASS (41 checks, exit 0). Both match the wrap-up's claims exactly.
+- Source audit (src/canvas.js, own read): `git diff 51575dd --
+  src/canvas.js` shows EXACTLY one hunk — the 8-line focusin listener
+  beside the FEW-2 pointerdown front (comment + 3-line handler), zero
+  other changes. The handler calls only `bringCardToFront(card)`
+  (bubbling focusin; `bringCardToFront` at line 120 is z-order only —
+  bumps zCounter, sets style.zIndex; no focus()/blur(), no DOM move).
+  Wired once per card: both the human add (line 1322) and loadModel
+  (line 1828) build cards through createNodeCard, which createElement's
+  a fresh section per card — the listener is attached once per fresh
+  element and dies with it on remove()/rebuild, so no duplicate
+  listeners and no leak across loadModel.
+- Gate spot-reads (tests/test-order-focus-a11y1.js, own read): E1/E2
+  (lines 638-645) fire pointerdown with focusLog armed and assert
+  focusLog.length === 0 AND activeElement unchanged — any focus steal
+  fails them. F4 (line 698-702) firsts fronts n2 via pointerdown (inline
+  zIndex), then focuses a control in n1 through a bubbling focusin and
+  asserts n1's zIndex strictly exceeds n2's fronted value — deleting the
+  focusin listener leaves n1 at the z-floor and NaN > z fails the check.
+  Both are genuine regression gates, not tautologies. Sections A-D
+  (DOM=tab=chain across all four relink types, keyboard splice, remove,
+  loadModel; 8 jacks tabindex-less; cord layer aria-hidden +
+  pointer-events none/all) all carry concrete assertions in the file.
+- Verdict: T-A11Y-1 PASS — tests/test-order-focus-a11y1.js

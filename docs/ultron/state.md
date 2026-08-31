@@ -758,5 +758,21 @@ Evidence: 48-check tests/test-cord-editing-few4.js; suite 29/29 files /
 (+FEW-7's re-scoped auto-place, A11Y-1's DOM/tab order test now has a
 cord-order surface to pin).
 
+### A11Y-1 dispatched 2026-08-30 (production-overlord worker; wrapped by wrap-up)
+**A11Y-1: APPROVED 2026-08-30 (T-A11Y-1 PASS; plan.md marked completed.)**
+A11Y-1 auto-approved (ultron-overlord) — evidence: tests/test-order-focus-a11y1.js — budget 5:00 (+wrap-up) + verify
+(order-based reading + focus rules. Prior worker budget-stopped mid-write leaving its test file with
+a SYNTAX ERROR (0-ok/1-fail, zero assertions ran). Wrap-up triage: E6 was a
+broken assertion (expected raw clientY 148; as-built snap-quantizes to
+GRID_PITCH → 368) — test fixed; F4/F7 were a GENUINE plan-mandated gap (no
+bring-to-front on focus — a focused card's ring could occlude under a fronted
+neighbor) — fixed with a 7-line focusin→bringCardToFront listener in
+src/canvas.js, z-order only, no focus steal. Evidence: 41-check
+tests/test-order-focus-a11y1.js (DOM=tab=chain across all order gestures,
+jacks aria-hidden/tabindex-less/pointer-split, zero focus calls on
+bring-to-front, CSS z-floor, focus raise); suite 30/30 files / 2292 checks
+green exit 0. Details in production-log.) Next unblocked after approval:
+QA-4 (per plan critical path A11Y-1 → QA-4 → QA-5).
+
 ### DAT-1 dispatched 2026-08-30 (production-overlord wrap-up; prior worker budget-stopped)
 **Active task: DAT-1 — status `awaiting-approval`** (migration + zero-regression gate, no new code — prior DAT-1 worker stopped at its 5-minute budget mid-analysis, gate closed from shipped evidence: `node tests/run.js autosave-layout` PASS 74 checks exit 0 — v2 round-trip, legacy→tidy migration idempotent + hostile-legacy fallback, preset-tidy chain-only, hostile layouts/envelopes fail soft, key karaoke-autosave-v1 preserved; `git diff 1d36d61 -- src/preset-schema.js src/preset-store.js src/audio-graph.js src/audio-engine.js` EMPTY; offline render NOT re-run this cycle (tests/qa-out/qa2-report.txt stale 2026-08-29) — zero-regression evidence = suite byte-stability assertions (test-board-positioning-few2.js C8, test-cord-editing-few4.js C3/G1) + the empty diff above; full suite re-run at wrap-up: 29/29 files / 2251 checks, exit 0; evidence in [production-log.md](production-log.md)). Fresh run-qa2 render available to approver on request. Next: M1 acceptance (FEW-1 + DAT-1) → user approval.

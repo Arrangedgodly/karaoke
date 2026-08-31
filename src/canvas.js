@@ -1652,6 +1652,14 @@
       bringCardToFront(card);
     });
 
+    // A11Y-1: a control RECEIVING focus raises its section the same way
+    // (bubbling focusin — 'focus' itself does not bubble). Z-order only:
+    // no focus() call, no DOM move; the ring can never paint beneath a
+    // previously fronted overlapping neighbor.
+    card.addEventListener('focusin', function () {
+      bringCardToFront(card);
+    });
+
     // FEW-2: the GRIP now MOVES POSITION (snap-quantized to GRID_PITCH),
     // never an order. The drag itself resolves on the document-level
     // pointermove/up handlers (initPositionDragWiring); this listener

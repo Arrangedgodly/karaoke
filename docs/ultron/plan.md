@@ -187,7 +187,7 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
 
 ### Accessibility (owner: A11Y)
 
-**A11Y-1 — Order-based reading + focus rules** · small · pending (after FEW-2, FEW-4)
+**A11Y-1 — Order-based reading + focus rules** · small · completed (verified 2026-08-30 ultron-overlord — wrap-up 2026-08-30: prior worker budget-stopped leaving its new test file with a syntax error; wrap-up fixed the test's broken ternary + a wrong E6 snap expectation, found ONE genuine gap — no bring-to-front on focus — fixed with a 7-line focusin listener in src/canvas.js; 41-check tests/test-order-focus-a11y1.js; suite 30/30 files / 2292 checks green; T-A11Y-1 PASS on own evidence — full suite + isolated rerun, source audit, two gate spot-reads; see production-log)
 - DOM/tab/aria order = chain order (PD-4) enforced by test; cords +
   grid decorative (aria-hidden); focus rings visible on overlapping
   cards (bring-to-front on focus); keyboard add unchanged.
