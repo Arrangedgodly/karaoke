@@ -806,3 +806,15 @@ approval.
 + coordinator mechanical check (docs-only diff README+ACCEPTANCE, zero
 src/ changes, suite 30/2292 exit 0). QA-5 (user ears/eyes) = the final
 acceptance gate, user-owned at completion.
+
+## CYCLE 4 + REDESIGN RUN — RUNTIME COMPLETE (2026-08-30)
+Final burn-down: ~1:59 runtime (clock 17:20→~19:19 MDT) against the
+120-min budget — on the line, defended by sheds. Completed: FEW-0,1,2,3,4
+(FEW-3 recovered from a mis-size deferral), DAT-1, A11Y-1, QA-4, QA-2
+(folded), finish phase (DESIGN.md + sidecar + critique 36/40 vs 36/40
+baseline). Deferred w/ reasons: FEW-5 resize (over budget; proven
+--card-scale path recorded), FEW-6 flow glyph, FEW-7 drag-placement
+half, FEW-8, VIS-1, QA-3 remainder, redesign items 3/5-7 (shed at
+sitting), item-4 extract (protected, queued for a calm run);
+create-readme trimmed into QA-4's README audit (disclosed). REMAINING
+GATE: user acceptance (QA-5) — ears/eyes on the delivered app.
