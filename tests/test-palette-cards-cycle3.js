@@ -620,20 +620,18 @@ NEW_TYPES.forEach(function (t) {
   var handle = rail.children[0];
   var grip = handle.children[0];
   var codeEl = rail.children[1];
-  var labelEl = rail.children[2];
   check(
     grip.className === 'node-drag-icon' &&
       grip.attrs['aria-hidden'] === 'true',
     t.type + ' grip icon is aria-hidden decoration'
   );
-  check(
-    labelEl.className === 'node-label' && labelEl.textContent === t.label,
-    t.type + ' card label reads "' + t.label + '"'
-  );
+  // 2026-08-31 (user direction): the header prints ONLY the family code —
+  // the module name rides as the code's hover tooltip.
   check(
     codeEl.className === 'section-code' &&
-      codeEl.textContent === t.initials,
-    t.type + ' family print block codes "' + t.initials + '"'
+      codeEl.textContent === t.initials &&
+      codeEl.title === t.label,
+    t.type + ' family print block codes "' + t.initials + '" with the full name as its tooltip'
   );
 
   var foot = sectionFoot(card);

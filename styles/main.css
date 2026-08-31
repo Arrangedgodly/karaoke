@@ -870,9 +870,9 @@ select.control {
                          scale, one tier up from per-control values by
                          direction; its own segments share the one size
                          (weight/color differentiate, never size)
-     identity print     NOT value display: .section-code 1.25rem (family
-                         code), sans silkscreen labels (.param-label
-                         0.7rem, .node-label 0.75rem), the EXP badge
+     identity print     NOT value display: .section-code (family code),
+                         sans silkscreen labels (.param-label 0.7rem),
+                         the EXP badge
                          (0.6875rem floor) — unchanged by this round
 
    Rationale for 0.75rem: at operator distance 12px mono holds the value
@@ -2028,17 +2028,6 @@ select.control {
   color: var(--card-family, var(--pm-print));
 }
 
-/* Module label — the section's name in the print register. */
-.node-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  line-height: 1.25;
-  color: var(--pm-print);
-  overflow-wrap: anywhere;
-}
-
 /* Family derivations — ONE rule per family carries BOTH family-color
    roles of the section (single source; no per-control class anywhere):
      --card-family  the rail's DESATURATED silkscreen ink (code + tick —
@@ -2237,8 +2226,10 @@ select.control {
      collapses it instead (the defect the 2026-08-31 browser round
      caught). */
   position: relative;
-  width: 1.15rem;
-  height: 1.15rem;
+  /* Condensed to the code line (16px + border) so the header band never
+     grows a blank strip under the keys. */
+  width: 1rem;
+  height: 1rem;
   padding: 0;
   border: 1px solid var(--pm-key-edge);
   border-radius: 3px;
@@ -2249,13 +2240,13 @@ select.control {
 
 .chevron-mark {
   display: block;
-  width: 6px;
-  height: 6px;
-  margin: 4px auto;
+  width: 5px;
+  height: 5px;
+  margin: 2px auto;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: rotate(45deg); /* points down at the visible field */
-  margin-top: 5px;
+  margin-top: 3px;
 }
 
 .node-collapse:hover,
@@ -2291,8 +2282,8 @@ select.control {
 .node-remove-btn {
   flex: none;
   position: relative;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1rem;
+  height: 1rem;
   padding: 0;
   border: 1px solid var(--pm-key-edge);
   border-radius: 3px;
@@ -2307,7 +2298,7 @@ select.control {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 9px;
+  width: 7px;
   height: 1.5px;
   background: currentColor;
 }
@@ -2315,7 +2306,7 @@ select.control {
 .remove-mark::before,
 .remove-mark::after {
   content: '';
-  margin: -0.75px 0 0 -4.5px;
+  margin: -0.75px 0 0 -3.5px;
 }
 
 .remove-mark {
@@ -3599,19 +3590,21 @@ input.preset-name-input:focus-visible {
   gap: 0.4rem;
   border-right: none;
   border-bottom: 1px solid var(--pm-groove-cut);
-  padding: 0 0.25rem 0.35rem 0.3rem;
+  /* Condensed band (2026-08-31): the code IS the height driver now (the
+     module name is retired to the code's tooltip); the fold/eject keys
+     match it so the band adds one tight print row, never a blank strip
+     under the buttons. */
+  padding: 0 0.2rem 0.2rem 0.25rem;
 }
 
 .canvas-panel.flow-horizontal .section-foot {
   margin-top: 0;
   margin-left: auto;
   padding-top: 0;
+  gap: 0.2rem;
 }
 
-.canvas-panel.flow-horizontal .node-label {
-  flex: 1 1 auto;
-  min-width: 0;
-}
+
 
 /* The body: short fields center vertically in whatever room the module
    has (with no forced min-height that is simply content height). */

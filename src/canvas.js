@@ -1669,8 +1669,8 @@
   //                                 risk line demands — knobs, pads,
   //                                 chevron and × can never start a drag).
   //         .node-drag-icon      <- CSS-drawn grip dots (aria-hidden).
-  //       .section-code          <- the 2-letter family silkscreen code.
-  //       .node-label            <- the module label (print register).
+  //       .section-code          <- the 2-letter family silkscreen code
+  //                               (title = the full module name).
   //       .section-foot          <- collapse chevron + remove × (real
   //                                 buttons, the section's header-zone
   //                                 parts; siblings of the handle, never
@@ -1735,15 +1735,15 @@
     code.className = 'section-code';
     code.setAttribute('aria-hidden', 'true');
     code.textContent = familyInitials(type);
-
-    var label = document.createElement('span');
-    label.className = 'node-label';
-    label.textContent = window.NodeTypes.getLabel(type);
+    // 2026-08-31 (user direction): the header prints ONLY the 2-letter
+    // family code — the full module name rides as the code's hover
+    // tooltip. The section's accessible naming lives on its controls
+    // (the collapse/remove buttons' aria-labels carry the module name).
+    code.title = window.NodeTypes.getLabel(type);
 
     handle.appendChild(gripIcon);
     rail.appendChild(handle);
     rail.appendChild(code);
-    rail.appendChild(label);
 
     // UI-2 (cycle 3): the formal experimental badge on the section of
     // every type in EXPERIMENTAL_TYPES (autotune only, cycle-3 scope) —
