@@ -670,8 +670,30 @@
       // (and should) sever here. For a plain single-node type, getNodeOutput()
       // falls through to the node itself, so this is a no-op behavioral
       // change from before.
+      //
+      // Adapter-backed instances (src/tone-adapter.js composites) also get
+      // dispose() called here when their id is NOT carried forward: a Tone
+      // node keeps internal nodes and a JS-tick clock alive after a mere
+      // disconnect, so dropped instances must be explicitly released.
+      // Carried-forward identity is decided by object identity — resolved
+      // nodes for reuse ARE the old instance objects (Phase 1) — which also
+      // covers the id-same-type-changed case (fresh factory instance, old
+      // instance dropped). Plain AudioNodes and native composites have no
+      // dispose(): the typeof guard makes this a no-op for every one of
+      // them, so existing types' teardown behavior is byte-for-byte what
+      // it was before this hook existed.
+      var carriedForward = {};
+      model.forEach(function (entry, i) {
+        if (resolvedNodes[i] === oldNodeInstances[entry.id]) {
+          carriedForward[entry.id] = true;
+        }
+      });
       Object.keys(oldNodeInstances).forEach(function (id) {
-        try { getNodeOutput(oldNodeInstances[id]).disconnect(); } catch (e) { /* already gone */ }
+        var old = oldNodeInstances[id];
+        try { getNodeOutput(old).disconnect(); } catch (e) { /* already gone */ }
+        if (!carriedForward[id] && old && typeof old.dispose === 'function') {
+          try { old.dispose(); } catch (e) { /* already gone */ }
+        }
       });
 
       // Rebuild: wire the new topology fresh, using the node objects already

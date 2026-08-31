@@ -292,6 +292,16 @@
     the mic source, chain gate, bypass tap, and meters.
   -->
   <script src="vendor/tone.min.js"></script>
+  <!--
+    ToneAdapter (src/tone-adapter.js): one-call registration for Tone-backed
+    node types — generates BOTH registry registrations (AudioGraph factory
+    + NodeTypes metadata) around a Tone effect node wrapped in the AE-7
+    native composite contract. Loads after vendor/tone.min.js and after both
+    registries; the Tone effect files below (node-pitchshift.js etc.) call
+    ToneAdapter.register() at parse time. Touches window.Tone only at
+    factory time, never at registration time (harness safety).
+  -->
+  <script src="src/tone-adapter.js"></script>
   <script src="src/node-gain.js"></script>
   <script src="src/node-compressor.js"></script>
   <script src="src/node-eq.js"></script>
