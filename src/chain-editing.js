@@ -19,6 +19,7 @@
 //     signal?: AbortSignal
 //   }) -> Promise<{applied, saved, mode, model, warning?}>
 //   ChainEditing.getModel() -> detached accepted-model copy
+//   ChainEditing.getLayout() -> detached accepted-layout copy
 //   ChainEditing.whenIdle() -> Promise<detached accepted-model copy>
 //   ChainEditing.hasPersistenceWarning() -> boolean
 //
@@ -32,6 +33,7 @@
   'use strict';
 
   var acceptedModel = null;
+  var acceptedLayout;
   var persistenceWarning = false;
   var queue = Promise.resolve();
 
@@ -69,6 +71,13 @@
       }
     }
     return null;
+  }
+
+  function currentAcceptedLayout() {
+    if (acceptedLayout === undefined) {
+      acceptedLayout = currentLayout();
+    }
+    return acceptedLayout === null ? null : clone(acceptedLayout);
   }
 
   function currentPresetState() {
@@ -232,17 +241,23 @@
     var err = result.error instanceof Error
       ? result.error
       : new Error(result.error ? String(result.error) : 'The live graph did not commit.');
+    if (result.error && result.error.name) {
+      err.name = result.error.name;
+    }
+    if (result.error && result.error.code) {
+      err.code = result.error.code;
+    }
     err.graphResult = result;
     return err;
   }
 
-  function buildGraph(model) {
+  function buildGraph(model, signal) {
     if (!liveGraphAvailable()) {
       return Promise.resolve({ committed: true, skipped: true });
     }
     var returned;
     try {
-      returned = window.AudioGraph.buildGraph(cloneModel(model));
+      returned = window.AudioGraph.buildGraph(cloneModel(model), { signal: signal });
     } catch (err) {
       return Promise.reject(err);
     }
@@ -475,7 +490,7 @@
     } catch (err) {
       return Promise.reject(err);
     }
-    var previousLayout = currentLayout();
+    var previousLayout = currentAcceptedLayout();
     var snapshot = {
       model: previous,
       layout: previousLayout,
@@ -496,7 +511,7 @@
         renderParam(change);
       });
     } else {
-      commit = buildGraph(candidate).then(function () {
+      commit = buildGraph(candidate, request.signal).then(function () {
         liveCommitted = true;
         if (request.signal && request.signal.aborted) {
           throw makeAbortError();
@@ -508,6 +523,11 @@
 
     return commit.then(function () {
       acceptedModel = cloneModel(candidate);
+      if (mode === 'structural') {
+        acceptedLayout = request.layout === undefined
+          ? (previousLayout === null ? null : clone(previousLayout))
+          : clone(request.layout);
+      }
       markAcceptedEdit(request);
       var saved = persist(candidate);
       pushAgentUndo(request, snapshot);
@@ -523,7 +543,16 @@
       return result;
     }).catch(function (cause) {
       var rollbackPromise;
-      if (mode === 'parameter') {
+      if (
+        mode === 'structural' &&
+        cause &&
+        cause.graphResult &&
+        cause.graphResult.canceled &&
+        cause.graphResult.rollback &&
+        cause.graphResult.rollback.succeeded
+      ) {
+        rollbackPromise = Promise.resolve(cause.graphResult.rollback);
+      } else if (mode === 'parameter') {
         rollbackPromise = Promise.resolve().then(function () {
           rollbackParam(change);
           return { attempted: true, succeeded: true };
@@ -541,6 +570,7 @@
       }).then(function (rollback) {
         if (rollback.succeeded) {
           acceptedModel = cloneModel(previous);
+          acceptedLayout = previousLayout === null ? null : clone(previousLayout);
         }
         throw failureWithRollback(cause, rollback);
       });
@@ -560,6 +590,7 @@
   window.ChainEditing = {
     apply: apply,
     getModel: currentAcceptedModel,
+    getLayout: currentAcceptedLayout,
     whenIdle: function () {
       return queue.then(function () { return currentAcceptedModel(); });
     },

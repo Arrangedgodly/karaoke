@@ -320,6 +320,29 @@ async function main() {
   check(replacementResult && replacementResult.committed === true && AG.getModel()[0].id === 'n1',
     'A1b: only the replacement build becomes the accepted live graph');
 
+  var abortProbe = null;
+  AG.registerNodeType('abort-probe', function () {
+    abortProbe = makeBaseNode('AbortProbeNode');
+    abortProbe.__disposed = false;
+    abortProbe.dispose = function () { abortProbe.__disposed = true; };
+    return abortProbe;
+  });
+  var preCommitController = new AbortController();
+  var gateBeforeAbort = AG.getChainGate().gain.value;
+  var canceledBeforeCommit = AG.buildGraph(
+    [{ id: 'abort-staged', type: 'abort-probe', params: {} }],
+    { signal: preCommitController.signal }
+  );
+  preCommitController.abort();
+  var canceledBeforeCommitResult = await canceledBeforeCommit;
+  check(canceledBeforeCommitResult && canceledBeforeCommitResult.committed === false &&
+      canceledBeforeCommitResult.canceled === true,
+    'A1c: aborting staged graph work resolves as cancelled before commit');
+  check(abortProbe && abortProbe.__disposed === true && AG.getModel()[0].id === 'n1',
+    'A1c: the staged node is disposed and the prior live model remains accepted');
+  check(AG.getChainGate().gain.value === gateBeforeAbort,
+    'A1c: pre-commit cancellation does not duck or otherwise touch the live gate');
+
   // The issue's exact shape: a valid model in which the gain id becomes
   // the SOLE TERMINAL LIMITER.
   AG.buildGraph([{ id: 'n1', type: 'limiter', params: { ceiling: -6, release: 100 } }]);

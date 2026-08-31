@@ -424,6 +424,45 @@ check(
   'G4: a terminal limiter STAYS terminal across an add (insert-before policy unchanged)'
 );
 
+// ----------------------------------------------------------------------
+console.log('H. production human adapter keeps provisional DOM hidden until acceptance');
+var acceptedBefore = CC.getCurrentModel();
+var layoutBefore = CC.getCurrentLayout();
+var pendingRequest = null;
+var acceptPending = null;
+sandbox.ChainEditing = {
+  getModel: function () { return JSON.parse(JSON.stringify(acceptedBefore)); },
+  getLayout: function () { return JSON.parse(JSON.stringify(layoutBefore)); },
+  apply: function (request) {
+    pendingRequest = request;
+    return new Promise(function (resolve) {
+      acceptPending = function () {
+        acceptedBefore = JSON.parse(JSON.stringify(request.candidate));
+        layoutBefore = JSON.parse(JSON.stringify(request.layout));
+        CC.renderModel(request.candidate, request.layout);
+        resolve({ applied: true, saved: true, mode: 'structural' });
+      };
+    });
+  }
+};
+var acceptedOrderBefore = domOrder();
+CC.addNodeType('gain');
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(acceptedOrderBefore),
+  'H1: the provisional add is synchronously replaced by the last accepted rendering'
+);
+check(
+  pendingRequest && pendingRequest.source === 'human' &&
+    pendingRequest.forceStructural === true &&
+    pendingRequest.candidate.length === acceptedOrderBefore.length + 1,
+  'H2: the human adapter submits one normalized structural candidate to ChainEditing'
+);
+acceptPending();
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(pendingRequest.candidate.map(function (entry) { return entry.id; })),
+  'H3: only acceptance makes the candidate DOM visible'
+);
+
 if (failures.length === 0) {
   console.log('PASS: free positioning (FEW-2)');
   process.exit(0);

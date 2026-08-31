@@ -855,6 +855,31 @@ async function main() {
     'E: the read changed nothing (same toasts, same undo count)');
 
   // --------------------------------------------------------------------
+  console.log('F. rollback failure outranks a late abort signal');
+  // --------------------------------------------------------------------
+  var splitSignal = { aborted: false };
+  sandbox.ChainEditing = {
+    getModel: function () { return sandbox.ChainCanvas.getCurrentModel(); },
+    whenIdle: function () { return Promise.resolve(); },
+    apply: function () {
+      splitSignal.aborted = true;
+      var splitError = new Error('candidate failed and rollback failed');
+      splitError.code = 'CHAIN_ROLLBACK_FAILED';
+      splitError.rollback = { attempted: true, succeeded: false };
+      return Promise.reject(splitError);
+    }
+  };
+  var splitResult = await getTool(sandbox, 'set_param').execute(
+    { nodeId: 'n5', param: 'mix', value: 35 },
+    { signal: splitSignal }
+  );
+  check(splitResult && splitResult.code === 'SCHEMA_LAYER_FAULT' &&
+      splitResult.rollback && splitResult.rollback.succeeded === false,
+    'F1: a failed rollback remains a structured fault even when the signal is now aborted');
+  check(!isAbortedResult(splitResult, 'set_param'),
+    'F2: split live state is never flattened into the harmless ABORTED result');
+
+  // --------------------------------------------------------------------
   if (failures.length === 0) {
     console.log('PASS: AbortSignal is honored for queued WebMCP mutations (issue #10)');
     return 0;

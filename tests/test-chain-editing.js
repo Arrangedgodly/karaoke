@@ -66,10 +66,10 @@ function makeHarness(initial) {
         }
       });
     },
-    buildGraph: function (model) {
+    buildGraph: function (model, options) {
       records.push('graph:build:' + model.map(function (entry) { return entry.id; }).join(','));
       if (graphBehavior) {
-        return graphBehavior(model, function (next) { graphModel = copy(next); });
+        return graphBehavior(model, function (next) { graphModel = copy(next); }, options || {});
       }
       graphModel = copy(model);
       return Promise.resolve({ committed: true });
@@ -307,19 +307,74 @@ async function main() {
     'E4: a pre-cancelled request performs no graph, canvas, persistence, preset, revision, or Undo work');
 
   h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
+  var preCommitController = new AbortController();
+  h.setGraphBehavior(function (model, setGraph, options) {
+    return new Promise(function (resolve) {
+      options.signal.addEventListener('abort', function () {
+        var abortError = new Error('cancelled while staged');
+        abortError.name = 'AbortError';
+        resolve({
+          committed: false,
+          canceled: true,
+          error: abortError,
+          rollback: { attempted: false, succeeded: true }
+        });
+      }, { once: true });
+    });
+  });
+  var preCommitApply = h.window.ChainEditing.apply({
+    source: 'agent',
+    candidate: [node('b', 'limiter')],
+    signal: preCommitController.signal,
+    undoLabel: 'Cancelled while staged'
+  });
+  await Promise.resolve();
+  preCommitController.abort();
+  err = await expectReject(preCommitApply);
+  check(err && err.name === 'AbortError' && err.rollback && err.rollback.succeeded === true,
+    'E5: cancellation reaches graph staging and reports the unchanged graph truthfully');
+  check(h.records.filter(function (x) { return x.indexOf('graph:build:') === 0; }).length === 1 &&
+      h.records.filter(function (x) { return x.indexOf('canvas:') === 0 || x.indexOf('persist:') === 0 || x.indexOf('undo:') === 0; }).length === 0,
+    'E5: a staged cancellation performs no rollback rebuild, render, persistence, or Undo work');
+
+  h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
   await h.window.ChainEditing.apply({
     source: 'agent',
     candidate: [node('a', 'gain', { gainDb: 4 })],
     undoLabel: 'Raise gain'
   });
-  check(h.undoEntries.length === 1, 'E5: a committed agent edit creates one Undo snapshot');
+  check(h.undoEntries.length === 1, 'E6: a committed agent edit creates one Undo snapshot');
   await h.undoEntries[0].restore();
   check(JSON.stringify(h.window.ChainEditing.getModel()) === JSON.stringify([node('a', 'gain', { gainDb: 0 })]),
-    'E6: Undo restores the captured pre-state through ChainEditing');
+    'E7: Undo restores the captured pre-state through ChainEditing');
   check(h.undoEntries.length === 1 && h.records.filter(function (x) { return x.indexOf('undo:push:') === 0; }).length === 1,
-    'E7: an Undo restore never creates a recursive Undo entry');
+    'E8: an Undo restore never creates a recursive Undo entry');
 
-  console.log('F. normalized intents serialize without stale-model loss');
+  console.log('F. named structural operations share the same interface contract');
+  h = makeHarness([node('a', 'gain'), node('b', 'delay'), node('z', 'limiter')]);
+  await h.window.ChainEditing.apply({
+    source: 'human',
+    candidate: [node('a', 'gain'), node('z', 'limiter')]
+  });
+  check(h.window.ChainEditing.getModel().map(function (entry) { return entry.id; }).join(',') === 'a,z',
+    'F1: remove commits through ChainEditing');
+  await h.window.ChainEditing.apply({
+    source: 'human',
+    candidate: [node('z', 'limiter'), node('a', 'gain')]
+  });
+  check(h.window.ChainEditing.getModel().map(function (entry) { return entry.id; }).join(',') === 'z,a',
+    'F2: reorder commits through ChainEditing');
+  await h.window.ChainEditing.apply({
+    source: 'agent',
+    candidate: [node('replacement', 'limiter')],
+    undoLabel: 'Replace chain'
+  });
+  check(h.window.ChainEditing.getModel().map(function (entry) { return entry.id; }).join(',') === 'replacement' &&
+      h.canvasModel().map(function (entry) { return entry.id; }).join(',') === 'replacement' &&
+      h.graphModel().map(function (entry) { return entry.id; }).join(',') === 'replacement',
+    'F3: full replacement leaves accepted, rendered, and live models identical');
+
+  console.log('G. normalized intents serialize without stale-model loss');
   h = makeHarness([
     node('a', 'gain', { gainDb: 0 }),
     node('b', 'delay', { mix: 20 }),
@@ -336,20 +391,20 @@ async function main() {
   await Promise.all([firstIntent, secondIntent]);
   var queuedModel = h.window.ChainEditing.getModel();
   check(queuedModel[0].params.gainDb === 2 && queuedModel[1].params.mix === 35,
-    'F1: two immediate edits on different nodes both survive queueing');
+    'G1: two immediate edits on different nodes both survive queueing');
   check(h.records.filter(function (x) { return x.indexOf('graph:build:') === 0; }).length === 0,
-    'F2: both queued one-param intents keep the no-rebuild path');
+    'G2: both queued one-param intents keep the no-rebuild path');
   check(h.records.filter(function (x) { return x === 'revision:human'; }).length === 2,
-    'F3: each accepted human intent bumps revision once, with no duplicate bump');
+    'G3: each accepted human intent bumps revision once, with no duplicate bump');
 
-  console.log('G. production script order installs the seam before consumers');
+  console.log('H. production script order installs the seam before consumers');
   var html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   var presetIndex = html.indexOf('<script src="src/presets-ui.js"');
   var editingIndex = html.indexOf('<script src="src/chain-editing.js"');
   var toolsIndex = html.indexOf('<script src="src/mcp-tools.js"');
   var mainIndex = html.indexOf('<script src="src/main.js"');
   check(presetIndex !== -1 && presetIndex < editingIndex && editingIndex < toolsIndex && editingIndex < mainIndex,
-    'G1: PresetsUI loads before ChainEditing, which loads before WebMCP and startup');
+    'H1: PresetsUI loads before ChainEditing, which loads before WebMCP and startup');
 
   if (failures > 0) {
     console.error('\n' + failures + ' check(s) failed');

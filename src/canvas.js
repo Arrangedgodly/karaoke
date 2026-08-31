@@ -1628,10 +1628,22 @@
     // ChainEditing renders the accepted candidate on success and restores
     // the previous accepted model on failure.
     if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
+      var candidateModel = getCurrentModel();
+      var candidateLayout = currentLayout();
+      // The gesture may have provisionally reordered/added/removed DOM in
+      // order to express its candidate. Put the last accepted render back
+      // synchronously, before graph staging begins, so an operator never
+      // sees a chain that has not yet become live.
+      renderModel(
+        window.ChainEditing.getModel(),
+        typeof window.ChainEditing.getLayout === 'function'
+          ? window.ChainEditing.getLayout()
+          : null
+      );
       window.ChainEditing.apply({
         source: 'human',
-        candidate: getCurrentModel(),
-        layout: currentLayout(),
+        candidate: candidateModel,
+        layout: candidateLayout,
         forceStructural: true
       }).catch(function (err) {
         console.error('ChainCanvas: human structural edit was not accepted', err);

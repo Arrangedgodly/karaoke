@@ -4367,7 +4367,12 @@
               }
               return result;
             }, function (err) {
-              if (signalAborted(signal) || (err && err.name === 'AbortError')) {
+              var rollbackFailed = !!(
+                err &&
+                err.rollback &&
+                err.rollback.succeeded === false
+              );
+              if (!rollbackFailed && (signalAborted(signal) || (err && err.name === 'AbortError'))) {
                 return abortedResult(name);
               }
               var applyFault = schemaLayerFaultResult(name, err);
