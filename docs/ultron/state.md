@@ -19,7 +19,19 @@ bypass cue. Executing the refinement checklist one entry at a time, pausing
 for user approval after each.
 
 ## Active Task
-**FEW-4 auto-approved (ultron-overlord) — evidence: tests/test-cord-editing-few4.js — budget 10:00, actual ~9:30 + verify/QA-2 fold.**
+**FEW-5 — status `deferred (over budget)`** (production-overlord wrap-up,
+2026-08-30). The FEW-5 worker was stopped at its 10:00 budget mid-edit,
+leaving a 535-line uncommitted delta (src/canvas.js, styles/main.css) and its
+new 50-check suite red at 7 failures. Reverted to 0d911fa; suite verified
+exit 0 — **29/29 files, 2251 checks, all green** (baseline). Not rescued: the
+7 failures spanned 5 areas (width-bound vs 11px-floor clamp math, hostile
+factor fail-soft, handle aria/focus, live cord re-route on resize ticks,
+board extent, 0.85→11.2px text band) — no ≤20-line fix existed. Re-dispatch
+is cheap: 43/50 checks already passed, proving the approach (one
+--card-scale factor consumed via CSS calc, corner handle, presentation-only
+gesture, scale persisted in layout entries). Details in production-log.
+Prior: FEW-4 auto-approved (ultron-overlord) — evidence:
+tests/test-cord-editing-few4.js — budget 10:00, actual ~9:30 + verify/QA-2 fold.
 Order-by-cord verified live: 29/29 files / 2251 checks exit 0 (isolated
 cord-editing run PASS, 48 checks); source-audited the single
 commitStructuralChange chokepoint (no second buildGraph/autosave path in

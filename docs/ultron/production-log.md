@@ -487,3 +487,42 @@ NEVER gate audio. Budget 10:00, actual ~9:30.
   available to the approver on request.
 - Full suite re-run at wrap-up (not just cited): `node tests/run.js`
   → 29/29 files, 2251 checks ok, exit 0.
+
+## FEW-5 — Continuous resize + stepped text — DEFERRED (over budget)
+
+### Wrap-up (production-overlord wrap-up worker, 2026-08-30)
+
+The FEW-5 worker was stopped at its 10:00 budget mid-edit. The tree held a
+535-line uncommitted delta (`src/canvas.js` +307, `styles/main.css` +247 —
+19 deletions between them) plus one new untracked file,
+`tests/test-resize-few5.js` (50 checks). The suite was RED: 29/30 files,
+7 checks failing, all in the worker's own new test file.
+
+Why reverted rather than rescued: the 7 failures were not one breakage but
+five distinct gaps — (B7) width-bound clamp binding a legal factor 1.3 at
+x=16, (B8) non-finite factors not failing soft to 1, (D3/D4) handle missing
+accessible name / still focusable, (E9) cords not re-routing live on resize
+ticks, (E10) board extent not growing with the scaled card, (G3) the 0.85
+restore case not stepping 10.2px up to the 11.2px ladder band. No ≤20-line
+fix existed, and FEW-5's own acceptance bar (clamp proof incl. the 11px
+floor, geometry-continuous/text-stepped per PD-2, scale persistence, cord
+re-route) was not met. `git checkout -- src/canvas.js styles/main.css`;
+`rm tests/test-resize-few5.js` — back to the verified 0d911fa baseline
+exactly.
+
+What the partial work proved (re-dispatch is cheap): 43/50 checks already
+passed — the architecture is sound: one `--card-scale` CSS variable
+consumed by knob/pad/trim/native-input geometry via CSS calc (H5), a corner
+resize handle with in-world `--pm-*` styling and nwse cursor (D2/D5), a
+continuous presentation-only gesture with zero `buildGraph` calls (E8),
+exactly one layout-store save on release (E12), factor paint + hostile
+clamping on load (G2/G4: 99→1.5, 0.1→0.75), and byte-stable save/reload
+round-trips (G5). A re-dispatch should budget for the five gaps above and
+re-use `tests/test-resize-few5.js`'s checklist shape (its content is lost
+with the revert; the failing check names above are the spec).
+
+### Validation
+- `node tests/run.js` → **29/29 files, 2251 checks ok, exit 0** (verified
+  after revert; identical to the 0d911fa verified baseline).
+- `git status` clean except the three docs/ultron/*.md ledger files from
+  this wrap-up.

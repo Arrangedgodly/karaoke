@@ -105,7 +105,7 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
   committed relink; revert path provably audio-neutral; agent-queue
   test; mid-show guard demo.
 
-**FEW-5 — Continuous resize (clamped) + stepped text** · medium · pending (after FEW-2)
+**FEW-5 — Continuous resize (clamped) + stepped text** · medium · deferred (over budget) — 2026-08-30 worker hit its 10:00 limit mid-edit; partials reverted to 0d911fa (suite 29/2251 green); approach validated, see production-log.
 - Corner handle; continuous scale factor on card geometry with
   PD-2's stepped text (hard 11px floor); clamps: min = floor-holding
   factor, max = panel-width bound; scale persists in layout; folded
