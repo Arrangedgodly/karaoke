@@ -1,6 +1,6 @@
 # VOXCHAIN
 
-**Live: https://karaoke.arrangedgodly.com/**
+**Live: https://voxchain.arrangedgodly.com/**
 
 A live karaoke vocal chain in your browser: mic in → effects (reverb, delay, compression, EQ, noise gate, distortion, chorus — even autotune) → PA out. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
 
@@ -12,12 +12,12 @@ The console's dark pro-audio look — amber lamps, legible from two meters — a
 
 Everything below works on the deployed site, no local setup, no Chrome flags.
 
-1. Open **https://karaoke.arrangedgodly.com/** in the Codex (or ChatGPT) in-app browser.
+1. Open **https://voxchain.arrangedgodly.com/** in the Codex (or ChatGPT) in-app browser.
 2. Ask the agent, in plain language: *"Set up a warm ballad vocal with light reverb."* Watch the chain rebuild itself, a plain-English summary toast of every change, and a one-click **Undo** on the toast.
 3. Ask for something unsafe: *"Remove the limiter."* The agent is refused by the app's built-in policy — you get a refusal toast showing what was asked versus what's allowed. The limiter stays.
 4. Safety stays human: the red **Bypass** button (or the **spacebar**) always works and no agent can touch it.
 
-**No agent handy?** Open **https://karaoke.arrangedgodly.com/?dev** — an **Agent Harness** panel appears where you can run all 10 WebMCP tools directly with example inputs and watch change summaries, refusals, and Undo live. Start with `get_capabilities`, then `set_chain` (prefilled with a valid example), then hit Undo.
+**No agent handy?** Open **https://voxchain.arrangedgodly.com/?dev** — an **Agent Harness** panel appears where you can run all 10 WebMCP tools directly with example inputs and watch change summaries, refusals, and Undo live. Start with `get_capabilities`, then `set_chain` (prefilled with a valid example), then hit Undo.
 
 ### No MCP server or side package
 

@@ -150,5 +150,5 @@ The repo is renamed **voxchain** and the deployment moves to a
 the Pages site was deleted from the repo (it had been building from
 `main` to `arrangedgodly.com/voxchain/` after the rename, custom domain
 detached) and the `CNAME` artifact is removed. The prior live URL
-(karaoke.arrangedgodly.com) is expected to move to the Worker with the
+(voxchain.arrangedgodly.com) is expected to move to the Worker with the
 domain's DNS — update this record if the final URL differs.

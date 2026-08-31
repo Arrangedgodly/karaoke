@@ -284,10 +284,20 @@ body {
     min-height: 0;
   }
 
+  /* The grid-blowout guard (the container round's real defect): without
+     min-width: 0 the 1fr face track grows to the board's content width
+     (the chain-list carries the row extent as its min-width) and pushes
+     the presets zone and the chassis frame off screen — the outer
+     container must bound the board, the face scrolls inside. */
   .layout .palette,
   .layout .canvas-panel,
   .layout .presets {
     min-height: 0;
+    min-width: 0;
+  }
+
+  .layout .canvas-panel .canvas {
+    min-width: 0;
   }
 
   .layout .palette,
