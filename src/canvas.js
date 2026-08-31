@@ -238,6 +238,13 @@
     document.addEventListener('pointermove', onPositionPointerMove);
     document.addEventListener('pointerup', onPositionPointerEnd);
     document.addEventListener('pointercancel', onPositionPointerEnd);
+    // FEW-4: the cord-edit gesture rides the same document-level wiring
+    // (each handler no-ops unless ITS drag is armed). Escape reverts an
+    // in-progress cord edit (the keyboard twin of drop-nowhere).
+    document.addEventListener('pointermove', onCordPointerMove);
+    document.addEventListener('pointerup', onCordPointerEnd);
+    document.addEventListener('pointercancel', cancelCordDrag);
+    document.addEventListener('keydown', onCordKeyDown);
   }
 
   initPositionDragWiring();
@@ -275,6 +282,15 @@
   var CORD_JACK_DY = GRID_PITCH * 3; // a section's jack line (mid-rail)
   var CORD_JACK_DX = GRID_PITCH * 10; // section in->out jack span (placeholder width)
   var cordSvgEl = null;
+  // FEW-4: jack-point geometry + edit-gesture constants. JACK_R is the
+  // DRAWN ring (the grab target — pointer-events:all makes the whole
+  // disc live); CORD_HIT_SLOP is the geometric drop slop the JS
+  // hit-test uses; CORD_DETACH_THRESHOLD is the deliberate-drag guard.
+  var JACK_R = 12;
+  var CORD_HIT_SLOP = 24;
+  var CORD_DETACH_THRESHOLD = 6;
+  var jackEls = []; // the live jack elements ({el, jack}), rebuilt by renderCords
+  var cordDrag = null; // the live cord edit, if any (FEW-4 block below)
 
   function createSvgEl(tag) {
     if (typeof document.createElementNS === 'function') {
@@ -363,9 +379,34 @@
       ', ' + b.x + ' ' + b.y;
   }
 
-  /** THE one re-render entry point — rebuilds the cord paths from the
-   *  current positions map + DOM order. Called from each existing
-   *  position/order write path; never maintains state of its own. */
+  /** The link POINTS the cord segments terminate at — one per segment
+   *  endpoint, DERIVED from the same segments (zero parallel geometry):
+   *  mic-out (the first segment's source), each section's IN (a segment's
+   *  target) and OUT (a segment's source), and the out anchor's IN (the
+   *  last segment's target). FEW-4's editable hit targets. */
+  function jackPoints() {
+    var pts = [];
+    cordSegments().forEach(function (seg) {
+      if (seg.from === 'mic') {
+        pts.push({ kind: 'mic-out', x: seg.a.x, y: seg.a.y });
+      } else {
+        pts.push({ kind: 'section-out', nodeId: seg.from, x: seg.a.x, y: seg.a.y });
+      }
+      if (seg.to === 'out') {
+        pts.push({ kind: 'out-in', x: seg.b.x, y: seg.b.y });
+      } else {
+        pts.push({ kind: 'section-in', nodeId: seg.to, x: seg.b.x, y: seg.b.y });
+      }
+    });
+    return pts;
+  }
+
+  /** THE one re-render entry point — rebuilds the cord paths AND the
+   *  jack points from the current positions map + DOM order. Called from
+   *  each existing position/order write path; never maintains state of
+   *  its own beyond the live jack-element registry FEW-4's grabs ride
+   *  on (fresh listeners on fresh elements — a rebuild mid-gesture is
+   *  therefore always safe). */
   function renderCords() {
     if (!cordSvgEl) {
       return;
@@ -381,9 +422,394 @@
       path.setAttribute('data-to', seg.to);
       cordSvgEl.appendChild(path);
     });
+    // FEW-4: the JACK POINTS — the layer's ONLY pointer-live children
+    // (CSS turns pointer-events on for .cord-jack alone; the paths stay
+    // decorative until grabbed).
+    jackEls = [];
+    jackPoints().forEach(function (jp) {
+      var el = createSvgEl('circle');
+      el.className = 'cord-jack';
+      el.setAttribute('cx', jp.x);
+      el.setAttribute('cy', jp.y);
+      el.setAttribute('r', JACK_R);
+      el.setAttribute('data-jack-kind', jp.kind);
+      if (jp.nodeId) {
+        el.setAttribute('data-node-id', jp.nodeId);
+      }
+      el.addEventListener('pointerdown', function (event) {
+        armCordDrag(jp, event);
+      });
+      cordSvgEl.appendChild(el);
+      jackEls.push({ el: el, jack: jp });
+    });
   }
 
   buildCordLayer();
+
+  // ---------------------------------------------------------------------
+  // FEW-4 (cycle 4): CORD EDITING — order-by-cord, never gating audio.
+  //
+  // Fixed semantics (town-hall Q4, unchangeable):
+  //   - CORDS EDIT ORDER, NEVER GATE AUDIO. Grabbing a jack starts an
+  //     EDIT; audio changes ONLY on a completed relink — a drop on a
+  //     compatible point — committed as ONE structural commit through
+  //     the existing commitStructuralChange() chokepoint (DOM reorder
+  //     -> recompute -> rebuildGraph duck -> autosave -> revision
+  //     bump). Unplugging can never remove audio: mid-drag the model,
+  //     the DOM, and the painted cords are byte-unchanged, and drop
+  //     nowhere (or Escape, or pointercancel) reverts the edit with
+  //     ZERO rebuilds. Per-node bypass stays DECLINED elsewhere; a cord
+  //     edit never touches bypass state at all.
+  //   - ORDER MATH (the four link-point types):
+  //       mic-out point            -> the dragged node becomes the
+  //                                   FIRST node (its IN takes the mic
+  //                                   feed);
+  //       a section's OUT end on
+  //       section-B's IN jack      -> insert the dragged section
+  //                                   BEFORE B;
+  //       a section's IN end on
+  //       section-B's OUT jack     -> insert the dragged section
+  //                                   AFTER B;
+  //       the out-anchor IN point  -> the dragged node becomes the LAST
+  //                                   node (its OUT feeds the panel).
+  //     So an IN end targets mic-out + section OUT jacks; an OUT end
+  //     targets section IN jacks + the out anchor. Anything else —
+  //     including the dragged node's OWN jacks (a self-link) — is
+  //     incompatible and reverts. A computed order identical to the
+  //     current one is a NO-OP: revert, zero rebuilds (the retired
+  //     SortableJS likewise never fired onSort for a drop that moved
+  //     nothing).
+  //   - DELIBERATE-DRAG GUARD: the pointer must travel at least
+  //     CORD_DETACH_THRESHOLD px before the end detaches — a click on a
+  //     jack is not an unplug, and a sub-threshold release leaves no
+  //     state at all. dragActive (MC-4) goes true at DETACH and false
+  //     at gesture end, so agent mutations QUEUE behind the edit
+  //     exactly as they queue behind a palette or grip drag (mcp-tools
+  //     already polls isDragActive() — no new seam).
+  //   - The commit reorders the DOM (.insertBefore, DOM ORDER = CHAIN
+  //     ORDER, PD-4) and then runs the existing downstream machinery
+  //     exactly once. The ghost is a lightweight path re-drawn per
+  //     pointermove from the cord's still-plugged anchor to the
+  //     pointer; the static cords stay untouched until the commit
+  //     re-routes them (mid-drag byte-stability is what the revert
+  //     path proves).
+  //   - The panel anchors (mic-out, out-in) are FIXED HARDWARE: drop
+  //     targets only, never drag sources. Only a section's own in/out
+  //     jacks can be grabbed.
+  // ---------------------------------------------------------------------
+  function domCardIds() {
+    var cardEls = chainListEl.querySelectorAll('.node-card');
+    return Array.prototype.map.call(cardEls, function (el) {
+      return el.getAttribute('data-node-id');
+    });
+  }
+
+  function cardElById(id) {
+    var found = null;
+    var cardEls = chainListEl.querySelectorAll('.node-card');
+    Array.prototype.some.call(cardEls, function (el) {
+      if (el.getAttribute('data-node-id') === id) {
+        found = el;
+        return true;
+      }
+      return false;
+    });
+    return found;
+  }
+
+  function findJack(kind, nodeId) {
+    var found = null;
+    jackPoints().some(function (jp) {
+      if (jp.kind === kind && (!nodeId || jp.nodeId === nodeId)) {
+        found = jp;
+        return true;
+      }
+      return false;
+    });
+    return found;
+  }
+
+  function jackKey(jp) {
+    return jp ? jp.kind + '|' + (jp.nodeId || '') : '';
+  }
+
+  /** Pointer (client space) -> layer space. In a real host the SVG's
+   *  own bounding rect does the mapping; a stripped vm harness has no
+   *  rects and client coords ARE layer coords — the same identity the
+   *  FEW-3 harness pins for board origin {0, 0}. */
+  function pointerToLayer(event) {
+    var cx = event && typeof event.clientX === 'number' ? event.clientX : 0;
+    var cy = event && typeof event.clientY === 'number' ? event.clientY : 0;
+    var rect = null;
+    if (cordSvgEl && typeof cordSvgEl.getBoundingClientRect === 'function') {
+      try {
+        rect = cordSvgEl.getBoundingClientRect();
+      } catch (err) {
+        rect = null;
+      }
+    }
+    if (rect && typeof rect.left === 'number' && isFinite(rect.left) &&
+        typeof rect.top === 'number' && isFinite(rect.top)) {
+      return { x: cx - rect.left, y: cy - rect.top };
+    }
+    return { x: cx, y: cy };
+  }
+
+  /** Is this link point a legal target for the dragged end? (The order
+   *  math's compatibility table — see the block comment above.) */
+  function compatibleJack(dragEnd, jack) {
+    if (!jack || !cordDrag || jack.nodeId === cordDrag.id) {
+      return false; // never a self-link
+    }
+    if (jack.kind === 'section-in') {
+      return dragEnd === 'out'; // an OUT end before B
+    }
+    if (jack.kind === 'section-out') {
+      return dragEnd === 'in'; // an IN end after B
+    }
+    if (jack.kind === 'mic-out') {
+      return dragEnd === 'in'; // the dragged node's IN takes the mic feed
+    }
+    if (jack.kind === 'out-in') {
+      return dragEnd === 'out'; // the dragged node's OUT feeds the panel
+    }
+    return false;
+  }
+
+  /** The nearest COMPATIBLE link point within CORD_HIT_SLOP of a layer
+   *  point (geometric hit-test — the drawn ring stays small, the drop
+   *  slop is generous patch-cord feel). */
+  function resolveTargetJack(pt) {
+    if (!pt || !cordDrag) {
+      return null;
+    }
+    var best = null;
+    var bestD = CORD_HIT_SLOP;
+    jackPoints().forEach(function (jp) {
+      if (!compatibleJack(cordDrag.endKind, jp)) {
+        return;
+      }
+      var dx = pt.x - jp.x;
+      var dy = pt.y - jp.y;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= bestD) {
+        best = jp;
+        bestD = d;
+      }
+    });
+    return best;
+  }
+
+  /** The still-plugged anchor the ghost dangles from: dragging X's IN
+   *  end unplugs the cord that FED X (its source is the predecessor's
+   *  OUT jack, or the mic panel); dragging X's OUT end leaves the cord
+   *  plugged into X's own IN jack. */
+  function anchorPointFor(dragId, endKind) {
+    if (endKind === 'out') {
+      return findJack('section-in', dragId) || findJack('mic-out');
+    }
+    var ids = domCardIds();
+    var idx = ids.indexOf(dragId);
+    if (idx <= 0) {
+      return findJack('mic-out');
+    }
+    return findJack('section-out', ids[idx - 1]);
+  }
+
+  /** THE order math: the new linear order a completed relink commits.
+   *  Pure — reads DOM order, computes the target order, never mutates. */
+  function relinkOrder(dragId, target) {
+    var rest = domCardIds().filter(function (id) {
+      return id !== dragId;
+    });
+    if (target.kind === 'mic-out') {
+      return [dragId].concat(rest); // FIRST node
+    }
+    if (target.kind === 'out-in') {
+      return rest.concat([dragId]); // LAST node
+    }
+    var out = [];
+    rest.forEach(function (id) {
+      if (target.kind === 'section-in' && id === target.nodeId) {
+        out.push(dragId); // an OUT end on B's IN: BEFORE B
+      }
+      out.push(id);
+      if (target.kind === 'section-out' && id === target.nodeId) {
+        out.push(dragId); // an IN end on B's OUT: AFTER B
+      }
+    });
+    return out;
+  }
+
+  /** Commit the new order to the DOM with .insertBefore ONLY (exactly
+   *  how the retired SortableJS onSort reorder did it — SortableJS too
+   *  pulled the element out before placing it). The cards are detached
+   *  first, then inserted walking the target order right-to-left, each
+   *  before the already-placed card that must follow it, so the insert
+   *  references are never shifted by a concurrent removal. DOM ORDER =
+   *  CHAIN ORDER (PD-4); everything downstream is the existing
+   *  machinery. Listeners survive — elements are moved, never rebuilt. */
+  function applyDomOrder(ids) {
+    var els = [];
+    ids.forEach(function (id) {
+      var card = cardElById(id);
+      if (card) {
+        els.push(card);
+      }
+    });
+    els.forEach(function (card) {
+      card.remove();
+    });
+    var ref = null;
+    for (var k = els.length - 1; k >= 0; k--) {
+      chainListEl.insertBefore(els[k], ref);
+      ref = els[k];
+    }
+  }
+
+  /** Arm (not start) a cord edit from a jack press. The edit only
+   *  DETACHES once the deliberate-drag threshold is crossed; nothing is
+   *  mutated here. Panel anchors are fixed hardware — drop targets
+   *  only. */
+  function armCordDrag(jp, event) {
+    if (cordDrag || positionDrag) {
+      return; // one gesture at a time
+    }
+    if (jp.kind !== 'section-in' && jp.kind !== 'section-out') {
+      return; // mic-out / out-in never drag
+    }
+    if (!jp.nodeId) {
+      return;
+    }
+    if (event && typeof event.button === 'number' && event.button !== 0) {
+      return; // primary pointer only
+    }
+    if (event && typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+    cordDrag = {
+      id: jp.nodeId,
+      endKind: jp.kind === 'section-in' ? 'in' : 'out',
+      startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
+      startY: event && typeof event.clientY === 'number' ? event.clientY : 0,
+      detached: false,
+      anchorPt: null,
+      ghostEl: null,
+      hotKey: '',
+      hotEl: null
+    };
+  }
+
+  /** The ghost path (created on demand — a renderCords() call mid-gesture
+   *  rebuilds the layer, so the ghost must be able to re-attach). */
+  function ensureGhost() {
+    if (!cordDrag.ghostEl || cordDrag.ghostEl.parentNode !== cordSvgEl) {
+      cordDrag.ghostEl = createSvgEl('path');
+      cordDrag.ghostEl.className = 'cord-ghost';
+      cordDrag.ghostEl.setAttribute('data-drag-node', cordDrag.id);
+      cordDrag.ghostEl.setAttribute('data-drag-end', cordDrag.endKind);
+      cordSvgEl.appendChild(cordDrag.ghostEl);
+    }
+    return cordDrag.ghostEl;
+  }
+
+  /** Highlight the compatible target under the pointer (paint only). */
+  function setHotJack(jp) {
+    var key = jackKey(jp);
+    if (cordDrag.hotKey === key) {
+      return;
+    }
+    if (cordDrag.hotEl) {
+      cordDrag.hotEl.classList.remove('cord-jack-hot');
+    }
+    cordDrag.hotKey = key;
+    cordDrag.hotEl = null;
+    if (!jp) {
+      return;
+    }
+    jackEls.some(function (entry) {
+      if (jackKey(entry.jack) === key) {
+        cordDrag.hotEl = entry.el;
+        return true;
+      }
+      return false;
+    });
+    if (cordDrag.hotEl) {
+      cordDrag.hotEl.classList.add('cord-jack-hot');
+    }
+  }
+
+  function onCordPointerMove(event) {
+    if (!cordDrag) {
+      return;
+    }
+    var cx = event && typeof event.clientX === 'number' ? event.clientX : cordDrag.startX;
+    var cy = event && typeof event.clientY === 'number' ? event.clientY : cordDrag.startY;
+    if (!cordDrag.detached) {
+      var dx = cx - cordDrag.startX;
+      var dy = cy - cordDrag.startY;
+      if (Math.sqrt(dx * dx + dy * dy) < CORD_DETACH_THRESHOLD) {
+        return; // deliberate-drag guard: not yet an unplug
+      }
+      cordDrag.detached = true;
+      dragActive = true; // MC-4: agent mutations now queue behind the edit
+      cordDrag.anchorPt = anchorPointFor(cordDrag.id, cordDrag.endKind);
+    }
+    var pt = pointerToLayer({ clientX: cx, clientY: cy });
+    var ghost = ensureGhost();
+    ghost.setAttribute('d', cordPathD(cordDrag.anchorPt || pt, pt));
+    setHotJack(resolveTargetJack(pt));
+  }
+
+  function onCordPointerEnd(event) {
+    if (!cordDrag) {
+      return;
+    }
+    var target = null;
+    if (cordDrag.detached && event &&
+        typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+      target = resolveTargetJack(pointerToLayer(event));
+    }
+    finishCordDrag(target);
+  }
+
+  function onCordKeyDown(event) {
+    if (cordDrag && event && event.key === 'Escape') {
+      cancelCordDrag();
+    }
+  }
+
+  function cancelCordDrag() {
+    finishCordDrag(null); // pointercancel / Escape: the revert path
+  }
+
+  /** THE one resolution: teardown the gesture's paint, then either
+   *  revert (no target / moved nothing — model, DOM, and cords stay
+   *  byte-unchanged, ZERO rebuilds) or commit the relink through the
+   *  existing structural chokepoint exactly ONCE. */
+  function finishCordDrag(target) {
+    var drag = cordDrag;
+    if (!drag) {
+      return;
+    }
+    cordDrag = null;
+    dragActive = false;
+    if (drag.ghostEl && drag.ghostEl.parentNode) {
+      drag.ghostEl.remove();
+    }
+    if (drag.hotEl) {
+      drag.hotEl.classList.remove('cord-jack-hot');
+    }
+    if (!drag.detached || !target) {
+      return; // revert: an unplug is an EDIT, never an audio change
+    }
+    var order = relinkOrder(drag.id, target);
+    if (order.join('|') === domCardIds().join('|')) {
+      return; // a drop that moves nothing commits nothing (no-op)
+    }
+    applyDomOrder(order);
+    commitStructuralChange(); // DOM reorder -> recompute -> rebuild duck -> autosave -> revision bump, ONCE
+  }
 
   // ---------------------------------------------------------------------
   // DISPLAY REGISTER (redesign item 1, Single Face Chassis) — the
@@ -1232,8 +1658,8 @@
     // only ARMS it. dragActive goes true for the whole gesture so agent
     // mutations queue behind it (MC-4 discipline, unchanged consumer).
     handle.addEventListener('pointerdown', function (event) {
-      if (positionDrag) {
-        return; // one gesture at a time
+      if (positionDrag || cordDrag) {
+        return; // one gesture at a time (a cord edit owns the pointer too)
       }
       if (event && typeof event.button === 'number' && event.button !== 0) {
         return; // primary pointer only

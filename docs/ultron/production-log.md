@@ -329,3 +329,129 @@ Fresh cycle-4 file; cycle-3's log is archived under cycle-3/.
   top of the data-from/data-to paths.
 - Palette CLONE-drag still reverts (FEW-2's disclosed seam, FEW-7's).
 - Verdict: T-FEW-3 PASS — tests/test-cord-layer-few3.js
+
+## FEW-4 — Cord editing semantics (2026-08-30, production-overlord worker)
+
+Status: `awaiting-approval`. Order-by-cord is live; cords edit order and
+NEVER gate audio. Budget 10:00, actual ~9:30.
+
+### Semantics shipped (town-hall Q4, verbatim)
+- GRAB: a jack point press ARMS an edit; the end DETACHES only after a
+  6px deliberate-drag threshold (a click on a jack is not an unplug —
+  sub-threshold release leaves no state at all: no ghost, no flag, no
+  mutation). Panel anchors (mic-out, out-in) are fixed hardware — drop
+  targets only, never drag sources. One gesture at a time (grip drag
+  and cord edit mutually exclude).
+- ORDER MATH (the four link-point types, in src/canvas.js
+  relinkOrder()): mic-out point → dragged node FIRST; a section's OUT
+  end on B's IN jack → BEFORE B; a section's IN end on B's OUT jack →
+  AFTER B; out-anchor IN point → LAST. Compatibility is the strict
+  table (IN ends target mic-out + section OUTs; OUT ends target section
+  INs + the out anchor); self-links and incompatible targets revert.
+- ONE STRUCTURAL COMMIT: a completed relink reorders the DOM with
+  .insertBefore only (detach-then-insert walking the target order
+  right-to-left — SortableJS also pulled the element out; DOM ORDER =
+  CHAIN ORDER, PD-4) and then runs the EXISTING
+  commitStructuralChange() chokepoint exactly once: recompute →
+  rebuildGraph duck → renderCords re-route → autosave → human-edit
+  revision bump. A drop that computes the current order commits
+  NOTHING (zero rebuilds — SortableJS onSort parity for a no-move
+  drop).
+- REVERT (drop nowhere / incompatible / Escape / pointercancel /
+  no-op-order): model + DOM + cords + layout byte-unchanged, ZERO
+  buildGraph calls, ZERO saves. Mid-drag nothing mutates — the ghost
+  and the hot-target highlight are paint-only. Unplugging can never
+  remove audio; per-node bypass stays DECLINED (the edit path never
+  touches bypass at all).
+- AGENT QUEUE: dragActive (MC-4) goes true at DETACH and false at
+  gesture end; mcp-tools' existing waitForDragSettle polls
+  isDragActive() unchanged — no new window.ChainCanvas exports.
+
+### Files
+- `src/canvas.js` — jackPoints() derived from the SAME segments (zero
+  parallel geometry); renderCords() now also paints the jack elements
+  (class .cord-jack, data-jack-kind + data-node-id, fresh listeners per
+  rebuild); the FEW-4 block (armCordDrag / onCordPointerMove /
+  onCordPointerEnd / finishCordDrag / cancelCordDrag / relinkOrder /
+  applyDomOrder / resolveTargetJack / ghost + hot highlight) riding the
+  same document-level wiring as the grip drag (+ keydown Escape);
+  geometric drop hit-test with 24px slop (pointer→layer via the SVG's
+  bounding rect; identity in a stripped harness).
+- `styles/main.css` — .cord-jack (the layer's ONLY pointer-live
+  children; pointer-events:all on the ring disc, the paths stay
+  decorative), .cord-jack-hot, .cord-ghost — --pm-* tokens only (VIS-1
+  placeholder; the redesign pass owns beauty, OQ-9).
+- `tests/test-cord-editing-few4.js` — NEW, 48 checks. A: jack render +
+  FEW-3 contracts intact (layer last child, nothing cord-related in
+  #chain-list, .cord count still nodes+1); B: threshold no-op; C–F:
+  all four link-point types end-to-end, each with exactly ONE
+  buildGraph + ONE autosave (real call counts, engine started) and the
+  committed order visible in DOM + model + cords + the built graph
+  payload; G: drop-nowhere byte-stable revert, zero rebuilds; H:
+  incompatible / self-link / no-op-order drops revert with zero
+  rebuilds; I: Escape + pointercancel revert, non-Escape key ignored;
+  J: agent queue — flag true only post-detach, queued set_param applies
+  after the commit; K: empty board (2 panel jacks only, nothing
+  draggable) + panel anchors never drag.
+
+### Validation
+- `node tests/test-cord-editing-few4.js` isolated → PASS, 48/48, exit 0.
+- `node tests/run.js` → exit 0, **29/29 files, 2251 checks, all green**
+  (FEW-3 baseline 28/2203).
+
+### Honest seams (disclosed, not gaps)
+- A human cord edit carries the SAME order freedom the retired
+  SortableJS reorder had — a human CAN drag a section after the
+  terminal limiter. The limiter-terminal policy has always been an
+  add-verb/agent-side rule (addNodeType insert-before + mcp-tools
+  refusals), never a human-reorder constraint; parity kept, noted for
+  the overlord if a human-side clamp is ever wanted.
+- QA-1 (pointer utilities) was never dispatched; FEW-3/FEW-4 tests
+  each carry the committed vm-harness __fire convention instead —
+  plan.md's dependency note updated accordingly.
+- Hit-slop (24px) and jack ring (12px) are placeholder geometry riding
+  the FEW-3 constants; the redesign round (OQ-9) trues them up.
+- Verdict: T-FEW-4 PASS — tests/test-cord-editing-few4.js
+
+### FEW-4 verification (2026-08-30, ultron-overlord)
+
+- Own evidence, not the worker's: `node tests/run.js` exit 0 (29/29
+  files, 2251 checks); `node tests/run.js cord-editing` isolated → PASS
+  (48 checks, exit 0).
+- Source audit (src/canvas.js, own read): the relink path calls
+  commitStructuralChange() EXACTLY once (finishCordDrag, line 811) and
+  the cord block contains no second buildGraph/autosave path (the only
+  other rebuildGraph callers are the pre-existing remove/loadModel
+  paths); all four order-math cases in relinkOrder() match spec
+  (mic-out=FIRST at 625-627, out-in=LAST at 628-630, OUT-end-on-IN
+  pushes the dragged node BEFORE B at 633-635, IN-end-on-OUT pushes it
+  AFTER B at 637-639); drop-nowhere / Escape / pointercancel /
+  incompatible / self-link / no-op-order all return BEFORE
+  applyDomOrder — zero rebuilds by construction; CORD_DETACH_THRESHOLD
+  = 6px (line 291) checked pre-detach; dragActive set true only at
+  detach (line 755) and cleared at gesture end (796); jackPoints()
+  derives from the SAME cordSegments() renderCords paints (387-402) —
+  zero parallel geometry.
+- Adversarial probe (throwaway node script vs the vm harness, kept out
+  of the repo): (a) a relink computing the CURRENT order → 0 buildGraph
+  calls, 0 autosaves, order untouched; (b) two rapid back-to-back
+  relinks → exactly 2 commits + 2 autosaves, each gesture fully settled
+  before the next arms, final order + built payload correct, no ghost
+  leak; (c) during a live detached drag a DIRECT updateNodeParam
+  applies (the flag gates the agent queue, not the write path — zero
+  rebuilds), while a queued waitForDragSettle-style apply lands only
+  AFTER drag end with the drag's single commit intact.
+  mcp-tools' waitForDragSettle (line 2496) polls
+  ChainCanvas.isDragActive() — the queue seam is real, no gap.
+- The disclosed human-side order freedom (cord edit may place a section
+  after the terminal limiter) re-checked against history: the policy is
+  framed as an add-verb rule everywhere it appears (town-hall.md "order
+  appended before terminal limiter as today"; addNodeType's
+  insert-before; mcp-tools' limiter-required-terminal refusals) — the
+  retired SortableJS human reorder never carried the clamp. Disclosure
+  accurate; parity kept; not a failure.
+- Disposition: FEW-4 confirmed completed; QA-2 marked completed (folded
+  into FEW-4 verification) in plan.md — its named failure classes are
+  killed by the shipped suite (blocks B–K) plus the probe above, and
+  QA-1 (never dispatched) is subsumed by the committed vm-harness
+  __fire convention.

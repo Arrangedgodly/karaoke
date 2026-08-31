@@ -19,7 +19,20 @@ bypass cue. Executing the refinement checklist one entry at a time, pausing
 for user approval after each.
 
 ## Active Task
-**FEW-3 (jack points + cord layer) landed 2026-08-30 on the re-run — FEW-3 auto-approved (ultron-overlord) — evidence: tests/test-cord-layer-few3.js — budget 10:00 (re-sized), actual ~7:24 + verify.**
+**FEW-4 auto-approved (ultron-overlord) — evidence: tests/test-cord-editing-few4.js — budget 10:00, actual ~9:30 + verify/QA-2 fold.**
+Order-by-cord verified live: 29/29 files / 2251 checks exit 0 (isolated
+cord-editing run PASS, 48 checks); source-audited the single
+commitStructuralChange chokepoint (no second buildGraph/autosave path in
+the cord block), the four order-math cases, zero-rebuild reverts, the 6px
+threshold, post-detach-only dragActive, and jackPoints() derived from the
+same cordSegments. Adversarial probe (throwaway, /tmp — not committed):
+no-op relink = 0 builds; two back-to-back relinks = exactly 2 commits,
+correct final order; queued updateNodeParam applies only after drag end
+(mcp-tools waitForDragSettle polls the real flag — seam intact). QA-2
+folded: covered by the FEW-4 suite + probe, marked completed in plan.md.
+Prior: FEW-3 landed 2026-08-30 on the re-run — FEW-3 auto-approved
+(ultron-overlord) — evidence: tests/test-cord-layer-few3.js — budget
+10:00 (re-sized), actual ~7:24 + verify.
 Read-only SVG cord layer in #chain-canvas (last child, aria-hidden): one shared
 renderCords() over the positions map, re-route hooks in all five existing
 position/order write paths (move, TIDY, loadModel, keyboard add, remove ×);
@@ -712,3 +725,23 @@ merit failure; re-dispatched. Sheds to defend the cord feature:
 FEW-6 deferred (over budget) — per-card flow glyph + canvas-toggle
 retirement waits; FEW-7 re-scoped — drag-drop placement deferred, the
 verified auto-place stands as the committed add verb.
+
+### FEW-4 dispatched 2026-08-30 (production-overlord worker)
+**FEW-4: APPROVED 2026-08-30 (ultron-overlord verify — T-FEW-4 PASS; QA-2
+folded in, marked completed in plan.md.)** (cord editing
+semantics, the critical path: jack-point grabs arm an edit behind a 6px
+deliberate-drag threshold; ghost cord + compatible-target highlight
+follow the pointer; the four link-point types relink — mic-out=FIRST,
+OUT-end on B's IN=BEFORE B, IN-end on B's OUT=AFTER B, out-anchor
+IN=LAST — through exactly ONE commitStructuralChange (DOM
+.insertBefore reorder → recompute → rebuildGraph duck → autosave →
+revision bump); drop nowhere / incompatible / self-link / Escape /
+pointercancel / no-op-order all revert with model+DOM+cords
+byte-unchanged and ZERO rebuilds; dragActive true only post-detach so
+agent mutations queue (isDragActive discipline, no new exports); panel
+anchors are drop targets only; human cord edits keep SortableJS order
+freedom incl. past the limiter — policy stays add-verb/agent-side).
+Evidence: 48-check tests/test-cord-editing-few4.js; suite 29/29 files /
+2251 checks green.) Next unblocked: FEW-5, FEW-8
+(+FEW-7's re-scoped auto-place, A11Y-1's DOM/tab order test now has a
+cord-order surface to pin).

@@ -1694,6 +1694,34 @@ select.control {
   stroke-linecap: round;
 }
 
+/* FEW-4 — the JACK POINTS: the cord layer's ONLY pointer-live children.
+   The layer keeps pointer-events:none; each jack ring turns them back on
+   for itself alone (pointer-events:all makes the whole disc a grab
+   target, not just the painted stroke). A hot ring (a compatible drop
+   target under the dragged end) and the dashed ghost cord use the accent
+   ink. In-world placeholder styling in the panel's own vocabulary
+   (--pm-* tokens only); the redesign pass owns beauty (OQ-9). */
+.cord-jack {
+  pointer-events: all;
+  fill: transparent;
+  stroke: var(--pm-print-dim);
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.cord-jack-hot {
+  stroke: var(--pm-accent);
+  stroke-width: 3;
+}
+
+.cord-ghost {
+  fill: none;
+  stroke: var(--pm-accent);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  stroke-linecap: round;
+}
+
 /* Taught empty state — a printed EMPTY SOCKET on the face: recessed
    register ground, hairline dashed print boundary (a drop target earns a
    visible boundary, in the print register — no card island). */

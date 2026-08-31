@@ -94,7 +94,7 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
 - Acceptance: cords track order changes from any existing path
   (keyboard add, agent, remove); resize/reposition re-routes cords.
 
-**FEW-4 — Cord editing semantics** · medium, the critical path · pending (after FEW-3, QA-1)
+**FEW-4 — Cord editing semantics** · medium, the critical path · completed (after FEW-3; QA-1's pointer utilities subsumed — FEW-3/4 tests drive synthetic pointer events on the committed vm-harness convention, see production-log)
 - Drag from a jack point (deliberate-drag threshold before detach);
   ghost cord follows; drop on a compatible point = relink → compute the
   new linear order → ONE commitStructuralChange (duck/rebuild,
@@ -149,10 +149,18 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
   the vm-DOM harness, in the committed zero-dep convention.
 - Acceptance: utilities land + one demo test each; no harness drift.
 
-**QA-2 — Cord-editing suite** · medium · pending (beside FEW-4)
+**QA-2 — Cord-editing suite** · medium · completed (folded into FEW-4 verification)
 - Commit/revert/threshold/single-chokepoint/agent-queue/order-math
   coverage via QA-1 utilities.
 - Acceptance: kills the failure classes FEW-4 names.
+- Fold note (2026-08-30, ultron-overlord): tests/test-cord-editing-few4.js
+  blocks B–K already cover every failure class named here (threshold no-op,
+  four-type order-math with ONE buildGraph + ONE autosave each,
+  byte-stable revert incl. Escape/pointercancel/no-op-order, agent-queue
+  flag discipline), and the verifier's adversarial probe added no-op-order
+  zero-build, back-to-back relink sequencing, and mid-drag queue
+  discipline. QA-1 itself was never dispatched — the committed vm-harness
+  __fire convention is the utility layer this entry pointed at.
 
 **QA-3 — Board suite (resize/flow/layout/TIDY/auto-place)** · medium · pending (beside FEW-5..8)
 - Clamps incl. 11px rendered-text proof; migration; TIDY; auto-place;
