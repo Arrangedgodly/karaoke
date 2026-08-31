@@ -19,7 +19,11 @@ bypass cue. Executing the refinement checklist one entry at a time, pausing
 for user approval after each.
 
 ## Active Task
-**Cycle acceptance (user's final gate).** The impeccable phase is complete:
+**FEW-3 (jack points + cord layer) deferred 2026-08-30 — over budget.** Prior
+worker stopped mid-edit (6 suite checks RED); wrap-up reverted the partial
+canvas.js/CSS/test delta to the verified FEW-2 tree 2bd8466 — `node tests/run.js`
+exit 0, tree clean. FEW-3 re-queued in plan.md; FEW-4 remains gated on it.
+(Prior cycle context: impeccable phase complete, cycle acceptance was the gate.)
 round 1 (5 entries: occlusion, plain-language params, error recovery, 11px
 floor, bypass indication) + round 2 (3 entries: pinned OUT footer, keyboard
 node addition, inline preset dialogs) all landed and user-approved (E5, R2-2
@@ -698,3 +702,10 @@ tests/test-board-positioning-few2.js (sections A–G); suite 27/27 files /
 2177 checks green.) Next unblocked after approval: FEW-3, FEW-5, FEW-6,
 FEW-8 (FEW-7 additionally after FEW-3); QA-1 + DAT-1 still parallel.
 FEW-2 auto-approved (ultron-overlord) — evidence: tests/test-board-positioning-few2.js — budget 10:00, actual ~10:07 + wrap 2:38 + verify
+
+Clock adjustment (overlord, task-level, outcome-preserving): FEW-3
+re-sized small→medium (5→10 min) — the deferral was a mis-size, not a
+merit failure; re-dispatched. Sheds to defend the cord feature:
+FEW-6 deferred (over budget) — per-card flow glyph + canvas-toggle
+retirement waits; FEW-7 re-scoped — drag-drop placement deferred, the
+verified auto-place stands as the committed add verb.

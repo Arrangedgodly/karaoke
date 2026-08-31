@@ -252,3 +252,18 @@ Fresh cycle-4 file; cycle-3's log is archived under cycle-3/.
   untouched and FEW-7 owns drop-point placement, so FEW-2's acceptance
   (move/tidy/reload round-trip; order byte-stable; suite green) holds.
 - Verdict: T-FEW-2 PASS — tests/test-board-positioning-few2.js
+## FEW-3 — Jack points + cord layer — DEFERRED (over budget)
+
+### Wrap-up (production-overlord wrap-up worker, 2026-08-30)
+- Prior FEW-3 worker stopped at budget mid-edit: uncommitted delta in
+  src/canvas.js (+175), styles/main.css (+34), new
+  tests/test-cord-layer-few3.js. Suite RED: 6 checks failed across the new
+  cord test (A4 z-order, B6 positions-map coords, C2 reorder re-route,
+  F2 keyboard-add splice) plus side-effect failures in
+  test-preset-tools.js / test-read-tool-purity.js (extra SVG first child
+  in the section list).
+- Not one-small-fix-from-green -> surgical revert to the verified FEW-2
+  state: `git checkout -- src/canvas.js styles/main.css`; new test file
+  removed. Tree clean at 2bd8466.
+- Verified: `node tests/run.js` exit 0 (all files pass) after revert.
+- Verdict: T-FEW-3 deferred (over budget) — zero code retained; re-queue FEW-3.

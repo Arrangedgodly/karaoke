@@ -83,7 +83,11 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
 - Acceptance: move/tidy/reload round-trip; order provably untouched by
   moves (graph + model byte-stable); suite green.
 
-**FEW-3 — Jack points + cord layer (read-only cords)** · small · pending (after FEW-2)
+**FEW-3 — Jack points + cord layer (read-only cords)** · small · deferred (over budget)
+- Deferred 2026-08-30: the prior worker was stopped mid-edit; the partial cord layer
+  (svg-first-child z-order, positions-map-derived jack coords, reorder/keyboard-add
+  re-route) left 6 suite checks RED, so wrap-up reverted to the verified FEW-2 tree
+  (2bd8466, suite green) rather than ship a half-finished layer. Re-queue as-is.
 - SVG cord layer; jack points: MIC IN out, per-section in+out, OUT in;
   cords drawn FROM model order (visual only, this task); in-world
   placeholder styling (redesign pass later — OQ-9).
