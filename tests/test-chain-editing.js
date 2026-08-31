@@ -449,10 +449,22 @@ async function main() {
       return fs.readFileSync(path.join(ROOT, 'tests', name), 'utf8');
     })
     .join('\n');
+  var retiredFixtureAdapterPattern =
+    /(?:^|[,{]\s*)['"]?(?:loadModel|updateNodeParam)['"]?\s*(?::|\([^)]*\)\s*\{)/m;
   check(
-    !/\bloadModel:\s*function/.test(fixtureSources) &&
-      !/\bupdateNodeParam:\s*function/.test(fixtureSources),
+    !retiredFixtureAdapterPattern.test(fixtureSources),
     'H3: test fixtures contain no retired direct-mutation adapter implementations'
+  );
+  check(
+    [
+      '{ loadModel: function () {} }',
+      '{ loadModel: () => {} }',
+      '{ updateNodeParam: fixtureHelper }',
+      '{ updateNodeParam() {} }'
+    ].every(function (sample) {
+      return retiredFixtureAdapterPattern.test(sample);
+    }),
+    'H4: the fixture architecture gate rejects function, arrow, helper, and method syntaxes'
   );
 
   if (failures > 0) {

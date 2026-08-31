@@ -613,8 +613,8 @@ async function main() {
   // count, stub records, undo/toast counts.
   var base = {
     buildGraph: buildGraphCalls,
-    loadModel: records.loadModelCalls,
-    updateNodeParam: records.updateNodeParamCalls.length,
+    loadModelCalls: records.loadModelCalls,
+    updateNodeParamCalls: records.updateNodeParamCalls.length,
     persistence: records.persistenceCalls.length,
     markModified: markModifiedCalls,
     undoPushes: undoPushes,
@@ -695,7 +695,7 @@ async function main() {
       ', still ' + buildGraphCalls + ')'
   );
   check(
-    records.loadModelCalls === base.loadModel,
+    records.loadModelCalls === base.loadModelCalls,
     'A4: ZERO canvas model renders during set_param (no card rebuild)'
   );
   var gateDuringSetParam = gate.gain.__automation.slice(gateBase);
@@ -707,7 +707,7 @@ async function main() {
 
   // (d) The card/row update function was called instead of a re-render.
   check(
-    records.updateNodeParamCalls.length === base.updateNodeParam + 1 &&
+    records.updateNodeParamCalls.length === base.updateNodeParamCalls + 1 &&
       records.updateNodeParamCalls[records.updateNodeParamCalls.length - 1].nodeId === 'n5' &&
       records.updateNodeParamCalls[records.updateNodeParamCalls.length - 1].paramId === 'mix' &&
       records.updateNodeParamCalls[records.updateNodeParamCalls.length - 1].value === 40,
@@ -959,7 +959,7 @@ async function main() {
     var param = tc.getParam();
     var before = {
       buildGraph: buildGraphCalls,
-      loadModel: records.loadModelCalls,
+      loadModelCalls: records.loadModelCalls,
       gateAutomation: gate.gain.__automation.length,
       automation: param.__automation.length,
       instance: AG.getNodeInstance(tc.nodeId),
@@ -1005,7 +1005,7 @@ async function main() {
       tc.label + ': ZERO buildGraph calls — fast path taken'
     );
     check(
-      records.loadModelCalls === before.loadModel,
+      records.loadModelCalls === before.loadModelCalls,
       tc.label + ': ZERO ChainCanvas.loadModel calls — cards were not rebuilt'
     );
     check(
@@ -1051,8 +1051,8 @@ async function main() {
   var refuseBase = {
     automation: gainParam.__automation.length,
     buildGraph: buildGraphCalls,
-    loadModel: records.loadModelCalls,
-    updateNodeParam: records.updateNodeParamCalls.length,
+    loadModelCalls: records.loadModelCalls,
+    updateNodeParamCalls: records.updateNodeParamCalls.length,
     persistence: records.persistenceCalls.length,
     markModified: markModifiedCalls,
     undoPushes: undoPushes,
@@ -1077,8 +1077,8 @@ async function main() {
   check(
     gainParam.__automation.length === refuseBase.automation &&
       buildGraphCalls === refuseBase.buildGraph &&
-      records.loadModelCalls === refuseBase.loadModel &&
-      records.updateNodeParamCalls.length === refuseBase.updateNodeParam &&
+      records.loadModelCalls === refuseBase.loadModelCalls &&
+      records.updateNodeParamCalls.length === refuseBase.updateNodeParamCalls &&
       records.persistenceCalls.length === refuseBase.persistence &&
       markModifiedCalls === refuseBase.markModified &&
       undoPushes === refuseBase.undoPushes &&
