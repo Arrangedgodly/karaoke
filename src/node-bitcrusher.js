@@ -26,7 +26,6 @@
 
   window.ToneAdapter.register('bitcrusher', {
     label: 'Bitcrusher',
-    experimental: true,
     paramSpec: [
       {
         id: 'bits',

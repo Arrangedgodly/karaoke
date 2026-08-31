@@ -608,9 +608,12 @@ async function main() {
       soundDesignResult.vocabulary.ghostly,
     'D1: sound_design focus maps deeper, light reverb, and ghostly goals to host-authored guidance'
   );
+  // 1500 was PR #18's original discipline off Chrome's PRELIMINARY guidance
+  // (not an enforced limit); raised to 2000 on 2026-08-31 by owner direction
+  // to fund full vocabulary for the four Tone types (measured ~1.7K).
   check(
-    JSON.stringify(soundDesignResult).length <= 1500,
-    'D1: sound_design guidance stays within Chrome\'s preliminary 1,500-character output guidance (' +
+    JSON.stringify(soundDesignResult).length <= 2000,
+    'D1: sound_design guidance stays within the 2,000-character output ceiling (' +
       JSON.stringify(soundDesignResult).length + ' characters)'
   );
   soundDesignResult.vocabulary.deeper[0] = 'mutated by caller';

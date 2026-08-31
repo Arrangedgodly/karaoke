@@ -969,3 +969,26 @@ or worse:
   FrequencyShifter, Stereo...) is now importable at ~90 lines each.
 Reversible: any future migration is one small adapter registration +
 test rework per effect, gated the same way.
+
+### Tone types promoted + vocabulary completed (2026-08-31, user direction)
+User gate: (1) move pitchshift/tremolo/bitcrusher/phaser out of
+experimental; (2) give every one of them plain-language vocabulary like
+the rest. Both done in one pass.
+- PROMOTION: experimental:true removed at each registration (the single
+  source of truth — chips/cards/capabilities read it). Autotune keeps
+  the cycle-3 badge. Inherent facts stay documented in the file headers
+  (pitchshift's ~windowSize latency note).
+- VOCABULARY: transposed (pitchshift, now with the sign advisory
+  "negative lowers, positive raises; keep |shift| <= 7 st"), spacey
+  (phaser), warble (tremolo), lofi (bitcrusher). Every step references
+  real param ids inside spec ranges (A18's discipline holds
+  automatically).
+- CEILING: PR #18's 1500-char sound-design ceiling (off Chrome's
+  PRELIMINARY output guidance — not an enforced limit) moved to 2000 by
+  owner direction to fund the full set; measured payload 1698. Both
+  ceiling assertions (tool-registration D1, cycle3 A20) updated with
+  the reasoning inline.
+Suite 33/33 files / 2428 checks green. Real-browser spot-check (per the
+QA-5 lesson, badges are a render surface): four chips badge-free,
+autotune chip keeps EXP, guide serves transposed/spacey/warble/lofi at
+1698 chars, zero console errors.

@@ -18,9 +18,9 @@
 //     the voice's character (the "chipmunk"/"deep" trade). ±12 st is the
 //     full musical range; the guide keeps suggestions inside ±7.
 //   - The engine adds latency (~windowSize) even at pitch 0 with Mix
-//     100%. That is inherent to the effect class, not a defect; it is why
-//     this type is EXPERIMENTAL until the ACCEPTANCE.md listening pass
-//     signs off on it mid-chain.
+//     100%. That is inherent to the effect class, not a defect — worth
+//     remembering when stacking it with autotune (which declares its own
+//     20 ms). Promoted out of experimental by owner sign-off 2026-08-31.
 //
 // Params (the public contract — mcp-tools.js validates against these,
 // presets persist them, the sound-design guide references them):
@@ -34,7 +34,6 @@
 
   window.ToneAdapter.register('pitchshift', {
     label: 'Pitch Shift',
-    experimental: true,
     paramSpec: [
       {
         id: 'pitch',

@@ -1174,12 +1174,20 @@
       thick: ['chorus depthMs 2..4 ms', 'chorus rateHz 0.8..1.8 Hz', 'chorus mix 15..35%'],
       gritty: ['distortion drive 0.15..0.4', 'distortion tone 0.4..0.7', 'distortion output -6..-3 dB'],
       robotic: ['autotune retune 40..0 ms', 'autotune mix 70..100%', 'autotune scale Chromatic', 'EXPERIMENTAL: verify by ear before a show.'],
-      // cycle 4 additions (Tone-backed types): the two concepts the 1500-char
-      // PR #18 ceiling has room for. pitchshift is the app's ONLY actual-pitch
-      // control (see `deeper`'s honesty note); both types' EXPERIMENTAL status
-      // rides the default capabilities readout's experimental map.
-      transposed: ['pitchshift pitch -4..+4 st'],
-      spacey: ['phaser rateHz 0.3..1 Hz', 'phaser depth 40..70%']
+      // cycle 4 additions (Tone-backed types), completed 2026-08-31 per
+      // owner direction: every Tone type now has vocabulary. The PR #18
+      // 1500-char ceiling moved to 2000 the same day to fund the full set
+      // (Chrome's figure was preliminary guidance, not an enforced limit;
+      // measured payload ~1.7K). pitchshift is the app's ONLY actual-pitch
+      // control (see `deeper`'s honesty note); the types left experimental
+      // status the same day, so no per-entry EXPERIMENTAL notes ride here.
+      transposed: [
+        'pitchshift pitch -4..+4 st',
+        'Negative lowers the pitch, positive raises it; keep |shift| <= 7 st for intelligibility.'
+      ],
+      spacey: ['phaser rateHz 0.3..1 Hz', 'phaser depth 40..70%'],
+      warble: ['tremolo rateHz 4..7 Hz', 'tremolo depth 30..60%'],
+      lofi: ['bitcrusher bits 3..5', 'bitcrusher mix 20..45%']
     },
     boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
   };

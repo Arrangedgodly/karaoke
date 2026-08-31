@@ -325,7 +325,9 @@ async function main() {
   TYPES.forEach(function (type) {
     check(NT.getAllTypes().indexOf(type) !== -1, 'A1: ' + type + ' listed in NodeTypes');
     check(NT.getLabel(type) === LABELS[type], 'A1: ' + type + ' label is ' + LABELS[type]);
-    check(NT.isExperimental(type), 'A1: ' + type + ' is experimental (badge)');
+    // Promoted out of experimental by owner sign-off 2026-08-31 (arrived
+    // experimental with the cycle-4 round; autotune stays badged).
+    check(!NT.isExperimental(type), 'A1: ' + type + ' is NOT experimental (promoted)');
     var spec = NT.getParamSpec(type);
     check(spec.length > 0, 'A2: ' + type + ' has a non-empty paramSpec');
     check(
@@ -450,8 +452,8 @@ async function main() {
     'D2: get_capabilities reports pitchshift pitch range [-12, 12]'
   );
   check(
-    caps && caps.experimental && !!caps.experimental.pitchshift,
-    'D2: get_capabilities flags pitchshift experimental'
+    caps && Object.keys(caps.experimental || {}).length === 0,
+    'D2: no Tone type carries the experimental flag after promotion (autotune not loaded here)'
   );
 
   // Seed a chain with the terminal limiter the chain rules require, plus
@@ -502,25 +504,53 @@ async function main() {
   check(liveComp.tone.pitch === 12, 'D5: live Tone node received the clamped 12');
 
   // --------------------------------------------------------------------
-  console.log('E. sound-design guide: additive vocabulary for the Tone types');
+  console.log('E. sound-design guide: complete vocabulary for ALL four Tone types');
   // --------------------------------------------------------------------
 
   var guide = await getTool(sandbox, 'get_capabilities').execute({ focus: 'sound_design' });
   check(guide && guide.focus === 'sound_design', 'E1: guide served for focus sound_design');
   check(
     guide && guide.vocabulary && Array.isArray(guide.vocabulary.transposed) &&
-    guide.vocabulary.transposed.indexOf('pitchshift pitch -4..+4 st') !== -1,
-    'E1: transposed entry maps to pitchshift pitch inside the spec range'
+    guide.vocabulary.transposed.indexOf('pitchshift pitch -4..+4 st') !== -1 &&
+    guide.vocabulary.transposed.some(function (s) { return /^Negative lowers/.test(s); }),
+    'E1: transposed maps to pitchshift pitch + carries the sign advisory'
   );
   check(
     guide && guide.vocabulary && Array.isArray(guide.vocabulary.spacey) &&
     guide.vocabulary.spacey.indexOf('phaser rateHz 0.3..1 Hz') !== -1 &&
     guide.vocabulary.spacey.indexOf('phaser depth 40..70%') !== -1,
-    'E1: spacey entry maps to phaser rate/depth inside the spec ranges'
+    'E1: spacey maps to phaser rate/depth inside the spec ranges'
   );
   check(
-    JSON.stringify(guide).length <= 1500,
-    'E2: guide payload still inside the PR #18 1500-char ceiling (' + JSON.stringify(guide).length + ')'
+    guide && guide.vocabulary && Array.isArray(guide.vocabulary.warble) &&
+    guide.vocabulary.warble.indexOf('tremolo rateHz 4..7 Hz') !== -1 &&
+    guide.vocabulary.warble.indexOf('tremolo depth 30..60%') !== -1,
+    'E1: warble maps to tremolo rate/depth inside the spec ranges'
+  );
+  check(
+    guide && guide.vocabulary && Array.isArray(guide.vocabulary.lofi) &&
+    guide.vocabulary.lofi.indexOf('bitcrusher bits 3..5') !== -1 &&
+    guide.vocabulary.lofi.indexOf('bitcrusher mix 20..45%') !== -1,
+    'E1: lofi maps to bitcrusher bits/mix inside the spec ranges'
+  );
+  // The coverage property the owner asked for: every one of the four
+  // Tone types is reachable by at least one plain-language intent.
+  var coveredTypes = [];
+  Object.keys(guide.vocabulary).forEach(function (intent) {
+    guide.vocabulary[intent].forEach(function (step) {
+      var m = step.match(/^([a-z]+) /);
+      if (m && TYPES.indexOf(m[1]) !== -1 && coveredTypes.indexOf(m[1]) === -1) {
+        coveredTypes.push(m[1]);
+      }
+    });
+  });
+  check(
+    TYPES.every(function (t) { return coveredTypes.indexOf(t) !== -1; }),
+    'E2: all four Tone types have at least one vocabulary entry (' + coveredTypes.join(', ') + ')'
+  );
+  check(
+    JSON.stringify(guide).length <= 2000,
+    'E3: guide payload inside the 2026-08-31 ceiling of 2000 (' + JSON.stringify(guide).length + ')'
   );
 
   // --------------------------------------------------------------------

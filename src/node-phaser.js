@@ -31,7 +31,6 @@
 
   window.ToneAdapter.register('phaser', {
     label: 'Phaser',
-    experimental: true,
     paramSpec: [
       {
         id: 'rateHz',

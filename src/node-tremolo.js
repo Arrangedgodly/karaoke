@@ -26,7 +26,6 @@
 
   window.ToneAdapter.register('tremolo', {
     label: 'Tremolo',
-    experimental: true,
     paramSpec: [
       {
         id: 'rateHz',

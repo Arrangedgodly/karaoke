@@ -518,15 +518,13 @@ async function main() {
   check(caps.experimental && typeof caps.experimental.autotune === 'string' &&
     /EXPERIMENTAL/i.test(caps.experimental.autotune),
     'A3: autotune carries the experimental disclosure note');
-  // cycle 3: autotune alone. cycle 4: the four Tone-backed types join it
-  // (same badge + disclosure mechanism; gate and the other natives never).
-  var badged = Object.keys(caps.experimental || {});
-  check(badged.length === 5 &&
-    ['autotune', 'pitchshift', 'tremolo', 'bitcrusher', 'phaser'].every(function (t) {
-      return badged.indexOf(t) !== -1 && typeof caps.experimental[t] === 'string';
-    }) &&
-    caps.experimental.gate === undefined,
-    'A4: exactly autotune + the four Tone types are badged');
+  // cycle 4: the four Tone-backed types were experimental on arrival,
+  // then promoted by owner sign-off 2026-08-31 — autotune is once again
+  // the only badged type.
+  check(Object.keys(caps.experimental || {}).length === 1 &&
+    caps.experimental.gate === undefined &&
+    caps.experimental.pitchshift === undefined,
+    'A4: autotune is the ONLY badged type');
   check(sandbox.NodeTypes.isExperimental('autotune') === true &&
     sandbox.NodeTypes.isExperimental('gate') === false,
     'A5: the registry itself is the badge source (NodeTypes.isExperimental)');
@@ -575,9 +573,9 @@ async function main() {
       }
     });
   });
-  // 24 through cycle 3; +3 from the cycle-4 guide additions (transposed 1,
-  // spacey 2 — src/mcp-tools.js SOUND_DESIGN_GUIDE).
-  check(guideSteps.length === 27 && guideSteps.every(function (entry) {
+  // 24 through cycle 3; +3 (transposed/spacey) then +4 (warble/lofi) from
+  // the cycle-4 vocabulary completion — src/mcp-tools.js SOUND_DESIGN_GUIDE.
+  check(guideSteps.length === 31 && guideSteps.every(function (entry) {
     return byType[entry.type] && byType[entry.type][entry.param];
   }), 'A17: every actionable guide step names a registered node parameter');
   check(guideSteps.every(function (entry) {
@@ -596,7 +594,10 @@ async function main() {
   check(soundGuide.vocabulary.robotic.some(function (step) {
     return /EXPERIMENTAL/i.test(step) && /verify by ear/i.test(step);
   }), 'A19: robotic guidance carries the autotune experimental disclosure');
-  check(JSON.stringify(soundGuide).length <= 1500,
+  // PR #18's original discipline was 1500 (Chrome's PRELIMINARY guidance,
+  // not an enforced limit). Raised to 2000 on 2026-08-31 by owner direction
+  // to fund full vocabulary for the four Tone types (measured ~1.7K).
+  check(JSON.stringify(soundGuide).length <= 2000,
     'A20: sound-design payload held (' + JSON.stringify(soundGuide).length + ' chars)');
 
   // ====================================================================
