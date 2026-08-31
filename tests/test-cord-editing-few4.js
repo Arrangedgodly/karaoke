@@ -155,19 +155,30 @@ var layoutEl = new FakeElement('div');
 var canvasPanelEl = new FakeElement('div');
 canvasPanelEl.className = 'canvas-panel';
 var canvasFaceEl = new FakeElement('div'); // #chain-canvas — the cord layer's host
+var boardFrameEl = new FakeElement('div');
+boardFrameEl.className = 'board-frame';
+var ioRailInEl = new FakeElement('aside');
+ioRailInEl.className = 'io-rail io-rail-in';
+var ioRailOutEl = new FakeElement('aside');
+ioRailOutEl.className = 'io-rail io-rail-out';
 var micAnchorEl = new FakeElement('div');
 micAnchorEl.className = 'anchor';
-var arrowElA = new FakeElement('span');
-arrowElA.className = 'arrow';
-var arrowElB = new FakeElement('span');
-arrowElB.className = 'arrow';
-canvasFaceEl.appendChild(micAnchorEl);
-canvasFaceEl.appendChild(arrowElA);
+var outAnchorEl = new FakeElement('div');
+outAnchorEl.className = 'anchor';
+// Guided Patchbay round: the rails are FLEX SIBLINGS of #chain-canvas
+// inside .board-frame, not children inside the scrolling face.
+ioRailInEl.appendChild(micAnchorEl);
+ioRailOutEl.appendChild(outAnchorEl);
+boardFrameEl.appendChild(ioRailInEl);
+boardFrameEl.appendChild(canvasFaceEl);
+boardFrameEl.appendChild(ioRailOutEl);
+canvasPanelEl.appendChild(boardFrameEl);
 canvasFaceEl.appendChild(chainListEl);
 canvasFaceEl.appendChild(emptyHintEl);
-canvasFaceEl.appendChild(arrowElB);
-// No offsetLeft/offsetTop on chainListEl — board origin is {0, 0}, so
-// the pins below are the positions map verbatim (the FEW-3 contract).
+// No offsetLeft/offsetTop on chainListEl and no getBoundingClientRect
+// anywhere in this fake DOM — board origin is {0, 0} and both rail jacks
+// take railJackPoint()'s layout-less fallback, so the pins below are
+// that fallback's constants (the FEW-3/Guided-Patchbay contract).
 
 Object.defineProperty(chainListEl, 'innerHTML', {
   set: function (v) {
@@ -335,16 +346,16 @@ function model3() {
   ];
 }
 
-// Board-space jack constants (src/canvas.js, 2026-08-31 cord round): mic
-// drops at the content top under the fixed header unit (16, 0); the
-// chain's OUT exits at the board's bottom-right corner — rightmost seat
-// (288) + card width (160) - one grid unit in = 432, extent foot - one
-// grid unit = 160. A section's jacks sit ON its border, DIRECTLY ACROSS
-// each other over the placeholder card box (160w x 48h): IN at the
-// middle of its LEFT border, OUT at the middle of its RIGHT. Row seats:
-// n1 x=0, n2 x=144, n3 x=288 (all y=16).
-var MIC_OUT = { x: 16, y: 0 };
-var OUT_IN = { x: 432, y: 160 };
+// Board-space jack constants (src/canvas.js, Guided Patchbay rail round):
+// both panel jacks now read railJackPoint()'s layout-less fallback — a
+// stable, distinct constant per side, vertically centered on
+// CARD_H_FALLBACK (48) rather than the pre-rail MIC-only content-top /
+// board-extent-corner geometry this replaces. A section's jacks sit ON
+// its border, DIRECTLY ACROSS each other over the placeholder card box
+// (160w x 48h): IN at the middle of its LEFT border, OUT at the middle
+// of its RIGHT. Row seats: n1 x=0, n2 x=144, n3 x=288 (all y=16).
+var MIC_OUT = { x: 16, y: 24 };
+var OUT_IN = { x: 176, y: 24 };
 var CARD_W = 160;
 var CARD_H = 48;
 var SEAT_X = { n1: 0, n2: 144, n3: 288 };
@@ -487,7 +498,7 @@ check(buildCount === baseBuild + 1 && saves.length === baseSaves + 1,
   'E3: one rebuild, one autosave');
 
 // ----------------------------------------------------------------------
-console.log('F. relink 4/4 — the OUT corner-exit point links the dragged node LAST');
+console.log('F. relink 4/4 — the Voice Out rail\'s jack links the dragged node LAST');
 CC.loadModel(model3());
 baseBuild = buildCount;
 baseSaves = saves.length;
@@ -495,9 +506,9 @@ grabJack('section-out', 'n1');
 move({ x: 120, y: 120 }); // detach
 move(OUT_IN);
 check(jackAt('out-in').classList.contains('cord-jack-hot'),
-  'F1: the board-corner OUT exit point highlights for an OUT end');
+  'F1: the Voice Out rail\'s jack highlights for an OUT end');
 drop(OUT_IN);
-check(domOrder().join('|') === 'n2|n3|n1', 'F2: out-in links n1 as the LAST node (the corner exit is the chain\'s end port)');
+check(domOrder().join('|') === 'n2|n3|n1', 'F2: out-in links n1 as the LAST node (the fixed rail jack is the chain\'s end port)');
 check(buildCount === baseBuild + 1 && saves.length === baseSaves + 1,
   'F3: one rebuild, one autosave');
 
@@ -600,14 +611,12 @@ check(domOrder().join('|') === 'n2|n1|n3', 'J5: the committed order survived the
 // ----------------------------------------------------------------------
 console.log('K. final DOM contracts + the empty board');
 check(
-  // 2026-08-31: the MIC IN print row MOVED onto the display-register
-  // strip (its fixed header home), so the face's first child is the
-  // leading arrow — wait, the leading arrow is hidden by CSS but still
-  // first in DOM order.
-  canvasFaceEl.children[0] !== micAnchorEl &&
-    micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register') &&
+  // Guided Patchbay round: both panel anchors live on their fixed rails,
+  // flex siblings of #chain-canvas — neither is a child of the face.
+  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('io-rail-in') &&
+    outAnchorEl.parentNode && outAnchorEl.parentNode.classList.contains('io-rail-out') &&
     canvasFaceEl.children[canvasFaceEl.children.length - 1] === cordLayer(),
-  'K1: MIC IN lives on the register strip (not in the face); the layer is still the face\'s last child'
+  'K1: MIC IN / OUT live on their fixed rails (not in the face); the layer is still the face\'s last child'
 );
 CC.loadModel([]);
 check(cordPaths().length === 1 && jackEls().length === 2,

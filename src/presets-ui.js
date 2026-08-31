@@ -81,6 +81,10 @@
   var presetSelectEl = document.getElementById('preset-select');
   var loadBtn = document.getElementById('load-preset-btn');
   var deleteBtn = document.getElementById('delete-preset-btn');
+  // Guided Patchbay round: the Presets tab's curated browse cards (JS-built
+  // below by renderPresetCards()). Optional — a harness/markup without it
+  // simply never renders cards; the dropdown+Load path is unaffected.
+  var presetCardsEl = document.getElementById('preset-cards');
 
   if (!presetsPanelEl || !currentPresetNameEl || !presetSelectEl || !loadBtn || !deleteBtn) {
     // Presets panel markup isn't present (e.g. not yet built, or
@@ -404,6 +408,121 @@
   }
 
   /**
+   * PS-4/Guided Patchbay: the ONE factory-load path — resolves a factory
+   * preset by name and applies it through ChainCanvas.loadModel exactly
+   * as before, with the same clean display state (name shown, unsaved
+   * dot hidden, human-edit revision bumped). Shared by BOTH the
+   * dropdown+Load button's factory branch and the Presets tab's curated
+   * cards, so there is exactly one factory-load code path, never two
+   * that could drift.
+   *
+   * @param {string} name - the preset's plain (unprefixed) name.
+   * @returns {boolean} whether the load applied.
+   */
+  function loadFactoryPreset(name) {
+    var factoryPreset = findFactoryPreset(name);
+    if (!factoryPreset) {
+      // Defensive — the dropdown/cards only ever list names the library
+      // itself reported, so this needs the library to have changed
+      // mid-session. Same quiet-note refusal as every other guard here.
+      showPresetNote('Could not load that preset — it may have been removed.');
+      return false;
+    }
+    // freshSeats (#16 stale-seats finding): a preset load REPLACES the
+    // board — matching node ids do not inherit their current seats;
+    // every section takes the first-free stack (the documented tidy
+    // layout).
+    window.ChainCanvas.loadModel(factoryPreset.nodes, null, { freshSeats: true });
+    setCurrentPreset(factoryPreset.name);
+    clearModified();
+    noteHumanEditGuarded();
+    return true;
+  }
+
+  /**
+   * Guided Patchbay: a preset's family-tag row ("GATE · EQ · COMP · REV ·
+   * LIM"), derived at render time from its own node types via
+   * ChainCanvas.familyInitials — the same 3-letter-code function the
+   * palette chips and node-card rails use, so this can never hand-
+   * maintain a second copy that drifts from the real chain.
+   *
+   * @param {Array<{type: string}>} nodes
+   * @returns {string}
+   */
+  function nodeFamilyTags(nodes) {
+    return nodes.map(function (entry) {
+      try {
+        if (window.ChainCanvas && typeof window.ChainCanvas.familyInitials === 'function') {
+          return window.ChainCanvas.familyInitials(entry.type);
+        }
+      } catch (err) {
+        /* stripped harness — the type key's own initials are the fallback */
+      }
+      return String(entry.type || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+    }).join(' · ');
+  }
+
+  /**
+   * Guided Patchbay: the Presets tab's curated browse cards — one per
+   * factory preset, name + description (FactoryPresets.describeAll(),
+   * additive and separate from list()'s policy-relevant shape) + a
+   * family-tag row, clicking through loadFactoryPreset(). Rendered ONCE
+   * at script-init time (the factory library is static content, same
+   * render-once contract renderPalette() has for the registry). Guarded:
+   * missing #preset-cards markup, a missing/damaged FactoryPresets, or a
+   * missing describeAll() all degrade to a silently empty (or
+   * description-less) card set — never a thrown error.
+   */
+  function renderPresetCards() {
+    if (!presetCardsEl) {
+      return;
+    }
+    presetCardsEl.innerHTML = '';
+    var descriptions = {};
+    try {
+      if (window.FactoryPresets && typeof window.FactoryPresets.describeAll === 'function') {
+        window.FactoryPresets.describeAll().forEach(function (entry) {
+          if (entry && typeof entry.name === 'string') {
+            descriptions[entry.name] = entry.description || '';
+          }
+        });
+      }
+    } catch (err) {
+      /* degrade to description-less cards below */
+    }
+
+    factoryPresets().forEach(function (preset) {
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'preset-card';
+      card.setAttribute('data-preset-name', preset.name);
+      card.setAttribute('aria-label', 'Load ' + preset.name + ' preset');
+
+      var title = document.createElement('strong');
+      title.textContent = preset.name;
+      card.appendChild(title);
+
+      var description = descriptions[preset.name];
+      if (description) {
+        var small = document.createElement('small');
+        small.textContent = description;
+        card.appendChild(small);
+      }
+
+      var tags = document.createElement('span');
+      tags.className = 'preset-card-tags';
+      tags.setAttribute('aria-hidden', 'true');
+      tags.textContent = nodeFamilyTags(preset.nodes);
+      card.appendChild(tags);
+
+      card.addEventListener('click', function () {
+        loadFactoryPreset(preset.name);
+      });
+      presetCardsEl.appendChild(card);
+    });
+  }
+
+  /**
    * Show the quiet inline note under the preset controls (created
    * lazily on first use, auto-hidden again after 4 s — a note, not a
    * modal). PS-4 introduced it for factory-refusal notes; issue #8
@@ -588,28 +707,13 @@
 
     // PS-4: factory selections resolve from window.FactoryPresets — the
     // user store is never consulted — then apply through the SAME model
-    // path a user-preset Load uses (ChainCanvas.loadModel, which also
-    // re-baselines the autosave internally, see src/canvas.js), with the
-    // same clean display state (name shown, unsaved dot hidden).
+    // path a user-preset Load uses (loadFactoryPreset -> ChainCanvas
+    // .loadModel, which also re-baselines the autosave internally, see
+    // src/canvas.js), with the same clean display state (name shown,
+    // unsaved dot hidden). This is also the Presets tab's card click
+    // path — one factory-load code path, not two.
     if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
-      var factoryPreset = findFactoryPreset(value.slice(FACTORY_VALUE_PREFIX.length));
-      if (!factoryPreset) {
-        // Defensive — the dropdown only lists names the library itself
-        // reported, so this needs the library to have changed mid-session.
-        // Refinement entry 5 (P3-5): routed through the quiet .preset-note
-        // line like every other refusal in this panel — this and the user
-        // preset guard below were the surface's last two browser dialogs.
-        showPresetNote('Could not load that preset — it may have been removed.');
-        return;
-      }
-      // freshSeats (#16 stale-seats finding): a preset load REPLACES the
-      // board — matching node ids do not inherit their current seats;
-      // every section takes the first-free stack (the documented tidy
-      // layout).
-      window.ChainCanvas.loadModel(factoryPreset.nodes, null, { freshSeats: true });
-      setCurrentPreset(factoryPreset.name);
-      clearModified();
-      noteHumanEditGuarded();
+      loadFactoryPreset(value.slice(FACTORY_VALUE_PREFIX.length));
       return;
     }
 
@@ -721,6 +825,10 @@
   // pure read since issue #11 (no fresh-profile seeding; the user
   // "Yours" group fills with the first explicit Save As).
   refreshPresetSelect();
+  // Guided Patchbay: the curated browse cards render once too — the
+  // factory library is static content, same render-once contract as the
+  // dropdown's Factory optgroup above.
+  renderPresetCards();
 
   // VIS-3: the full preset-display write path is exported, not just
   // markModified. src/mcp-tools.js (save_preset + the MC-5 undo restores)

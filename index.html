@@ -178,26 +178,30 @@
 
   <!--
     ================================================================
-    UI-3 — palette + chain canvas, restructured by redesign item 1 into
-    the SINGLE FACE CHASSIS (the direction contract comment above is the
-    binding world; src/canvas.js + src/param-controls.js + the Pattern
-    Machine block of styles/main.css build it).
+    GUIDED PATCHBAY (2026-08-31 board round, replacing UI-3's three-
+    column palette/canvas/presets grid): the free board — movable
+    knob-cards, drag/resize, cable-based reordering — is UNCHANGED (still
+    src/canvas.js + src/param-controls.js + the Pattern Machine block of
+    styles/main.css). What changed is everything around it:
 
-    The .canvas markup below is the FLOW SEQUENCE (unchanged DOM): MIC IN
-    arrow → #chain-list → #empty-hint → arrow → OUT anchor (the MIC IN
-    anchor starts here in markup but is RELOCATED onto the display-register
-    strip at runtime — its fixed header home, 2026-08-31). The
-    chrome around it is JS-built panel furniture: the DISPLAY REGISTER
-    (src/canvas.js, panel's first child — the accent-marked top-edge
-    line) and the pinned OUT footer mirror + VU corner (src/meters.js,
-    the base plate). Each chain entry is a panel-print SECTION built by
-    src/canvas.js (family print rail + encoder field, split by machined
-    grooves — see that file's createNodeCard block); its controls (knob
-    clusters, pad selectors, trim sliders) are src/param-controls.js.
-
-    VIS-5/FEW-3 contract preserved verbatim: src/meters.js finds the two
-    .anchor elements by their EXACT text ("MIC IN" / "OUT") and mounts
-    the meter units inside them — the anchors below must stay text-only.
+    - .board-frame flanks the scrolling .canvas with two fixed rails,
+      each hosting a real .anchor ("MIC IN" / "OUT" — VIS-5/FEW-3's exact
+      text-match contract, unchanged) so src/meters.js mounts a live
+      meter in each rail with zero code changes there. The OUT anchor is
+      RESTORED here (it was retired to a footer-mirror fallback in the
+      2026-08-31 cord round; that fallback self-skips once a real anchor
+      exists). src/canvas.js's micOutPoint()/outInPoint() read these
+      rails' own rendered position for the cord's start/end — see that
+      file.
+    - .signal-order is a new sibling panel, JS-built by src/canvas.js
+      (called alongside renderCords()), showing the full
+      "mic -> ... -> Limiter -> Safe out" order in one line.
+    - .build replaces BOTH .panel.palette and .panel.presets with one
+      two-tab panel: Effects (#palette-list, renderPalette() output
+      verbatim, unchanged add-node wiring) and Presets (curated factory
+      cards + the real Save As/Load/Delete controls, relocated here with
+      every id unchanged so src/mcp-tools.js's direct getElementById
+      reads keep working).
 
     The whole region starts visually gated (`engine-not-started` class —
     the hatch + recede grammar in main.css) until AudioEngine.start()
@@ -212,68 +216,86 @@
        class .voice-deck added alongside .layout; the engine-not-started
        gate class and id are the wiring contracts, unchanged. -->
   <div class="layout voice-deck engine-not-started" id="chain-layout">
-    <div class="panel palette">
-      <h2>Palette</h2>
-      <div class="palette-list" id="palette-list"></div>
-    </div>
-
     <div class="panel canvas-panel">
-      <div class="canvas" id="chain-canvas">
-        <div class="anchor">MIC IN</div>
-        <span class="arrow" aria-hidden="true">→</span>
-        <div class="chain-list" id="chain-list"></div>
-        <!--
-          Refinement entry 2: the empty-hint is STATE-AWARE. This static
-          default is the PRE-START copy — the palette is pointer-locked
-          until Start succeeds, so teaching the add verb here would be an
-          invitation the gated surface cannot honor (critique P2).
-          src/canvas.js's onEngineStarted() flips this element to the
-          working add verbs ("Click an effect to add it to the chain",
-          verbatim — palette drag is retired; click and keyboard are the
-          add paths) at the exact transition where adding becomes
-          possible; styles/main.css retires the dashed drop-target
-          affordance while the engine-not-started gate holds.
-        -->
-        <div class="empty-hint" id="empty-hint">Press Start to power on</div>
-        <!-- 2026-08-31 cord round: the in-flow OUT anchor is RETIRED — the
-             chain's cable exits at the board's bottom-right corner toward
-             the fixed base-plate OUT unit (the footer's meter port), the
-             mirror of MIC IN's fixed header unit. -->
+      <div class="board-frame">
+        <aside class="io-rail io-rail-in">
+          <h3 class="io-rail-label">Voice In</h3>
+          <div class="anchor">MIC IN</div>
+        </aside>
+
+        <div class="canvas" id="chain-canvas">
+          <div class="chain-list" id="chain-list"></div>
+          <!--
+            Refinement entry 2: the empty-hint is STATE-AWARE. This static
+            default is the PRE-START copy — the palette is pointer-locked
+            until Start succeeds, so teaching the add verb here would be an
+            invitation the gated surface cannot honor (critique P2).
+            src/canvas.js's onEngineStarted() flips this element to the
+            working add verbs ("Click an effect to add it to the chain",
+            verbatim — palette drag is retired; click and keyboard are the
+            add paths) at the exact transition where adding becomes
+            possible; styles/main.css retires the dashed drop-target
+            affordance while the engine-not-started gate holds.
+          -->
+          <div class="empty-hint" id="empty-hint">Press Start to power on</div>
+          <!-- cord-layer SVG is appended here at runtime by
+               src/canvas.js#buildCordLayer(), always as the LAST child. -->
+        </div>
+
+        <aside class="io-rail io-rail-out">
+          <h3 class="io-rail-label">Voice Out</h3>
+          <div class="anchor">OUT</div>
+        </aside>
       </div>
     </div>
+
+    <!-- JS-built by src/canvas.js (see buildSignalOrderStrip in that
+         file) — the full mic-to-safe-out order in one readable line. -->
+    <div class="panel signal-order" id="signal-order-panel" aria-label="Complete signal order"></div>
 
     <!--
-      PS-3 — real, third Presets column, per the approved PX-1 mockup's
-      3-column layout (docs/ultron/design/px1-mockup.html's .presets/
-      .preset-name/.unsaved-dot classes are the styling source of truth —
-      see styles/main.css). Wired up by src/presets-ui.js to
-      window.PresetStore (src/preset-store.js, N named saved presets) and
-      window.ChainCanvas (loadModel()/getCurrentModel()). Sibling of
-      .palette/.canvas-panel above, so it's gated by the same
-      `engine-not-started` class on #chain-layout — no extra JS wiring
-      needed for that (see styles/main.css's `.layout.engine-not-started`
-      rule, extended to include `.presets`).
+      BUILD PANEL — replaces PS-3's Presets column and UI-3's Palette
+      column with one two-tab panel. Wired by src/canvas.js (Effects tab:
+      renderPalette() into #palette-list, unchanged) and
+      src/presets-ui.js (Presets tab: window.PresetStore,
+      window.FactoryPresets, window.ChainCanvas.loadModel()). Sibling of
+      .canvas-panel above, so it's gated by the same `engine-not-started`
+      class on #chain-layout (see styles/main.css's
+      `.layout.engine-not-started` rule, retargeted from
+      `.palette`/`.presets` to `.build`/`.signal-order`).
     -->
-    <div class="panel presets">
-      <h2>Presets</h2>
-      <div class="preset-current">
-        <span id="current-preset-name" class="preset-name">Unsaved chain</span>
-        <span id="unsaved-indicator" class="unsaved-dot" style="display:none;">• unsaved changes</span>
+    <div class="panel build">
+      <div class="build-tabs" role="tablist" aria-label="Build the chain">
+        <button type="button" role="tab" aria-selected="true" id="build-tab-effects" aria-controls="build-panel-effects" data-build-tab="effects">Effects</button>
+        <button type="button" role="tab" aria-selected="false" id="build-tab-presets" aria-controls="build-panel-presets" data-build-tab="presets">Presets</button>
       </div>
-      <!-- #16 finding: autosave failures were console-only, so edits could
-           look durable and then vanish on reload. src/main.js shows this
-           latched warning while window.Persistence.isSaveFailed() is true
-           (the 'chain-autosave-failed'/'chain-autosave-recovered' events
-           drive it); it clears only after a later save VERIFIES. -->
-      <div class="autosave-warning" id="autosave-warning" role="alert" hidden>
-        Autosave is failing — changes will not survive a reload
+
+      <div class="build-tab-panel" id="build-panel-effects" role="tabpanel" aria-labelledby="build-tab-effects" data-build-panel="effects">
+        <div class="palette-list" id="palette-list"></div>
       </div>
-      <button id="save-preset-btn" class="control" type="button">Save As…</button>
-      <label for="preset-select" class="sr-only">Saved presets</label>
-      <select id="preset-select" class="control"><option value="">-- no presets --</option></select>
-      <div class="preset-actions">
-        <button id="load-preset-btn" class="control" type="button">Load</button>
-        <button id="delete-preset-btn" class="control" type="button">Delete</button>
+
+      <div class="build-tab-panel" id="build-panel-presets" role="tabpanel" aria-labelledby="build-tab-presets" data-build-panel="presets" hidden>
+        <div class="preset-cards" id="preset-cards"></div>
+
+        <div class="preset-current">
+          <span id="current-preset-name" class="preset-name">Unsaved chain</span>
+          <span id="unsaved-indicator" class="unsaved-dot" style="display:none;">• unsaved changes</span>
+        </div>
+        <!-- #16 finding: autosave failures were console-only, so edits could
+             look durable and then vanish on reload. src/main.js shows this
+             latched warning while window.Persistence.isSaveFailed() is true
+             (the 'chain-autosave-failed'/'chain-autosave-recovered' events
+             drive it); it clears only after a later save VERIFIES. -->
+        <div class="autosave-warning" id="autosave-warning" role="alert" hidden>
+          Autosave is failing — changes will not survive a reload
+        </div>
+        <button id="save-preset-btn" class="control" type="button">Save As…</button>
+        <label for="preset-select" class="sr-only">Saved presets</label>
+        <select id="preset-select" class="control"><option value="">-- no presets --</option></select>
+        <div class="preset-actions">
+          <button id="load-preset-btn" class="control" type="button">Load</button>
+          <button id="delete-preset-btn" class="control" type="button">Delete</button>
+        </div>
       </div>
     </div>
   </div>

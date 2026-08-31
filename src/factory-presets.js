@@ -78,6 +78,7 @@
       // [-12, -3] dB limiter range. Every other param is the original PX-3
       // value.
       name: 'Classic Karaoke',
+      description: 'The all-purpose starting point: gentle leveling, a warm-neutral EQ, a short slap-back delay, and a light room reverb.',
       nodes: [
         { id: 'n1', type: 'gain',       params: { gainDb: 0 } },
         { id: 'n2', type: 'compressor', params: { threshold: -16, ratio: 4, attack: 0.01, release: 0.25 } },
@@ -91,6 +92,7 @@
       // QA-3 CHAINS[1] verbatim (name adjusted to the library's friendly
       // name). Warm ballad: gentle compression, low warmth, light hall.
       name: 'Warm Ballad',
+      description: 'Gentle compression, a touch of low-end warmth, and a light hall reverb for slow, close-up songs.',
       nodes: [
         { id: 'qa-g1', type: 'gain', params: { gainDb: 1 } },
         { id: 'qa-e1', type: 'eq', params: { lowGain: 1, midGain: 0, highGain: 0.5 } },
@@ -103,6 +105,7 @@
       // QA-3 CHAINS[2] verbatim. Rock shout: stronger compression,
       // top-end bite, short slap, dry.
       name: 'Rock Night',
+      description: 'Stronger compression and top-end bite with a short, dry slap delay — built to cut through a loud room.',
       nodes: [
         { id: 'qa-g2', type: 'gain', params: { gainDb: 0 } },
         { id: 'qa-e2', type: 'eq', params: { lowGain: -1, midGain: 0, highGain: 2 } },
@@ -115,6 +118,7 @@
       // QA-3 CHAINS[3] verbatim. Phone-filter gag: band-limited, slightly
       // crushed, intelligible.
       name: 'Phone Call Gag',
+      description: 'Band-limited and lightly crushed for the classic "calling from a phone" bit — still fully intelligible.',
       nodes: [
         { id: 'qa-e3', type: 'eq', params: { lowGain: -10, midGain: 2, highGain: -8 } },
         { id: 'qa-c3', type: 'compressor', params: { threshold: -10, ratio: 8, attack: 0.002, release: 0.12 } },
@@ -125,6 +129,7 @@
       // QA-3 CHAINS[4] verbatim. Big-room epic: long reverb, wide delay,
       // vocal up front.
       name: 'Big Room',
+      description: 'Long reverb and a wide delay for an epic, arena-sized space, with the vocal still riding up front.',
       nodes: [
         { id: 'qa-g4', type: 'gain', params: { gainDb: 1 } },
         { id: 'qa-e4', type: 'eq', params: { lowGain: 0.5, midGain: 0, highGain: 1 } },
@@ -138,6 +143,7 @@
       // QA-3 CHAINS[5] verbatim. Clean speech: light leveling, no audible
       // effects.
       name: 'Clean Speech',
+      description: 'Light leveling with no audible coloring — for hosting, announcements, or anywhere the voice should just sound like itself.',
       nodes: [
         { id: 'qa-e5', type: 'eq', params: { lowGain: -1, midGain: 0, highGain: -1 } },
         { id: 'qa-c5', type: 'compressor', params: { threshold: -10, ratio: 2, attack: 0.005, release: 0.2 } },
@@ -170,7 +176,25 @@
     });
   }
 
+  /**
+   * ADDITIVE, UI-only export for the Presets tab's curated browse cards.
+   * Returns just {name, description} — never `nodes` — so this can never
+   * become a second load-path or drift from list()'s policy-relevant
+   * shape. list() itself is untouched by this addition: existing
+   * consumers (the preset dropdown, mcp-tools.js's list_presets/
+   * get_preset, tests/test-preset-tools.js's strict {name, nodes}
+   * deepEqual) see zero change.
+   *
+   * @returns {Array<{name: string, description: string}>}
+   */
+  function describeAll() {
+    return FACTORY_PRESETS.map(function (preset) {
+      return { name: preset.name, description: preset.description };
+    });
+  }
+
   window.FactoryPresets = {
-    list: list
+    list: list,
+    describeAll: describeAll
   };
 })();

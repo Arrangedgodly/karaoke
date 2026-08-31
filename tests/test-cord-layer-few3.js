@@ -39,8 +39,10 @@ function check(cond, label) {
 
 // ----------------------------------------------------------------------
 // Minimal fake DOM — the FEW-2 harness plus the canvas FACE (#chain-canvas)
-// carrying index.html's real child order: MIC anchor, arrow, chain-list,
-// empty-hint, arrow, OUT anchor. Those first children are pinned below.
+// carrying index.html's real Guided Patchbay structure: .canvas-panel >
+// .board-frame > [Voice In rail (.anchor "MIC IN"), #chain-canvas
+// (chain-list, empty-hint only), Voice Out rail (.anchor "OUT")]. Those
+// first children are pinned below.
 // ----------------------------------------------------------------------
 function FakeElement(tag) {
   var self = this;
@@ -143,20 +145,32 @@ var layoutEl = new FakeElement('div');
 var canvasPanelEl = new FakeElement('div');
 canvasPanelEl.className = 'canvas-panel';
 var canvasFaceEl = new FakeElement('div'); // #chain-canvas — the cord layer's host
+var boardFrameEl = new FakeElement('div');
+boardFrameEl.className = 'board-frame';
+var ioRailInEl = new FakeElement('aside');
+ioRailInEl.className = 'io-rail io-rail-in';
+var ioRailOutEl = new FakeElement('aside');
+ioRailOutEl.className = 'io-rail io-rail-out';
 var micAnchorEl = new FakeElement('div');
 micAnchorEl.className = 'anchor';
-var arrowElA = new FakeElement('span');
-arrowElA.className = 'arrow';
-var arrowElB = new FakeElement('span');
-arrowElB.className = 'arrow';
-// index.html's real #chain-canvas child order.
-canvasFaceEl.appendChild(micAnchorEl);
-canvasFaceEl.appendChild(arrowElA);
+var outAnchorEl = new FakeElement('div');
+outAnchorEl.className = 'anchor';
+// index.html's real Guided Patchbay structure: the rails are FLEX
+// SIBLINGS of #chain-canvas inside .board-frame, not children inside the
+// scrolling face — #chain-canvas itself carries only chain-list +
+// empty-hint.
+ioRailInEl.appendChild(micAnchorEl);
+ioRailOutEl.appendChild(outAnchorEl);
+boardFrameEl.appendChild(ioRailInEl);
+boardFrameEl.appendChild(canvasFaceEl);
+boardFrameEl.appendChild(ioRailOutEl);
+canvasPanelEl.appendChild(boardFrameEl);
 canvasFaceEl.appendChild(chainListEl);
 canvasFaceEl.appendChild(emptyHintEl);
-canvasFaceEl.appendChild(arrowElB);
-// NOTE: no offsetLeft/offsetTop on chainListEl — the board origin must
-// resolve to {0, 0} so the pins below are the positions map verbatim.
+// NOTE: no offsetLeft/offsetTop on chainListEl and no getBoundingClientRect
+// anywhere in this fake DOM — the board origin resolves to {0, 0} and
+// every rail-jack lookup takes railJackPoint()'s layout-less fallback, so
+// the pins below are that fallback's constants, not a live measurement.
 
 Object.defineProperty(chainListEl, 'innerHTML', {
   set: function (v) {
@@ -347,14 +361,18 @@ function model3() {
   ];
 }
 
-// Board-space jack constants (src/canvas.js, OQ-9 geometry): mic
-// (16,-32) — the layout-less fallback for the MIC OUT point; a section's
-// jacks sit ON its border, DIRECTLY ACROSS each other (IN at the middle
-// of the LEFT border, OUT at the middle of the RIGHT — the one reading
-// since vertical flow was retired 2026-08-31) over the placeholder card
-// box (160 wide, 48 tall — real browsers measure the live card); OUT IN
-// at the board's foot (16, maxY + 160).
-var MIC = { x: 16, y: 0 };
+// Board-space jack constants (src/canvas.js, OQ-9 geometry + the Guided
+// Patchbay rail rewrite): with no live getBoundingClientRect anywhere in
+// this fake DOM, railJackPoint()'s layout-less fallback fires for BOTH
+// rails — a stable, distinct constant per side (16, 24) for mic and
+// (176, 24) for out, vertically centered on CARD_H_FALLBACK (48) rather
+// than pinned to the content top the way the pre-rail MIC-only fallback
+// was. A section's jacks sit ON its border, DIRECTLY ACROSS each other
+// (IN at the middle of the LEFT border, OUT at the middle of the RIGHT)
+// over the placeholder card box (160 wide, 48 tall — real browsers
+// measure the live card).
+var MIC = { x: 16, y: 24 };
+var OUT = { x: 176, y: 24 };
 var CARD_W = 160;
 var CARD_H = 48;
 function seatIn(seat) { return { x: seat.x, y: seat.y + CARD_H / 2 }; }
@@ -369,8 +387,9 @@ check(
   'A2: the layer is #chain-canvas\'s LAST child — never a first child (no firstChild index shifts)'
 );
 check(
-  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register'),
-  'A3: MIC IN lives on the register strip; the in-flow OUT anchor is retired (2026-08-31 cord round)'
+  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('io-rail-in') &&
+    outAnchorEl.parentNode && outAnchorEl.parentNode.classList.contains('io-rail-out'),
+  'A3: MIC IN lives on the fixed Voice In rail, OUT on the fixed Voice Out rail (Guided Patchbay round — both anchors are real, flanking .canvas as siblings)'
 );
 check(
   !!layer && layer.attrs['aria-hidden'] === 'true',
@@ -396,7 +415,7 @@ check(
 var d01 = dOf(0);
 check(
   !!d01 && startPoint(d01).x === MIC.x && startPoint(d01).y === MIC.y,
-  'B4: the first cord leaves the MIC drop point at the content top (16, 0) — under the header unit'
+  'B4: the first cord leaves the Voice In rail\'s jack (16, 24 — the layout-less fallback, vertically centered)'
 );
 var d12 = dOf(1);
 check(
@@ -406,8 +425,8 @@ check(
 );
 var dLast = dOf(3);
 check(
-  !!dLast && endPoint(dLast).x === 288 + 160 - 16 && endPoint(dLast).y === 16 + 160 - 16,
-  'B6: the chain\'s OUT exits at the board\'s bottom-right corner (rightmost seat + card width - one grid unit in, one grid above the extent foot)'
+  !!dLast && endPoint(dLast).x === OUT.x && endPoint(dLast).y === OUT.y,
+  'B6: the chain\'s OUT exits at the Voice Out rail\'s jack (176, 24) — a FIXED rail point now, independent of the rightmost card\'s position (contrast the pre-rail board-extent geometry this constant replaces)'
 );
 check(
   !!d01 && d01.indexOf(' C') !== -1,
@@ -480,9 +499,10 @@ check(
   'G2: #chain-list still carries ONLY sections (empty here) — the layer lives in the face'
 );
 check(
-  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register') &&
+  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('io-rail-in') &&
+    outAnchorEl.parentNode && outAnchorEl.parentNode.classList.contains('io-rail-out') &&
     canvasFaceEl.children[canvasFaceEl.children.length - 1] === cordLayer(),
-  'G3: after every operation MIC IN stays on the register strip and the layer stays the face\'s last child'
+  'G3: after every operation both rail anchors stay on their fixed rails and the layer stays the face\'s last child'
 );
 check(
   emptyHintEl.style.display === '' || emptyHintEl.style.display === 'none',

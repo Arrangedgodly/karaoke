@@ -36,6 +36,7 @@
   var chainListEl = document.getElementById('chain-list');
   var emptyHintEl = document.getElementById('empty-hint');
   var layoutEl = document.getElementById('chain-layout');
+  var signalOrderEl = document.getElementById('signal-order-panel');
 
   if (!paletteListEl || !chainListEl) {
     // Palette/canvas markup isn't present (e.g. not yet built, or
@@ -518,11 +519,11 @@
     };
   }
 
-  /** A panel anchor element (the OUT print row in the canvas face and the
-   *  MIC IN unit on the register strip, matched by class in document
-   *  order — never by text, which is src/meters.js's own contract). The
-   *  register precedes the face, so anchors[0] is still MIC IN and the
-   *  last is OUT. */
+  /** A rail anchor element (the real MIC IN / OUT jacks, one per
+   *  .io-rail, matched by class in document order — never by text, which
+   *  is src/meters.js's own contract). The in-rail precedes the board
+   *  precedes the out-rail in markup, so anchors[0] is always MIC IN and
+   *  the last is always OUT. */
   function panelAnchorEl(which) {
     var panel = document.querySelector('.canvas-panel');
     var anchors = [];
@@ -543,17 +544,21 @@
     return which === 'out' ? anchors[anchors.length - 1] : anchors[0];
   }
 
-  /** MIC IN's OUT jack — the cable's DROP POINT at the board's top edge,
-   *  directly beneath the fixed header unit's meter (2026-08-31 cord
-   *  round). The cord SVG lives inside the scrolling face and cannot
-   *  paint above its clip, so the cable starts AT the content top under
-   *  the unit — visibly dropping out of the header's port — with its
-   *  draggable jack ring drawn there. Real browsers convert the unit's
-   *  viewport rect into content space (+ scrollLeft so the point stays
-   *  put while the board pans); stripped harnesses take the constant. */
-  function micOutPoint() {
+  /** A rail jack's point in the SVG's coordinate space (Guided Patchbay
+   *  round: fixed Voice In / Voice Out rails flank the board, each
+   *  hosting a real .anchor — see index.html's .board-frame). Both
+   *  endpoints now read the same way: the anchor's own live rendered
+   *  center, converted from viewport space into the chain-list's content
+   *  space (+ scroll compensation so the point stays put as the board
+   *  pans — the technique this file already used for MIC alone before
+   *  the OUT anchor was restored). Y comes from the anchor's own
+   *  vertical center, so a rail's `justify-content: center` CSS is what
+   *  keeps the drawn cord centered — no separate board-height math
+   *  needed. Stripped harnesses (no live layout) fall back to a
+   *  deterministic, distinct constant per side. */
+  function railJackPoint(which) {
     var origin = boardOrigin();
-    var el = panelAnchorEl('mic');
+    var el = panelAnchorEl(which);
     if (el) {
       try {
         if (typeof el.getBoundingClientRect === 'function' &&
@@ -561,33 +566,39 @@
           var er = el.getBoundingClientRect();
           var lr = chainListEl.getBoundingClientRect();
           if (er && lr && er.width && er.height) {
-            var dropX = er.left + er.width / 2 - lr.left +
-              (chainListEl.scrollLeft || 0);
-            if (dropX < GRID_PITCH) {
-              dropX = GRID_PITCH;
+            var x = er.left + er.width / 2 - lr.left + (chainListEl.scrollLeft || 0);
+            var y = er.top + er.height / 2 - lr.top + (chainListEl.scrollTop || 0);
+            if (which === 'mic' && x < GRID_PITCH) {
+              x = GRID_PITCH;
             }
-            return { x: origin.x + dropX, y: origin.y };
+            return { x: origin.x + x, y: origin.y + y };
           }
         }
       } catch (err) {
         /* stripped harness — fallback below */
       }
     }
-    return { x: origin.x + TIDY_X, y: origin.y };
+    // No live layout: mic and out get distinct, stable placeholder
+    // points (the historical TIDY_X / CARD_H_FALLBACK-derived constants)
+    // so a layout-less host still produces two different endpoints.
+    return which === 'mic'
+      ? { x: origin.x + TIDY_X, y: origin.y + CARD_H_FALLBACK / 2 }
+      : { x: origin.x + TIDY_X + CARD_W_FALLBACK, y: origin.y + CARD_H_FALLBACK / 2 };
   }
 
-  /** The chain's OUT jack — the cable's EXIT POINT at the board's
-   *  bottom-right corner (2026-08-31 cord round: the in-flow OUT anchor
-   *  is retired; the fixed base-plate OUT unit below the face is the
-   *  port, and this content-anchored point — one grid unit in from the
-   *  board's extent — is where the last cord visibly drops toward it,
-   *  jack ring drawn). */
-  function outInPoint(maxX, maxY) {
-    var origin = boardOrigin();
-    return {
-      x: origin.x + Math.max(maxX - GRID_PITCH, TIDY_X),
-      y: origin.y + Math.max(maxY - GRID_PITCH, 0)
-    };
+  /** MIC IN's OUT jack — the cable's start point, read live off the
+   *  Voice In rail's anchor (see railJackPoint). */
+  function micOutPoint() {
+    return railJackPoint('mic');
+  }
+
+  /** The chain's OUT jack — the cable's end point, read live off the
+   *  Voice Out rail's anchor (see railJackPoint). Both rails are real,
+   *  always-present elements now, so this needs no board-extent math of
+   *  its own (contrast the pre-rail geometry, which derived this purely
+   *  from the rightmost card's position). */
+  function outInPoint() {
+    return railJackPoint('out');
   }
 
   /** The read-only route: MIC OUT -> each section in DOM order -> OUT IN.
@@ -595,22 +606,10 @@
    *  empty chain still shows the direct MIC -> OUT bypass cord). */
   function cordSegments() {
     var ids = domCardIds();
-    var maxY = 0;
-    var maxX = 0;
-    ids.forEach(function (id) {
-      var pos = positions[id];
-      if (pos && pos.y > maxY) {
-        maxY = pos.y;
-      }
-      if (pos && pos.x > maxX) {
-        maxX = pos.x;
-      }
-    });
-
     var segments = [];
     var prevId = 'mic';
     var prevPt = micOutPoint();
-    var outPt = outInPoint(maxX + (maxX ? CARD_W_FALLBACK : 0), maxY + (maxY ? TIDY_ROW_PITCH : 0));
+    var outPt = outInPoint();
 
     ids.forEach(function (id) {
       var pos = positions[id];
@@ -720,6 +719,7 @@
   }
 
   buildCordLayer();
+  renderSignalOrderStrip(); // initial "Mic in -> Safe out" before any load
 
   // OQ-9: jack points derive from LIVE card geometry (border centers), so
   // a viewport resize re-derives them — the cords stay plugged when the
@@ -1176,31 +1176,6 @@
     registerEl.appendChild(main);
     registerEl.appendChild(registerHelpEl);
     panel.insertBefore(registerEl, panel.firstChild);
-
-    // 2026-08-31 (user direction): the register strip is also the fixed
-    // home of the MIC IN meter unit. The print row MOVES out of the
-    // scrolling face onto the panel's top header (mirroring the base
-    // plate's OUT corner at the bottom-right): src/meters.js mounts the
-    // input meter inside the anchor wherever it lives, and the cord layer
-    // reads the unit's right edge as MIC OUT (see micOutPoint).
-    var micPrint = firstAnchorIn(document.getElementById('chain-canvas'));
-    if (micPrint && registerEl.insertBefore) {
-      registerEl.insertBefore(micPrint, registerEl.firstChild);
-    }
-  }
-
-  /** The first .anchor inside a subtree (document-order), or null. */
-  function firstAnchorIn(root) {
-    if (!root || !root.children) {
-      return null;
-    }
-    for (var i = 0; i < root.children.length; i++) {
-      var child = root.children[i];
-      if (child.classList && child.classList.contains('anchor')) {
-        return child;
-      }
-    }
-    return null;
   }
 
   function setRegisterText(module, param, value, help) {
@@ -1232,6 +1207,33 @@
   }
 
   buildDisplayRegister();
+
+  /** Guided Patchbay's Effects/Presets tab switch — plain show/hide, no
+   *  audio or model implication either way (both tabs' content already
+   *  exists in the DOM; switching never rebuilds anything). Guarded like
+   *  every other panel-level init: a harness with no .build-tabs simply
+   *  has nothing to wire. */
+  function initBuildTabs() {
+    if (typeof document.querySelectorAll !== 'function') {
+      return;
+    }
+    var tabs = document.querySelectorAll('[data-build-tab]');
+    if (!tabs || !tabs.length) {
+      return;
+    }
+    Array.prototype.forEach.call(tabs, function (tab) {
+      tab.addEventListener('click', function () {
+        Array.prototype.forEach.call(tabs, function (other) {
+          other.setAttribute('aria-selected', String(other === tab));
+        });
+        var panels = document.querySelectorAll('[data-build-panel]');
+        Array.prototype.forEach.call(panels, function (panel) {
+          panel.hidden = panel.getAttribute('data-build-panel') !== tab.getAttribute('data-build-tab');
+        });
+      });
+    });
+  }
+  initBuildTabs();
 
 
   function nextNodeId() {
@@ -1267,6 +1269,57 @@
     }
     var hasNodes = chainListEl.children.length > 0;
     emptyHintEl.style.display = hasNodes ? 'none' : '';
+  }
+
+  /** Guided Patchbay's signal-order strip: one readable line, "Mic in ->
+   *  each section in DOM order -> Safe out", with a terminal limiter
+   *  marked locked. Purely presentational (aria-hidden — every semantic
+   *  already lives on the board's own cards/cords); reads chainModel via
+   *  domCardIds()/nodesById so it can never drift from what's actually on
+   *  screen. Called from every structural-change chokepoint alongside
+   *  renderCords() (commitStructuralChange(), loadModel()). */
+  function renderSignalOrderStrip() {
+    if (!signalOrderEl) {
+      return;
+    }
+    signalOrderEl.textContent = '';
+    signalOrderEl.setAttribute('aria-hidden', 'true');
+
+    function addStep(text, cls) {
+      var span = document.createElement('span');
+      if (cls) {
+        span.className = cls;
+      }
+      span.textContent = text;
+      signalOrderEl.appendChild(span);
+    }
+    function addArrow() {
+      var arrow = document.createElement('b');
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = '→';
+      signalOrderEl.appendChild(arrow);
+    }
+
+    addStep('Mic in');
+    var ids = domCardIds();
+    ids.forEach(function (id, index) {
+      addArrow();
+      var node = nodesById[id];
+      var type = node && node.type;
+      var label = type;
+      try {
+        if (window.NodeTypes && typeof window.NodeTypes.getLabel === 'function') {
+          label = window.NodeTypes.getLabel(type) || type;
+        }
+      } catch (err) {
+        /* stripped harness — the type key is the fallback label */
+      }
+      var isTerminalLimiter = type === 'limiter' && index === ids.length - 1;
+      addStep(isTerminalLimiter ? label + ' · locked last' : label,
+        isTerminalLimiter ? 'signal-order-lock' : null);
+    });
+    addArrow();
+    addStep('Safe out', 'signal-order-safe');
   }
 
   /**
@@ -1430,6 +1483,45 @@
     limiter: 'safe',
     gate: 'safe'
   };
+
+  // ---------------------------------------------------------------------
+  // Guided Patchbay round: the Effects tab's hover/focus preview line —
+  // "what this does" in one short phrase, condensed from README.md's own
+  // per-effect copy (never invented fresh, so the chip and the docs never
+  // tell a different story). Purely presentational, read by
+  // paletteTypePreview() below with the same no-silent-drop discipline as
+  // paletteGroupLabel(): an unmapped future type gets a generic line
+  // instead of rendering blank.
+  // ---------------------------------------------------------------------
+  var PALETTE_TYPE_PREVIEW = {
+    gain: 'A clean level trim for the whole chain.',
+    compressor: 'Keeps the vocal at a steady, even level.',
+    eq: 'Shapes tone — warmer, brighter, or more telephonic.',
+    delay: 'Short echo repeats for depth without mush.',
+    reverb: 'A sense of room, from close and dry to wide and wet.',
+    limiter: 'The last line of defense on the output ceiling.',
+    gate: 'Turns the mic down automatically between phrases.',
+    distortion: 'Adds grit and edge — a turned-up-too-loud character.',
+    chorus: 'Thickens and widens the voice with two drifting copies.',
+    autotune: 'Pulls each note toward a key and scale you pick.',
+    pitchshift: 'Moves the whole voice up or down in semitones.',
+    tremolo: 'Volume wobble — amplitude dips and swells.',
+    bitcrusher: 'Lo-fi digital grunge — fewer bits, more crunch.',
+    phaser: 'A sweeping, spacey filter sweep.'
+  };
+  var PALETTE_PREVIEW_FALLBACK = 'Adds this effect to the chain.';
+
+  /**
+   * The Effects tab chip's hover/focus preview line. Same defensive
+   * register as paletteGroupLabel()/familyInitials(): a type this map
+   * hasn't caught up with yet gets a generic line, never a blank one.
+   * @param {string} type
+   * @returns {string}
+   */
+  function paletteTypePreview(type) {
+    return Object.prototype.hasOwnProperty.call(PALETTE_TYPE_PREVIEW, type) ?
+      PALETTE_TYPE_PREVIEW[type] : PALETTE_PREVIEW_FALLBACK;
+  }
 
   /**
    * Which palette group does this type ride under? (Data source for
@@ -1600,6 +1692,17 @@
         if (isExperimentalType(type)) {
           chip.appendChild(createExperimentalBadge(type, true));
         }
+        // Guided Patchbay round: the hover/focus preview line — revealed
+        // by CSS only (:hover/:focus-visible, styles/main.css), so a
+        // sighted user previews "what this does" before adding it.
+        // aria-hidden: the chip's aria-label already carries the full
+        // accessible name; this is a sighted-only convenience, not a
+        // second announcement.
+        var preview = document.createElement('span');
+        preview.className = 'chip-preview';
+        preview.setAttribute('aria-hidden', 'true');
+        preview.textContent = paletteTypePreview(type);
+        chip.appendChild(preview);
         // Gating: chips ship DISABLED, mirroring the Start/Bypass
         // disabled-until-start pattern (the .engine-not-started panel gate
         // is pointer-events:none, which says nothing to a keyboard or a
@@ -1685,6 +1788,7 @@
     updateEmptyHint();
     rebuildGraph();
     renderCords(); // FEW-3: an add (or any order change) re-routes the cords
+    renderSignalOrderStrip();
     // PS-2: persist the chain after every structural add/remove/reorder.
     // Pass chainModel explicitly rather than AudioGraph.getModel() — see
     // the comment on Persistence.saveCurrentChain() for why: AudioGraph's
@@ -2292,6 +2396,7 @@
     });
     applyPositionsToCards();
     renderCords(); // FEW-3: re-route onto the freshly-loaded board
+    renderSignalOrderStrip();
 
     updateEmptyHint();
     rebuildGraph();
@@ -2567,7 +2672,12 @@
     CARD_W_MAX_PX: CARD_W_MAX_PX,
     snapToGrid: snapToGrid,
     currentLayout: currentLayout,
-    addNodeType: addNodeType
+    addNodeType: addNodeType,
+    // Guided Patchbay round: the Presets tab's factory cards derive their
+    // family-tag row from a preset's own node types (src/presets-ui.js),
+    // reusing this file's one 3-letter-code function rather than a second
+    // copy that could drift from the palette chip / card rail's own tags.
+    familyInitials: familyInitials
   };
 
   // The display-register feed consumed by src/param-controls.js (guarded

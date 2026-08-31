@@ -199,19 +199,30 @@ var layoutEl = new FakeElement('div');
 var canvasPanelEl = new FakeElement('div');
 canvasPanelEl.className = 'canvas-panel';
 var canvasFaceEl = new FakeElement('div'); // #chain-canvas — the cord layer's host
+var boardFrameEl = new FakeElement('div');
+boardFrameEl.className = 'board-frame';
+var ioRailInEl = new FakeElement('aside');
+ioRailInEl.className = 'io-rail io-rail-in';
+var ioRailOutEl = new FakeElement('aside');
+ioRailOutEl.className = 'io-rail io-rail-out';
 var micAnchorEl = new FakeElement('div');
 micAnchorEl.className = 'anchor';
-var arrowElA = new FakeElement('span');
-arrowElA.className = 'arrow';
-var arrowElB = new FakeElement('span');
-arrowElB.className = 'arrow';
-canvasFaceEl.appendChild(micAnchorEl);
-canvasFaceEl.appendChild(arrowElA);
+var outAnchorEl = new FakeElement('div');
+outAnchorEl.className = 'anchor';
+// Guided Patchbay round: the rails are FLEX SIBLINGS of #chain-canvas
+// inside .board-frame, not children inside the scrolling face.
+ioRailInEl.appendChild(micAnchorEl);
+ioRailOutEl.appendChild(outAnchorEl);
+boardFrameEl.appendChild(ioRailInEl);
+boardFrameEl.appendChild(canvasFaceEl);
+boardFrameEl.appendChild(ioRailOutEl);
+canvasPanelEl.appendChild(boardFrameEl);
 canvasFaceEl.appendChild(chainListEl);
 canvasFaceEl.appendChild(emptyHintEl);
-canvasFaceEl.appendChild(arrowElB);
-// No offsetLeft/offsetTop on chainListEl — board origin is {0, 0}, so
-// jack coordinates below are the positions map verbatim (FEW-3/4 contract).
+// No offsetLeft/offsetTop on chainListEl and no getBoundingClientRect
+// anywhere in this fake DOM — board origin is {0, 0} and both rail jacks
+// take railJackPoint()'s layout-less fallback (FEW-3/4/Guided-Patchbay
+// contract).
 
 Object.defineProperty(chainListEl, 'innerHTML', {
   set: function (v) {
@@ -421,27 +432,18 @@ function tabOrderEqualsDomOrder() {
 // border, OUT at the middle of its RIGHT.
 var CARD_W = 160;
 var CARD_H = 48;
-var MIC_OUT = { x: 16, y: 0 }; // content-top drop under the header unit
+// Guided Patchbay round: both panel jacks now read railJackPoint()'s
+// layout-less fallback — fixed, distinct constants per side, vertically
+// centered on CARD_H_FALLBACK (48) rather than pinned to the pre-rail
+// content-top / board-extent-corner geometry these replace. out-in no
+// longer depends on the live positions map at all.
+var MIC_OUT = { x: 16, y: 24 };
+var OUT_IN = { x: 176, y: 24 };
 
 function jackPt(kind, id) {
   if (kind === 'mic-out') { return MIC_OUT; }
+  if (kind === 'out-in') { return OUT_IN; }
   var layout = CC.currentLayout();
-  if (kind === 'out-in') {
-    // The board's bottom-right corner exit (2026-08-31 cord round):
-    // rightmost seat + card width - one grid unit in; extent foot - one
-    // grid unit — mirroring src/canvas.js's outInPoint over the fallback
-    // card box (160 x 48).
-    var maxX = 0;
-    var maxY = 0;
-    Object.keys(layout).forEach(function (k) {
-      if (layout[k].x > maxX) { maxX = layout[k].x; }
-      if (layout[k].y > maxY) { maxY = layout[k].y; }
-    });
-    return {
-      x: (maxX ? maxX + 160 : 0) - 16,
-      y: (maxY ? maxY + 160 : 0) - 16
-    };
-  }
   var seat = layout[id] || { x: 0, y: 16 };
   return kind === 'section-in'
     ? { x: seat.x, y: seat.y + CARD_H / 2 }

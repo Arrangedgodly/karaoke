@@ -285,13 +285,13 @@ body {
   }
 
   /* The grid-blowout guard (the container round's real defect): without
-     min-width: 0 the 1fr face track grows to the board's content width
-     (the chain-list carries the row extent as its min-width) and pushes
-     the presets zone and the chassis frame off screen — the outer
-     container must bound the board, the face scrolls inside. */
-  .layout .palette,
+     min-width: 0 a flex child grows to its content's width (the
+     chain-list carries the row extent as its min-width) and pushes the
+     other stacked zones and the chassis frame off screen — every zone
+     must stay bounded so the board scrolls inside instead. */
   .layout .canvas-panel,
-  .layout .presets {
+  .layout .signal-order,
+  .layout .build {
     min-height: 0;
     min-width: 0;
   }
@@ -300,8 +300,17 @@ body {
     min-width: 0;
   }
 
-  .layout .palette,
-  .layout .presets {
+  /* .build takes whatever height .canvas-panel's own max-height budget
+     and .signal-order's content height leave inside .layout's bounded
+     stack; its OWN child .build-tab-panel (not .build itself, so the
+     tab row stays put) is the actual scroll region — same "flanks
+     scroll their own content" contract the old .palette/.presets had. */
+  .layout .build {
+    flex: 1 1 auto;
+  }
+
+  .layout .build-tab-panel {
+    min-height: 0;
     overflow-y: auto;
   }
 }
@@ -1190,20 +1199,22 @@ select.control {
 }
 
 /* ===========================================================================
-   VOICE DECK (UI-3 re-cast by item 1b) — the LOWER slab of the Two-Deck
-   Stack: one continuous faceplate (the .instrument chassis ground) whose
-   three columns read as PRINTED ZONES, not separate panels. The palette
-   zone and presets zone are print on the same face as the chain face;
-   the zone boundaries are MACHINED GROOVES in the same grammar the
-   canvas sections use between themselves (a 1px dark cut beside a 1px
-   light lip — cut first in reading order, lip after). Grid columns keep
-   the committed 200px | 1fr | 220px; below 900px the zones stack
-   palette → face → presets and the grooves turn horizontal.
+   VOICE DECK (Guided Patchbay round, replacing item 1b's three printed
+   columns) — the LOWER slab of the Two-Deck Stack: one continuous
+   faceplate stacked into THREE zones instead of three side-by-side
+   columns: the chain face (board + fixed Voice In/Out rails), the
+   signal-order strip, and the build panel (Effects/Presets tabs,
+   replacing the old palette + presets columns). Zone boundaries are
+   still MACHINED GROOVES in the same grammar the canvas sections use
+   between themselves (a 1px dark cut beside a 1px light lip), now
+   running horizontally between the stacked zones at every width — there
+   is no separate narrow-viewport collapse to author, since the zones
+   were never side-by-side to begin with.
    =========================================================================== */
 
 .layout {
-  display: grid;
-  grid-template-columns: 200px 1fr 220px;
+  display: flex;
+  flex-direction: column;
   gap: 0;
   min-height: 60vh;
   /* The voice deck IS the lower slab of the one chassis — the
@@ -1219,37 +1230,12 @@ select.control {
    src/canvas.js's onSort/remove handlers ALSO guard on
    window.AudioEngine.isStarted directly, so this is a visual/UX affordance
    on top of a real functional guard, not the only thing preventing a
-   pre-Start drop from throwing. Includes .presets (PS-3) too.
-   Item 1b: all three zones now share the ONE Pattern Machine disabled
-   grammar (hatch + recede — see the disabled-texture block); the
-   legacy flank dim is retired. */
+   pre-Start drop from throwing. Includes .build (Guided Patchbay) too.
+   All three zones share the ONE Pattern Machine disabled grammar (hatch
+   + recede — see the disabled-texture block). */
 
 .panel {
   padding: 0.85rem 0.9rem 1rem;
-}
-
-/* PALETTE ZONE — print zone on the voice deck. The zone's right edge
-   is the CUT half of the palette|face groove (the face's left border is
-   the lip half, at .canvas-panel below): sequence reads cut-then-lip,
-   the vertical twin of the sections' top groove. */
-.palette {
-  border-right: 1px solid var(--pm-groove-cut);
-  background: transparent;
-}
-
-/* Zone header — silkscreened legend (VIS-3): uppercase tracked print
-   label over a groove-cut rule, with more space above (the zone's
-   padding) than below (0.6rem), per the craft floor. Same treatment on
-   the Presets header keeps the two zones one vocabulary. */
-.palette h2 {
-  margin: 0 0 0.6rem;
-  padding-bottom: 0.45rem;
-  border-bottom: 1px solid var(--pm-groove-cut);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--pm-print);
 }
 
 /* Refinement entry 3 (critique P2-3) — palette group legends. The ten
@@ -1274,34 +1260,6 @@ select.control {
 
 .palette-group-label:first-child {
   margin-top: 0;
-}
-
-/* Narrow viewport (<900px, item 1b — the locked card's viewport law):
-   the voice deck STACKS palette → chain face → presets, and the zone
-   grooves turn horizontal (same cut-then-lip reading order, now top to
-   bottom). This also relieves the old sub-680px three-column squeeze:
-   every zone takes the full width. */
-@media (max-width: 900px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
-  .palette {
-    border-right: none;
-    border-bottom: 1px solid var(--pm-groove-cut);
-  }
-
-  .canvas-panel {
-    border-left: none;
-    border-right: none;
-    border-top: 1px solid var(--pm-groove-lip);
-    border-bottom: 1px solid var(--pm-groove-cut);
-  }
-
-  .presets {
-    border-left: none;
-    border-top: 1px solid var(--pm-groove-lip);
-  }
 }
 
 /* ITEM 1b — palette chips as KEYS ON THE VOICE DECK, the flank twin of
@@ -1469,30 +1427,62 @@ select.control {
   transform: none;
 }
 
+/* Guided Patchbay round: the Effects tab's hover/focus preview line —
+   "what this does" (src/canvas.js's PALETTE_TYPE_PREVIEW), collapsed to
+   zero height at rest and revealed on hover/focus so a sighted operator
+   previews before adding. aria-hidden (the chip's own aria-label already
+   carries the full accessible name — see renderPalette). Guarded under
+   reduced-motion: the reveal still happens, just without the animated
+   height/opacity tween. */
+.chip-preview {
+  display: block;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin-top: 0;
+  font-size: 0.7rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--pm-print-dim);
+  transition: max-height 180ms ease, opacity 180ms ease, margin-top 180ms ease;
+}
+
+.node-chip:hover .chip-preview,
+.node-chip:focus-visible .chip-preview {
+  max-height: 3rem;
+  opacity: 1;
+  margin-top: 0.3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip-preview {
+    transition: none;
+  }
+}
+
 /* ===========================================================================
    CANVAS PANEL — the SINGLE FACE CHASSIS (redesign item 1): the CHAIN
-   FACE, the middle zone of the voice deck. One continuous matte
-   near-black faceplate:
+   FACE, the top zone of the voice deck. One continuous matte near-black
+   faceplate:
 
      top edge    DISPLAY REGISTER (etched, accent-marked, JS-built by
                  src/canvas.js as the panel's first child)
-     face        MIC IN jack print (top-left) → panel-print SECTIONS
-                 split by machined grooves → OUT jack print
-     base edge   the pinned OUT footer mirror (the VU corner,
-                 bottom-right — src/meters.js) + the flow-direction
-                 switch (bottom-left)
+     face        the board-frame: a fixed Voice In rail (jack print +
+                 live meter) → panel-print SECTIONS split by machined
+                 grooves → a fixed Voice Out rail (jack print + live
+                 meter) — see .board-frame/.io-rail below
 
    The old floating-card vocabulary (border-radius islands, drop shadows
    at rest) is gone: sections are print zones of the one face, the only
-   real shadow in the world is the drag LIFT (SortableJS's live clone),
-   and brightness is saturation on matte, never glow.
+   real shadow in the world is the drag LIFT, and brightness is
+   saturation on matte, never glow.
 
-   Item 1b: the panel's side chrome is now the two halves of the ZONE
-   GROOVES it shares with the flanking zones — its left border is the
-   LIP under the palette zone's cut, its right border the CUT above the
-   presets zone's lip (same grammar as the sections' top grooves, read
-   left to right: cut, then lip). Everything inside the panel is the
-   item-1 build, untouched.
+   Guided Patchbay round: the panel is now the FIRST of three STACKED
+   zones (chain face, signal-order strip, build panel) instead of the
+   middle of three side-by-side columns — its side chrome (the old
+   palette/presets zone-groove borders) is gone; a bottom groove now
+   separates it from .signal-order below.
    =========================================================================== */
 
 .canvas-panel {
@@ -1500,14 +1490,19 @@ select.control {
   /* The chassis ground: the SAME faceplate as the whole voice deck —
      the chain face is a zone of the one slab, not an inset panel. */
   background: var(--pm-chassis);
-  /* The zone grooves (see the block comment above). */
-  border-left: 1px solid var(--pm-groove-lip);
-  border-right: 1px solid var(--pm-groove-cut);
+  /* Guided Patchbay: the panel is the first of three STACKED zones now
+     (not a side-by-side column), so its only zone-groove border is the
+     bottom edge, separating it from .signal-order below. */
+  border-bottom: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 -1px 0 var(--pm-groove-lip);
   /* A bounded flex column so the face owns its scrolling — the page must
-     never grow unbounded with a long chain. Budget re-based by item 1b
-     to the Two-Deck Stack's chrome: body padding (2rem) + the 4rem
-     system deck + the 4px deck seam + slack — slightly MORE room for
-     the face than the old strip+margin budget. */
+     never grow unbounded with a long chain. Budget re-based to the
+     Two-Deck Stack's chrome: body padding (2rem) + the 4rem system deck
+     + the 4px deck seam + slack. Unscoped (applies at every width, same
+     as before Guided Patchbay) — the board stays internally scrollable
+     regardless of viewport; only .build's own scroll is width-gated (see
+     .layout's @media (min-width: 901px) block) to match "below 901px the
+     zones stack and the page keeps its scroll". */
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 6.75rem);
@@ -1534,9 +1529,6 @@ select.control {
 .display-register {
   flex: none;
   position: relative;
-  /* The MIC IN header unit is absolutely pinned into this strip's left
-     end (see .display-register .anchor below), so the text block clears
-     it. */
   /* FIXED geometry: two register lines, height pinned — the register
      answers every control event without ever pumping layout (values and
      help lines clip, never reflow). */
@@ -1643,47 +1635,51 @@ select.control {
 }
 
 
-/* THE MIC IN HEADER UNIT (2026-08-31, user direction): the input print
-   row lives ON the register strip — the fixed top header of the chain
-   face — in the same vocabulary as the base plate's OUT corner at the
-   bottom-right (jack ring + silkscreen legend + the 96x26 lamp bar +
-   mono dB readout, one row). Absolutely pinned: it never scrolls with
-   the board. The register's 3px accent mark leads it. */
-.display-register .anchor {
-  position: absolute;
-  left: 1.4rem;
-  top: 0;
-  bottom: 0;
+/* --- The board frame: fixed Voice In/Out rails + the scrolling face ---
+   Guided Patchbay round: the MIC IN header unit and the OUT footer
+   mirror are RETIRED — both meters now live in real, always-present
+   rails flanking the board, as flex SIBLINGS of .canvas (not children of
+   the scrolling region — the board genuinely scrolls, so an absolutely-
+   positioned rail inside it would scroll away with the content). Flex
+   row, stretched to the panel's remaining height; .canvas takes the
+   remaining width between the two fixed-width rails. */
+.board-frame {
   display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.io-rail {
+  flex: none;
+  width: 6.5rem;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.75rem 0 0;
-  margin: 0;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.4rem;
+  background: var(--pm-system-deck);
+}
+
+.io-rail-in {
   border-right: 1px solid var(--pm-groove-cut);
-  white-space: nowrap;
+  box-shadow: inset -1px 0 0 var(--pm-groove-lip);
 }
 
-/* Compact meter in the strip: the readout rides BESIDE the bar (the
-   3rem strip cannot stack them). */
-.display-register .anchor .meter-unit {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.4rem;
-  width: auto;
+.io-rail-out {
+  border-left: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 1px 0 0 var(--pm-groove-lip);
+}
+
+.io-rail-label {
   margin: 0;
-}
-
-/* The register's text (touched-control readouts — the state line is
-   retired) clears the pinned unit. */
-.display-register .register-main,
-.display-register .register-help {
-  padding-left: 15rem;
-}
-
-/* The leading flow chevron retired with the in-face MIC anchor: the
-   board's flow now starts at the header unit, not at a print row. */
-.canvas-panel .canvas > .arrow:first-of-type {
-  display: none;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pm-print);
+  text-align: center;
 }
 
 /* --- The face (scrolling flow) ---------------------------------------- */
@@ -1695,6 +1691,7 @@ select.control {
   padding: 0.75rem 0.9rem 1rem;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   /* FEW-3: the positioning context for the cord layer — the SVG and the
      .chain-list then share ONE coordinate space (the list's live
@@ -1703,20 +1700,23 @@ select.control {
   position: relative;
 }
 
-/* Canvas anchors (MIC IN / OUT) — silkscreen JACK PRINT, not cards: the
-   drawn jack ring + the label in print, the VIS-5 meter unit at the
-   print row's right end. No border-radius island, no dashed target. */
+/* Rail anchors (MIC IN / OUT) — silkscreen JACK PRINT, not cards: the
+   drawn jack ring + the label in print, the VIS-5 meter unit beneath.
+   No border-radius island, no dashed target. Stacked vertically (rather
+   than the old horizontal print-row reading) to fit the narrow rail —
+   the .anchor base rule below is the shared jack anatomy; this is the
+   rail's own layout. */
 .anchor {
   flex: none;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.4rem;
   padding: 0.35rem 0.15rem;
   background: transparent;
   border: none;
   color: var(--pm-print);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1733,31 +1733,10 @@ select.control {
   border-radius: 50%;
   border: 2px solid var(--pm-print);
   background: radial-gradient(circle, var(--pm-register-bg) 0 2.5px, transparent 2.5px);
-  margin-right: 0.55rem;
 }
 
 .anchor .meter-unit {
-  margin-right: 0.25rem;
-}
-
-/* Signal-flow arrows — the same aria-hidden decorative spans, drawn as
-   print chevrons (the glyph text is zeroed; the mark is CSS geometry
-   pointing down the vertical flow). */
-.arrow {
-  flex: none;
-  align-self: center;
-  font-size: 0;
-  color: var(--pm-print-dim);
-}
-
-.arrow::before {
-  content: '';
-  display: block;
-  width: 7px;
-  height: 7px;
-  border-right: 2px solid var(--pm-print-dim);
-  border-bottom: 2px solid var(--pm-print-dim);
-  transform: rotate(45deg);
+  margin: 0;
 }
 
 .chain-list {
@@ -2435,18 +2414,18 @@ select.control {
    gate with the same hatch + recede the canvas face has always used.
    =========================================================================== */
 
-/* Pre-Start gate, the flanking zones: pointer lock (the functional
-   gate, unchanged) + the SAME recede + diagonal hatch the canvas face
-   carries below — one grammar, three zones. */
-.layout.engine-not-started .palette,
-.layout.engine-not-started .presets {
+/* Pre-Start gate, the signal-order strip + build panel: pointer lock
+   (the functional gate, unchanged) + the SAME recede + diagonal hatch
+   the canvas face carries below — one grammar, three zones. */
+.layout.engine-not-started .build,
+.layout.engine-not-started .signal-order {
   position: relative;
   opacity: 0.55;
   pointer-events: none;
 }
 
-.layout.engine-not-started .palette::before,
-.layout.engine-not-started .presets::before {
+.layout.engine-not-started .build::before,
+.layout.engine-not-started .signal-order::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -2506,35 +2485,163 @@ select.control {
 }
 
 /* ===========================================================================
-   PRESETS ZONE (PS-3 + VIS-3, re-cast by item 1b) — the voice deck's
-   right-hand print zone, one vocabulary with the palette zone:
-   silkscreen zone legend over a groove-cut rule, the current-preset
-   name as the zone's mono machine readout (12px tabular — the shared
-   per-control value tier, 11.78 on the chassis), the unsaved flag in
-   the signal orange as text (6.54 — a system state), controls as the
-   shared control KEYS. The preset <select> is already dark-coherent
-   via the shared rules: color-scheme dark (root) renders the native
-   dropdown dark, key-edge bezel, bright print.
+   SIGNAL-ORDER STRIP (Guided Patchbay round) — the voice deck's second
+   zone: one readable line, "Mic in -> each section in DOM order -> Safe
+   out", JS-built by src/canvas.js#renderSignalOrderStrip() from the same
+   chainModel the board itself renders from (so it can never drift).
+   Purely presentational (aria-hidden — every semantic already lives on
+   the board's own cards/cords); centered, wrapping on narrow widths.
    =========================================================================== */
 
-.presets {
-  /* The lip half of the face|presets zone groove (the face's right
-     border is the cut — see .canvas-panel above). */
-  border-left: 1px solid var(--pm-groove-lip);
+.signal-order {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
   background: transparent;
+  font-family: var(--font-readout);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pm-print);
 }
 
-/* Silkscreen zone legend — identical treatment to .palette h2 above
-   (one vocabulary across both zones). */
-.presets h2 {
-  margin: 0 0 0.6rem;
-  padding-bottom: 0.45rem;
+.signal-order b {
+  font-weight: 400;
+  color: var(--pm-print-dim);
+  font-size: 0.85em;
+}
+
+.signal-order-lock {
+  color: var(--pm-family-limiter);
+}
+
+.signal-order-safe {
+  color: var(--pm-print-hi);
+}
+
+/* ===========================================================================
+   BUILD PANEL (Guided Patchbay round, replacing PS-3's Presets zone +
+   the old Palette zone) — the voice deck's third and final zone: a
+   two-tab panel, Effects (#palette-list, unchanged) and Presets
+   (curated factory cards + the real Save As/Load/Delete controls,
+   relocated here verbatim — same ids, same src/presets-ui.js wiring).
+   The preset display vocabulary below (silkscreen readout, control
+   keys) is unchanged from the old Presets zone; only its outer zone
+   chrome (the border/header this comment used to describe) is gone,
+   since the panel is no longer a side-by-side column.
+   =========================================================================== */
+
+.build {
+  /* Unscoped: just a flex column for the tabs+panel stack, natural
+     content height. The width-gated scroll budget (flex-grow share of
+     .layout's bounded height, min-height: 0) lives in the @media
+     (min-width: 901px) block below, matching .canvas-panel's own
+     always-on max-height vs. the old .palette/.presets' width-gated
+     overflow-y: auto — the board stays bounded at every width, the
+     build panel only gains its own internal scroll on the wide-screen
+     fixed console (below 901px the page keeps its scroll instead). */
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  /* The groove pair's lip half — .signal-order's own border-bottom is
+     the cut; this completes the cut-then-lip reading order the sections
+     use between themselves. */
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+}
+
+.build-tabs {
+  flex: none;
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.6rem;
   border-bottom: 1px solid var(--pm-groove-cut);
-  font-size: 0.7rem;
+}
+
+.build-tabs button {
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--pm-print);
+  cursor: pointer;
+}
+
+.build-tabs button[aria-selected='true'] {
+  border-bottom-color: var(--pm-accent);
+  color: var(--pm-print-hi);
+}
+
+.build-tab-panel {
+  flex: 1 1 auto;
+}
+
+.build-tab-panel[hidden] {
+  display: none;
+}
+
+/* Effects tab: #palette-list fills the tab panel exactly as it filled
+   the old .palette zone — no selector changes needed for .node-chip et
+   al. (they target the chip, not its ancestor panel). */
+
+/* Presets tab: the curated factory cards, above the real preset
+   controls (.preset-current etc. below, unchanged from the old zone). */
+.preset-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.preset-card {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 4px;
+  background: var(--pm-key);
+  text-align: left;
+  cursor: pointer;
+}
+
+.preset-card:hover {
+  border-color: var(--pm-print);
+}
+
+.preset-card strong {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--pm-print-hi);
+}
+
+.preset-card small {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--pm-print);
+}
+
+.preset-card-tags {
+  display: block;
+  margin-top: 0.5rem;
+  font-family: var(--font-readout);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--pm-display);
 }
 
 .preset-current {
@@ -2583,7 +2690,7 @@ select.control {
 /* Direct children only — Save As… and the <select> stack full-width in the
    column; the Load/Delete pair below is laid out separately via
    .preset-actions so they can sit side by side instead. */
-.presets > .control {
+#build-panel-presets > .control {
   display: block;
   width: 100%;
   margin-top: 0.75rem;
@@ -3436,86 +3543,6 @@ input.preset-name-input:focus-visible {
 }
 
 /* ===========================================================================
-   R2-1 ($impeccable layout, 2026-08-29) — PINNED OUT FOOTER. Created from
-   JS by src/meters.js (buildFooterMirror) as a child of the canvas PANEL,
-   immediately after the scrolling .canvas: in the bounded vertical canvas
-   the panel is the fixed frame and .canvas owns the scrolling, so this
-   row is the always-visible region — output level readable from across
-   the room regardless of scroll position or card collapse (the closing
-   critique's P2: the OUT anchor/meter sits below the fold with the
-   default preset expanded). One compact row, fixed height (the 96×26
-   meter footprint is the tallest item — no layout pumping): silkscreen
-   OUT legend left, the SAME lamp-bar canvas scene + mono dB readout
-   (the mirror of the OUT unit's own state — one feed, one ballistics,
-   two views) right.
-
-   Family rules it inherits by construction: same 96×26 CSS lockstep as
-   .meter-canvas above (no size variant); tokens only; no transitions or
-   keyframes (functional metering stays live under reduced motion);
-   NEVER de-emphasized while bypassed (the entry-5 dim is scoped to
-   .chain-list + .flow-toggle — this footer is the operator's output
-   ground truth in that state too, same family as the anchors/meters);
-   outside .canvas entirely, so it covers nothing and the round-1
-   occlusion guard's zero-overlap invariant is untouched. In horizontal
-   flow mode the panel un-bounds (the page owns the scroll) and the
-   footer scrolls away WITH the panel — the pinned guarantee is the
-   vertical default's; it still renders there as part of the panel.
-   =========================================================================== */
-
-/* --- The base plate (redesign item 1 restyle of the R2-1 pinned OUT
-   footer): the panel's bottom edge is the OUT corner — jack print legend
-   right, the SAME 96×26 lamp scene + mono readout (one feed, one
-   ballistics, two views; the mirror is aria-hidden). Fixed height (the
-   meter footprint is the tallest item — no layout pumping); machined
-   groove along its top edge; NEVER de-emphasized while bypassed or
-   gated (the operator's output ground truth in every state — the
-   dim/hatch grammar is scoped to the chain and the face, never the base
-   plate). Since the fixed one-page round the panel is bounded in BOTH
-   flow modes, so the footer is pinned in both — the output ground truth
-   never scrolls away. */
-.canvas-footer {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0.4rem 0.9rem;
-  border-top: 1px solid var(--pm-groove-cut);
-  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
-}
-
-/* OUT jack print: the drawn jack ring + the legend, the anchor
-   vocabulary's bottom-edge twin. */
-.canvas-footer-legend {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  font-family: var(--font-readout);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--pm-print);
-  white-space: nowrap;
-}
-
-.canvas-footer-legend::before {
-  content: '';
-  flex: none;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 2px solid var(--pm-print);
-  background: radial-gradient(circle, var(--pm-register-bg) 0 2px, transparent 2px);
-}
-
-/* The mirrored unit reuses .meter-unit/.meter-canvas/.meter-readout
-   verbatim; this override only enforces the single-row compact
-   register (column stack inherited as-is — canvas over readout). */
-.canvas-footer .meter-unit {
-  width: 96px;
-}
-
-/* ===========================================================================
    BOARD CHROME. Vertical flow is RETIRED (2026-08-31, user direction):
    the board has ONE reading — horizontal, condensed modules
    left-to-right — and .flow-horizontal is a permanent class the canvas
@@ -3544,14 +3571,6 @@ input.preset-name-input:focus-visible {
 .canvas-panel.flow-horizontal .chain-list {
   flex-direction: row;
   align-items: flex-start;
-}
-
-.canvas-panel.flow-horizontal .arrow {
-  font-size: 0;
-}
-
-.canvas-panel.flow-horizontal .arrow::before {
-  transform: rotate(-45deg); /* points right down the row */
 }
 
 /* CONDENSED SECTION (2026-08-31 horizontal-default round, tightened by
