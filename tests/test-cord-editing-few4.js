@@ -82,7 +82,13 @@ function FakeElement(tag) {
       this.add(c); return true;
     }
   };
-  this.setAttribute = function (k, v) { self.attrs[k] = String(v); };
+  this.setAttribute = function (k, v) {
+    self.attrs[k] = String(v);
+    // Real DOM sync: setting the class attribute updates className (and
+    // classList reads it) — required since production classes SVG
+    // elements via setAttribute (SVGElement.className is read-only).
+    if (k === 'class' && self.className !== String(v)) { self.className = String(v); }
+  };
   this.getAttribute = function (k) {
     return Object.prototype.hasOwnProperty.call(self.attrs, k) ? self.attrs[k] : null;
   };

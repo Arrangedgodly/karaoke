@@ -174,9 +174,27 @@ Object.defineProperty(paletteListEl, 'innerHTML', {
   get: function () { return ''; }
 });
 
+// Browser-faithful SVG elements (2026-08-30 hotfix regression gate): in
+// a REAL browser, SVGElement.className is a read-only SVGAnimatedString
+// getter — a strict-mode assignment throws TypeError (the exact bug that
+// shipped: canvas.js set .className on cord-layer and crashed every real
+// browser while this harness's plain-FakeElement fallback let it pass).
+// createElementNS therefore returns elements whose className is
+// getter-only, backed by the class attribute; production code must use
+// setAttribute('class', ...) on SVG elements.
+function makeSvgElement(tag) {
+  var el = new FakeElement(tag);
+  delete el.className;
+  Object.defineProperty(el, 'className', {
+    get: function () { return el.getAttribute('class') || ''; },
+    configurable: true
+  });
+  return el;
+}
+
 var documentStub = {
   createElement: function (tag) { return new FakeElement(tag); },
-  // NO createElementNS — the fallback path a stripped host takes.
+  createElementNS: function (ns, tag) { return makeSvgElement(tag); },
   getElementById: function (id) {
     if (id === 'palette-list') { return paletteListEl; }
     if (id === 'chain-list') { return chainListEl; }
@@ -469,6 +487,47 @@ check(
   emptyHintEl.style.display === '' || emptyHintEl.style.display === 'none',
   'G4: the empty-hint flip still reads #chain-list\'s children (unaffected by the layer)'
 );
+
+// ----------------------------------------------------------------------
+console.log('H. browser-faithful SVG contract (hotfix regression gate)');
+check(
+  cordLayer().getAttribute('class') === 'cord-layer',
+  'H1: the layer element carries its class via the class ATTRIBUTE (real SVGElement.className is read-only)'
+);
+check(
+  cordPaths().every(function (p) { return p.getAttribute('class') === 'cord'; }),
+  'H2: every cord path classes via the attribute'
+);
+var threwReadOnly = false;
+try {
+  'use strict';
+  cordLayer().className = 'would-throw';
+} catch (err) {
+  threwReadOnly = err instanceof TypeError;
+}
+check(
+  threwReadOnly,
+  'H3: this harness is faithful — assigning className on an SVG element throws TypeError, so a reintroduced .className assignment fails the suite at load'
+);
+
+// H4 (source gate): no direct array-method calls on live DOM collections
+// anywhere in src/ — the HTMLCollection-vs-Array divergence that shipped
+// twice today. Array.prototype.*.call is the only legal form.
+var fsMod = require('fs');
+var pathMod = require('path');
+var srcDir = pathMod.join(__dirname, '..', 'src');
+var offenders = [];
+fsMod.readdirSync(srcDir).forEach(function (f) {
+  if (!/\.js$/.test(f)) { return; }
+  var body = fsMod.readFileSync(pathMod.join(srcDir, f), 'utf8');
+  var lines = body.split('\n');
+  lines.forEach(function (line, i) {
+    if (/\.children\.(slice|forEach|map|filter|indexOf|some|every|reduce)\(/.test(line)) {
+      offenders.push(f + ':' + (i + 1) + ' ' + line.trim());
+    }
+  });
+});
+check(offenders.length === 0, 'H4: zero direct array-method calls on .children in src/ (offenders: ' + (offenders.join(' | ') || 'none') + ')');
 
 if (failures.length === 0) {
   console.log('PASS: cord layer (FEW-3)');

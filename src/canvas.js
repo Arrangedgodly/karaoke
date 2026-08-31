@@ -308,7 +308,10 @@
       return; // no canvas face (e.g. a stripped harness) — cords simply don't paint
     }
     cordSvgEl = createSvgEl('svg');
-    cordSvgEl.className = 'cord-layer';
+    // SVGElement.className is a read-only SVGAnimatedString in real
+    // browsers (the vm harness's stub allowed a plain assignment, which
+    // is how this shipped) — class goes through setAttribute.
+    cordSvgEl.setAttribute('class', 'cord-layer');
     cordSvgEl.setAttribute('aria-hidden', 'true');
     canvasFace.appendChild(cordSvgEl); // LAST child — see insertion note above
     renderCords();
@@ -411,12 +414,15 @@
     if (!cordSvgEl) {
       return;
     }
-    cordSvgEl.children.slice().forEach(function (child) {
+    // Array.prototype.slice.call — real DOM children is a live
+    // HTMLCollection without array methods (the vm harness's Array
+    // children masked this; second hotfix of the same shipping class).
+    Array.prototype.slice.call(cordSvgEl.children).forEach(function (child) {
       child.remove();
     });
     cordSegments().forEach(function (seg) {
       var path = createSvgEl('path');
-      path.className = 'cord';
+      path.setAttribute('class', 'cord');
       path.setAttribute('d', cordPathD(seg.a, seg.b));
       path.setAttribute('data-from', seg.from);
       path.setAttribute('data-to', seg.to);
@@ -428,7 +434,7 @@
     jackEls = [];
     jackPoints().forEach(function (jp) {
       var el = createSvgEl('circle');
-      el.className = 'cord-jack';
+      el.setAttribute('class', 'cord-jack');
       el.setAttribute('cx', jp.x);
       el.setAttribute('cy', jp.y);
       el.setAttribute('r', JACK_R);
@@ -705,7 +711,7 @@
   function ensureGhost() {
     if (!cordDrag.ghostEl || cordDrag.ghostEl.parentNode !== cordSvgEl) {
       cordDrag.ghostEl = createSvgEl('path');
-      cordDrag.ghostEl.className = 'cord-ghost';
+      cordDrag.ghostEl.setAttribute('class', 'cord-ghost');
       cordDrag.ghostEl.setAttribute('data-drag-node', cordDrag.id);
       cordDrag.ghostEl.setAttribute('data-drag-end', cordDrag.endKind);
       cordSvgEl.appendChild(cordDrag.ghostEl);

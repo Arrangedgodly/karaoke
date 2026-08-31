@@ -837,3 +837,23 @@ patch-cord board + PR #19, suite 30/2292 green. PR #19 auto-closed
 MERGED by GitHub. REMAINING: user QA-5 acceptance (user running QA
 shortly); deferred work queued with reasons (FEW-5 resize re-dispatch
 cheapest first).
+
+### QA-5 hotfix (2026-08-30): real-browser load crash — FIXED
+User report (mobile, deployed site): no effects visible, empty screen
+after Start. Root cause: TWO vm-vs-real-browser divergences in the FEW-3
+cord layer, both shipped because no real-browser render ran post-FEW-3
+(verifiers skipped the optional serve step — coordinator gap, owned):
+(1) SVGElement.className is a read-only getter in real browsers —
+canvas.js:311 assigned it (TypeError, canvas.js IIFE died: no palette,
+no cards, no ChainCanvas; main.js's fallback built audio silently →
+"empty after start"). (2) children.slice() on a live HTMLCollection
+(canvas.js:417 renderCords). Fixes: setAttribute('class', ...) at all
+four SVG sites; Array.prototype.slice.call at 417. Systemic gates:
+FEW-3 harness now installs a browser-faithful createElementNS
+(getter-only className — reintroduction fails the suite at load) + a
+source gate banning direct array-method calls on .children in src/;
+few4/a11y1 harnesses sync class-attribute ↔ className like the real
+DOM. Verified: suite 30/30 green; real-browser renders at 390px (10
+chips, 3 group legends, EXP badge, register, bypass cord + jacks,
+FLOW/TIDY controls; 0 cards pre-Start is by-design — chain populates
+in Start().then()).
