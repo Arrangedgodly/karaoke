@@ -104,7 +104,7 @@
   // ---------------------------------------------------------------------
   var GRID_PITCH = 16; // the snap quantum (px) — one shared constant
   var TIDY_X = GRID_PITCH; // the incumbent stack's left edge (grid-aligned)
-  var TIDY_ROW_PITCH = GRID_PITCH * 10; // 160px — one tidy row per section
+  var TIDY_ROW_PITCH = GRID_PITCH * 10; // 160px — the layout-less tidy-row fallback (real rows use measured heights)
   var positions = {}; // id -> {x, y, scale, flow} (scale/flow carried, FEW-5/6 wire them)
   var zCounter = 0; // bring-to-front counter (pointerdown order)
   var positionDrag = null; // the live grip drag, if any
@@ -122,38 +122,55 @@
     card.style.zIndex = String(zCounter);
   }
 
+  /** One row's contribution to the tidy stack: the card's MEASURED height
+   *  snapped up to the grid plus one grid unit of breathing room (the
+   *  console rhythm's own pitch — not an arbitrary gap). A layout-less
+   *  host falls back to the incumbent fixed 160px row pitch. OQ-9: the
+   *  fixed pitch overlapped real expanded sections (a knob field runs
+   *  ~200-280px), which is what "smashed together" was at real sizes. */
+  function tidyRowHeight(id) {
+    var size = measuredSize(cardElById(id));
+    if (size.h) {
+      return Math.ceil(size.h / GRID_PITCH) * GRID_PITCH + GRID_PITCH;
+    }
+    return TIDY_ROW_PITCH;
+  }
+
   /** The incumbent vertical stack for the CURRENT chain order, preserving
-   *  each node's existing scale/flow (TIDY rewrites only x/y). */
+   *  each node's existing scale/flow (TIDY rewrites only x/y). Rows stack
+   *  on their own measured heights — no card ever overlaps its neighbor
+   *  just because it grew. */
   function tidyStackLayout() {
     var layout = {};
-    chainModel.forEach(function (entry, i) {
+    var y = 0;
+    chainModel.forEach(function (entry) {
       var prev = positions[entry.id] || {};
       layout[entry.id] = {
         x: TIDY_X,
-        y: i * TIDY_ROW_PITCH,
+        y: y,
         scale: typeof prev.scale === 'number' && isFinite(prev.scale) ? prev.scale : 1,
         flow: prev.flow === 'horizontal' ? 'horizontal' : 'vertical'
       };
+      y += tidyRowHeight(entry.id);
     });
     return layout;
   }
 
-  /** First free grid slot down the tidy column (FEW-7 will generalize). */
+  /** First free grid slot down the tidy column: below the lowest card's
+   *  measured bottom (FEW-7 will generalize). */
   function firstFreeSlotY() {
-    for (var k = 0; k < 512; k++) {
-      var y = k * TIDY_ROW_PITCH;
-      var taken = Object.keys(positions).some(function (id) {
-        return positions[id].x === TIDY_X && positions[id].y === y;
-      });
-      if (!taken) {
-        return y;
+    var maxY = 0;
+    Object.keys(positions).forEach(function (id) {
+      var bottom = positions[id].y + tidyRowHeight(id);
+      if (bottom > maxY) {
+        maxY = bottom;
       }
-    }
-    return snapToGrid(Object.keys(positions).length * TIDY_ROW_PITCH);
+    });
+    return snapToGrid(maxY);
   }
 
   function placeNewNode(id) {
-    positions[id] = { x: TIDY_X, y: firstFreeSlotY(), scale: 1, flow: 'vertical' };
+    positions[id] = { x: TIDY_X, y: firstFreeSlotY(), scale: 1, flow: boardFlow };
     return positions[id];
   }
 
@@ -163,15 +180,18 @@
   }
 
   /** Keep the list tall enough that the lowest card stays reachable in the
-   *  panel's internal scroll (absolute cards do not size their container). */
+   *  panel's internal scroll (absolute cards do not size their container).
+   *  OQ-9: the extent covers each seat's measured BOTTOM, not a fixed row
+   *  pitch — a tall section at the board's foot is fully scrollable. */
   function refreshBoardExtent() {
     var maxY = 0;
     Object.keys(positions).forEach(function (id) {
-      if (positions[id].y > maxY) {
-        maxY = positions[id].y;
+      var bottom = positions[id].y + tidyRowHeight(id);
+      if (bottom > maxY) {
+        maxY = bottom;
       }
     });
-    chainListEl.style.minHeight = (maxY + TIDY_ROW_PITCH) + 'px';
+    chainListEl.style.minHeight = maxY + 'px';
   }
 
   function applyPositionsToCards() {
@@ -273,24 +293,52 @@
   //     the point: the map is the only state.
   //   - READ-ONLY this task: pointer-events none, aria-hidden decorative.
   //     Cord EDITING (drag-to-relink) is FEW-4's scope.
-  //   - Placeholder jack geometry: fixed grid-derived offsets (VIS-1's
-  //     in-world vocabulary, --pm-* tokens only; the full visual pass is
-  //     the later redesign round, OQ-9).
+  //   - OQ-9 (QA-5 element round): jack geometry is the user's exact
+  //     across-from spec (see the constants block below) — ON the border,
+  //     derived from live card measurements + each card's layout flow
+  //     field, with placeholder fallbacks only for a layout-less host.
   // ---------------------------------------------------------------------
   var SVG_NS = 'http://www.w3.org/2000/svg';
-  var CORD_MIC_DY = -2 * GRID_PITCH; // the MIC OUT jack print, above the board's first row
-  var CORD_JACK_DY = GRID_PITCH * 3; // a section's jack line (mid-rail)
-  var CORD_JACK_DX = GRID_PITCH * 10; // section in->out jack span (placeholder width)
+  // OQ-9 (QA-5 element round) — JACK GEOMETRY, per the user's exact spec:
+  // a card's two jacks sit ON its border, DIRECTLY ACROSS each other.
+  //   VERTICAL flow   -> IN at the TOP-CENTER of the border, OUT at the
+  //                      BOTTOM-CENTER (the column reads mic -> down
+  //                      through the cards -> out);
+  //   HORIZONTAL flow -> IN at the MIDDLE of the LEFT border, OUT at the
+  //                      MIDDLE of the RIGHT border.
+  // Orientation derives from each card's OWN layout flow field (FEW-1's
+  // per-entry `flow`) — today that field is uniform, written by the canvas
+  // FLOW toggle (see applyFlow); FEW-6's per-card glyph can flip one card
+  // and its jacks follow with zero changes here. Panel anchors rhyme with
+  // the same across-from logic: MIC IN is the SOURCE (its out-jack on the
+  // board-facing edge of its print row), the OUT anchor RECEIVES (its
+  // in-jack on the board-facing edge).
+  //
+  // Fallbacks for a LAYOUT-LESS host (the committed vm harnesses report no
+  // offsets): the placeholder card box keeps the historical constants
+  // (160px wide, 48px tall) so the pinned tests stay positions-map
+  // verbatim; every real browser measures the live card instead.
+  var CARD_W_FALLBACK = GRID_PITCH * 10; // 160 — placeholder card width
+  var CARD_H_FALLBACK = GRID_PITCH * 3; // 48 — placeholder card height
+  var PANEL_MIC_DY = -2 * GRID_PITCH; // -32 — MIC OUT line above the board (fallback)
   var cordSvgEl = null;
   // FEW-4: jack-point geometry + edit-gesture constants. JACK_R is the
-  // DRAWN ring (the grab target — pointer-events:all makes the whole
-  // disc live); CORD_HIT_SLOP is the geometric drop slop the JS
-  // hit-test uses; CORD_DETACH_THRESHOLD is the deliberate-drag guard.
+  // HIT disc (pointer-events:all makes the whole disc live); the DRAWN
+  // ring is smaller and sits half-buried ON the card's border line (the
+  // socket reads as machined into the slab's edge). CORD_HIT_SLOP is the
+  // geometric drop slop the JS hit-test uses; CORD_DETACH_THRESHOLD is
+  // the deliberate-drag guard.
   var JACK_R = 12;
+  var JACK_RING_R = 7.5; // 15px outer — the same size as the anchor print rings
+  var JACK_SOCKET_R = 2.5; // the dark socket dot inside the ring
   var CORD_HIT_SLOP = 24;
   var CORD_DETACH_THRESHOLD = 6;
   var jackEls = []; // the live jack elements ({el, jack}), rebuilt by renderCords
   var cordDrag = null; // the live cord edit, if any (FEW-4 block below)
+  // The canvas-wide flow mode the FLOW toggle owns (VIS-7b). Today it is
+  // the uniform value written into every card's layout flow field;
+  // FEW-6 makes the field per-card and this becomes only the default.
+  var boardFlow = 'vertical';
 
   function createSvgEl(tag) {
     if (typeof document.createElementNS === 'function') {
@@ -329,15 +377,93 @@
     return { x: ox, y: oy };
   }
 
+  /** Measured box of a live element, or {0,0} where the host reports no
+   *  layout (the committed vm harnesses) — the caller decides the
+   *  fallback. Same defensive register as boardOrigin(). */
+  function measuredSize(el) {
+    var w = el && typeof el.offsetWidth === 'number' && el.offsetWidth > 0 ? el.offsetWidth : 0;
+    var h = el && typeof el.offsetHeight === 'number' && el.offsetHeight > 0 ? el.offsetHeight : 0;
+    return { w: w, h: h };
+  }
+
+  /** The section's jack pair — ON the border, directly across each other
+   *  (the OQ-9 geometry block above). Reads the card's OWN flow field;
+   *  measures the live element, placeholder box in a layout-less host. */
+  function sectionJackPts(id) {
+    var pos = positions[id];
+    var origin = boardOrigin();
+    var size = measuredSize(cardElById(id));
+    var w = size.w || CARD_W_FALLBACK;
+    var h = size.h || CARD_H_FALLBACK;
+    var x0 = origin.x + pos.x;
+    var y0 = origin.y + pos.y;
+    if (pos.flow === 'horizontal') {
+      return {
+        inPt: { x: x0, y: y0 + h / 2 },
+        outPt: { x: x0 + w, y: y0 + h / 2 }
+      };
+    }
+    return {
+      inPt: { x: x0 + w / 2, y: y0 },
+      outPt: { x: x0 + w / 2, y: y0 + h }
+    };
+  }
+
+  /** A panel anchor element (the MIC IN / OUT print rows inside the
+   *  canvas face, matched by class in DOM order — never by text, which is
+   *  src/meters.js's own contract). */
+  function panelAnchorEl(which) {
+    var face = document.getElementById('chain-canvas');
+    if (!face || !face.children) {
+      return null;
+    }
+    var anchors = [];
+    Array.prototype.forEach.call(face.children, function (child) {
+      if (child.classList && child.classList.contains('anchor')) {
+        anchors.push(child);
+      }
+    });
+    if (anchors.length === 0) {
+      return null;
+    }
+    return which === 'out' ? anchors[anchors.length - 1] : anchors[0];
+  }
+
+  /** MIC IN's OUT jack — the source's board-facing edge, centered on the
+   *  print row (bottom-center in the vertical reading, middle-right in the
+   *  horizontal one — the same across-from rule the cards follow). */
+  function micOutPoint() {
+    var el = panelAnchorEl('mic');
+    var size = measuredSize(el);
+    var origin = boardOrigin();
+    if (size.w && size.h) {
+      return boardFlow === 'horizontal'
+        ? { x: el.offsetLeft + size.w, y: el.offsetTop + size.h / 2 }
+        : { x: el.offsetLeft + size.w / 2, y: el.offsetTop + size.h };
+    }
+    return { x: origin.x + TIDY_X, y: origin.y + PANEL_MIC_DY };
+  }
+
+  /** The OUT anchor's IN jack — the receiver's board-facing edge
+   *  (top-center vertical / middle-left horizontal). The layout-less
+   *  fallback rides the board's foot below the lowest seat. */
+  function outInPoint(maxY) {
+    var el = panelAnchorEl('out');
+    var size = measuredSize(el);
+    var origin = boardOrigin();
+    if (size.w && size.h) {
+      return boardFlow === 'horizontal'
+        ? { x: el.offsetLeft, y: el.offsetTop + size.h / 2 }
+        : { x: el.offsetLeft + size.w / 2, y: el.offsetTop };
+    }
+    return { x: origin.x + TIDY_X, y: origin.y + maxY + TIDY_ROW_PITCH };
+  }
+
   /** The read-only route: MIC OUT -> each section in DOM order -> OUT IN.
    *  One segment per hop, so the segment count is always nodes + 1 (an
    *  empty chain still shows the direct MIC -> OUT bypass cord). */
   function cordSegments() {
-    var origin = boardOrigin();
-    var cardEls = chainListEl.querySelectorAll('.node-card');
-    var ids = Array.prototype.map.call(cardEls, function (el) {
-      return el.getAttribute('data-node-id');
-    });
+    var ids = domCardIds();
     var maxY = 0;
     ids.forEach(function (id) {
       var pos = positions[id];
@@ -346,27 +472,20 @@
       }
     });
 
-    // Panel jack prints: MIC OUT above the board's top row, OUT IN at the
-    // board's foot (the same lowest-seat extent refreshBoardExtent sizes
-    // the list's min-height to).
     var segments = [];
     var prevId = 'mic';
-    var prevPt = { x: origin.x + TIDY_X, y: origin.y + CORD_MIC_DY };
-    var outPt = { x: origin.x + TIDY_X, y: origin.y + maxY + TIDY_ROW_PITCH };
+    var prevPt = micOutPoint();
+    var outPt = outInPoint(maxY);
 
     ids.forEach(function (id) {
       var pos = positions[id];
       if (!pos) {
         return; // seatless sections never exist on a painted board
       }
-      segments.push({
-        from: prevId,
-        to: id,
-        a: prevPt,
-        b: { x: origin.x + pos.x, y: origin.y + pos.y + CORD_JACK_DY }
-      });
+      var jacks = sectionJackPts(id);
+      segments.push({ from: prevId, to: id, a: prevPt, b: jacks.inPt });
       prevId = id;
-      prevPt = { x: origin.x + pos.x + CORD_JACK_DX, y: origin.y + pos.y + CORD_JACK_DY };
+      prevPt = jacks.outPt;
     });
     segments.push({ from: prevId, to: 'out', a: prevPt, b: outPt });
     return segments;
@@ -428,29 +547,55 @@
       path.setAttribute('data-to', seg.to);
       cordSvgEl.appendChild(path);
     });
-    // FEW-4: the JACK POINTS — the layer's ONLY pointer-live children
-    // (CSS turns pointer-events on for .cord-jack alone; the paths stay
-    // decorative until grabbed).
+    // FEW-4 + OQ-9: the JACK POINTS — the layer's ONLY pointer-live
+    // children (CSS turns pointer-events on for .cord-jack alone; the
+    // paths stay decorative until grabbed). One GROUP per link point:
+    // a transparent hit disc (the whole circle grabs, not just the
+    // painted stroke), the drawn RING, and the dark SOCKET dot inside it
+    // — ring + socket is the same drawn anatomy the anchor prints use,
+    // so every jack on the board is one size and one shape, sitting ON
+    // the border line it belongs to (half-buried in the slab edge).
     jackEls = [];
     jackPoints().forEach(function (jp) {
-      var el = createSvgEl('circle');
-      el.setAttribute('class', 'cord-jack');
-      el.setAttribute('cx', jp.x);
-      el.setAttribute('cy', jp.y);
-      el.setAttribute('r', JACK_R);
-      el.setAttribute('data-jack-kind', jp.kind);
+      var g = createSvgEl('g');
+      g.setAttribute('class', 'cord-jack');
+      g.setAttribute('data-jack-kind', jp.kind);
       if (jp.nodeId) {
-        el.setAttribute('data-node-id', jp.nodeId);
+        g.setAttribute('data-node-id', jp.nodeId);
       }
-      el.addEventListener('pointerdown', function (event) {
+      g.setAttribute('transform', 'translate(' + jp.x + ', ' + jp.y + ')');
+      var hit = createSvgEl('circle');
+      hit.setAttribute('class', 'jack-hit');
+      hit.setAttribute('r', JACK_R);
+      g.appendChild(hit);
+      var ring = createSvgEl('circle');
+      ring.setAttribute('class', 'jack-ring');
+      ring.setAttribute('r', JACK_RING_R);
+      g.appendChild(ring);
+      var socket = createSvgEl('circle');
+      socket.setAttribute('class', 'jack-socket');
+      socket.setAttribute('r', JACK_SOCKET_R);
+      g.appendChild(socket);
+      g.addEventListener('pointerdown', function (event) {
         armCordDrag(jp, event);
       });
-      cordSvgEl.appendChild(el);
-      jackEls.push({ el: el, jack: jp });
+      cordSvgEl.appendChild(g);
+      jackEls.push({ el: g, jack: jp });
     });
   }
 
   buildCordLayer();
+
+  // OQ-9: jack points derive from LIVE card geometry (border centers), so
+  // a viewport resize re-derives them — the cords stay plugged when the
+  // panel's column width changes. Guarded like every panel-level wiring.
+  if (typeof window.addEventListener === 'function' &&
+      !window.__chainCanvasResizeWired) {
+    window.__chainCanvasResizeWired = true;
+    window.addEventListener('resize', function () {
+      renderCords();
+    });
+  }
 
   // ---------------------------------------------------------------------
   // FEW-4 (cycle 4): CORD EDITING — order-by-cord, never gating audio.
@@ -1867,7 +2012,11 @@
           x: snapToGrid(saved.x),
           y: snapToGrid(saved.y),
           scale: typeof saved.scale === 'number' && isFinite(saved.scale) ? saved.scale : 1,
-          flow: saved.flow === 'horizontal' ? 'horizontal' : 'vertical'
+          // An EXPLICIT saved flow wins; a missing field defaults to the
+          // canvas-wide mode the FLOW toggle owns (OQ-9: the toggle is
+          // today's uniform writer of the per-card field).
+          flow: saved.flow === 'horizontal' ? 'horizontal'
+            : saved.flow === 'vertical' ? 'vertical' : boardFlow
         };
       } else if (previous[entry.id]) {
         positions[entry.id] = previous[entry.id];
@@ -2138,16 +2287,35 @@
   }
 
   function applyFlow(mode) {
+    boardFlow = mode === 'horizontal' ? 'horizontal' : 'vertical';
     if (flowPanel) {
-      if (mode === 'horizontal') {
+      if (boardFlow === 'horizontal') {
         flowPanel.classList.add('flow-horizontal');
       } else {
         flowPanel.classList.remove('flow-horizontal');
       }
     }
     if (flowButton) {
-      flowButton.textContent = mode === 'horizontal' ? 'FLOW: HORIZONTAL' : 'FLOW: VERTICAL';
-      flowButton.setAttribute('aria-pressed', mode === 'vertical' ? 'true' : 'false');
+      flowButton.textContent = boardFlow === 'horizontal' ? 'FLOW: HORIZONTAL' : 'FLOW: VERTICAL';
+      flowButton.setAttribute('aria-pressed', boardFlow === 'vertical' ? 'true' : 'false');
+    }
+    // OQ-9: jack geometry derives from each card's OWN flow field. Today
+    // the field is UNIFORM and this toggle is its single writer (FEW-6
+    // will make it per-card); writing it here keeps the cords and the
+    // panel class in lockstep, and persists the per-entry field so a
+    // reload round-trips. A layout-less host has nothing to sync.
+    var changed = false;
+    Object.keys(positions).forEach(function (id) {
+      if (positions[id] && positions[id].flow !== boardFlow) {
+        positions[id].flow = boardFlow;
+        changed = true;
+      }
+    });
+    if (changed) {
+      renderCords(); // re-route onto the flipped orientation
+      if (window.Persistence) {
+        window.Persistence.saveCurrentChain(chainModel, positions);
+      }
     }
   }
 

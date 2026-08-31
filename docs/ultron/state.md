@@ -866,3 +866,30 @@ geometry EXACT: vertical card -> input jack TOP-CENTER of the border,
 output jack BOTTOM-CENTER (directly across); horizontal card -> input
 MIDDLE-LEFT border, output MIDDLE-RIGHT border. Dispatched as the
 OQ-9 element round with the prescription fixed.
+
+### OQ-9 element round BUILT (2026-08-30, redesign element worker) — awaiting user gate
+Board identity + jack geometry per the fixed prescription. (1) Sections
+are now WEIGHTED SLABS: --pm-slab #181a21 face step + sawn groove-cut
+edge + machined slab lip (0.22 alpha, pinned BETWEEN groove and seam
+lips), family tick 3px + rail groove division, tidy stack on MEASURED
+heights + one grid unit of gap (real render: six slabs, 18px gaps, zero
+overlap; the old fixed 160px pitch was the "smashed together"). (2)
+Jack geometry exact: vertical IN top-center / OUT bottom-center directly
+across; horizontal middle-left / middle-right; orientation from the
+per-card layout flow field (FLOW toggle = its uniform writer; FEW-6
+ready); panel anchors measured (mic bottom-center, OUT top-center).
+(3) One jack vocabulary: 15px ring + dark socket ON the border line
+(half-buried socket), 24px hit disc, quiet print-lift hover; vertical
+anchors retire their print ring + arrows (cords are the flow). Elevation
+tonal+edge only — zero shadow at rest; audio semantics, thresholds,
+queueing, fast path untouched. Suite 30/30 files / 2313 checks exit 0
+(behavior assertions unchanged; geometry/vocabulary pins moved in
+few3 [+3 orientation checks]/few4/a11y1/two-deck). REAL-BROWSER
+verification done per the hotfix lesson:
+.impeccable/review/board-identity-desktop.png (1440x900) +
+board-identity-mobile.png (390x844), populated via real Start clicks —
+validated non-blank, slabs + border-line jacks visible; companion
+console logs EMPTY (zero uncaught errors both breakpoints); CDP probes
+proved jack pointer-liveness over the opaque slab, a full relink
+gesture, TIDY overlap-free, and the horizontal flip. DESIGN.md synced.
+Full record + residuals: [redesign.md](redesign.md) OQ-9 entry.

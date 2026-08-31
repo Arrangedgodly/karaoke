@@ -354,11 +354,17 @@ check(
   'the seam cut is its own deeper value (' + seamCut + ', vs the section groove ' + grooveCut + ')'
 );
 var nodeCardRule = cssRule('.node-card');
+var slabLip = cssToken('pm-slab-lip');
 check(
   nodeCardRule !== null &&
-    cssDecl(nodeCardRule, 'border-top') === '1px solid var(--pm-groove-cut)' &&
-    cssDecl(nodeCardRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)',
-  'the canvas sections keep their 1px groove (the seam stays deeper than every section groove)'
+    cssDecl(nodeCardRule, 'border') === '1px solid var(--pm-groove-cut)' &&
+    cssDecl(nodeCardRule, 'background') === 'var(--pm-slab)' &&
+    cssDecl(nodeCardRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-slab-lip)',
+  'the canvas sections are slabs on the chassis: 1px groove-cut edge, slab face, machined top lip (OQ-9 vocabulary)'
+);
+check(
+  !!slabLip && lipAlpha(slabLip) < lipAlpha(seamLip) && lipAlpha(slabLip) > lipAlpha(grooveLip),
+  'the slab lip sits BETWEEN the groove lip and the seam lip (' + slabLip + ') — the seam stays the deepest, brightest cut on the page'
 );
 
 var frameRule = cssRule('.instrument');

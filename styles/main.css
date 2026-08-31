@@ -172,6 +172,17 @@
   --pm-seam-lip: rgba(201, 206, 220, 0.3);
   --pm-bench: #0a0b0f;
 
+  /* OQ-9 (QA-5 element round) — THE SECTION SLAB. The board's sections
+     are weighted slabs with a real face step above the chassis (DESIGN.md
+     promised "weighted-slab sections with cut faces, never floating
+     panels"; this delivers it): one step lighter than the chassis ground
+     they sit IN, a sawn dark cut edge all round, and a machined top lip
+     one rank brighter than a section groove but below the deck seam —
+     elevation stays TONAL + edge, never shadow (Rest-Flat holds: no drop
+     shadow at rest anywhere on the slab). */
+  --pm-slab: #181a21;
+  --pm-slab-lip: rgba(201, 206, 220, 0.22);
+
   --pm-family-gain: #cdc5ad;
   --pm-family-compressor: #b0c6a9;
   --pm-family-eq: #aabacf;
@@ -1617,6 +1628,42 @@ select.control {
   margin-right: 0.25rem;
 }
 
+/* OQ-9 (QA-5) — vertical mode: the panel anchors rhyme with the cards'
+   across-from geometry. The MIC IN row's jack sits at its BOTTOM-CENTER,
+   the OUT row's at its TOP-CENTER, and the CORD LAYER draws those jacks
+   (ring + socket, the one board vocabulary) exactly there — so the
+   print row's own left-edge ring retires in this mode and the label
+   prints beside the real jack. The meter stays pinned at the row's
+   right end (absolute; the row is already position:relative via the
+   occlusion guard). Horizontal mode keeps the stacked print ring as
+   before (the jack there is the anchor block's top mark). */
+.canvas-panel:not(.flow-horizontal) .anchor::before {
+  content: none;
+}
+
+.canvas-panel:not(.flow-horizontal) .anchor {
+  justify-content: flex-start;
+  padding-left: calc(50% + 0.8rem);
+  padding-right: 0.15rem;
+}
+
+.canvas-panel:not(.flow-horizontal) .anchor .meter-unit {
+  position: absolute;
+  right: 0.15rem;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+}
+
+/* Vertical mode retires the printed flow arrows: the PATCH CORDS are the
+   flow indication on a free board, they run down the column's center,
+   and a dim chevron printed exactly where the cord drops would only
+   collide with the new jack line. (Horizontal mode keeps them — its
+   cords run edge-to-edge along the row.) */
+.canvas-panel:not(.flow-horizontal) .arrow {
+  display: none;
+}
+
 /* Signal-flow arrows — the same aria-hidden decorative spans, drawn as
    print chevrons (the glyph text is zeroed; the mark is CSS geometry
    pointing down the vertical flow). */
@@ -1664,16 +1711,20 @@ select.control {
   z-index: 1;
 }
 
-/* --- FEW-3: the cord layer ---------------------------------------------
+/* --- FEW-3 + OQ-9: the cord layer ---------------------------------------
    Read-only signal cords (MIC OUT -> sections in chain order -> OUT IN),
    painted by src/canvas.js's renderCords() from the positions map. The
    layer is APPENDED as the canvas face's LAST child (never a first
    child, never inside .chain-list — those DOM contracts are pinned by
    other tests) and paints BEHIND the sections purely by z-index.
-   In-world placeholder styling: recessed print-dim ink in the panel's
-   own vocabulary (--pm-* tokens only); the full cord/jack visual pass
-   is the later redesign round (OQ-9). Cord editing is FEW-4's scope —
-   the layer is decorative and pointer-inert. */
+   OQ-9 delivered the in-world vocabulary: cords run jack-to-jack in the
+   panel's own tokens (--pm-* only), and each jack is a drawn RING +
+   dark SOCKET pair sitting ON the border line it serves — the same
+   anatomy and 15px size as the anchor print rings, one vocabulary for
+   every jack on the board. Section jacks sit half-buried on the slab's
+   edge (the ring reads as a socket machined into the border); the
+   visible half is the grab affordance. Cord editing is FEW-4's scope —
+   only the jacks are pointer-live. */
 .cord-layer {
   position: absolute;
   top: 0;
@@ -1694,24 +1745,44 @@ select.control {
   stroke-linecap: round;
 }
 
-/* FEW-4 — the JACK POINTS: the cord layer's ONLY pointer-live children.
-   The layer keeps pointer-events:none; each jack ring turns them back on
-   for itself alone (pointer-events:all makes the whole disc a grab
-   target, not just the painted stroke). A hot ring (a compatible drop
-   target under the dragged end) and the dashed ghost cord use the accent
-   ink. In-world placeholder styling in the panel's own vocabulary
-   (--pm-* tokens only); the redesign pass owns beauty (OQ-9). */
+/* FEW-4 + OQ-9 — the JACK POINTS: the cord layer's ONLY pointer-live
+   children. The layer keeps pointer-events:none; each jack group turns
+   them back on for itself alone (pointer-events inherits to the hit
+   disc, ring, and socket — the whole group grabs). The RING is the
+   drawn jack (15px, the anchor print size); the SOCKET dot inside it is
+   the dark bore; the transparent HIT disc is wider for the hand. A hot
+   ring (a compatible drop target under the dragged end) and the dashed
+   ghost cord use the accent ink; hover quietly lifts the ring to full
+   print before any of that — the affordance teaches itself at rest. */
 .cord-jack {
   pointer-events: all;
-  fill: transparent;
-  stroke: var(--pm-print-dim);
-  stroke-width: 2;
   cursor: grab;
 }
 
-.cord-jack-hot {
+.cord-jack .jack-hit {
+  fill: transparent;
+}
+
+.cord-jack .jack-ring {
+  fill: none;
+  stroke: var(--pm-print);
+  stroke-width: 2;
+}
+
+.cord-jack .jack-socket {
+  fill: var(--pm-register-bg);
+}
+
+.cord-jack:hover .jack-ring {
+  stroke: var(--pm-print-hi);
+}
+
+.cord-jack-hot .jack-ring {
   stroke: var(--pm-accent);
-  stroke-width: 3;
+}
+
+.cord-jack-hot .jack-socket {
+  fill: var(--pm-accent);
 }
 
 .cord-ghost {
@@ -1738,18 +1809,27 @@ select.control {
 }
 
 /* ===========================================================================
-   SECTIONS (the chain's effects) — panel-print zones of the one faceplate
+   SECTIONS (the chain's effects) — WEIGHTED SLABS on the one faceplate
    (src/canvas.js writes the same data-family/data-initials hooks the old
    cards carried). Anatomy per the locked structure: FAMILY PRINT BLOCK
-   (rail) left + ENCODER FIELD right, split by a MACHINED GROOVE from the
-   neighbors above and below — never a floating card.
-
-   The groove: each section's top edge carries a 1px dark cut with a 1px
-   light lip (inset) — cut-face geometry, no shadow, no rounded island.
-   Family coding is PRINT: the 2-letter code in the family's desaturated
-   ink (8.66–10.76 on chassis) + a 2px family tick on the rail's left
-   edge. Color is never the only signal (code text + label always carry
-   the family identity too).
+   (rail) left + ENCODER FIELD right. OQ-9 (QA-5): each section now
+   carries its own face — the "everything is smashed together" ground is
+   gone. The slab is TONAL + EDGE, never shadow:
+     - FACE STEP: --pm-slab, one step lighter than the chassis ground it
+       sits IN (a raised casting, not a floating card);
+     - CUT EDGE: a 1px sawn dark cut all round (the groove vocabulary —
+       the slot the slab was cut from);
+     - MACHINED TOP LIP: inset 1px slab-lip directly under the top cut —
+       cut beside lip, the house boundary grammar; brighter than a
+       section groove, dimmer than the deck seam (a part, never the
+       joint).
+   No drop shadow at rest, no radius, no border islands — the Rest-Flat
+   rule holds; the sections still read as parts of the one chassis.
+   Family coding stays PRINT: the 2-letter code in the family's
+   desaturated ink (8.66–10.76 measured on chassis; ~8.2–10.2 on the
+   slab — well clear) + the 3px family tick down the rail's left edge.
+   Color is never the only signal (code text + label always carry the
+   family identity too).
    =========================================================================== */
 
 .node-card {
@@ -1759,7 +1839,8 @@ select.control {
      quantized in src/canvas.js). Position is STYLE ONLY: the DOM order
      always equals the chain order (PD-4), so the bring-to-front z-order
      (JS zIndex) is paint, never order. The list's scrollable extent is
-     maintained by JS (min-height against the lowest seat). */
+     maintained by JS (min-height over the lowest seat's measured
+     bottom). */
   position: absolute;
   left: 0;
   right: 0;
@@ -1773,10 +1854,10 @@ select.control {
   align-items: stretch;
   padding: 0.55rem 0.75rem 0.6rem 0.9rem;
   border-radius: 0;
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--pm-groove-cut);
-  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  /* The slab: face step + sawn cut edge + machined top lip. */
+  background: var(--pm-slab);
+  border: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-slab-lip);
   min-width: 0;
   will-change: transform;
 }
@@ -1813,10 +1894,16 @@ select.control {
   align-items: flex-start;
   gap: 0.3rem;
   min-width: 0;
-  /* The family tick: 2px of the family ink down the rail's left edge —
-     panel-print marking, not a filled chip. */
-  border-left: 2px solid var(--card-family, var(--pm-print-dim));
+  /* The family tick: 3px of the family ink down the rail's left edge —
+     panel-print marking, not a filled chip (OQ-9: one notch wider than
+     the old 2px so the family reads at a glance on the slab, still never
+     a fill). */
+  border-left: 3px solid var(--card-family, var(--pm-print-dim));
+  /* The rail is the module's identity block — a machined division
+     separates it from the encoder field (cut, not border island). */
+  border-right: 1px solid var(--pm-groove-cut);
   padding-left: 0.6rem;
+  padding-right: 0.75rem;
 }
 
 /* The explicit GRIP ZONE (the locked card's risk line): with no card
@@ -2043,7 +2130,7 @@ select.control {
   flex-direction: row;
   align-items: center;
   gap: 0.55rem;
-  border-left-width: 2px;
+  border-left-width: 3px;
 }
 
 .node-card.collapsed .section-code {
@@ -2175,7 +2262,7 @@ select.control {
 }
 
 .node-card.sortable-drag {
-  background: var(--pm-chassis);
+  background: var(--pm-slab);
   opacity: 0.92;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
 }
@@ -2195,7 +2282,7 @@ select.control {
 }
 
 /* --- Agent mutation pulse ----------------------------------------------
-   One accent blink on the section's top groove (the frame's cut edge
+   One accent blink on the section's machined top lip (the slab's lip
    flashes signal orange) — a state blink, not a glow; the animation
    NAME is pinned by src/canvas.js's animationend listener and MUST NOT
    change. Entirely inside the reduced-motion guard. */
@@ -2207,7 +2294,7 @@ select.control {
   @keyframes node-card-agent-pulse {
     0%,
     100% {
-      box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+      box-shadow: inset 0 1px 0 var(--pm-slab-lip);
     }
 
     50% {

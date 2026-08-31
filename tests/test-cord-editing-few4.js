@@ -328,16 +328,21 @@ function model3() {
   ];
 }
 
-// Board-space jack constants (src/canvas.js): mic (16,-32); a section's
-// jack line at seat + 48y, in at seat.x, out at seat.x + 160; out-in at
-// the board's foot. Tidy seats: n1 y=0, n2 y=160, n3 y=320.
+// Board-space jack constants (src/canvas.js, OQ-9 geometry): mic
+// (16,-32) and out-in (16,480) — the layout-less panel fallbacks; a
+// section's jacks sit ON its border, DIRECTLY ACROSS each other over the
+// placeholder card box (160w x 48h): vertical flow reads IN at the
+// top-center, OUT at the bottom-center. Tidy seats: n1 y=0, n2 y=160,
+// n3 y=320.
 var MIC_OUT = { x: 16, y: -32 };
 var OUT_IN = { x: 16, y: 480 };
+var CARD_W = 160;
+var CARD_H = 48;
 function seatIn(id) {
-  return { x: 16, y: { n1: 0, n2: 160, n3: 320 }[id] + 48 };
+  return { x: 16 + CARD_W / 2, y: { n1: 0, n2: 160, n3: 320 }[id] };
 }
 function seatOut(id) {
-  return { x: 176, y: { n1: 0, n2: 160, n3: 320 }[id] + 48 };
+  return { x: 16 + CARD_W / 2, y: { n1: 0, n2: 160, n3: 320 }[id] + CARD_H };
 }
 
 function grabJack(kind, nodeId) {
@@ -392,9 +397,9 @@ var baseSaves = saves.length;
 console.log('B. deliberate-drag threshold: a click on a jack is not an unplug');
 grabJack('section-out', 'n2');
 check(CC.isDragActive() === false, 'B1: press alone does not engage the drag flag');
-move({ x: 179, y: 208 }); // 3px — sub-threshold
+move({ x: 99, y: 208 }); // 3px past n2's out-jack (96,208) — sub-threshold
 check(CC.isDragActive() === false && !ghostEl(), 'B2: sub-threshold move detaches nothing (no flag, no ghost)');
-drop({ x: 179, y: 208 });
+drop({ x: 99, y: 208 });
 check(
   buildCount === baseBuild && saves.length === baseSaves &&
     domOrder().join('|') === 'n1|n2|n3' && !ghostEl() && CC.isDragActive() === false,

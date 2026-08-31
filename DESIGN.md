@@ -5,6 +5,8 @@ colors:
   bench: "#0a0b0f"
   chassis: "#131316"
   system-deck: "#17181d"
+  slab: "#181a21"
+  slab-lip: "rgba(201, 206, 220, 0.22)"
   face-edge: "#232330"
   groove-cut: "#05060a"
   groove-lip: "rgba(158, 164, 184, 0.14)"
@@ -131,7 +133,7 @@ components:
     textColor: "{colors.print}"
     padding: "0.35rem 0.5rem"
   section-node:
-    backgroundColor: "transparent"
+    backgroundColor: "{colors.slab}"
     textColor: "{colors.print}"
     padding: "0.55rem 0.75rem 0.6rem 0.9rem"
     width: "100%"
@@ -156,8 +158,9 @@ continuous faceplate whose three zones (palette flank · chain face ·
 presets flank) are printed onto the same ground, separated by machined
 grooves rather than panel borders. The chain face itself is the Single
 Face Chassis: a dot-matrix display register etched along the top edge,
-jack-print anchors (MIC IN / OUT), and each effect a panel-print SECTION
-split from its neighbors by grooves — never a floating card.
+jack-print anchors (MIC IN / OUT), and each effect a weighted-slab
+SECTION with cut faces standing on the chassis ground — never a floating
+card.
 
 The control world is the encoder field: rotary knobs, pad selectors, and
 trimmers condensed into fluid clusters, exactly the refusal of stacked
@@ -212,6 +215,7 @@ measured in the build records (redesign.md item 1/1b tables).
 - **Bench** (#0a0b0f): the ground AROUND the instrument — the page reads as a slab on a surface.
 - **Chassis** (#131316): the instrument's one continuous faceplate ground, both decks' casting base; also `--pm-ink` (text/fill ink on accent).
 - **System Deck cast** (#17181d): the upper slab, a hair lighter — two castings, one instrument.
+- **Section slab** (#181a21, `--pm-slab`): each chain section's own face — one step lighter than the chassis it sits IN (a raised casting, never a floating card), with a 1px sawn groove-cut edge and the machined **slab lip** (rgba(201,206,220,0.22)) directly under the top cut: brighter than a section groove, dimmer than the deck seam. Elevation on the board is TONAL + EDGE only.
 - **Face Edge** (#232330): the chassis frame's machined bezel edge — a cut face, not a floating border.
 - **Groove Cut / Groove Lip** (#05060a / rgba(158,164,184,0.14)): the machined groove between sections and zones — dark slot beside a light lip.
 - **Seam Cut / Seam Lip** (#010208 / rgba(201,206,220,0.3)): the deck seam — deliberately deeper (4px) and brighter-lipped than section grooves; the deepest cut on the page.
@@ -272,16 +276,27 @@ absolutely positioned full-width row translated to its board seat by JS
 is STYLE ONLY — DOM order always equals chain order (PD-4), so
 bring-to-front z-order is paint, never sequence. The grip drag moves a
 section's seat (never its sound); the arrangement autosaves; TIDY
-recomputes the incumbent vertical stack (x = 16px, one 160px row per
-section).
+recomputes the incumbent vertical stack (x = 16px, rows stacking on each
+section's MEASURED height plus one grid unit of breathing room — never
+overlapping, never a fixed pitch).
 
-**Patch cords (FEW-3/FEW-4):** an SVG cord layer behind the sections
-draws MIC OUT → sections in chain order → OUT IN from the same positions
-map (nodes + 1 segments, re-routed by every position/order write path).
-Jack rings are the layer's only pointer-live children: dragging a cord
-end reorders the chain — audio changes ONLY on a completed link; drop
-nowhere reverts (keyboard Escape is the twin). Ghost cords and hot drop
-targets take the accent ink.
+**Patch cords (FEW-3/FEW-4, geometry by OQ-9):** an SVG cord layer
+behind the sections draws MIC OUT → sections in chain order → OUT IN
+from the same positions map (nodes + 1 segments, re-routed by every
+position/order write path). Jack geometry is the across-from rule: a
+VERTICAL card's input sits at the TOP-CENTER of its border and its
+output at the BOTTOM-CENTER (directly across); a HORIZONTAL card's at
+the middle of its LEFT and RIGHT borders — orientation derives from each
+card's OWN layout flow field (today uniform, written by the canvas FLOW
+toggle; per-card when FEW-6 lands). The panel anchors rhyme: MIC IN's
+out-jack at its print row's bottom-center, the OUT anchor's in-jack at
+its top-center, so the column reads mic → down through the cards → out.
+Every jack is ONE drawn vocabulary — a 15px ring with a dark socket dot,
+sitting ON the border line it serves (half-buried in the slab's edge)
+with a quiet print-lift hover. Jack rings are the layer's only
+pointer-live children: dragging a cord end reorders the chain — audio
+changes ONLY on a completed link; drop nowhere reverts (keyboard Escape
+is the twin). Ghost cords and hot drop targets take the accent ink.
 
 Spacing rhythm is console-tight (4/8/12/16px); panel padding ~0.85–1rem;
 section padding 0.55/0.75/0.6/0.9rem on an 8.5rem rail + fluid encoder
@@ -311,8 +326,9 @@ Squared machined hardware. The chassis frame and all sections have
 radius 0; the remaining radii are small and functional: 2px (empty-socket
 hint), 3px (EXP badge), 4px (control keys), full-circle (knobs, jack
 rings, legend squares). The recurring signature geometry: the 15px drawn
-jack (threaded ring + dark radial socket), the 3×3 grip dot field, the
-2px family tick on the rail, the register's 3px accent mark at its left
+jack — one ring + dark socket vocabulary shared by the cord layer's
+border-line jacks and the panel prints — the 3×3 grip dot field, the
+3px family tick on the rail, the register's 3px accent mark at its left
 edge, the diagonal 45° hatch texture (7px/2px) of the one disabled
 grammar, and the dashed print slot of the insertion ghost / empty
 socket. Focus rings are 2px solid orange with 1px offset; on orange
@@ -343,7 +359,7 @@ never shadow or glow.
 - One etched slot on the chain face's top edge: inset register ground, machined lip, a 3px accent mark at the left edge, FIXED 3rem height over two lines (main + help) that clip, never reflow. Main line: `module · param · value` in mono tabular 13.6px — module segment in signal orange, segments differentiated by color/weight, never size. Help line at the 12px value tier. The touched control's value writes it; the ONE blink (register-blink) lives here. aria-hidden: the controls carry semantics; this is the redundant display.
 
 ### Sections (chain effects)
-- Panel-print zones of the one faceplate — radius 0, transparent ground, a groove (dark cut top edge + inset light lip) splitting neighbors. Grid: 8.5rem family rail | fluid encoder field. **Rail:** machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · fold chevron + eject × at the rail's foot. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the chosen (held) section's groove lip goes accent; the ghost is a dashed print slot — a groove reservation, not a section. **Agent pulse:** one accent blink on the section's top groove (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
+- WEIGHTED SLABS on the one faceplate (OQ-9): radius 0, `--pm-slab` face ground one step lighter than the chassis, a 1px sawn groove-cut edge all round, and the machined slab lip (inset 1px under the top cut) — a raised casting separated from its neighbors by the chassis ground, never a floating card and never a shadow at rest. Grid: 8.5rem family rail | fluid encoder field. **Rail:** the family print block — 3px family tick down its left edge · machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · fold chevron + eject × at the rail's foot; a groove-cut division separates rail from encoder field. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the chosen (held) section's machined lip goes accent; the ghost is a dashed print slot — a groove reservation, not a section. **Agent pulse:** one accent blink on the section's machined lip (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
 
 ### Chips (palette zone)
 - Real `<button>`s rendered as KEYS on the voice deck: key ground, cut-edge bezel, a 20px family legend square (saturated rq5 token — the identity mark) beside the module name as a silkscreen legend (12px uppercase). Rest seam is the cut edge; hover raises to full print; active/drag-origin goes signal orange. Ten chips chunk under three non-interactive group legends in operator language ("Shape your voice" / "Polish your sound" / "Keep it safe") as real `<h3>`s.

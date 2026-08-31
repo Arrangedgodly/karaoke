@@ -641,3 +641,127 @@ correct content.
 
 **Item 1b gate: APPROVED 2026-08-30** (user, live inspection). Next:
 item 2 element round (control anatomy + drag feel, live variants).
+
+## OQ-9 element round — board identity + jack geometry (2026-08-30, redesign element worker)
+
+**Trigger:** QA-5 verdict ADJUST — "plugin cards must STAND OUT from the
+mixer ground + more individual identity (everything is smashed
+together)"; cord patching "decent first attempt, sloppy". User
+prescription FIXED (three parts): (1) weighted-slab sections with a real
+face step (distinct ground one step lighter than the chassis, cut-edge
+treatment, stronger family identity, breathing room at real sizes) —
+NO floating-card regression, elevation TONAL + EDGE only; (2) exact jack
+geometry — vertical card: IN top-center of the border, OUT bottom-center
+(directly across); horizontal card: IN middle-left, OUT middle-right;
+orientation from the per-card layout flow field; panel anchors rhyme
+(mic out at bottom-center, OUT in at top-center) so the column reads
+mic → down through cards → out; (3) jack visual coherence — one
+teachable ring+socket vocabulary sitting ON the border, quiet hover.
+
+**What shipped**
+
+*Slab identity (styles/main.css).* Two new tokens — `--pm-slab`
+(#181a21, one step lighter than the chassis #131316) and
+`--pm-slab-lip` (rgba(201,206,220,0.22), deliberately BETWEEN the groove
+lip 0.14 and the seam lip 0.30 — a part, never the joint; pinned by a
+new test). `.node-card` becomes the slab: slab face ground, 1px sawn
+groove-cut edge all round, inset 1px machined lip under the top cut.
+Zero shadow at rest (Rest-Flat holds); the drag-clone keeps the one
+physical lift (now on the slab ground); the agent pulse keyframes and
+chosen-state accent lip re-based on the slab lip. Family rail more
+assertive: family tick 2px → 3px down the rail's left edge, and the rail
+gains a groove-cut right division (the family print block reads as the
+module's identity strip). Measured on the slab ground: print 7.11,
+lifted print 11.10, family code inks 8.16–10.13, knob arcs (worst)
+6.53 — all pass their floors.
+
+*Breathing room (src/canvas.js).* The tidy stack was a FIXED 160px row
+pitch while real expanded sections measure ~126–280px — the literal
+"smashed together". `tidyRowHeight()` now stacks rows on each section's
+MEASURED height snapped up to the 16px grid + one grid unit of gap
+(within the console rhythm, not arbitrary); TIDY, first-free-slot
+placement, and the board extent all use it. The layout-less harness
+fallback stays the old 160px pitch so the FEW-2 pins hold verbatim.
+Real-Chrome proof: default chain renders six 126px slabs with 18px gaps,
+zero overlap; TIDY re-stack verified overlap-free.
+
+*Jack geometry (src/canvas.js).* `sectionJackPts(id)` — the across-from
+rule exactly: vertical card → IN at (seat.x + w/2, seat.y), OUT at
+(seat.x + w/2, seat.y + h); horizontal → IN at (seat.x, seat.y + h/2),
+OUT at (seat.x + w, seat.y + h/2). Orientation reads the card's OWN
+layout `flow` field (FEW-1 schema); the canvas FLOW toggle is now its
+uniform writer (applyFlow syncs every entry + re-routes + persists, so
+FEW-6's per-card glyph just works later); loadModel defaults a missing
+field to the canvas-wide mode, an explicit saved field wins. Panel
+anchors measured from their real elements (mic row bottom-center, OUT
+row top-center; horizontal: middle-right / middle-left), with the old
+grid-derived constants as the layout-less fallback. Cards measured live
+(offsetWidth/Height), placeholder box 160×48 in harnesses. A guarded
+window-resize listener re-routes (jack x derives from card width).
+Real-Chrome proof: in-jack (725.5,164) vs card top-center (726,164),
+out-jack directly across; horizontal mode: in (355,192) middle-left,
+out (835,192) middle-right.
+
+*Jack visuals (both files).* Each jack is now a `<g class="cord-jack">`:
+transparent 24px hit disc + drawn 15px RING + dark SOCKET dot (the same
+anatomy and size as the anchor print rings — one teachable vocabulary),
+positioned ON the border line so it reads half-buried in the slab's edge
+like a machined socket; quiet hover lifts the ring to full print; hot
+target + ghost keep the accent. The vertical-mode anchor rows retire
+their own left-edge print ring and the flow arrows (the cord layer IS
+the flow indication now): label prints beside the real jack
+(`calc(50% + 0.8rem)`), meter pinned absolute right. Cord d-attr shape
+unchanged — endpoints moved only.
+
+*Untouched (hard constraints):* never-gate-audio semantics, the 6px
+threshold, commit chokepoint, agent queueing (isDragActive), fast path,
+audio code — zero diffs outside the geometry/visual seam. 11px floor,
+--pm-* tokens only, no glow, reduced-motion guards intact.
+
+**Files:** src/canvas.js, styles/main.css, DESIGN.md (surgical sync:
+slab tokens + Sections/Shape/Layout/Patch-cords spec now match the built
+world), tests/test-cord-layer-few3.js (geometry pins + new §D2
+orientation checks), tests/test-cord-editing-few4.js (seat helpers),
+tests/test-order-focus-a11y1.js (jackPt helper), tests/test-two-deck-
+stack.js (section groove pin → slab vocabulary + the new lip-hierarchy
+invariant). Behavior assertions unchanged — only geometry/vocabulary
+pins moved.
+
+**Tests:** `node tests/run.js` exit 0 — **30/30 files, 2313 checks,
+all green** (baseline 30/2309; +4 = few3's three new orientation checks
++ two-deck's lip-hierarchy check). FEW-3 33 ok (was 30), FEW-4 48,
+A11Y-1 41, FEW-2 27, two-deck 75 — all PASS.
+
+**Real-browser verification (MANDATORY, the hotfix lesson — all done in
+headless Chrome/CDP, fresh profiles, cache-busted URLs):**
+`.impeccable/review/board-identity-desktop.png` (1440×900, populated via
+a real Start click with fake media — six slabs, center-column cords,
+jacks on the borders) and `board-identity-mobile.png` (390×844,
+populated) — both validated non-blank and showing the sections with the
+new jack geometry; companion `.console.log` files are EMPTY — zero
+uncaught errors / console.error at BOTH breakpoints (grep-verified).
+Beyond the rasters, a CDP interaction probe proved in the real browser:
+pointer-liveness of the jack's visible half over the now-opaque slab
+(elementFromPoint → .jack-hit), a full relink gesture end-to-end
+(n1's OUT on n3's IN → hot target n3 → order [n1,n2,n3,…] → [n2,n1,n3,…],
+one commit), TIDY overlap-free, and the horizontal-flow flip moving the
+jacks to the card's side borders. Zero console errors in every run.
+
+**Residuals**
+1. Panel-anchor jacks sit at the mic/OUT rows' centers (709.5px) while
+   the tidy column's card jacks sit +16px right (TIDY_X) — a 16px jog
+   the bezier sag absorbs; honest (cards ARE shifted on the board;
+   panel anchors center on the panel). Revisit only if the user reads
+   it as sloppy.
+2. Tidy spacing measures section heights AT TIDY TIME — a later
+   fold/unfold changes a slab's height without re-flowing neighbors
+   (session-only fold; the pre-round fixed pitch had the same class of
+   issue, only worse). FEW-5's resize work is the natural home.
+3. Jack grab reach is the ring's VISIBLE half (the slab covers the
+   other); the 24px geometric drop slop is unaffected. Fine on desktop;
+   revisit with FEW-6's touch pass.
+4. FEW-5 (card resize), FEW-6 (per-card flow glyph), FEW-7 drag
+   placement, FEW-8 — still deferred per the completion report; this
+   round's flow-field work makes FEW-6's geometry land clean.
+5. design.json sidecar not regenerated this round (finish-phase refresh
+   owns it; DESIGN.md already matches the built world).

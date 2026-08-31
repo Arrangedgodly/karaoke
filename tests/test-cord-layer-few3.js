@@ -344,11 +344,17 @@ function model3() {
   ];
 }
 
-// Board-space jack constants (src/canvas.js): mic (16,-32), a section's
-// jack line at +48y, in-jack at the seat's x, out-jack at seat.x + 160.
+// Board-space jack constants (src/canvas.js, OQ-9 geometry): mic
+// (16,-32) — the layout-less fallback for the MIC OUT point; a section's
+// jacks sit ON its border, DIRECTLY ACROSS each other (vertical flow: IN
+// at top-center, OUT at bottom-center) over the placeholder card box
+// (160 wide, 48 tall — real browsers measure the live card); OUT IN at
+// the board's foot (16, maxY + 160).
 var MIC = { x: 16, y: -32 };
-var JACK_DY = 48;
-var JACK_DX = 160;
+var CARD_W = 160;
+var CARD_H = 48;
+function seatIn(seat) { return { x: seat.x + CARD_W / 2, y: seat.y }; }
+function seatOut(seat) { return { x: seat.x + CARD_W / 2, y: seat.y + CARD_H }; }
 
 // ----------------------------------------------------------------------
 console.log('A. layer construction + the pinned DOM contracts');
@@ -391,9 +397,9 @@ check(
 );
 var d12 = dOf(1);
 check(
-  !!d12 && startPoint(d12).x === 16 + JACK_DX && startPoint(d12).y === 0 + JACK_DY &&
-    endPoint(d12).x === 16 && endPoint(d12).y === 160 + JACK_DY,
-  'B5: mid-chain endpoints derive from the seats (n1 out-jack 176,48 -> n2 in-jack 16,208)'
+  !!d12 && startPoint(d12).x === seatOut({ x: 16, y: 0 }).x && startPoint(d12).y === seatOut({ x: 16, y: 0 }).y &&
+    endPoint(d12).x === seatIn({ x: 16, y: 160 }).x && endPoint(d12).y === seatIn({ x: 16, y: 160 }).y,
+  'B5: mid-chain endpoints derive from the seats (n1 out-jack 96,48 -> n2 in-jack 96,160 — ON the border, across from each other)'
 );
 var dLast = dOf(3);
 check(
@@ -419,12 +425,12 @@ check(
 var intoN2 = dOf(1);
 var outOfN2 = dOf(2);
 check(
-  !!intoN2 && endPoint(intoN2).x === 48 && endPoint(intoN2).y === 176 + JACK_DY,
-  'C2: the cord INTO n2 now ends at its moved in-jack (48, 224)'
+  !!intoN2 && endPoint(intoN2).x === seatIn({ x: 48, y: 176 }).x && endPoint(intoN2).y === seatIn({ x: 48, y: 176 }).y,
+  'C2: the cord INTO n2 now ends at its moved in-jack (128, 176 — top-center of the seat)'
 );
 check(
-  !!outOfN2 && startPoint(outOfN2).x === 48 + JACK_DX && startPoint(outOfN2).y === 176 + JACK_DY,
-  'C3: the cord OUT OF n2 now starts at its moved out-jack (208, 224)'
+  !!outOfN2 && startPoint(outOfN2).x === seatOut({ x: 48, y: 176 }).x && startPoint(outOfN2).y === seatOut({ x: 48, y: 176 }).y,
+  'C3: the cord OUT OF n2 now starts at its moved out-jack (128, 224 — bottom-center, directly across)'
 );
 check(
   dOf(0) === micToN1Before,
@@ -435,8 +441,34 @@ check(
 console.log('D. TIDY re-routes the cords onto the restored stack');
 CC.tidyChain();
 check(
-  endPoint(dOf(1)).x === 16 && endPoint(dOf(1)).y === 160 + JACK_DY,
-  'D1: after TIDY the cord into n2 returns to the stack seat (16, 208)'
+  endPoint(dOf(1)).x === seatIn({ x: 16, y: 160 }).x && endPoint(dOf(1)).y === seatIn({ x: 16, y: 160 }).y,
+  'D1: after TIDY the cord into n2 returns to the stack seat (96, 160)'
+);
+
+// ----------------------------------------------------------------------
+console.log('D2. jack ORIENTATION derives from each card\'s OWN flow field');
+// OQ-9: HORIZONTAL flow moves the jacks to the card\'s sides — IN at the
+// middle of the LEFT border, OUT at the middle of the RIGHT border (the
+// per-card field FEW-6\'s glyph will flip; today the canvas toggle is
+// its uniform writer — the LAYOUT FIELD is what the geometry reads).
+CC.loadModel(model3(), {
+  n1: { x: 16, y: 0, flow: 'horizontal' },
+  n2: { x: 16, y: 160 },
+  n3: { x: 16, y: 320 }
+});
+var dIntoN1 = dOf(0);
+var dOutOfN1 = dOf(1);
+check(
+  !!dIntoN1 && endPoint(dIntoN1).x === 16 && endPoint(dIntoN1).y === 0 + CARD_H / 2,
+  'D2a: a HORIZONTAL card\'s in-jack sits at the middle of its LEFT border (16, 24)'
+);
+check(
+  !!dOutOfN1 && startPoint(dOutOfN1).x === 16 + CARD_W && startPoint(dOutOfN1).y === 0 + CARD_H / 2,
+  'D2b: a HORIZONTAL card\'s out-jack sits at the middle of its RIGHT border (176, 24) — directly across'
+);
+check(
+  !!dOutOfN1 && endPoint(dOutOfN1).y === 160,
+  'D2c: the vertical neighbor\'s in-jack stays on its top border (mixing orientations routes cleanly)'
 );
 
 // ----------------------------------------------------------------------
