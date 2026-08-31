@@ -857,3 +857,12 @@ DOM. Verified: suite 30/30 green; real-browser renders at 390px (10
 chips, 3 group legends, EXP badge, register, bypass cord + jacks,
 FLOW/TIDY controls; 0 cards pre-Start is by-design — chain populates
 in Start().then()).
+
+### QA-5 verdict (2026-08-30, user): ADJUST — board visual round commissioned
+Cord patching = "decent first attempt, sloppy right now". User
+direction: (1) plugin cards must STAND OUT from the mixer ground +
+more individual identity ("everything is smashed together"); (2) jack
+geometry EXACT: vertical card -> input jack TOP-CENTER of the border,
+output jack BOTTOM-CENTER (directly across); horizontal card -> input
+MIDDLE-LEFT border, output MIDDLE-RIGHT border. Dispatched as the
+OQ-9 element round with the prescription fixed.
