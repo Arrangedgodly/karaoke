@@ -445,7 +445,7 @@ async function main() {
   // --------------------------------------------------------------------
   console.log('C. the intended per-tool schemas (read vs mutation)');
   // --------------------------------------------------------------------
-  ['get_capabilities', 'get_chain', 'list_presets'].forEach(function (name) {
+  ['get_chain', 'list_presets'].forEach(function (name) {
     var tool = byName(apiRegisterCalls, name);
     check(
       !!tool &&
@@ -458,6 +458,19 @@ async function main() {
       'C1: ' + name + ' publishes readOnlyHint: true (a read tool)'
     );
   });
+
+  var getCapabilitiesSchema = byName(apiRegisterCalls, 'get_capabilities').inputSchema;
+  check(
+    getCapabilitiesSchema.required.length === 0 &&
+      Object.keys(getCapabilitiesSchema.properties).length === 1 &&
+      getCapabilitiesSchema.properties.focus &&
+      sameMembers(getCapabilitiesSchema.properties.focus.enum, ['policy', 'sound_design']),
+    'C1: get_capabilities accepts optional focus [policy, sound_design]'
+  );
+  check(
+    byName(apiRegisterCalls, 'get_capabilities').annotations.readOnlyHint === true,
+    'C1: get_capabilities publishes readOnlyHint: true (a read tool)'
+  );
 
   // Issue #12: get_preset is a read tool that TAKES arguments (name +
   // optional namespace) — its schema specifics are C8 below; here just
@@ -575,6 +588,56 @@ async function main() {
     JSON.stringify(capsResult).length <= 1500,
     'D1: get_capabilities stays within Chrome\'s preliminary 1,500-character output guidance (' +
       JSON.stringify(capsResult).length + ' characters)'
+  );
+  var explicitPolicyResult = await byName(apiRegisterCalls, 'get_capabilities').execute({
+    focus: 'policy'
+  });
+  check(
+    deepEqual(explicitPolicyResult, capsResult),
+    'D1: explicit policy focus is byte-equivalent to the default compact response'
+  );
+  var soundDesignResult = await byName(apiRegisterCalls, 'get_capabilities').execute({
+    focus: 'sound_design'
+  });
+  check(
+    !!soundDesignResult &&
+      soundDesignResult.focus === 'sound_design' &&
+      soundDesignResult.vocabulary &&
+      soundDesignResult.vocabulary.deeper &&
+      soundDesignResult.vocabulary.light_reverb &&
+      soundDesignResult.vocabulary.ghostly,
+    'D1: sound_design focus maps deeper, light reverb, and ghostly goals to host-authored guidance'
+  );
+  check(
+    JSON.stringify(soundDesignResult).length <= 1500,
+    'D1: sound_design guidance stays within Chrome\'s preliminary 1,500-character output guidance (' +
+      JSON.stringify(soundDesignResult).length + ' characters)'
+  );
+  soundDesignResult.vocabulary.deeper[0] = 'mutated by caller';
+  var freshSoundDesignResult = await byName(apiRegisterCalls, 'get_capabilities').execute({
+    focus: 'sound_design'
+  });
+  check(
+    freshSoundDesignResult.vocabulary.deeper[0] !== 'mutated by caller',
+    'D1: sound_design returns a fresh defensive copy on every call'
+  );
+  var invalidFocus = await byName(apiRegisterCalls, 'get_capabilities').execute({
+    focus: 'make-it-cool'
+  });
+  check(
+    !!invalidFocus &&
+      invalidFocus.error === true &&
+      invalidFocus.code === 'INVALID_ARGUMENTS' &&
+      invalidFocus.problems[0].path === 'focus' &&
+      sameMembers(invalidFocus.problems[0].allowed, ['policy', 'sound_design']),
+    'D1: an unknown get_capabilities focus returns corrective allowed values'
+  );
+  var nonStringFocus = await byName(apiRegisterCalls, 'get_capabilities').execute({ focus: 42 });
+  check(
+    !!nonStringFocus &&
+      nonStringFocus.code === 'INVALID_ARGUMENTS' &&
+      nonStringFocus.problems[0].path === 'focus',
+    'D1: a non-string get_capabilities focus resolves INVALID_ARGUMENTS'
   );
 
   var chainResult = await byName(apiRegisterCalls, 'get_chain').execute({});

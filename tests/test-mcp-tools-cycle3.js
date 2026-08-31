@@ -542,6 +542,46 @@ async function main() {
     'A12: compact payload held (' + capsLen + ' chars — PR #18 ceiling discipline)');
   check(caps.summary === undefined,
     'A13: no prose summary in the compact readout (disclosure rides experimental + chainRules)');
+  var soundGuide = await getCapabilities.execute({ focus: 'sound_design' });
+  check(soundGuide.focus === 'sound_design' &&
+    soundGuide.vocabulary.deeper.some(function (step) { return /does not lower pitch/i.test(step); }),
+    'A14: deeper guidance is honest about timbre shaping rather than pitch shifting');
+  check(soundGuide.vocabulary.ghostly.some(function (step) { return /reverb/i.test(step); }) &&
+    soundGuide.vocabulary.ghostly.some(function (step) { return /delay/i.test(step); }),
+    'A15: ghostly guidance combines space and echo without requiring a named tool');
+  check(soundGuide.intensity && /first listed/i.test(soundGuide.intensity.slight) &&
+    /last listed/i.test(soundGuide.intensity.strong),
+    'A16: intensity follows each mild-to-strong listed range, including cuts');
+  var guideSteps = [];
+  Object.keys(soundGuide.vocabulary).forEach(function (intent) {
+    soundGuide.vocabulary[intent].forEach(function (step) {
+      var match = step.match(/^([a-z]+) ([A-Za-z][A-Za-z0-9]*)\b/);
+      if (match) {
+        guideSteps.push({ intent: intent, step: step, type: match[1], param: match[2] });
+      }
+    });
+  });
+  check(guideSteps.length === 24 && guideSteps.every(function (entry) {
+    return byType[entry.type] && byType[entry.type][entry.param];
+  }), 'A17: every actionable guide step names a registered node parameter');
+  check(guideSteps.every(function (entry) {
+    var policy = byType[entry.type][entry.param];
+    var range = entry.step.match(/([+-]?\d+(?:\.\d+)?)\.\.([+-]?\d+(?:\.\d+)?)/);
+    if (range) {
+      var a = Number(range[1]);
+      var b = Number(range[2]);
+      return policy.range && a >= policy.range[0] && a <= policy.range[1] &&
+        b >= policy.range[0] && b <= policy.range[1];
+    }
+    return policy.values && policy.values.some(function (value) {
+      return entry.step.indexOf(String(value)) !== -1;
+    });
+  }), 'A18: every guide range/value stays inside the published policy');
+  check(soundGuide.vocabulary.robotic.some(function (step) {
+    return /EXPERIMENTAL/i.test(step) && /verify by ear/i.test(step);
+  }), 'A19: robotic guidance carries the autotune experimental disclosure');
+  check(JSON.stringify(soundGuide).length <= 1500,
+    'A20: sound-design payload held (' + JSON.stringify(soundGuide).length + ' chars)');
 
   // ====================================================================
   console.log('B. set_chain: all four effects, incl. key "A" / scale "Minor"');

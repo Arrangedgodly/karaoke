@@ -1135,6 +1135,49 @@
     'A runtime watchdog watches the output analyser: peak above the ceiling +0.5 dB sustained >250 ms, or ~1 s of monotonic band-energy rise, forces the output to silence with a UI alert — restoring it is human-only.'
   ];
 
+  /**
+   * Compact translation help for non-technical sound requests. The
+   * browser agent interprets the user's language; the page stays LLM-free
+   * and returns host-authored, policy-safe starting points. This is a
+   * focused get_capabilities response so the normal policy index remains
+   * below Chrome's preliminary 1.5K output guidance.
+   */
+  var CAPABILITY_FOCUS = {
+    POLICY: 'policy',
+    SOUND_DESIGN: 'sound_design'
+  };
+  var CAPABILITY_FOCUS_VALUES = [
+    CAPABILITY_FOCUS.POLICY,
+    CAPABILITY_FOCUS.SOUND_DESIGN
+  ];
+
+  var SOUND_DESIGN_GUIDE = {
+    app: 'karaoke-chain-builder',
+    focus: CAPABILITY_FOCUS.SOUND_DESIGN,
+    workflow: {
+      edit: 'Call get_chain first; preserve nodes unless the user asks to rebuild.',
+      apply: 'Use set_param on existing nodes; add_node only for a missing effect.',
+      verify: 'Describe changes and ask the human to listen.'
+    },
+    intensity: {
+      slight: 'Use the first listed value in each range and make 1-2 changes.',
+      moderate: 'Use the middle of each range.',
+      strong: 'Use the last listed value, still inside policy.'
+    },
+    vocabulary: {
+      deeper: ['eq lowGain +2..+4 dB', 'eq highGain -1..-3 dB', 'This shapes timbre; it does not lower pitch.'],
+      light_reverb: ['reverb mix 10..25%'],
+      ghostly: ['reverb mix 25..50%', 'delay timeMs 180..320 ms', 'delay feedback 15..30%', 'delay mix 10..25%', 'chorus mix 10..25% (optional)'],
+      warm: ['eq lowGain +1..+3 dB', 'eq highGain -1..-2 dB', 'reverb mix 15..30%'],
+      bright: ['eq highGain +2..+4 dB', 'eq lowGain -1..-3 dB'],
+      clear: ['eq lowGain -2..-4 dB', 'reverb mix 0..15%'],
+      thick: ['chorus depthMs 2..4 ms', 'chorus rateHz 0.8..1.8 Hz', 'chorus mix 15..35%'],
+      gritty: ['distortion drive 0.15..0.4', 'distortion tone 0.4..0.7', 'distortion output -6..-3 dB'],
+      robotic: ['autotune retune 40..0 ms', 'autotune mix 70..100%', 'autotune scale Chromatic', 'EXPERIMENTAL: verify by ear before a show.']
+    },
+    boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
+  };
+
   // ---------------------------------------------------------------------
   // MC-3 read-tool helpers. Every app read here is guarded: an absent or
   // damaged dependency produces honest degraded fields, never a throw
@@ -1710,7 +1753,10 @@
    *
    * @returns {Object}
    */
-  function buildCapabilitiesResult() {
+  function buildCapabilitiesResult(input) {
+    if (input && input.focus === CAPABILITY_FOCUS.SOUND_DESIGN) {
+      return freshCopy(SOUND_DESIGN_GUIDE);
+    }
     var nodeTypes = {};
     registryTypes().forEach(function (type) {
       var params = {};
@@ -3830,7 +3876,7 @@
   }
 
   /**
-   * No-argument tools (get_capabilities, get_chain, list_presets): the
+   * No-argument tools (get_chain, list_presets): the
    * only structural rule is input-is-an-object.
    *
    * @param {*} input
@@ -3838,6 +3884,30 @@
    */
   function validateNoArgs(input, problems) {
     checkInputObject(input, problems);
+  }
+
+  /**
+   * get_capabilities: default to the compact policy index; optionally
+   * return the plain-language sound-design guide.
+   *
+   * @param {*} input
+   * @param {Array<Object>} problems
+   */
+  function validateGetCapabilities(input, problems) {
+    var inputObject = checkInputObject(input, problems);
+    if (problems.length > 0 || inputObject.focus === undefined) {
+      return;
+    }
+    if (CAPABILITY_FOCUS_VALUES.indexOf(inputObject.focus) === -1) {
+      problems.push(
+        problem(
+          'focus',
+          "must be '" + CAPABILITY_FOCUS_VALUES.join("' or '") + "'; got " +
+            displayValue(inputObject.focus),
+          CAPABILITY_FOCUS_VALUES.slice()
+        )
+      );
+    }
   }
 
   /**
@@ -4091,7 +4161,7 @@
    *
    * @param {string} name - the tool's registered name.
    * @param {Function} validator - (input, problems) => void.
-   * @param {Function} buildResult - () => Object.
+   * @param {Function} buildResult - (input) => Object.
    * @returns {Function} execute(input, options) -> Promise<Object>.
    */
   function readExecute(name, validator, buildResult) {
@@ -4102,35 +4172,11 @@
         if (problems.length > 0) {
           return Promise.resolve(invalidArgumentsResult(name, problems));
         }
-        return Promise.resolve(buildResult());
+        return Promise.resolve(buildResult(input));
       } catch (err) {
         return Promise.resolve(schemaLayerFaultResult(name, err));
       }
     };
-  }
-
-  /**
-   * get_preset's body (issue #12): the read-tool pattern, except the
-   * builder needs the VALIDATED input (the name + optional namespace the
-   * resolution runs against). Same contract otherwise: the builder
-   * guards its own reads (absent stores degrade honestly into the
-   * PRESET_NOT_FOUND result), never throws, and a caught crash really is
-   * a bug in THIS layer (SCHEMA_LAYER_FAULT).
-   *
-   * @param {*} input
-   * @returns {Promise<Object>}
-   */
-  function getPresetExecute(input) {
-    try {
-      var problems = [];
-      validatePresetSelector(input, problems);
-      if (problems.length > 0) {
-        return Promise.resolve(invalidArgumentsResult('get_preset', problems));
-      }
-      return Promise.resolve(buildGetPresetResult(input));
-    } catch (err) {
-      return Promise.resolve(schemaLayerFaultResult('get_preset', err));
-    }
   }
 
   /**
@@ -4283,17 +4329,24 @@
     return {
       name: 'get_capabilities',
       description:
-        'Return supported node types, parameter names, units, safe ranges, out-of-range ' +
-        'behavior, core chain rules, and human-only controls. Use when constructing or ' +
-        'correcting a chain request.',
+        'Translate a plain-language voice goal or inspect safety policy. Use ' +
+        "focus='sound_design' for requests like deeper, a little reverb, ghostly, warm, " +
+        "clear, thick, gritty, or robotic. Use focus='policy' (the default) for node " +
+        'parameters, safe ranges, chain rules, and human-only controls.',
       inputSchema: {
         type: 'object',
-        properties: {},
+        properties: {
+          focus: {
+            type: 'string',
+            enum: CAPABILITY_FOCUS_VALUES.slice(),
+            description: 'policy for ranges and rules; sound_design for adjective-to-effect guidance.'
+          }
+        },
         required: [],
         additionalProperties: false
       },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
-      execute: readExecute('get_capabilities', validateNoArgs, buildCapabilitiesResult)
+      execute: readExecute('get_capabilities', validateGetCapabilities, buildCapabilitiesResult)
     };
   }
 
@@ -4548,7 +4601,7 @@
       // whatever save_preset was given) — the untrusted-content hint is
       // true, like list_presets.
       annotations: { readOnlyHint: true, untrustedContentHint: true },
-      execute: getPresetExecute
+      execute: readExecute('get_preset', validatePresetSelector, buildGetPresetResult)
     };
   }
 

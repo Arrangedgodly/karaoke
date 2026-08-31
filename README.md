@@ -69,7 +69,7 @@ Registered by the app for in-browser agents (see `src/mcp-tools.js`):
 
 | Tool | Kind | What it does |
 | --- | --- | --- |
-| `get_capabilities` | read | Everything the app offers an agent: valid node types, param names, units, ranges, chain rules. |
+| `get_capabilities` | read | Focused policy ranges or a compact sound-design guide that maps plain-language goals to safe effects. |
 | `get_chain` | read | The live chain, serialized in the exact shape `set_chain` accepts, with engine/preset context. |
 | `set_chain` | write | Replace the whole chain in one validated pass (also the preset-loading path). |
 | `add_node` | write | Insert one effect node (position optional). |
@@ -79,6 +79,13 @@ Registered by the app for in-browser agents (see `src/mcp-tools.js`):
 | `get_preset` | read | One listed preset's complete nodes, without loading it (namespace explicit when a name exists in both groups). |
 | `load_preset` | write | Load a listed preset as the live chain — same policy and visible UI path as `set_chain`, with summary toast and Undo. |
 | `save_preset` | write | Save the current chain as a named preset. |
+
+`get_capabilities` has two focused responses. The default `policy` response
+lists exact parameters, ranges, and chain rules. The optional `sound_design`
+response translates language such as "deeper," "a little reverb," "ghostly,"
+"warm," "clear," "thick," "gritty," and "robotic" into safe starting ranges.
+The browser agent still interprets the request. The app supplies the audio
+vocabulary, enforces every resulting change, and stays LLM-free.
 
 ## Shared-state architecture
 
