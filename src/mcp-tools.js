@@ -3513,6 +3513,34 @@
     var clamped = [];
     var finalValue = input.value;
     var policy = policyFor(entry.type, input.param);
+    if (!policy) {
+      // Registry-range fallback (cycle 4, Tone-backed effects): a param
+      // with no AGENT_PARAM_POLICY entry falls back to its registered
+      // paramSpec range with treatment 'clamp'. Every param of the ten
+      // native types HAS a policy entry (probe-verified 2026-08-31: all
+      // 26 numeric params clamp/reject out-of-range requests), so this
+      // branch is behavior-neutral for them — it exists so a NEWLY
+      // registered type's params get the same honest range enforcement
+      // (and the same clamped[] disclosure) without a policy-table edit
+      // per effect. Discrete params fall back to their spec's value
+      // list (membership — the structural layer already rejected
+      // non-members, this keeps the planner self-consistent).
+      var fallbackSpec = findSpec(paramSpecsFor(entry.type), input.param);
+      if (fallbackSpec && isDiscreteSpec(fallbackSpec)) {
+        policy = { values: fallbackSpec.values, unit: fallbackSpec.unit || '' };
+      } else if (
+        fallbackSpec &&
+        typeof fallbackSpec.min === 'number' &&
+        typeof fallbackSpec.max === 'number'
+      ) {
+        policy = {
+          min: fallbackSpec.min,
+          max: fallbackSpec.max,
+          unit: fallbackSpec.unit || '',
+          treatment: 'clamp'
+        };
+      }
+    }
     if (policy && policy.values) {
       // MCP-1: discrete param — membership, not a numeric range. The
       // structural layer already rejected non-members with the legal

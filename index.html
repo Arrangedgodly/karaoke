@@ -332,6 +332,19 @@
     formal badge component is UI-2's).
   -->
   <script src="src/node-autotune.js"></script>
+  <!--
+    Tone-backed effects (cycle 4): each file is ONE ToneAdapter.register()
+    call — the adapter (src/tone-adapter.js) builds both registry
+    registrations around a vendor/tone.min.js (Tone.js 15.1.22) effect
+    node. Palette chips, MCP add_node enum entries, set_param validation,
+    and preset persistence all pick these up automatically from the live
+    NodeTypes registry. Experimental until the ACCEPTANCE.md listening
+    pass signs off (same badge mechanism as autotune, cycle 3).
+  -->
+  <script src="src/node-pitchshift.js"></script>
+  <script src="src/node-tremolo.js"></script>
+  <script src="src/node-bitcrusher.js"></script>
+  <script src="src/node-phaser.js"></script>
   <script src="src/param-controls.js"></script>
   <script src="src/preset-schema.js"></script>
   <script src="src/default-preset.js"></script>
