@@ -466,6 +466,12 @@ async function main() {
     }),
     'H4: the fixture architecture gate rejects function, arrow, helper, and method syntaxes'
   );
+  var architectureHarness = makeHarness([node('gate', 'gain', { gainDb: 0 })]);
+  check(
+    !Object.prototype.hasOwnProperty.call(architectureHarness.window.ChainCanvas, 'loadModel') &&
+      !Object.prototype.hasOwnProperty.call(architectureHarness.window.ChainCanvas, 'updateNodeParam'),
+    'H5: this test file\'s ChainCanvas harness exposes no retired mutation adapter'
+  );
 
   if (failures > 0) {
     console.error('\n' + failures + ' check(s) failed');
