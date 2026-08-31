@@ -7,7 +7,14 @@ approved 2026-08-27; its production-log, QA, research, and design references
 remain valid there).
 
 ## Current Phase
-`impeccable` — **COMPLETE 2026-08-29, awaiting cycle acceptance.** Was POL-1 closer (ultron-impeccable) — **production complete
+**Redesign FINISH PHASE — COMPLETE 2026-08-30 (ultron-overlord finishing
+worker, auto mode / trimmed).** Closing critique 36/40 (baseline 36/40 —
+level in a harder world; snapshot
+`.impeccable/critique/2026-08-31T01-18-41Z__index-html.md`); DESIGN.md +
+.impeccable/design.json refreshed from the built Pattern Machine world;
+`node tests/run.js` exit 0; refinement queue EMPTY BY TRIM (no closing
+polish round). **Remaining: user acceptance only.**
+(Previously: `impeccable` — COMPLETE 2026-08-29, awaiting cycle acceptance.) Was POL-1 closer (ultron-impeccable) — **production complete
 2026-08-28**: all 22 plan tasks done (QA-3 5/5 PASS, user-judged; QA-1/2/4
 user-PASSed; PS-4/VIS-7/VIS-7b committed in 8be184c). `$impeccable document`
 ran 2026-08-28: DESIGN.md + .impeccable/design.json generated (scan mode,

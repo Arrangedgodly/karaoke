@@ -121,7 +121,26 @@ rerolls, no steer text, no product code touched.
 
 ## Finishing
 
-(reserved — closing critique vs baseline + document refresh)
+**COMPLETE 2026-08-30 (ultron-overlord finishing worker, auto mode / trimmed
+— refinement queue EMPTY BY TRIM, no closing polish round).**
+
+- Document refresh: DESIGN.md rewritten from the built world (Pattern
+  Machine / Single Face Chassis / Two-Deck Stack / free board; North Star
+  "The Pattern Machine") + .impeccable/design.json sidecar regenerated
+  (schemaVersion 2; JSON round-trips; var(--pm-*) refs resolve in
+  main.css). Detector-driven truth fix absorbed 0.9rem/1.05rem/#FFFFFF
+  into the frontmatter ramp (findings 21 → 15).
+- Closing critique: snapshot
+  `.impeccable/critique/2026-08-31T01-18-41Z__index-html.md` (disclosed
+  trimmed single-context run). Detector 15 findings vs the takeover's 25;
+  remaining quality advisories confined to the documented off-chassis rq5
+  residual (toasts / watchdog Restore / ?dev harness).
+- **Before/after: 36/40 → 36/40** — level in a harder world: the
+  baseline's tokenization P3 (a) is paid; (b)/(c) agent-side, untouched;
+  new P2 = cord-edit affordance is recall-only; standing behavioral
+  residue (no manual undo, no numeric entry, hover-only help discovery)
+  unchanged by the visual pass. `node tests/run.js` exit 0.
+  Remaining: user acceptance.
 
 **LOCKED 2026-08-30 (collected by the coordinator after the worker's
 window expired): `single-face-chassis`** (the dealt lead), steer empty.

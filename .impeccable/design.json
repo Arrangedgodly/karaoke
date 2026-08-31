@@ -1,172 +1,231 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-30T00:01:31-06:00",
+  "generatedAt": "2026-08-31T01:15:44Z",
   "title": "Design System: VOXCHAIN",
   "extensions": {
     "colorMeta": {
-      "bg-body": {
+      "bench": {
         "role": "neutral",
-        "displayName": "Chassis Charcoal",
-        "canonical": "#1B1917",
+        "displayName": "Bench",
+        "canonical": "#0a0b0f",
         "tonalRamp": [
-          "#292623",
-          "#49433e",
-          "#686159",
-          "#887e74",
-          "#a39b93",
-          "#beb8b2",
-          "#d8d5d2",
-          "#f3f2f1"
+          "#060608",
+          "#0a0b0f",
+          "#16171c",
+          "#2a2c35",
+          "#464853",
+          "#6b6e7b",
+          "#9498a4",
+          "#c3c6cf",
+          "#eceef2"
         ]
       },
-      "bg-panel": {
+      "chassis": {
         "role": "neutral",
-        "displayName": "Faceplate Umber",
-        "canonical": "#292623",
+        "displayName": "Instrument Chassis",
+        "canonical": "#131316",
         "tonalRamp": [
-          "#292623",
-          "#49433e",
-          "#686159",
-          "#887e74",
-          "#a39b93",
-          "#beb8b2",
-          "#d8d5d2",
-          "#f3f2f1"
+          "#08080a",
+          "#131316",
+          "#1e1f24",
+          "#333440",
+          "#4c4e5c",
+          "#6c6f7f",
+          "#9094a4",
+          "#b7bac6",
+          "#e0e2e9"
         ]
       },
-      "bg-card": {
+      "system-deck": {
         "role": "neutral",
-        "displayName": "Module Card",
-        "canonical": "#322E29",
+        "displayName": "System Deck Cast",
+        "canonical": "#17181d",
         "tonalRamp": [
-          "#2a2722",
-          "#4a443d",
-          "#6a6257",
-          "#8a7f71",
-          "#a59c91",
-          "#bfb9b1",
-          "#d9d6d1",
-          "#f4f2f1"
+          "#0a0b0e",
+          "#17181d",
+          "#23242b",
+          "#383a44",
+          "#52555f",
+          "#737681",
+          "#979aa6",
+          "#bdc0ca",
+          "#e4e6ec"
         ]
       },
-      "hairline": {
+      "face-edge": {
         "role": "neutral",
-        "displayName": "Seam Hairline",
-        "canonical": "#4C463E",
+        "displayName": "Machined Face Edge",
+        "canonical": "#232330",
         "tonalRamp": [
-          "#2a2722",
-          "#4a443d",
-          "#6a6257",
-          "#8a8071",
-          "#a59c91",
-          "#bfb9b1",
-          "#d9d6d1",
-          "#f4f2f1"
+          "#101017",
+          "#232330",
+          "#35364a",
+          "#4a4c63",
+          "#63667e",
+          "#828598",
+          "#a4a7b6",
+          "#c8cad6",
+          "#ebedf2"
         ]
       },
-      "line-strong": {
+      "print": {
         "role": "neutral",
-        "displayName": "Bezel Line",
-        "canonical": "#857C6E",
+        "displayName": "Silkscreen Print",
+        "canonical": "#9ea4b8",
         "tonalRamp": [
-          "#2a2723",
-          "#4a453d",
-          "#6a6357",
-          "#8a8072",
-          "#a49d91",
-          "#bfb9b1",
-          "#d9d6d1",
-          "#f3f3f1"
+          "#1c1e26",
+          "#333744",
+          "#4b5060",
+          "#646a7c",
+          "#7d8496",
+          "#9ea4b8",
+          "#b6bbca",
+          "#ced2dd",
+          "#e6e9f0"
         ]
       },
-      "text-primary": {
+      "print-hi": {
         "role": "neutral",
-        "displayName": "Warm Chalk",
-        "canonical": "#EDE8DE",
+        "displayName": "Lifted Print",
+        "canonical": "#c9cedc",
         "tonalRamp": [
-          "#322a1b",
-          "#574a30",
-          "#7d6a44",
-          "#a38a59",
-          "#b8a57d",
-          "#cdbfa3",
-          "#e1d9c9",
-          "#f6f3ef"
+          "#26282f",
+          "#3d4049",
+          "#565a65",
+          "#70747f",
+          "#8b8f9a",
+          "#a7abb7",
+          "#c9cedc",
+          "#dde0e8",
+          "#f0f2f6"
         ]
       },
-      "text-muted": {
+      "print-dim": {
         "role": "neutral",
-        "displayName": "Muted Silkscreen",
-        "canonical": "#A79F92",
+        "displayName": "Receding Print",
+        "canonical": "#767c90",
         "tonalRamp": [
-          "#2a2722",
-          "#4b453c",
-          "#6b6356",
-          "#8b8170",
-          "#a69d90",
-          "#c0bab0",
-          "#dad6d1",
-          "#f4f3f1"
+          "#1a1c22",
+          "#2f333d",
+          "#454a57",
+          "#5c6270",
+          "#767c90",
+          "#9096a8",
+          "#aab0bf",
+          "#c5cad6",
+          "#e1e4ec"
         ]
       },
       "accent": {
         "role": "primary",
-        "displayName": "Signal Amber",
-        "canonical": "#F0A83C",
+        "displayName": "Signal Orange",
+        "canonical": "#ff6b35",
         "tonalRamp": [
-          "#472d05",
-          "#7d4f0a",
-          "#b3710e",
-          "#e99312",
-          "#f1ac45",
-          "#f5c47b",
-          "#f9dcb1",
-          "#fdf4e7"
+          "#331307",
+          "#66220d",
+          "#993515",
+          "#cc4a1f",
+          "#ff6b35",
+          "#ff8558",
+          "#ffa583",
+          "#ffc7b3",
+          "#ffe8e0"
         ]
       },
-      "accent-hover": {
+      "accent-hi": {
         "role": "primary",
-        "displayName": "Lamp Amber",
-        "canonical": "#FFC06B",
+        "displayName": "Hover Orange",
+        "canonical": "#ff8558",
         "tonalRamp": [
-          "#492b04",
-          "#804c07",
-          "#b76d0a",
-          "#ef8e0d",
-          "#f5a841",
-          "#f8c178",
-          "#fbdbaf",
-          "#fef4e7"
+          "#33180f",
+          "#662f1d",
+          "#99472c",
+          "#cc6040",
+          "#ff8558",
+          "#ff9d7c",
+          "#ffbba5",
+          "#ffd8ca",
+          "#ffece5"
         ]
       },
-      "accent-active": {
+      "accent-lo": {
         "role": "primary",
-        "displayName": "Pressed Amber",
-        "canonical": "#D18A20",
+        "displayName": "Pressed Orange",
+        "canonical": "#e85a20",
         "tonalRamp": [
-          "#422c0a",
-          "#754d12",
-          "#a76f1a",
-          "#da9021",
-          "#e4a951",
-          "#ecc284",
-          "#f4dbb6",
-          "#fcf4e9"
+          "#2e1104",
+          "#5c2208",
+          "#8a340c",
+          "#b84615",
+          "#e85a20",
+          "#ed7b4f",
+          "#f29c7e",
+          "#f7bda9",
+          "#fbded2"
         ]
       },
-      "on-accent": {
-        "role": "primary",
-        "displayName": "Lamp Ink",
-        "canonical": "#241A08",
+      "display": {
+        "role": "secondary",
+        "displayName": "Dot-Matrix Amber",
+        "canonical": "#ffd75e",
         "tonalRamp": [
-          "#3f2d0e",
-          "#6e5019",
-          "#9e7223",
-          "#ce952e",
-          "#dbad5b",
-          "#e5c58b",
-          "#f0ddba",
-          "#faf5ea"
+          "#33270c",
+          "#664e18",
+          "#997425",
+          "#cc9b41",
+          "#ffd75e",
+          "#ffde85",
+          "#ffe7ad",
+          "#fff0d4",
+          "#fff8ec"
+        ]
+      },
+      "register-bg": {
+        "role": "neutral",
+        "displayName": "Register Slot Ground",
+        "canonical": "#0b0c10",
+        "tonalRamp": [
+          "#050608",
+          "#0b0c10",
+          "#16171f",
+          "#23242f",
+          "#333441",
+          "#4a4b5a",
+          "#666878",
+          "#8a8c9b",
+          "#b2b4c0"
+        ]
+      },
+      "key": {
+        "role": "neutral",
+        "displayName": "Key Ground",
+        "canonical": "#1d1e26",
+        "tonalRamp": [
+          "#0f0f13",
+          "#1d1e26",
+          "#2b2d39",
+          "#3d3f4d",
+          "#525565",
+          "#6c6f81",
+          "#898d9e",
+          "#a9adbb",
+          "#ccd0da"
+        ]
+      },
+      "key-edge": {
+        "role": "neutral",
+        "displayName": "Key Cut Edge",
+        "canonical": "#343746",
+        "tonalRamp": [
+          "#1a1b23",
+          "#343746",
+          "#4a4e60",
+          "#616679",
+          "#7a8094",
+          "#949aae",
+          "#aeb4c6",
+          "#c9cedd",
+          "#e4e7f0"
         ]
       },
       "red-edge": {
@@ -174,14 +233,15 @@
         "displayName": "Safety Edge Red",
         "canonical": "#E5484D",
         "tonalRamp": [
-          "#430a0b",
-          "#761114",
-          "#a9181d",
-          "#dc1f25",
-          "#e65054",
-          "#ed8386",
-          "#f5b6b8",
-          "#fce9e9"
+          "#2e0d0e",
+          "#5c1a1c",
+          "#8a2829",
+          "#b83739",
+          "#E5484D",
+          "#ea6c70",
+          "#ef9093",
+          "#f4b5b7",
+          "#fadadc"
         ]
       },
       "red-fill": {
@@ -189,474 +249,283 @@
         "displayName": "Safety Fill Red",
         "canonical": "#C93A32",
         "tonalRamp": [
-          "#3d120f",
-          "#6c1f1b",
-          "#9b2d26",
-          "#c93a32",
-          "#d7655f",
-          "#e3928d",
-          "#eebfbc",
-          "#faebeb"
+          "#280f0d",
+          "#501d1a",
+          "#782c27",
+          "#a03226",
+          "#C93A32",
+          "#d35c50",
+          "#dd7f75",
+          "#e8a29b",
+          "#f3c6c1"
         ]
-      },
-      "focus-ring": {
-        "role": "primary",
-        "displayName": "Focus Amber Ring",
-        "canonical": "#FFB640",
-        "tonalRamp": [
-          "#492e04",
-          "#805207",
-          "#b7750a",
-          "#ef980d",
-          "#f5b041",
-          "#f8c778",
-          "#fbdeaf",
-          "#fef5e7"
-        ]
-      },
-      "focus-ring-on-accent": {
-        "role": "primary",
-        "displayName": "Lamp Ink (ring on amber)",
-        "canonical": "#241A08"
       },
       "family-gain": {
         "role": "tertiary",
-        "displayName": "Gain Edge",
+        "displayName": "Gain Arc (saturated)",
         "canonical": "#D9C37A",
         "tonalRamp": [
-          "#3c3211",
-          "#69571e",
-          "#967d2b",
-          "#c4a338",
-          "#d2b963",
-          "#dfcd91",
-          "#ece2be",
-          "#f9f6eb"
-        ]
-      },
-      "family-compressor": {
-        "role": "tertiary",
-        "displayName": "Compressor Edge",
-        "canonical": "#8CC079",
-        "tonalRamp": [
-          "#203418",
-          "#385c2b",
-          "#50833e",
-          "#69ab50",
-          "#8abf77",
-          "#acd29e",
-          "#cee4c6",
-          "#f0f7ee"
+          "#2b2718",
+          "#564f31",
+          "#82774a",
+          "#aea861",
+          "#D9C37A",
+          "#e0cf95",
+          "#e7dbb0",
+          "#efe8cb",
+          "#f7f4e6"
         ]
       },
       "family-eq": {
         "role": "tertiary",
-        "displayName": "EQ Edge",
+        "displayName": "EQ Arc (saturated)",
         "canonical": "#82A9DE",
         "tonalRamp": [
-          "#10233d",
-          "#1c3d6b",
-          "#285899",
-          "#3473c7",
-          "#6092d5",
-          "#8fb2e1",
-          "#bdd1ee",
-          "#ebf1fa"
+          "#1a222c",
+          "#334458",
+          "#4d6683",
+          "#6788ae",
+          "#82A9DE",
+          "#9bbde5",
+          "#b4d1ec",
+          "#cde4f3",
+          "#e6f2fa"
         ]
       },
-      "family-delay": {
+      "pm-family-eq": {
         "role": "tertiary",
-        "displayName": "Delay Edge",
-        "canonical": "#B18FDE",
+        "displayName": "EQ Silkscreen Ink (desaturated)",
+        "canonical": "#aabacf",
         "tonalRamp": [
-          "#23113b",
-          "#3e1f68",
-          "#592c95",
-          "#7439c2",
-          "#9364d1",
-          "#b391df",
-          "#d2beec",
-          "#f1ebf9"
-        ]
-      },
-      "family-reverb": {
-        "role": "tertiary",
-        "displayName": "Reverb Edge",
-        "canonical": "#6FC2C8",
-        "tonalRamp": [
-          "#153537",
-          "#255d62",
-          "#35868c",
-          "#45aeb6",
-          "#6ec2c8",
-          "#98d3d8",
-          "#c2e5e8",
-          "#edf7f8"
-        ]
-      },
-      "family-limiter": {
-        "role": "tertiary",
-        "displayName": "Limiter Edge",
-        "canonical": "#DE8FB0",
-        "tonalRamp": [
-          "#3b1123",
-          "#681f3d",
-          "#952c58",
-          "#c23972",
-          "#d16492",
-          "#df91b2",
-          "#ecbed1",
-          "#f9ebf1"
-        ]
-      },
-      "family-distortion": {
-        "role": "tertiary",
-        "displayName": "Distortion Edge",
-        "canonical": "#C0CE97",
-        "tonalRamp": [
-          "#2d3418",
-          "#4f5c2b",
-          "#72833e",
-          "#94ab50",
-          "#acbf77",
-          "#c4d29e",
-          "#dce4c6",
-          "#f4f7ee"
-        ]
-      },
-      "family-chorus": {
-        "role": "tertiary",
-        "displayName": "Chorus Edge",
-        "canonical": "#9E9ED1",
-        "tonalRamp": [
-          "#191934",
-          "#2b2b5b",
-          "#3e3e83",
-          "#5151ab",
-          "#7777bf",
-          "#9f9fd1",
-          "#c6c6e4",
-          "#eeeef7"
-        ]
-      },
-      "family-gate": {
-        "role": "tertiary",
-        "displayName": "Noise Gate Edge",
-        "canonical": "#9AD5B2",
-        "tonalRamp": [
-          "#163623",
-          "#285f3e",
-          "#398859",
-          "#4ab274",
-          "#71c493",
-          "#9bd5b2",
-          "#c4e6d2",
-          "#edf8f1"
-        ]
-      },
-      "family-autotune": {
-        "role": "tertiary",
-        "displayName": "Autotune Edge",
-        "canonical": "#D19ED1",
-        "tonalRamp": [
-          "#341934",
-          "#5b2b5b",
-          "#833e83",
-          "#ab51ab",
-          "#bf77bf",
-          "#d19fd1",
-          "#e4c6e4",
-          "#f7eef7"
-        ]
-      },
-      "status-live": {
-        "role": "tertiary",
-        "displayName": "Live Green",
-        "canonical": "#7BD389",
-        "tonalRamp": [
-          "#133919",
-          "#22652c",
-          "#309140",
-          "#3fbd53",
-          "#69cd79",
-          "#94dba0",
-          "#c0eac7",
-          "#ecf9ee"
-        ]
-      },
-      "status-error": {
-        "role": "tertiary",
-        "displayName": "Error Coral",
-        "canonical": "#FF806E",
-        "tonalRamp": [
-          "#490c04",
-          "#801607",
-          "#b71f0a",
-          "#ef290d",
-          "#f55741",
-          "#f88878",
-          "#fbb9af",
-          "#feeae7"
-        ]
-      },
-      "meter-low": {
-        "role": "tertiary",
-        "displayName": "Meter Green",
-        "canonical": "#5CC06E",
-        "tonalRamp": [
-          "#15371b",
-          "#266130",
-          "#368b45",
-          "#46b55a",
-          "#6ec77e",
-          "#99d7a4",
-          "#c3e8c9",
-          "#edf8ef"
-        ]
-      },
-      "meter-mid": {
-        "role": "tertiary",
-        "displayName": "Meter Amber",
-        "canonical": "#F0A83C",
-        "tonalRamp": [
-          "#472d05",
-          "#7d4f0a",
-          "#b3710e",
-          "#e99312",
-          "#f1ac45",
-          "#f5c47b",
-          "#f9dcb1",
-          "#fdf4e7"
-        ]
-      },
-      "meter-clip": {
-        "role": "tertiary",
-        "displayName": "Meter Clip",
-        "canonical": "#F05A45",
-        "tonalRamp": [
-          "#470e06",
-          "#7d180a",
-          "#b3230e",
-          "#e92d13",
-          "#f05b46",
-          "#f48a7c",
-          "#f9bab1",
-          "#fdeae7"
+          "#222531",
+          "#434a5f",
+          "#646f87",
+          "#8691a9",
+          "#aabacf",
+          "#c0c9dc",
+          "#d5dbe9",
+          "#e9edf4",
+          "#f7f9fc"
         ]
       }
     },
     "typographyMeta": {
-      "title": {
-        "displayName": "Identity Legend",
-        "purpose": "The working title's silkscreen legend on the status strip."
+      "value": {
+        "displayName": "Value Tier",
+        "purpose": "Every per-control value and state readout: mono tabular 12px, min-width 6ch."
       },
-      "body": {
-        "displayName": "Body",
-        "purpose": "Prose values, button labels, toast summaries."
+      "register": {
+        "displayName": "Register Line",
+        "purpose": "The panel instrument's etched tier: module·param·value on one 13.6px mono line."
       },
       "label": {
-        "displayName": "Silkscreen Legend",
-        "purpose": "Panel headers, param labels, readout labels, optgroup legends — the surface-wide micro-label."
+        "displayName": "Silkscreen Label",
+        "purpose": "Panel print: param/zone/group legends, 11.2px uppercase tracked."
       },
-      "readout": {
-        "displayName": "Machine Readout",
-        "purpose": "Every machine value: sample rate, latency, meters, preset names, param values. Mono + tabular numerals."
+      "nameplate": {
+        "displayName": "Nameplate",
+        "purpose": "The identity legend on the system deck — a nameplate, never a headline."
+      },
+      "family-code": {
+        "displayName": "Family Code",
+        "purpose": "The rail's large silkscreen identity print in desaturated family ink."
       }
     },
     "shadows": [
       {
-        "name": "card-rest",
-        "value": "0 1px 2px rgba(0, 0, 0, 0.3)",
-        "purpose": "The faint module seat — cards are inserted, not floating."
+        "name": "drag-lift",
+        "value": "0 4px 10px rgba(0,0,0,0.45)",
+        "purpose": "SortableJS live clone — the one physical lift on the chassis."
       },
       {
-        "name": "lifted",
-        "value": "0 4px 10px rgba(0, 0, 0, 0.45)",
-        "purpose": "Dragged clones and floating toasts — things held above the faceplate."
+        "name": "knob-cap-lip",
+        "value": "inset 0 1px 0 rgba(255,255,255,0.06)",
+        "purpose": "Bevel geometry on the matte knob cap, not ambient depth."
       },
       {
-        "name": "highest-lift",
-        "value": "0 8px 20px rgba(0, 0, 0, 0.55)",
-        "purpose": "The actively dragged node card."
+        "name": "register-lip",
+        "value": "inset 0 1px 0 var(--pm-groove-lip)",
+        "purpose": "The display register's machined lip (cut-face geometry)."
       }
     ],
     "motion": [
       {
         "name": "state-answer",
         "value": "150ms ease",
-        "purpose": "Default state transition for colors/borders — every control answers within it."
+        "purpose": "Hover/focus/pressed color answers and opacity transitions; reduced-motion-guarded."
       },
       {
-        "name": "toast-in",
-        "value": "180ms ease-out (transform/opacity only)",
-        "purpose": "Toast entrance; no exit animation by construction. Guarded by prefers-reduced-motion."
+        "name": "section-lift",
+        "value": "180ms ease (filter)",
+        "purpose": "The touched section's focus lift / neighbor recede."
       },
       {
-        "name": "collapse",
-        "value": "180ms ease (grid-template-rows)",
-        "purpose": "Node-card chevron collapse/expand. Guarded."
+        "name": "register-blink",
+        "value": "150ms ease-in-out x2",
+        "purpose": "The ONE live-control blink, on the display register."
+      },
+      {
+        "name": "agent-pulse",
+        "value": "150ms ease-in-out x2",
+        "purpose": "Agent mutation mark on a section's top groove; animationend-pinned class."
       },
       {
         "name": "agent-breath",
-        "value": "1.2s ease-in-out infinite (opacity 1→0.7→1)",
-        "purpose": "The agent-acting status lamp — the single slow-animation exception. Guarded; copy carries the state either way."
+        "value": "1.2s ease-in-out infinite (opacity 1-0.7-1)",
+        "purpose": "The agent chip's single slow activity breath while acting — the only slow animation."
+      },
+      {
+        "name": "fold",
+        "value": "grid-template-rows 1fr to 0fr",
+        "purpose": "Section collapse to a groove-line slim row; session-only, aria-expanded."
       }
     ],
     "breakpoints": [
       {
-        "name": "narrow-strip",
-        "value": "900px"
+        "name": "deck-wrap",
+        "value": "900px",
+        "purpose": "System deck etch wraps to a second row; voice deck zones stack palette, face, presets; grooves turn horizontal."
       }
     ]
   },
   "components": [
     {
-      "name": "Primary Button (Start)",
+      "name": "Start Key (the one orange key)",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one amber-filled action — Start. Ink-on-amber text, dark focus ring inside the fill.",
-      "html": "<button class=\"ds-btn-primary\">START</button>",
-      "css": ".ds-btn-primary { padding: 0.5rem 1rem; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; } .ds-btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); } .ds-btn-primary:active { background: var(--accent-active); border-color: var(--accent-active); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus-ring-on-accent); outline-offset: -2px; }"
+      "description": "The deck's single primary: signal-orange fill with chassis ink; recedes once the engine runs.",
+      "html": "<button class=\"ds-btn-primary\">Start</button>",
+      "css": ".ds-btn-primary { padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid var(--pm-accent); background: var(--pm-accent); color: var(--pm-ink); font: 700 0.9rem system-ui, sans-serif; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; } .ds-btn-primary:hover { background: var(--pm-accent-hi); border-color: var(--pm-accent-hi); } .ds-btn-primary:active { background: var(--pm-accent-lo); border-color: var(--pm-accent-lo); } .ds-btn-primary:focus-visible { outline: 2px solid var(--pm-ink); outline-offset: -2px; }"
     },
     {
-      "name": "Control Button",
+      "name": "Control Key",
       "kind": "button",
       "refersTo": "button-control",
-      "description": "The shared secondary control: card ground, bezel outline, amber-leaning hover, ink-on-amber press.",
-      "html": "<button class=\"ds-btn-control\">SAVE AS…</button>",
-      "css": ".ds-btn-control { padding: 0.5rem 1rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 0.9rem; cursor: pointer; } .ds-btn-control:hover { border-color: var(--accent); } .ds-btn-control:active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); } .ds-btn-control:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; } .ds-btn-control:active:focus-visible { outline-color: var(--focus-ring-on-accent); outline-offset: -2px; }"
+      "description": "Every shared button/select on the instrument: a physical key — cut-edge bezel, bright print, orange when pressed.",
+      "html": "<button class=\"ds-btn-control\">Load</button>",
+      "css": ".ds-btn-control { padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid var(--pm-key-edge); background: var(--pm-key); color: var(--pm-print-hi); font: 400 0.9rem system-ui, sans-serif; cursor: pointer; } .ds-btn-control:hover { border-color: var(--pm-print); } .ds-btn-control:active { background: var(--pm-accent); border-color: var(--pm-accent); color: var(--pm-ink); } .ds-btn-control:disabled { opacity: 0.55; cursor: not-allowed; color: var(--pm-print); } .ds-btn-control:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px; }"
     },
     {
-      "name": "Bypass Button",
+      "name": "Bypass End Key",
       "kind": "button",
       "refersTo": "button-bypass",
-      "description": "The safety-critical control — loudest on the strip. Red-edge halo at rest; red-fill with white text when engaged.",
-      "html": "<button class=\"ds-btn-bypass\">BYPASS: OFF</button>",
-      "css": ".ds-btn-bypass { min-height: 3rem; padding: 0.65rem 1.6rem; border: 2px solid var(--red-edge); border-radius: 8px; background: var(--bg-panel); color: var(--text-primary); font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; } .ds-btn-bypass.engaged { background: var(--red-fill); color: #FFFFFF; } .ds-btn-bypass:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
+      "description": "The safety-critical red-ringed end key of the system deck; the loudest element on the page.",
+      "html": "<button class=\"ds-btn-bypass\">Bypass: OFF</button>",
+      "css": ".ds-btn-bypass { min-height: 3rem; padding: 0.65rem 1.6rem; border-radius: 4px; border: 1px solid #E5484D; box-shadow: 0 0 0 2px #E5484D; background: var(--pm-key); color: var(--pm-print-hi); font: 700 1.05rem system-ui, sans-serif; letter-spacing: 0.04em; cursor: pointer; } .ds-btn-bypass.is-engaged { background: #C93A32; color: #FFFFFF; } .ds-btn-bypass:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px; }"
     },
     {
-      "name": "Palette Chip",
+      "name": "Palette Chip Key",
       "kind": "chip",
       "refersTo": "chip-palette",
-      "description": "A draggable module source AND a real button (keyboard add, aria-label \"Add X to chain\", disabled until Start): family legend square + silkscreen label; hover raises the bezel and a family top edge. The ten chips chunk under three non-interactive silkscreen group legends — \"Shape your voice\" / \"Polish your sound\" / \"Keep it safe\" (trailing fallback \"More effects\") — while staying flat direct-children buttons.",
-      "html": "<button type=\"button\" class=\"ds-chip\" data-family=\"reverb\" data-initials=\"RV\" aria-label=\"Add Reverb to chain\">REVERB</button>",
-      "css": ".ds-chip { width: 100%; font-family: inherit; text-align: left; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border: 1px solid var(--hairline); border-radius: 6px; background: var(--bg-card); color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; cursor: grab; transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease; } .ds-chip::before { content: attr(data-initials); flex: none; display: flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border-radius: 3px; background: var(--family-reverb); color: var(--on-accent); font-size: 0.6875rem; font-weight: 700; } .ds-chip:hover { border-color: var(--line-strong); color: var(--text-primary); box-shadow: inset 0 2px 0 var(--family-reverb); } .ds-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
+      "description": "A module key on the voice deck: 20px family legend square + silkscreen legend; drag-origin goes orange.",
+      "html": "<button class=\"ds-chip-palette\" aria-label=\"Add EQ to chain\"><span class=\"ds-chip-swatch\" style=\"background:#82A9DE\">EQ</span><span class=\"ds-chip-label\">EQ</span></button>",
+      "css": ".ds-chip-palette { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--pm-key-edge); background: var(--pm-key); color: var(--pm-print); font: 700 0.75rem system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; cursor: grab; } .ds-chip-palette:hover { border-color: var(--pm-print); color: var(--pm-print-hi); } .ds-chip-swatch { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 3px; color: var(--pm-ink); font: 700 0.6875rem ui-monospace, Menlo, monospace; } .ds-chip-label { text-align: left; }"
     },
     {
-      "name": "Palette Group Label",
+      "name": "Rotary Knob",
       "kind": "custom",
-      "refersTo": "chip-palette",
-      "description": "Non-interactive silkscreen h3 that chunks the flat palette chip list into operator groups — \"Shape your voice\" / \"Polish your sound\" / \"Keep it safe\" — in the optgroup-legend register (0.7rem/700/uppercase/0.08em/muted); chips stay flat direct-children buttons, grouping is presentation only.",
-      "html": "<h3 class=\"ds-palette-group-label\">Shape your voice</h3>",
-      "css": ".ds-palette-group-label { margin: 0.9rem 0 0.35rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); } .ds-palette-group-label:first-child { margin-top: 0; }"
+      "refersTo": "section-node",
+      "description": "The encoder field's rotary voice: 54px knob, family-colored arc over the unlit ring scale, label + mono value beneath.",
+      "html": "<div class=\"ds-knob-unit\"><div class=\"ds-knob\"><div class=\"ds-knob-ring\" style=\"--knob-pos:0.625; --knob-arc:#82A9DE\"></div><div class=\"ds-knob-cap\"></div><div class=\"ds-knob-pointer\" style=\"--knob-rot:70deg\"></div></div><span class=\"ds-param-label\">TONE</span><span class=\"ds-param-value\">25%</span></div>",
+      "css": ".ds-knob-unit { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; width: 6rem; } .ds-knob { position: relative; width: 54px; height: 54px; } .ds-knob-ring { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 225deg, var(--knob-arc) 0deg, var(--knob-arc) calc(var(--knob-pos) * 270deg), var(--pm-ring-track) calc(var(--knob-pos) * 270deg), var(--pm-ring-track) 270deg, transparent 270deg); } .ds-knob-cap { position: absolute; inset: 20%; border-radius: 50%; background: var(--pm-cap); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); } .ds-knob-pointer { position: absolute; left: 50%; top: 50%; width: 2px; height: 15px; background: var(--pm-print-hi); transform: translate(-50%, -100%) rotate(var(--knob-rot, 0deg)); transform-origin: 50% 100%; } .ds-param-label { font: 700 0.7rem system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; color: var(--pm-print); } .ds-param-value { font: 400 0.75rem ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; min-width: 6ch; color: var(--pm-print-hi); }"
     },
     {
-      "name": "Agent Chip",
-      "kind": "chip",
-      "refersTo": "chip-agent",
-      "description": "Strip-native reporter (never a control): quiet pill; live states lift the bezel, amber the label, and light an 8px amber square.",
-      "html": "<div class=\"ds-agent-chip\" data-state=\"tools-ready\"><span class=\"ds-agent-chip-label\">AGENT READY</span></div>",
-      "css": ".ds-agent-chip { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.6rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--bg-card); color: var(--text-muted); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap; } .ds-agent-chip::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); } .ds-agent-chip-label { color: var(--accent); }"
+      "name": "Pad Group (discrete params)",
+      "kind": "custom",
+      "refersTo": "section-node",
+      "description": "Discrete params as real buttons in a radio group; the pressed pad is the one bright thing in the group.",
+      "html": "<div class=\"ds-pads\" role=\"radiogroup\" aria-label=\"Scale\"><button class=\"ds-pad\" role=\"radio\" aria-checked=\"true\">Major</button><button class=\"ds-pad\" role=\"radio\" aria-checked=\"false\">Minor</button></div>",
+      "css": ".ds-pads { display: flex; flex-wrap: wrap; gap: 0.25rem; } .ds-pad { min-width: 44px; min-height: 44px; padding: 0.3rem 0.5rem; border: 1px solid var(--pm-key-edge); border-radius: 4px; background: var(--pm-key); color: var(--pm-print); font: 400 0.75rem ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; cursor: pointer; } .ds-pad[aria-checked=\"true\"] { background: var(--pm-accent); border-color: var(--pm-accent); color: var(--pm-ink); font-weight: 700; } .ds-pad:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px; }"
     },
     {
-      "name": "Node Module Card",
+      "name": "Display Register",
+      "kind": "custom",
+      "refersTo": "display-register",
+      "description": "The chain face's etched machine mouth: fixed-height two-line slot with a 3px accent mark; the touched control answers here.",
+      "html": "<div class=\"ds-register\"><div class=\"ds-register-main\"><span class=\"ds-register-module\">EQ</span><span class=\"ds-register-param\">TONE</span><span class=\"ds-register-value\">25%</span></div><div class=\"ds-register-help\">Brightens the highs</div></div>",
+      "css": ".ds-register { position: relative; height: 3rem; padding: 0.35rem 0.9rem 0.35rem 1.4rem; background: var(--pm-register-bg); box-shadow: inset 0 1px 0 var(--pm-groove-lip); border-bottom: 1px solid var(--pm-groove-cut); overflow: hidden; } .ds-register::before { content: ''; position: absolute; left: 0.6rem; top: 0.55rem; bottom: 0.55rem; width: 3px; background: var(--pm-accent); } .ds-register-main { display: flex; align-items: baseline; gap: 0.45rem; font: 400 0.85rem ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--pm-display); } .ds-register-module { color: var(--pm-accent); font-weight: 700; text-transform: uppercase; } .ds-register-param { color: var(--pm-print); text-transform: uppercase; } .ds-register-help { font: 400 0.75rem ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; color: var(--pm-print); }"
+    },
+    {
+      "name": "Chain Section (panel-print zone)",
       "kind": "card",
-      "refersTo": "card-module",
-      "description": "A channel-strip module: 3px family top edge (data-family maps one of ten family tokens onto --card-family), legend square, silkscreen label; collapses to the header-only slim row.",
-      "html": "<div class=\"ds-node-card\" data-family=\"eq\" data-initials=\"EQ\"><div class=\"ds-node-head\">EQ — 4-BAND</div><div class=\"ds-node-params\">…</div></div>",
-      "css": ".ds-node-card { position: relative; min-width: 190px; padding: 0.375rem 0.75rem; border: 1px solid var(--hairline); border-top: 3px solid var(--card-family, var(--line-strong)); border-radius: 8px; background: var(--bg-card); box-shadow: 0 1px 2px rgba(0,0,0,0.3); } .ds-node-card[data-family='gain'] { --card-family: var(--family-gain); } .ds-node-card[data-family='compressor'] { --card-family: var(--family-compressor); } .ds-node-card[data-family='eq'] { --card-family: var(--family-eq); } .ds-node-card[data-family='delay'] { --card-family: var(--family-delay); } .ds-node-card[data-family='reverb'] { --card-family: var(--family-reverb); } .ds-node-card[data-family='limiter'] { --card-family: var(--family-limiter); } .ds-node-card[data-family='distortion'] { --card-family: var(--family-distortion); } .ds-node-card[data-family='chorus'] { --card-family: var(--family-chorus); } .ds-node-card[data-family='gate'] { --card-family: var(--family-gate); } .ds-node-card[data-family='autotune'] { --card-family: var(--family-autotune); } .ds-node-card::before { content: attr(data-initials); position: absolute; top: 0.5625rem; left: 0.75rem; display: flex; align-items: center; justify-content: center; width: 1.125rem; height: 1.125rem; border-radius: 3px; background: var(--card-family, var(--line-strong)); color: var(--on-accent); font-size: 0.6875rem; font-weight: 700; line-height: 1; } .ds-node-card:hover { border-color: var(--line-strong); border-top-color: var(--card-family, var(--line-strong)); } .ds-node-head { min-height: 1.5rem; padding-left: 1.5rem; display: flex; align-items: center; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-primary); }"
+      "refersTo": "section-node",
+      "description": "One effect as print on the faceplate: family rail (grip, code, label) + encoder field, split from neighbors by a machined groove — never a floating card.",
+      "html": "<section class=\"ds-section\" data-family=\"eq\"><div class=\"ds-rail\"><span class=\"ds-code\">EQ</span><span class=\"ds-node-label\">EQ</span></div><div class=\"ds-main\"><span class=\"ds-param-value\">+3 dB</span></div></section>",
+      "css": ".ds-section { display: grid; grid-template-columns: 8.5rem 1fr; align-items: stretch; padding: 0.55rem 0.75rem 0.6rem 0.9rem; border-radius: 0; background: transparent; border: none; border-top: 1px solid var(--pm-groove-cut); box-shadow: inset 0 1px 0 var(--pm-groove-lip); color: var(--pm-print); } .ds-rail { display: flex; flex-direction: column; gap: 0.3rem; border-left: 2px solid var(--pm-family-eq); padding-left: 0.6rem; } .ds-code { font: 700 1.25rem ui-monospace, Menlo, monospace; letter-spacing: 0.06em; line-height: 1; color: var(--pm-family-eq); } .ds-node-label { font: 700 0.75rem system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; color: var(--pm-print); } .ds-main { min-width: 0; display: flex; flex-direction: column; justify-content: center; }"
     },
     {
       "name": "Experimental Badge",
       "kind": "chip",
-      "refersTo": "card-module",
-      "description": "A status tag, never a control — the full \"Experimental\" tag after the module label in the node-card header (a compact \"EXP\" twin pins right on the palette chip). Signal Amber 1px bezel + amber text on Module Card ground; mono silkscreen at 0.6875rem/700 (the 11px floor, the legend-initials size), 0.06em tracking, 0.35rem side padding (one shared rule — the chip override is margin-only, so the placements cannot drift); deliberately no focus ring and no pointer affordance. Autotune only, driven by NodeTypes.isExperimental. Detector exemption: the impeccable nested-cards heuristic flags the widened EXP tag (~100.6×16px) as a false positive — tag, not card; adjudicated keep 2026-08-30, do not re-triage.",
-      "html": "<span class=\"ds-exp-badge\">Experimental</span>",
-      "css": ".ds-exp-badge { flex: none; padding: 0.1rem 0.35rem; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-card); color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }"
-    },
-    {
-      "name": "Fader (Param Slider)",
-      "kind": "custom",
-      "refersTo": "card-module",
-      "description": "Native range re-skinned as a console fader: hairline slot, detent ticks, center-unity notch, amber cap with ink position line.",
-      "html": "<label class=\"ds-fader\"><span class=\"ds-fader-label\">THRESHOLD</span><span class=\"ds-fader-value\">−24.0 dB</span><input class=\"ds-fader-input\" type=\"range\" min=\"-60\" max=\"0\" value=\"-24\"></label>",
-      "css": ".ds-fader { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; padding: 0.25rem 0; } .ds-fader-label { flex: 1 1 auto; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); } .ds-fader-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--text-primary); } .ds-fader-input { order: 3; flex: 1 1 100%; height: 1.25rem; -webkit-appearance: none; appearance: none; background: transparent; } .ds-fader-input::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(90deg, transparent calc(50% - 1px), var(--line-strong) calc(50% - 1px), var(--line-strong) calc(50% + 1px), transparent calc(50% + 1px)), repeating-linear-gradient(90deg, var(--hairline) 0, var(--hairline) 1px, transparent 1px, transparent 12px), linear-gradient(90deg, transparent calc(50% - 1px), var(--hairline) calc(50% - 1px), var(--hairline) calc(50% + 1px), transparent calc(50% + 1px)); } .ds-fader-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 18px; margin-top: -5px; border: 1px solid var(--line-strong); border-radius: 3px; background-color: var(--accent); background-image: linear-gradient(90deg, transparent calc(50% - 1px), var(--on-accent) calc(50% - 1px), var(--on-accent) calc(50% + 1px), transparent calc(50% + 1px)); transition: background-color 150ms ease; } .ds-fader-input::-webkit-slider-thumb:hover { background-color: var(--accent-hover); } .ds-fader-input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
-    },
-    {
-      "name": "Param Select (Discrete)",
-      "kind": "input",
-      "refersTo": "card-module",
-      "description": "Enumerated params (autotune's Key/Scale) render a native <select> in the fader's readout slot instead of a slider: Faceplate Umber ground, Bezel Line bezel, sm radius, mono readout at the 11px floor — the option text IS the value display, native semantics untouched.",
-      "html": "<div class=\"ds-param-row\"><label class=\"ds-param-label\" for=\"ds-param-key\">KEY</label><select class=\"ds-param-select\" id=\"ds-param-key\"><option selected>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option><option>F</option></select></div>",
-      "css": ".ds-param-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; padding: 0.25rem 0; } .ds-param-label { flex: 1 1 auto; min-width: 0; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); } .ds-param-select { flex: 0 0 auto; min-width: 5.5rem; margin-left: auto; padding: 0.15rem 0.4rem; border: 1px solid var(--line-strong); border-radius: 4px; background-color: var(--bg-panel); color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; font-variant-numeric: tabular-nums; } .ds-param-select:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }"
-    },
-    {
-      "name": "Agent Toast",
-      "kind": "custom",
-      "refersTo": "toast-agent",
-      "description": "Change summary with one Undo action; mono machine footnotes under a hairline seam. Refusals carry a 2px red bezel.",
-      "html": "<div class=\"ds-toast\"><div class=\"ds-toast-summary\">Added compressor, set threshold −24 dB</div><div class=\"ds-toast-note\">clamped: ceiling −6 dBFS</div><button class=\"ds-toast-undo\">UNDO</button></div>",
-      "css": ".ds-toast { max-width: 340px; padding: 0.75rem 0.9rem; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--bg-card); box-shadow: 0 4px 10px rgba(0,0,0,0.45); color: var(--text-primary); font-size: 0.85rem; } .ds-toast-note { margin-top: 0.45rem; padding-top: 0.45rem; border-top: 1px solid var(--hairline); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; line-height: 1.45; color: var(--text-muted); } .ds-toast-undo { margin-top: 0.5rem; padding: 0.25rem 0.9rem; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; } .ds-toast-undo:hover { background: var(--accent-hover); border-color: var(--accent-hover); } .ds-toast-undo:focus-visible { outline: 2px solid var(--focus-ring-on-accent); outline-offset: -2px; } .ds-toast.refused { border: 2px solid var(--red-edge); }"
+      "refersTo": "chip-palette",
+      "description": "A status tag, not a control: display-amber silkscreen on transparent, 0.6875rem/700 at the 11px floor; one class, two placements.",
+      "html": "<span class=\"ds-badge-exp\">Experimental</span>",
+      "css": ".ds-badge-exp { padding: 0.1rem 0.35rem; border: 1px solid var(--pm-display); border-radius: 3px; color: var(--pm-display); background: transparent; font-family: ui-monospace, Menlo, monospace; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }"
     }
   ],
   "narrative": {
-    "northStar": "The Touring Rack",
-    "overview": "This is pro-audio rack gear built for the road, not for a studio shelf. Every surface answers three questions before it earns a pixel: can the operator read it from two meters away in a dark venue, does every lamp and silkscreen legend mean something, and will it still work when the show is already running. The console is warm industrial — brushed warm-charcoal steel, toolroom honesty, and one amber signal register that glows only where the machine speaks. It is dense the way real consoles are dense: deliberately, with a label rhythm, not as noise.\n\nThe visitor here is an operator mid-task, never a browse. Physical metaphors carry the whole vocabulary: module cards are channel strips with family color on their top edge the way real gear codes rack modules; sliders are faders with detent ticks, center-unity notches, and amber caps carrying an ink position line; the top bar is a status LCD strip whose mono readouts are machine registers. Depth is tonal first — a chassis → faceplate → module-card ground stack — and real shadows appear only when something physically lifts off the rack (a dragged card, a floating toast).\n\nThe one confirmed anti-reference: this is not a neon terminal, not a webfonts showcase, not a decorative-motion piece. No display fonts in UI, no invented brand imagery, no glow. Confidence comes from restraint and redundant encoding — color is never the only signal anywhere in the system.",
+    "northStar": "The Pattern Machine",
+    "overview": "VOXCHAIN is built as one hardware instrument, not a web page about audio. The whole viewport is a single machined chassis — the Two-Deck Stack: a sticky system deck (nameplate, dot-matrix etch, Start/device keys, the red-ringed BYPASS end key), a machined deck seam, and below it the voice deck — one continuous faceplate whose three zones are printed onto the same ground, separated by machined grooves rather than panel borders. The chain face is the Single Face Chassis: a display register etched along the top edge, jack-print anchors, and each effect a panel-print section split by grooves — never a floating card.\n\nThe control world is the encoder field: rotary knobs, pad selectors, and trimmers condensed into fluid clusters — the refusal of stacked full-width fader rows. The board underneath is free: sections sit wherever the operator puts them (snap-grid quantized), patch cords drawn between jacks are how the chain is edited — sound changes only when a cord link completes — and TIDY restores the vertical stack. The world is matte: brightness is saturation on a near-black ground, never glow.\n\nThe register discipline is strict: silkscreen print for humans, mono dot-matrix for machine values with tabular numerals, a two-tier value ladder (12px per-control / 13.6px register line), and one committed signal orange reserved for system states.",
     "keyCharacteristics": [
-      "Warm charcoal three-ground tonal stack (chassis → faceplate → module card); depth by layering, shadows only on lift.",
-      "One amber signal accent for action and machine attention; ink-on-amber fills, never amber-on-amber.",
-      "Two type registers: silkscreen legends for humans, mono LCD/VFD readouts for machine values.",
-      "Family color as edge marking (never fill) with always-present text labels — redundant encoding everywhere.",
-      "Split-role safety red: the Bypass control outranks everything on the strip.",
-      "150–250 ms state transitions only; meter ballistics and the agent breath are functional, not decorative; `prefers-reduced-motion` respected throughout.",
-      "Console-grade density: 11 px text floor, tracked uppercase micro-labels, tabular numerals in every readout."
+      "One instrument, two decks, three printed zones — machined grooves and one deck seam, no floating panels, no border-radius islands.",
+      "Single Face Chassis: display register on the top edge, sections as print zones, jack-print anchors, VU corner + flow switch on the base plate.",
+      "Encoder field: 54px knobs (family-colored arcs), pad radio-groups, trim slots; the display register answers the touched control.",
+      "Free board: snap-grid positioning, TIDY re-stack, patch cords that EDIT order but never gate audio; DOM order is always chain order.",
+      "One signal orange for system states only; family color on the arc alone; BYPASS's split-role red outranks everything on the deck.",
+      "Two-register type (silkscreen sans / dot-matrix mono tabular), 12px/13.6px value ladder, 11px floor.",
+      "One disabled grammar — diagonal hatch + recede — for exactly two states (pre-Start gate, bypassed chain)."
     ],
     "rules": [
       {
+        "name": "The One Orange Rule",
+        "body": "Signal orange is spent only on system states (register marks, focus, live blink, pressed pads/keys, the chosen groove, Start). Family color belongs to the arc; identity color to the rail print. If a use is not a system state, it is not orange.",
+        "section": "colors"
+      },
+      {
         "name": "The Split-Role Red Rule",
-        "body": "Edge red is for rings and bezels; fill red is for solid fills with white text. Never swap them: white on edge red fails (3.91), fill red as an edge fails (2.65).",
+        "body": "Edge red rings; fill red fills with white text. BYPASS is the only red thing on the system surface, and nothing outranks it.",
         "section": "colors"
       },
       {
-        "name": "The Amber Voice Rule",
-        "body": "Amber speaks for action and machine attention only — never as decoration, never as large-area fill. Its rarity on the dark chassis is what makes it readable at distance.",
-        "section": "colors"
-      },
-      {
-        "name": "The Seam Rule",
-        "body": "Hairlines are seams, not outlines. Anything meaningful (interactive bezels, floating-card boundaries, family identity) uses the Bezel Line token; anything merely decorative uses the hairline.",
-        "section": "colors"
+        "name": "The Machined-Geometry Rule",
+        "body": "Boundaries are cut faces: dark cut under a light lip (grooves, seam, key bezels). No ambient shadow draws a boundary anywhere on the chassis.",
+        "section": "elevation"
       },
       {
         "name": "The Register Rule",
-        "body": "If a value is machine state, it renders in the mono readout register with tabular numerals; if it is a human label, it renders as a silkscreen legend. Nothing in between.",
+        "body": "Machine state renders mono tabular at the value tier (register main line one tier up at 13.6px); human labels render silkscreen sans. Nothing in between, and no value readout at any size outside the two tiers.",
         "section": "typography"
       },
       {
         "name": "The 11px Floor Rule",
-        "body": "No text renders below 11px anywhere (0.6875rem initials and 0.7rem labels are the floor after the density pass) — distance legibility is a product requirement.",
+        "body": "No text below 11px (the EXP badge's 0.6875rem is the floor). Standing recorded exception: canvas meter scale numerals are 9px inside the 96×26 scene — canvas-drawn, unchanged by recorded decision.",
+        "section": "typography"
+      },
+      {
+        "name": "The Nameplate Discipline",
+        "body": "The app title is a nameplate, not a headline — it must never out-shout the BYPASS key.",
         "section": "typography"
       },
       {
         "name": "The Rest-Flat Rule",
-        "body": "Surfaces are flat at rest; a shadow means physical lift (drag, float). No ambient glow, no hover shadows.",
+        "body": "Surfaces are flat at rest. A shadow means physical lift (drag, floating toast); emphasis means brightness on matte. Never glow.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Do extend the token set — introduce no raw hex values; new colors enter as `:root` tokens in the rq5-verified vocabulary.",
-      "Do keep color redundant: every family edge pairs with its legend square initials and a text label; every state change is copy + color.",
-      "Do use tabular numerals and fixed min-widths in readouts so machine values never pump layout.",
-      "Do draw focus rings with the global 2px token, switching to the dark inside-fill ring on amber surfaces.",
-      "Do keep state transitions at 150–250 ms and guard every motion addition with `prefers-reduced-motion`; meter ballistics stay live by drawing per-frame."
+      "Do extend the --pm-* register — introduce no raw hex values; new colors enter as tokens in the measured vocabulary.",
+      "Do keep the value ladder exact: every value/state readout mono tabular at 12px, the register main line at 13.6px, silkscreen labels at 11.2px sans — nothing between the tiers.",
+      "Do keep color redundant: family identity is always code + label + arc/legend-square together; every state change is copy + color.",
+      "Do draw boundaries as cut faces (dark cut under light lip) and emphasis as brightness on matte; keep the one disabled grammar (hatch + recede) for exactly the pre-Start gate and the bypassed chain.",
+      "Do keep DOM order equal to chain order — board seats and z-order are paint; the cords layer re-routes from the same positions map on every write.",
+      "Do guard every motion addition with prefers-reduced-motion (150–250ms state answers); meter ballistics stay live by drawing per-frame."
     ],
     "donts": [
-      "Don't swap the safety red roles (edge ↔ fill) or put white text on edge red.",
-      "Don't render text below 11px, use webfonts/CDN assets, or add display fonts to the UI.",
-      "Don't use amber as decoration, large-area fill, or an amber-on-amber focus ring.",
-      "Don't add glow, load choreography, or hover shadows — shadows mean physical lift only.",
-      "Don't let anything on the status strip outrank BYPASS in loudness; don't move it from the visible top on narrow widths.",
-      "Don't invent brand imagery, logos, or a product name — the working title stands until the user chooses one."
+      "Don't render text below 11px (recorded exception: the 9px canvas meter numerals), use webfonts/CDN assets, or add display fonts.",
+      "Don't use signal orange for anything that is not a system state, and never as decoration or large-area fill.",
+      "Don't swap the safety red roles (edge for fill) or put white text on edge red; don't let anything outrank BYPASS on the deck.",
+      "Don't add glow, blur, load choreography, hover shadows, or border-radius card islands — sections are print zones of the one faceplate.",
+      "Don't let the cords gate audio mid-drag — sound changes only on a completed link; drop-nowhere reverts.",
+      "Don't let the machine speak twice — the system etch stays subordinate (neutral print, 12px); the chain face's register is the one amber machine voice."
     ]
   }
 }

@@ -666,3 +666,71 @@ monotonic within-card re-raise F7, final DOM=tab=chain F8).
 - `node tests/run.js` → 30/30 files / 2292 checks / exit 0 (run first,
   before any doc edit).
 - Status: `awaiting-approval` (plan.md updated). Next: QA-5.
+
+---
+
+## FINISH PHASE — redesign closing (2026-08-30, ultron-overlord finishing worker, auto mode / trimmed)
+
+Budget 15:00, trimmed scope: document refresh + closing critique only;
+**the refinement queue is EMPTY BY TRIM** (no closing polish round was
+run — recorded here so the report is honest about what did not happen).
+
+### DESIGN.md refresh (ground truth over intention)
+- DESIGN.md **rewritten from the built world** — the file still described
+  the retired "Touring Rack" (cycle-2/3: channel-strip cards, faders,
+  warm-charcoal rq5 grounds, amber accent) while the shipped surface is
+  the **Pattern Machine / Two-Deck Stack**. New file documents: the
+  `--pm-*` register as the page's system; system deck + deck seam +
+  voice-deck printed zones; the Single Face Chassis (display register,
+  jack-print anchors, sections as panel-print zones, VU corner + flow/
+  TIDY base plate); the encoder field (54px family-arc knobs, pad
+  radio-groups, trimmers); the 12px/13.6px value-display ladder and the
+  11px floor (9px canvas meter numerals recorded exception); the free
+  board (16px snap grid, TIDY, cords that EDIT order and never gate
+  audio, DOM order = chain order); collapse folds; agent pulse/breath;
+  the ONE disabled grammar; and the binding Do/Don'ts (one orange rule,
+  split-role red, no glow, machined geometry). North Star: "The Pattern
+  Machine". Surviving conventions preserved (split-role red, tabular
+  mono register, redundancy, reduced-motion discipline).
+- `.impeccable/design.json` regenerated alongside (schemaVersion 2,
+  generatedAt 2026-08-31T01:15:44Z): new colorMeta for the pm register,
+  typographyMeta for the ladder tiers, shadows/motion/breakpoints
+  extensions, 9 drop-in `ds-` components (Start key, control key, bypass
+  key, palette chip, knob, pads, display register, section, EXP badge)
+  referencing live `var(--pm-*)` tokens, narrative synced verbatim.
+  Verified: JSON round-trips; every `var(--…)` ref resolves in
+  main.css (`--knob-pos`/`--knob-arc` are per-element runtime props set
+  inline in the snippet itself — self-contained by design).
+- Detector-driven truth fix: 0.9rem key labels, 1.05rem BYPASS label,
+  and #FFFFFF on fill red absorbed into the frontmatter ramp (they are
+  shipped sizes/pairings the old frontmatter omitted) — findings
+  21 → 15 in one honest edit, zero prose changes.
+
+### Closing critique
+- Snapshot: `.impeccable/critique/2026-08-31T01-18-41Z__index-html.md`
+  (disclosed trimmed single-context closing run).
+- Detector: **15 findings, exit 2** vs the takeover baseline's 25. Keeps
+  unchanged: Roboto-in-stack, dense ladder; the repeating-stripes finding
+  is now the ONE disabled-grammar hatch (inherits the fader-detent
+  precedent); sortable-chosen retired with the cards. Remaining 12
+  quality advisories all live in the off-chassis rq5 residual (agent
+  toasts, watchdog Restore, ?dev harness) — documented in DESIGN.md as
+  residual, recorded as closing gap 2.
+- **Score 36/40 — held level with the 36/40 baseline, in a harder
+  world**: the baseline's tokenization P3 (a) is PAID (ladder documented
+  + frontmatter ramp), (b)/(c) are agent-side and untouched; the new
+  world added one P2 (cord-edit affordance is recall-only) and carries
+  the standing behavioral residue (no manual undo, no numeric entry,
+  hover-only help discovery). Trend: 27 → 33 → 35 → 32 → 36 → 36.
+
+### Validation
+- First post-refresh suite run caught the badge documentation contract
+  (tests/test-palette-cards-cycle3.js pins DESIGN.md's badge spec line +
+  the sidecar snippet to `0.6875rem`): repaired in both files —
+  DESIGN.md badge line now reads 0.6875rem/700, the sidecar badge CSS
+  uses explicit font-size and its description carries the value.
+- `node tests/run.js` → **30/30 files, 2292 checks ok, exit 0** (matches
+  the pre-finish baseline exactly; sidecar JSON round-trip verified
+  separately).
+- Remaining: **user acceptance** (QA-5 line) — nothing else open in the
+  finish scope.

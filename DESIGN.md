@@ -1,22 +1,31 @@
 ---
 name: VOXCHAIN
-description: A dark pro-audio touring rack in the browser — karaoke vocal chains built live, legible from two meters, safe by construction.
+description: A hardware groovebox's pattern surface in the browser — one matte instrument chassis, silkscreen sections, encoder field, and a free board where cords edit the chain.
 colors:
-  bg-body: "#1B1917"
-  bg-panel: "#292623"
-  bg-card: "#322E29"
-  hairline: "#4C463E"
-  line-strong: "#857C6E"
-  text-primary: "#EDE8DE"
-  text-muted: "#A79F92"
-  accent: "#F0A83C"
-  accent-hover: "#FFC06B"
-  accent-active: "#D18A20"
-  on-accent: "#241A08"
+  bench: "#0a0b0f"
+  chassis: "#131316"
+  system-deck: "#17181d"
+  face-edge: "#232330"
+  groove-cut: "#05060a"
+  groove-lip: "rgba(158, 164, 184, 0.14)"
+  seam-cut: "#010208"
+  seam-lip: "rgba(201, 206, 220, 0.3)"
+  print: "#9ea4b8"
+  print-hi: "#c9cedc"
+  print-dim: "#767c90"
+  accent: "#ff6b35"
+  accent-hi: "#ff8558"
+  accent-lo: "#e85a20"
+  display: "#ffd75e"
+  register-bg: "#0b0c10"
+  key: "#1d1e26"
+  key-edge: "#343746"
+  ring-track: "#454a5a"
+  cap: "#1e2027"
+  ink: "#131316"
+  on-red-fill: "#FFFFFF"
   red-edge: "#E5484D"
   red-fill: "#C93A32"
-  focus-ring: "#FFB640"
-  focus-ring-on-accent: "#241A08"
   family-gain: "#D9C37A"
   family-compressor: "#8CC079"
   family-eq: "#82A9DE"
@@ -27,17 +36,25 @@ colors:
   family-chorus: "#9E9ED1"
   family-gate: "#9AD5B2"
   family-autotune: "#D19ED1"
+  pm-family-gain: "#cdc5ad"
+  pm-family-compressor: "#b0c6a9"
+  pm-family-eq: "#aabacf"
+  pm-family-delay: "#baaecb"
+  pm-family-reverb: "#a6c6c9"
+  pm-family-limiter: "#d0b3bf"
+  pm-family-distortion: "#bfc7a8"
+  pm-family-chorus: "#afafca"
+  pm-family-gate: "#aecbbd"
+  pm-family-autotune: "#cfb4cf"
   status-live: "#7BD389"
   status-error: "#FF806E"
-  meter-low: "#5CC06E"
-  meter-mid: "#F0A83C"
-  meter-clip: "#F05A45"
+  vu-low: "#4ea96b"
+  vu-mid: "#ffd75e"
+  vu-clip: "#e4574a"
+  vu-unlit: "#262933"
+  vu-tick: "#c9cedc"
+  vu-label: "#9ea4b8"
 typography:
-  title:
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 700
-    letterSpacing: "0.08em"
   body:
     fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
     fontSize: "1rem"
@@ -47,16 +64,35 @@ typography:
     fontSize: "0.7rem"
     fontWeight: 700
     letterSpacing: "0.08em"
-  readout:
+  nameplate:
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 700
+    letterSpacing: "0.08em"
+  key-label:
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+    fontSize: "0.9rem"
+  bypass-label:
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+    fontSize: "1.05rem"
+    fontWeight: 700
+  value:
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontSize: "0.75rem"
+    fontVariation: "tabular-nums"
+  register:
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
     fontSize: "0.85rem"
     fontVariation: "tabular-nums"
+  family-code:
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontSize: "1.25rem"
+    fontWeight: 700
+    letterSpacing: "0.06em"
 rounded:
-  dot: "2px"
-  xs: "3px"
-  sm: "4px"
-  md: "6px"
-  lg: "8px"
+  sm: "2px"
+  badge: "3px"
+  key: "4px"
 spacing:
   sm: "4px"
   md: "8px"
@@ -65,248 +101,283 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.accent}"
-    textColor: "{colors.on-accent}"
-    rounded: "{rounded.md}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.key}"
     padding: "0.5rem 1rem"
   button-primary-hover:
-    backgroundColor: "{colors.accent-hover}"
-    textColor: "{colors.on-accent}"
+    backgroundColor: "{colors.accent-hi}"
+    textColor: "{colors.ink}"
   button-primary-active:
-    backgroundColor: "{colors.accent-active}"
-    textColor: "{colors.on-accent}"
+    backgroundColor: "{colors.accent-lo}"
+    textColor: "{colors.ink}"
   button-control:
-    backgroundColor: "{colors.bg-card}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.md}"
+    backgroundColor: "{colors.key}"
+    textColor: "{colors.print-hi}"
+    rounded: "{rounded.key}"
     padding: "0.5rem 1rem"
   button-bypass:
-    backgroundColor: "{colors.bg-panel}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
+    backgroundColor: "{colors.key}"
+    textColor: "{colors.print-hi}"
+    rounded: "{rounded.key}"
     padding: "0.65rem 1.6rem"
     height: "3rem"
   button-bypass-engaged:
     backgroundColor: "{colors.red-fill}"
     textColor: "#FFFFFF"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.key}"
     height: "3rem"
   chip-palette:
-    backgroundColor: "{colors.bg-card}"
-    textColor: "{colors.text-muted}"
-    rounded: "{rounded.md}"
-    padding: "0.5rem 0.6rem"
-  chip-agent:
-    backgroundColor: "{colors.bg-card}"
-    textColor: "{colors.text-muted}"
-    rounded: "{rounded.md}"
-    padding: "0.35rem 0.6rem"
-  card-module:
-    backgroundColor: "{colors.bg-card}"
-    rounded: "{rounded.lg}"
-    padding: "0.375rem 0.75rem"
-    width: "190px"
-  toast-agent:
-    backgroundColor: "{colors.bg-card}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
-    padding: "0.75rem 0.9rem"
-    width: "340px"
+    backgroundColor: "{colors.key}"
+    textColor: "{colors.print}"
+    padding: "0.35rem 0.5rem"
+  section-node:
+    backgroundColor: "transparent"
+    textColor: "{colors.print}"
+    padding: "0.55rem 0.75rem 0.6rem 0.9rem"
+    width: "100%"
+  display-register:
+    backgroundColor: "{colors.register-bg}"
+    height: "3rem"
+    padding: "0.35rem 0.9rem 0.35rem 1.4rem"
 ---
 
 # Design System: VOXCHAIN
 
 ## Overview
 
-**Creative North Star: "The Touring Rack"**
+**Creative North Star: "The Pattern Machine"**
 
-This is pro-audio rack gear built for the road, not for a studio shelf. Every
-surface answers three questions before it earns a pixel: can the operator read
-it from two meters away in a dark venue, does every lamp and silkscreen legend
-mean something, and will it still work when the show is already running. The
-console is warm industrial — brushed warm-charcoal steel, toolroom honesty,
-and one amber signal register that glows only where the machine speaks. It is
-dense the way real consoles are dense: deliberately, with a label rhythm, not
-as noise.
+VOXCHAIN is built as one hardware instrument, not a web page about audio.
+The whole viewport is a single machined chassis — the Two-Deck Stack: a
+sticky SYSTEM DECK across the top (identity nameplate, dot-matrix status
+etch, Start/device keys, the red-ringed BYPASS end key), a machined DECK
+SEAM bolting the two slabs together, and below it the VOICE DECK — one
+continuous faceplate whose three zones (palette flank · chain face ·
+presets flank) are printed onto the same ground, separated by machined
+grooves rather than panel borders. The chain face itself is the Single
+Face Chassis: a dot-matrix display register etched along the top edge,
+jack-print anchors (MIC IN / OUT), and each effect a panel-print SECTION
+split from its neighbors by grooves — never a floating card.
 
-The visitor here is an operator mid-task, never a browse. Physical metaphors
-carry the whole vocabulary: module cards are channel strips with family color
-on their top edge the way real gear codes rack modules; sliders are faders
-with detent ticks, center-unity notches, and amber caps carrying an ink
-position line; the top bar is a status LCD strip whose mono readouts are
-machine registers. Depth is tonal first — a chassis → faceplate → module-card
-ground stack — and real shadows appear only when something physically lifts
-off the rack (a dragged card, a floating toast).
+The control world is the encoder field: rotary knobs, pad selectors, and
+trimmers condensed into fluid clusters, exactly the refusal of stacked
+full-width fader rows the redesign brief demanded. The board underneath
+is FREE: sections sit wherever the operator puts them (snap-grid
+quantized), patch cords drawn between jacks are how the chain is
+EDITED — sound changes only when a cord link completes, never while
+dragging — and TIDY restores the incumbent vertical stack. Every value
+the machine holds answers on one display register. The world is matte:
+brightness is saturation on a near-black ground, never glow.
 
-The one confirmed anti-reference: this is not a neon terminal, not a webfonts
-showcase, not a decorative-motion piece. No display fonts in UI, no invented
-brand imagery, no glow. Confidence comes from restraint and redundant
-encoding — color is never the only signal anywhere in the system.
+The register discipline is strict: silkscreen print (labels, codes,
+legends) for humans, mono dot-matrix for machine values, tabular
+numerals everywhere, and a two-tier value ladder (12px per-control /
+13.6px register line). The one committed accent — signal orange — is
+reserved for system states: register marks, the global focus ring, the
+live-control blink, pressed pads, the chosen-drag groove lip, and Start.
+Family color appears twice, in two vocabularies: desaturated silkscreen
+inks for rail print, saturated rq5 tokens for knob arcs and palette
+legend squares.
 
 **Key Characteristics:**
-- Warm charcoal three-ground tonal stack (chassis → faceplate → module card); depth by layering, shadows only on lift.
-- One amber signal accent for action and machine attention; ink-on-amber fills, never amber-on-amber.
-- Two type registers: silkscreen legends for humans, mono LCD/VFD readouts for machine values.
-- Family color as edge marking (never fill) with always-present text labels — redundant encoding everywhere.
-- Split-role safety red: the Bypass control outranks everything on the strip.
-- 150–250 ms state transitions only; meter ballistics and the agent breath are functional, not decorative; `prefers-reduced-motion` respected throughout.
-- Console-grade density: 11 px text floor, tracked uppercase micro-labels, tabular numerals in every readout.
+- One instrument, two decks, three printed zones — machined grooves and one deck seam, no floating panels, no border-radius islands.
+- Single Face Chassis: display register on the top edge, sections as print zones, jack-print anchors, VU corner + flow switch on the base plate.
+- Encoder field: 54px knobs (family-colored arcs), pad radio-groups, trim slots; the display register answers the touched control.
+- Free board: snap-grid positioning, TIDY re-stack, patch cords that EDIT order but never gate audio; DOM order is always chain order.
+- One signal orange for system states only; family color on the arc alone; BYPASS's split-role red outranks everything on the deck.
+- Two-register type (silkscreen sans / dot-matrix mono tabular), 12px/13.6px value ladder, 11px floor.
+- One disabled grammar — diagonal hatch + recede — for exactly two states (pre-Start gate, bypassed chain).
 
 ## Colors
 
-A warm-charcoal chassis with one amber signal voice and a split-role safety
-red — every value WCAG-AA verified in its shipped pairing
-(`docs/ultron/research/rq5-palette.md` is the source of truth).
+A matte near-black instrument register (`--pm-*`) with one committed
+signal orange, a dot-matrix display amber, ten family inks in two
+saturations, and the split-role safety red on BYPASS. Every pairing is
+measured in the build records (redesign.md item 1/1b tables).
 
 ### Primary
-- **Signal Amber** (#F0A83C): the machine's voice — Start, Undo, active/drag states, unsaved flag, agent-ready label, fader caps. Hover brightens to Lamp Amber (#FFC06B), pressed deepens to Pressed Amber (#D18A20). Text on any amber fill is always Lamp Ink (#241A08) (8.46–10.60 contrast); amber-on-amber focus rings are forbidden (1.16) — use the dark ring token.
-- **Focus Amber Ring** (#FFB640): the single global `:focus-visible` ring, visible on all three grounds; its dark twin (#241A08) rides inside amber fills.
+- **Signal Orange** (#ff6b35, `--pm-accent`): the ONE committed accent, reserved for system states — display-register marks and module segment (6.89 on register ground), the global `:focus-visible` ring (6.25–7.97 across grounds), the live-control register blink, pressed pads and pressed keys (ink 6.54), the chosen-drag groove lip, and the Start key. Hover brightens to #ff8558, press deepens to #e85a20 (ink 7.72 / 5.22). Never decoration, never a knob arc, never large-area fill.
+- **Dot-Matrix Amber** (#ffd75e, `--pm-display`): machine values on the register (14.09 on the register ground) and the EXP badge (13.36 on chassis). The register's own ink — nothing else speaks it.
 
 ### Secondary
-- **Safety Edge Red** (#E5484D): rings and bezels only — the Bypass halo, refusal-toast bezel, meter clip pin.
-- **Safety Fill Red** (#C93A32): solid fills with white text only (5.08) — the engaged Bypass state.
-- Ten **family edges**: the original six — Gain (#D9C37A), Compressor (#8CC079), EQ (#82A9DE), Delay (#B18FDE), Reverb (#6FC2C8), Limiter (#DE8FB0) — plus the cycle-3 four: Distortion (#C0CE97), Chorus (#9E9ED1), Noise Gate (#9AD5B2), Autotune (#D19ED1), chosen to the same rq5 rules (initials ink 6.74–10.22, ≥5.30 on the card ground, hue centers ≥25° clear of every existing family). Used as chip legend-square fills (with on-accent initials — 7.06–9.82 for the original six, 6.74–10.22 for the cycle-3 four) and as 3px card top edges — never as text, never as large fills.
+- **Ten family tokens (saturated, rq5)** — Gain #D9C37A, Compressor #8CC079, EQ #82A9DE, Delay #B18FDE, Reverb #6FC2C8, Limiter #DE8FB0, Distortion #C0CE97, Chorus #9E9ED1, Gate #9AD5B2, Autotune #D19ED1: the KNOB ARCS (via `--knob-arc` per `data-family`, 6.93–11.07 as non-text arcs on chassis) and the palette chip's 20px legend squares. A section's arcs answer in its menu color.
+- **Ten family silkscreen inks (desaturated, `--pm-family-*`)** — e.g. gain #cdc5ad, eq #aabacf: the rail's 2-letter family code and its 2px left tick (8.66–10.76 on chassis — clears AA even at small print).
+- **Split-role safety red**: Edge Red #E5484D (rings/bezels only — BYPASS's 2px ring, refusal-toast bezel) and Fill Red #C93A32 (solid fills with white text 5.08 — engaged BYPASS). Never swapped, never white-on-edge-red.
 
 ### Tertiary
-- **Live Green** (#7BD389): the engine-state lamp. **Error Coral** (#FF806E): status-error register.
-- Meter stops: Meter Green (#5CC06E) → Meter Amber (#F0A83C) → Meter Clip (#F05A45), painted on canvas.
+- **Live Green** #7BD389 (engine lamp), **Error Coral** #FF806E (status-error text on the etch) — rq5 residuals still correct on the etch pairing.
+- **VU lamp paint** (`--pm-vu-*`): low #4ea96b → mid #ffd75e (one lamp language with the register) → clip #e4574a, on unlit glass #262933 with tick #c9cedc. Canvas-drawn by src/meters.js.
 
 ### Neutral
-- **Chassis Charcoal** (#1B1917): body ground.
-- **Faceplate Umber** (#292623): panel ground (topbar, flanks).
-- **Module Card** (#322E29): card/chip/toast ground.
-- **Seam Hairline** (#4C463E): decorative seams only — deliberately sub-3:1.
-- **Bezel Line** (#857C6E): meaningful outlines (3:1 against all grounds).
-- **Warm Chalk** (#EDE8DE): primary text. **Muted Silkscreen** (#A79F92): labels, secondary text.
+- **Bench** (#0a0b0f): the ground AROUND the instrument — the page reads as a slab on a surface.
+- **Chassis** (#131316): the instrument's one continuous faceplate ground, both decks' casting base; also `--pm-ink` (text/fill ink on accent).
+- **System Deck cast** (#17181d): the upper slab, a hair lighter — two castings, one instrument.
+- **Face Edge** (#232330): the chassis frame's machined bezel edge — a cut face, not a floating border.
+- **Groove Cut / Groove Lip** (#05060a / rgba(158,164,184,0.14)): the machined groove between sections and zones — dark slot beside a light lip.
+- **Seam Cut / Seam Lip** (#010208 / rgba(201,206,220,0.3)): the deck seam — deliberately deeper (4px) and brighter-lipped than section grooves; the deepest cut on the page.
+- **Print ladder**: #9ea4b8 silkscreen labels (7.47 on chassis) · #c9cedc lifted print, values, trim caps (11.78) · #767c90 receding print, flow marks (5.26).
+- **Key grounds**: #1d1e26 key ground with #343746 cut-edge bezel — a physical key on the panel; rest seams are decorative by the house hairline precedent.
+- **Register slot** (#0b0c10): the inset display ground. **Ring track** (#454a5a): unlit knob scale — decorative; the arc carries the value. **Cap** (#1e2027): the matte knob cap.
 
 ### Named Rules
-**The Split-Role Red Rule.** Edge red is for rings and bezels; fill red is for solid fills with white text. Never swap them: white on edge red fails (3.91), fill red as an edge fails (2.65).
-**The Amber Voice Rule.** Amber speaks for action and machine attention only — never as decoration, never as large-area fill. Its rarity on the dark chassis is what makes it readable at distance.
-**The Seam Rule.** Hairlines are seams, not outlines. Anything meaningful (interactive bezels, floating-card boundaries, family identity) uses the Bezel Line token; anything merely decorative uses the hairline.
+**The One Orange Rule.** Signal orange is spent only on system states (register marks, focus, live blink, pressed pads/keys, the chosen groove, Start). Family color belongs to the arc; identity color to the rail print. If a use is not a system state, it is not orange.
+**The Split-Role Red Rule.** Edge red rings; fill red fills with white text. BYPASS is the only red thing on the system surface, and nothing outranks it.
+**The Machined-Geometry Rule.** Boundaries are cut faces: dark cut under a light lip (grooves, seam, key bezels). No ambient shadow draws a boundary anywhere on the chassis.
 
 ## Typography
 
 **Body Font:** system-ui stack (`system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`)
-**Label/Mono Font:** `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace` (no webfonts — platform stacks only)
+**Label/Mono Font:** `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace` — no webfonts, platform stacks only.
 
-**Character:** An instrument panel in two registers. Human labels are
-silkscreen legends — small, bold, uppercase, tracked 0.08em, muted — exactly
-like the printing on a faceplate. Machine values (readouts, meters, preset
-names, toast footnotes) live in the mono register with tabular numerals so
-`—` becoming `48.0 kHz` changes glyphs, never geometry. The two registers
-never swap roles.
+**Character:** Two registers that never swap. Human labels are silkscreen
+panel print — small, bold, uppercase, tracked 0.08em, mid-print ink — the
+printing on a faceplate. Machine values live in the mono dot-matrix
+register with tabular numerals so a value changing never changes
+geometry. The nameplate (app title) is deliberately NOT a headline: it
+is the same micro-style as the zone legends, in lifted print.
 
 ### Hierarchy
-- **Title** (700, 0.75rem, tracked 0.08em, uppercase): the identity legend on the status strip; silkscreen register.
-- **Body** (400/600, 0.85–1rem, 1.5): prose values, button labels, toast summaries.
-- **Label** (700, 0.7rem / 11.2px, 0.08em, uppercase): panel headers, param labels, readout labels, optgroup legends — the surface-wide micro-label.
-- **Readout** (mono, tabular-nums, 0.7–0.95rem): every machine value — sample rate, latency, node count, meter dB, preset name, param values.
+- **Family code** (mono, 700, 1.25rem, 0.06em): the rail's large silkscreen identity print, in the family's desaturated ink.
+- **BYPASS label** (sans, 700, 1.05rem, tracked): the heaviest type on the page — the safety key out-weights everything, including the nameplate.
+- **Register line** (mono, tabular, 0.85rem / 13.6px, 400 + 700 segments): the panel instrument's etched tier — module · param · value on one line, segments differentiated by color/weight, never size.
+- **Value tier** (mono, tabular, 0.75rem / 12px): EVERY per-control value and state readout — knob/trim values (min-width 6ch), pad legends, meter dB, flow-state print, register help line, preset name, system-etch values. One size for everything that displays a value.
+- **Silkscreen labels** (sans, 700, 0.7rem / 11.2px, 0.08em uppercase): param labels, zone legends, group legends, readout labels.
+- **Nameplate** (sans, 700, 0.75rem, 0.08em): the identity legend on the system deck.
 
 ### Named Rules
-**The Register Rule.** If a value is machine state, it renders in the mono readout register with tabular numerals; if it is a human label, it renders as a silkscreen legend. Nothing in between.
-**The 11px Floor Rule.** No text renders below 11px anywhere (0.6875rem initials and 0.7rem labels are the floor after the density pass) — distance legibility is a product requirement.
+**The Register Rule.** Machine state renders mono tabular at the value tier (register main line one tier up at 13.6px); human labels render silkscreen sans. Nothing in between, and no value readout at any size outside the two tiers.
+**The 11px Floor Rule.** No text below 11px (the EXP badge's 0.6875rem is the floor). Standing recorded exception: canvas meter scale numerals are 9px inside the 96×26 scene — canvas-drawn, unchanged by recorded decision.
+**The Nameplate Discipline.** The app title is a nameplate, not a headline — it must never out-shout the BYPASS key.
 
 ## Layout
 
-Three-column console grid inside a rounded chassis frame
-(`grid-template-columns: 200px 1fr 220px`, gap 0, hairline seam borders):
-palette flank → signal-path canvas → presets flank. The sticky top bar is the
-status LCD strip: silkscreen identity legend · engine-state lamp · mono
-readout group · Start/device controls · agent chip · BYPASS at the far right.
-Below 900px the machine cluster (lamp + readouts) wraps to a second row via
-order — BYPASS never leaves the visible top.
+The viewport is the bench; `.instrument` is a full-bleed squared chassis
+frame on it. Inside, the Two-Deck Stack:
 
-The canvas flows top-down by default (VIS-7): MIC IN anchor with its meter →
-stacked channel-strip modules → OUT, inside a bounded panel
-(`max-height: calc(100vh - 7.5rem)`) that scrolls internally so a long chain
-never grows the page. A pinned footer row inside the panel (beneath the
-scrolling canvas, above the FLOW toggle) carries a second view of the OUT
-meter — output ground truth is always visible without scrolling. A FLOW
-toggle flips to the horizontal legacy reading (left→right chain, page-owned
-scroll), persisted per user. Cards collapse to slim header-only rows (~39px)
-via chevron — presentation only. While Bypass is engaged the chain region
-(cards + flow toggle) dims to the gated-state 0.55 with a silkscreen
-BYPASSED line; anchors, meters, the pinned footer, and both flanks never
-dim — output truth stays readable on the dry path. Spacing rhythm is
-console-tight: 4/8/12/16px steps, panel padding 1rem, card padding
-6px/12px after the ~90% density pass.
+- **System deck** (sticky, `--pm-system-deck`): one wrapping row, min-height 4rem — nameplate · dot-matrix etch (engine lamp + status sentence + RATE/LAT/NODES, values at the 12px tier, subordinate to the chain register by design) · Start/device keys · agent chip · BYPASS at the right end. Below 900px the etch wraps to a second row; BYPASS stays in the visible top.
+- **Deck seam**: 4px machined joint (1px bright lip over a deep cut) — deeper and brighter than any section groove so the two slabs read as one instrument under load.
+- **Voice deck**: grid `200px 1fr 220px`, gap 0 — palette zone | chain face | presets zone as PRINTED ZONES on the one chassis ground, separated by groove halves (palette's right edge is the cut; the face's left border is the lip; cut-then-lip in reading order). Below 900px the zones stack palette → face → presets and the grooves turn horizontal.
+
+The chain face (Single Face Chassis) is a bounded flex column
+(`max-height: calc(100vh - 6.75rem)`) that owns its scrolling: display
+register on the top edge; the FACE (MIC IN jack print → the board → OUT
+jack print) scrolling inside; base plate carrying the pinned OUT footer
+mirror / VU corner (bottom-right, always visible, never dimmed) and the
+flow switch + TIDY key (bottom-left). A persisted FLOW toggle flips to
+the horizontal legacy reading (page-owned scroll).
+
+**The board (free positioning, cycle 4):** every section is an
+absolutely positioned full-width row translated to its board seat by JS
+(`transform: translate(x,y)`, snap-quantized to the 16px grid). Position
+is STYLE ONLY — DOM order always equals chain order (PD-4), so
+bring-to-front z-order is paint, never sequence. The grip drag moves a
+section's seat (never its sound); the arrangement autosaves; TIDY
+recomputes the incumbent vertical stack (x = 16px, one 160px row per
+section).
+
+**Patch cords (FEW-3/FEW-4):** an SVG cord layer behind the sections
+draws MIC OUT → sections in chain order → OUT IN from the same positions
+map (nodes + 1 segments, re-routed by every position/order write path).
+Jack rings are the layer's only pointer-live children: dragging a cord
+end reorders the chain — audio changes ONLY on a completed link; drop
+nowhere reverts (keyboard Escape is the twin). Ghost cords and hot drop
+targets take the accent ink.
+
+Spacing rhythm is console-tight (4/8/12/16px); panel padding ~0.85–1rem;
+section padding 0.55/0.75/0.6/0.9rem on an 8.5rem rail + fluid encoder
+field grid.
 
 ## Elevation & Depth
 
-Tonal layering is the default depth: Chassis Charcoal ground → Faceplate
-Umber panels → Module Card surfaces, separated by hairline seams. Real
-shadows are structural — they appear only when something physically lifts off
-the rack.
+Flat by machined geometry, not by shadow. Depth is cut faces and tonal
+casting: the bench around the instrument, the two deck castings, the
+inset register slot, grooves and the seam as dark cuts under light lips,
+keys as cut-edge bezels. The only real shadow in the world is the drag
+LIFT (SortableJS's live clone) and the residual lifted toasts; a touched
+section lifts a hair while neighbors recede — `filter: brightness(1.13)`
+on `:focus-within`, `brightness(0.9)` on the rest — explicitly NO
+shadow. No glow, no hover shadows, no ambient anything.
 
 ### Shadow Vocabulary
-- **Card rest** (`0 1px 2px rgba(0,0,0,0.3)`): the faint module seat — cards are inserted, not floating.
-- **Lifted** (`0 4px 10px rgba(0,0,0,0.45–0.5)`): dragged cards/chips (SortableJS clones) and agent toasts — things held above the faceplate.
-- **Highest lift** (`0 8px 20px rgba(0,0,0,0.55)`): the actively dragged node card.
+- **Drag lift** (SortableJS clone): the one physical lift on the chassis.
+- **Knob cap lip** (`inset 0 1px 0 rgba(255,255,255,0.06)`): bevel geometry, not ambient depth.
 
 ### Named Rules
-**The Rest-Flat Rule.** Surfaces are flat at rest; a shadow means physical lift (drag, float). No ambient glow, no hover shadows.
+**The Rest-Flat Rule.** Surfaces are flat at rest. A shadow means physical lift (drag, floating toast); emphasis means brightness on matte. Never glow.
 
 ## Shapes
 
-Radius scale: dot 2px (status squares) · xs 3px (legend squares, fader caps) ·
-sm 4px (fader tracks) · md 6px (buttons, chips) · lg 8px (cards, toasts, the
-chassis frame). Form language is rectangular hardware: the chassis frame is
-one 8px rounded hairline-bordered box, cards are near-square modules, and the
-recurring signature silhouette is the family legend square — a small 3px-radius
-color block carrying two on-accent initials, repeated on palette chips and
-card headers. Family identity rides a 3px top edge on cards (edge marking,
-never fill). Focus rings are 2px solid with 1px offset; on amber fills the
-dark ring is drawn inside the fill (`outline-offset: -2px`).
+Squared machined hardware. The chassis frame and all sections have
+radius 0; the remaining radii are small and functional: 2px (empty-socket
+hint), 3px (EXP badge), 4px (control keys), full-circle (knobs, jack
+rings, legend squares). The recurring signature geometry: the 15px drawn
+jack (threaded ring + dark radial socket), the 3×3 grip dot field, the
+2px family tick on the rail, the register's 3px accent mark at its left
+edge, the diagonal 45° hatch texture (7px/2px) of the one disabled
+grammar, and the dashed print slot of the insertion ghost / empty
+socket. Focus rings are 2px solid orange with 1px offset; on orange
+fills the chassis-ink ring is drawn inside the fill (`outline-offset:
+-2px`).
 
 ## Components
 
-Tactile and confident: controls read as physical objects that answer within
-150 ms.
+Tactile, panel-mounted, answering within 150ms — brightness and print,
+never shadow or glow.
 
-### Buttons
-- **Shape:** md radius (6px); the shared `.control` vocabulary.
-- **Primary (Start):** Signal Amber fill, Lamp Ink text, 700 weight; hover Lamp Amber, pressed Pressed Amber, dark focus ring inside the fill. The strip's one primary action; recedes to disabled once the engine runs.
-- **Control (secondary):** Module Card ground, Bezel Line border (1px), Warm Chalk text; hover leans the border amber, pressed fills ink-on-amber; disabled drops to hairline seam + muted text at 0.6 opacity.
-- **BYPASS:** the loudest control on the strip — lg radius (8px), 3rem min-height, 1.05rem/700 type, 2px Safety Edge Red ring. Engaged: Safety Fill Red ground, white text. Nothing on the strip outranks it.
+### Buttons (control keys)
+- **Shape:** 4px radius, key ground #1d1e26, cut-edge bezel #343746, bright print; padding 0.5rem 1rem.
+- **Start (the one orange key):** signal-orange fill, chassis ink, 700; hover #ff8558, press #e85a20; ink focus ring inside the fill. Recedes to the shared disabled treatment once the engine runs.
+- **Control keys (device, presets, flow, TIDY):** shared vocabulary; hover leans the bezel to full print; pressed = the one orange fill with ink; disabled = recede (0.55, cut-edge seam, not-allowed). TIDY rides the base plate next to the flow switch in the same key rule (mono 12px).
+- **BYPASS (the red-ringed end key):** 3rem min-height, 1.05rem/700 tracked — the loudest element on the deck. OFF: key ground + bright print + 2px edge-red ring. ON: red-fill ground + white text + edge-red ring. Sticky-deck placement never leaves the visible top.
 
-### Chips
-- **Palette chip:** a real `<button>` (aria-label "Add X to chain"; disabled until Start) — Module Card ground, hairline seam at rest, md radius; 20px family legend square + silkscreen label (muted → primary on hover). Hover raises the bezel and adds a 2px family top edge (inset, no layout shift) + 1px lift (motion-guarded). Active/drag-origin: amber bezel. Keyboard: Enter/Space adds the node (appended before the terminal limiter); drag unchanged; grab cursor survives the button semantics. The ten chips chunk under three non-interactive silkscreen group legends in operator language — "Shape your voice" (EQ, Distortion, Chorus, Autotune), "Polish your sound" (Gain, Compressor, Delay, Reverb), "Keep it safe" (Limiter, Noise Gate) — in the optgroup legend register (uppercase, tracked, muted, 0.7rem), as real `<h3>`s so screen readers can navigate the chunking. Grouping is presentation only: chips stay flat direct-children buttons (DOM/tab/SR order and the drag items unchanged), the palette Sortable scopes its drag items to `.node-chip` so headers are pointer-inert, and the group map is a lookup with a trailing fallback group ("More effects") so a future registration can never silently vanish from the palette.
-- **Agent chip:** a strip-native reporter, never a control — card-ground pill, silkscreen legend type; tools-ready/acting lift to Bezel Line border, amber label, 8px amber status square; acting adds one 1.2s opacity breath (the single slow-animation exception, guarded). Unavailable is the quietest state on the strip.
+### Knobs (the encoder field's rotary voice)
+- **54px rotary encoder**; the native `input[type=range]` is the clipped, focusable semantic engine (opacity 0, hit-through); the knob draws focus as an orange ring at the dial's edge. Ring: conic arc from 225° sweeping 270°, min→value in the SECTION'S FAMILY COLOR (`--knob-arc`, set per `data-family`) over the unlit ring-track scale; matte cap with a print pointer line (`--knob-rot`); bipolar params print a neutral 12-o'clock detent tick outside the ring. Vertical drag (150px sweep, Shift ×0.2, wheel one step/notch), native arrows/Home/End. Label under the knob in silkscreen; mono value under that (12px, min-width 6ch). Family color lives on the arc ALONE — pointer, track, tick, labels, values stay neutral.
+
+### Pads (discrete params)
+- Real buttons in a radio group (roving tabindex; string commits verbatim): key ground, print text at the 12px value tier, 44px hit floor. The pressed pad is LIT in the accent fill with chassis ink — the accent-as-brightness economy: the selected value is the one bright thing in the group.
+
+### Trims (wide linear ranges)
+- A short horizontal instrument trimmer: silkscreen label + mono value line over a hairline milled slot with a bright print cap (delay Time, autotune Retune, gate Release). Neutral by recorded choice.
+
+### The display register
+- One etched slot on the chain face's top edge: inset register ground, machined lip, a 3px accent mark at the left edge, FIXED 3rem height over two lines (main + help) that clip, never reflow. Main line: `module · param · value` in mono tabular 13.6px — module segment in signal orange, segments differentiated by color/weight, never size. Help line at the 12px value tier. The touched control's value writes it; the ONE blink (register-blink) lives here. aria-hidden: the controls carry semantics; this is the redundant display.
+
+### Sections (chain effects)
+- Panel-print zones of the one faceplate — radius 0, transparent ground, a groove (dark cut top edge + inset light lip) splitting neighbors. Grid: 8.5rem family rail | fluid encoder field. **Rail:** machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · fold chevron + eject × at the rail's foot. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the chosen (held) section's groove lip goes accent; the ghost is a dashed print slot — a groove reservation, not a section. **Agent pulse:** one accent blink on the section's top groove (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
+
+### Chips (palette zone)
+- Real `<button>`s rendered as KEYS on the voice deck: key ground, cut-edge bezel, a 20px family legend square (saturated rq5 token — the identity mark) beside the module name as a silkscreen legend (12px uppercase). Rest seam is the cut edge; hover raises to full print; active/drag-origin goes signal orange. Ten chips chunk under three non-interactive group legends in operator language ("Shape your voice" / "Polish your sound" / "Keep it safe") as real `<h3>`s.
 
 ### Cards / Containers
-- **Node card (channel-strip module):** lg radius (8px), Module Card ground, 1px hairline border + 3px family top edge, rest shadow, min-width 190px, 6px/12px padding. Header: legend square + silkscreen label + drag grip (whole label line is the hit area) + collapse chevron + remove ×. Params region collapses to nothing on chevron toggle — the collapsed card is exactly the slim header row.
-- **Experimental badge (cycle 3, autotune only):** a status tag, not a control — one factory, two placements. The full "Experimental" tag sits after the module label in the card header; a compact "EXP" tag pins to the right edge of the palette chip (same tag, abbreviated at chip density the way legend initials are). Signal Amber 1px bezel + amber text on Module Card ground (6.65), mono silkscreen tag at 0.6875rem/700 (the 11px floor — the legend-initials size) with 0.06em tracking and 0.35rem side padding (both placements share one rule — the chip override is margin-only, so the two cannot drift); no focus ring and no pointer affordance. Screen-reader access is by content — the tag text rides the card's header flow, and the chip's aria-label carries the status before the node is added. Driven by the type's own registration (`experimental: true`, read through `NodeTypes.isExperimental()`) — one source shared with the agent capabilities readout, so the visible badge and the agent-facing disclosure cannot drift. **Detector exemption (adjudicated keep 2026-08-30):** the impeccable detector's `nested-cards` heuristic flags the widened EXP tag (~100.6×16px — it crosses the heuristic's ~100px card-width threshold) as a false positive: it is a tag, not a card. Do not re-triage.
-- **Drag states:** live clone lifts (0.85 opacity + lifted shadow); ghost is a 0.35-opacity dashed slot.
-
-### Inputs / Fields
-- **Select (device, presets):** `.control` vocabulary — card ground, Bezel Line bezel, native dark rendering via root `color-scheme: dark`; optgroup labels read as silkscreen micro-legends. Long labels ellipsize against a max width.
-- **Inline preset naming (Save As):** no browser dialogs — the naming row opens under the select: text input in the `.control` vocabulary (sr-only label) over an ink-on-amber Save + plain Cancel. Enter commits, Escape cancels (scoped), blur never commits; focus returns to Save As… on close. Empty names answer with the quiet `.preset-note` line.
-- **Armed Delete:** two-step in-panel — first click relabels to "DELETE?" (announced) and raises a Safety Edge Red bezel (edge, never fill — fill red is BYPASS-only); a second click within 5s deletes; expiry, click-elsewhere, or Escape disarms.
-- **Faders (param sliders):** one native `input[type=range]` per continuous param (discrete params take the param select below), re-skinned: 8px track (sm radius) painted as hairline slot + 1px detent ticks every 12px + 2px Bezel Line center-unity notch; 12×18px amber cap with Bezel Line bezel and a 2px Lamp Ink position line. Values read in the mono register right-aligned above, percent params on the surface's 0–100 % convention — distortion Drive/Tone multiply through a display-only `displayScale: 100` that changes the rendered string alone (slider ranges, model values, preset serialization, and the agent's 0..1 `set_param` contract are unchanged).
-- **Param select (discrete params, cycle 3):** enumerated params — autotune's Key/Scale (12 keys × Chromatic/Major/Minor) — render a native `<select>` instead of a fader: Faceplate Umber ground, Bezel Line bezel, sm radius, mono readout type at the 11px floor. The option text IS the value display, so the Register Rule holds with no separate value span, and native semantics (arrow keys, typeahead, screen-reader value announcement) stay untouched — appearance-only styling. The row keeps the fader's rhythm: silkscreen label left, control right.
+- **Experimental badge (autotune only):** one class, two placements (section rail + palette chip, "EXP" at chip density) — display-amber silkscreen on transparent (a machine marking, not a bright object), 1px amber border, 3px radius, 0.6875rem/700 mono at the 11px floor. A status tag, not a control: no focus, no pointer. Single-sourced from the type registration.
+- **Empty socket (taught empty state):** recessed register ground, dashed print boundary, centered print text; state-aware copy (pre-Start vs drag teaching).
+- **Agent toasts (rq5 residual, off-chassis):** floating cards with bezel borders, lifted shadow, ≤340px, bottom-right stack; refusal bezel is 2px edge red; Undo is the one ink-on-orange action.
 
 ### Navigation
-- **Status LCD strip (topbar):** the signature surface — one persistent full-width panel row reading as broadcast rack gear's status display, not a web header. Silkscreen identity legend · state lamp · fixed-width mono readouts (7ch/6ch/3ch slots) · controls · BYPASS.
+- **System deck + dot-matrix etch:** the signature surface — one persistent row reading as an instrument's status display. The etch borrows the register's inset geometry but stays SUBORDINATE to the chain face's register: neutral bright print (never amber/orange), values one tier down at 12px. The machine reports from one mouth, and it is the canvas register's.
 
 ### Meters
-- **MIC IN / OUT units:** 96×26px canvas lamp bar (unlit glass = hairline; green → amber → clip stops; peak tick + clip dot) over a mono dB readout (tabular, muted; CLIP latch text renders primary while the canvas carries the red). Ballistics are per-frame canvas draws — functional motion that stays live under reduced-motion by construction.
-- **Pinned OUT footer:** a second VIEW of the OUT unit (one feed, one ballistics, shared scene drawer) pinned in the canvas panel's always-visible region — the operator's output ground truth never depends on scroll or collapse; never dimmed, including while bypassed. The footer canvas is presentation-only (aria-hidden); the anchor meter keeps announcements.
+- **MIC IN / OUT units + the VU corner:** 96×26px canvas lamp bars (unlit glass, green→amber→clip stops, peak tick, clip latch dot) with mono dB readouts at the 12px tier. The pinned OUT footer is a second VIEW of one feed — output ground truth never depends on scroll or collapse, and never dims (including while bypassed). Ballistics are per-frame canvas draws: functional motion, live under reduced-motion by construction.
 
-### Toasts (agent change summaries)
-- Module Card ground, Bezel Line border (a floating card earns the meaningful outline), lg radius, lifted shadow, ≤340px, bottom-right stack (3 max, 6s auto-dismiss, hover-pause). Summary in body register; clamped/error/undone footnotes in muted mono under a hairline seam. Refusals carry a 2px Safety Edge Red bezel on all sides — the bezel is the refusal signal, never red text. Undo is the one action: ink-on-amber fill. Undone toasts recede to 0.75 opacity.
+### Inputs / Fields
+- **Selects (device, presets):** shared key vocabulary, native dark rendering via root `color-scheme: dark`; optgroup labels read as silkscreen micro-legends.
+- **Inline preset naming (Save As):** no browser dialogs — the naming row opens under the select in the key vocabulary; Enter commits, Escape cancels, blur never commits.
+- **Armed Delete:** two-step in-panel — first click relabels to "DELETE?" and raises an edge-red bezel (edge, never fill — fill red is BYPASS-only); second click within 5s deletes.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** extend the token set — introduce no raw hex values; new colors enter as `:root` tokens in the rq5-verified vocabulary.
-- **Do** keep color redundant: every family edge pairs with its legend square initials and a text label; every state change is copy + color.
-- **Do** use tabular numerals and fixed min-widths in readouts so machine values never pump layout.
-- **Do** draw focus rings with the global 2px token, switching to the dark inside-fill ring on amber surfaces.
-- **Do** keep state transitions at 150–250 ms and guard every motion addition with `prefers-reduced-motion`; meter ballistics stay live by drawing per-frame.
+- **Do** extend the `--pm-*` register — introduce no raw hex values; new colors enter as tokens in the measured vocabulary.
+- **Do** keep the value ladder exact: every value/state readout mono tabular at 12px, the register main line at 13.6px, silkscreen labels at 11.2px sans — nothing between the tiers.
+- **Do** keep color redundant: family identity is always code + label + arc/legend-square together; every state change is copy + color.
+- **Do** draw boundaries as cut faces (dark cut under light lip) and emphasis as brightness on matte; keep the one disabled grammar (hatch + recede) for exactly the pre-Start gate and the bypassed chain.
+- **Do** keep DOM order equal to chain order — board seats and z-order are paint; the cords layer re-routes from the same positions map on every write.
+- **Do** guard every motion addition with `prefers-reduced-motion` (150–250ms state answers); meter ballistics stay live by drawing per-frame.
 
 ### Don't:
-- **Don't** swap the safety red roles (edge ↔ fill) or put white text on edge red.
-- **Don't** render text below 11px, use webfonts/CDN assets, or add display fonts to the UI.
-- **Don't** use amber as decoration, large-area fill, or an amber-on-amber focus ring.
-- **Don't** add glow, load choreography, or hover shadows — shadows mean physical lift only.
-- **Don't** let anything on the status strip outrank BYPASS in loudness; don't move it from the visible top on narrow widths.
-- **Don't** invent brand imagery, logos, or a product name — the working title stands until the user chooses one.
+- **Don't** render text below 11px (recorded exception: the 9px canvas meter numerals), use webfonts/CDN assets, or add display fonts.
+- **Don't** use signal orange for anything that is not a system state, and never as decoration or large-area fill.
+- **Don't** swap the safety red roles (edge ↔ fill) or put white text on edge red; don't let anything outrank BYPASS on the deck.
+- **Don't** add glow, blur, load choreography, hover shadows, or border-radius card islands — sections are print zones of the one faceplate.
+- **Don't** let the cords gate audio mid-drag — sound changes only on a completed link; drop-nowhere reverts.
+- **Don't** let the machine speak twice — the system etch stays subordinate (neutral print, 12px); the chain face's register is the one amber machine voice.
