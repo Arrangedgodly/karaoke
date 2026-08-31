@@ -455,3 +455,35 @@ NEVER gate audio. Budget 10:00, actual ~9:30.
   killed by the shipped suite (blocks B–K) plus the probe above, and
   QA-1 (never dispatched) is subsumed by the committed vm-harness
   __fire convention.
+
+## DAT-1 — Migration + zero-regression gate (2026-08-30, production-overlord wrap-up)
+
+- Status: `awaiting-approval` (owner DAT; rides with FEW-1 per M1).
+- Prior DAT-1 worker stopped at its 5-minute budget mid-analysis
+  (plan.md still showed `pending`); this wrap-up closed the gate from
+  the shipped evidence, no new code.
+- Migration coverage exists and passes: `node tests/run.js
+  autosave-layout` → PASS, 74 checks ok, exit 0
+  (tests/test-autosave-layout-store.js) — group A: v2 envelope
+  round-trip; B: legacy autosave (no layout) migrates to the
+  tidy-stack fallback, idempotent, zero errors, hostile-legacy chain
+  falls back to DEFAULT; C: preset-tidy (named presets carry NO
+  layout, chain-only; preset load prunes replaced positions); D+E:
+  hostile layouts and hostile envelopes (wrong shape, bad chain,
+  unparsable slot) fail soft to layout {} without ever throwing or
+  touching the chain; F: single localStorage key karaoke-autosave-v1
+  preserved across the upgrade.
+- Preset/audio sources untouched this cycle: `git diff 1d36d61 --
+  src/preset-schema.js src/preset-store.js src/audio-graph.js
+  src/audio-engine.js` → EMPTY (verified for all four files).
+- Offline render NOT re-run this cycle — tests/qa-out/qa2-report.txt
+  is stale (mtime 2026-08-29 23:46, predates today's wrap-up;
+  its own tail is a cycle-3-era PASS for that cycle). Zero-regression
+  evidence stands on: (a) graph/model byte-stability assertions in
+  the suite — test-board-positioning-few2.js C8 "model + DOM
+  byte-stable across the drag", test-cord-editing-few4.js C3/G1
+  byte-unchanged reverts; (b) the empty git diff above for preset +
+  audio-graph/audio-engine sources. A fresh run-qa2 render remains
+  available to the approver on request.
+- Full suite re-run at wrap-up (not just cited): `node tests/run.js`
+  → 29/29 files, 2251 checks ok, exit 0.

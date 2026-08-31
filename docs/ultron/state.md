@@ -745,3 +745,6 @@ Evidence: 48-check tests/test-cord-editing-few4.js; suite 29/29 files /
 2251 checks green.) Next unblocked: FEW-5, FEW-8
 (+FEW-7's re-scoped auto-place, A11Y-1's DOM/tab order test now has a
 cord-order surface to pin).
+
+### DAT-1 dispatched 2026-08-30 (production-overlord wrap-up; prior worker budget-stopped)
+**Active task: DAT-1 — status `awaiting-approval`** (migration + zero-regression gate, no new code — prior DAT-1 worker stopped at its 5-minute budget mid-analysis, gate closed from shipped evidence: `node tests/run.js autosave-layout` PASS 74 checks exit 0 — v2 round-trip, legacy→tidy migration idempotent + hostile-legacy fallback, preset-tidy chain-only, hostile layouts/envelopes fail soft, key karaoke-autosave-v1 preserved; `git diff 1d36d61 -- src/preset-schema.js src/preset-store.js src/audio-graph.js src/audio-engine.js` EMPTY; offline render NOT re-run this cycle (tests/qa-out/qa2-report.txt stale 2026-08-29) — zero-regression evidence = suite byte-stability assertions (test-board-positioning-few2.js C8, test-cord-editing-few4.js C3/G1) + the empty diff above; full suite re-run at wrap-up: 29/29 files / 2251 checks, exit 0; evidence in [production-log.md](production-log.md)). Fresh run-qa2 render available to approver on request. Next: M1 acceptance (FEW-1 + DAT-1) → user approval.

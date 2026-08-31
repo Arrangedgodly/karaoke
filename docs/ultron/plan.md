@@ -136,11 +136,21 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
 
 ### Data / persistence (owner: DAT)
 
-**DAT-1 — Migration + zero-regression gate** · small · pending (with FEW-1)
+**DAT-1 — Migration + zero-regression gate** · small · awaiting-approval
 - Migration tests for every legacy autosave shape; bit-stable audio on
   legacy chains (offline render comparison, run-qa2 style); preset
   round-trips byte-unchanged.
 - Acceptance: legacy corpus loads; renders bit-identical; suite green.
+  (2026-08-30 wrap-up: 74-check tests/test-autosave-layout-store.js
+  PASS — groups A v2 round-trip, B legacy migration (idempotent,
+  hostile-legacy fallback), C preset-tidy (presets chain-only),
+  D/E hostile layouts+envelopes fail soft, F key discipline
+  (karaoke-autosave-v1 unchanged). Offline render NOT re-run this
+  cycle (qa2-report.txt stale, 2026-08-29); zero-regression evidence
+  = graph/model byte-stability assertions (test-board-positioning-few2
+  C8, test-cord-editing-few4 C3/G1) + git diff vs 1d36d61 EMPTY for
+  src/preset-schema.js, src/preset-store.js, src/audio-graph.js,
+  src/audio-engine.js. Suite green, exit 0.)
 
 ### QA / test (owner: QA)
 
