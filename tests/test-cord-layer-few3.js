@@ -250,12 +250,8 @@ var sandbox = {
   }
 };
 sandbox.window = sandbox;
-// Horizontal-default round (2026-08-31): the board's DEFAULT reading is
-// now horizontal. These harnesses pin the VERTICAL geometry contracts,
-// so they stub an EXPLICIT stored vertical preference (the user has
-// clicked the toggle) — readFlowPreference honors it and the vertical
-// pins hold verbatim. The horizontal default gets its own coverage
-// below / in test-board-positioning-few2.js.
+// Vertical flow is RETIRED (2026-08-31): nothing reads a flow preference
+// anymore; the stub stays only to prove a stale legacy key is inert.
 sandbox.window.localStorage = {
   getItem: function (k) { return k === 'karaoke-flow-orientation-v1' ? 'vertical' : null; },
   setItem: function () {},
@@ -356,15 +352,16 @@ function model3() {
 
 // Board-space jack constants (src/canvas.js, OQ-9 geometry): mic
 // (16,-32) — the layout-less fallback for the MIC OUT point; a section's
-// jacks sit ON its border, DIRECTLY ACROSS each other (vertical flow: IN
-// at top-center, OUT at bottom-center) over the placeholder card box
-// (160 wide, 48 tall — real browsers measure the live card); OUT IN at
-// the board's foot (16, maxY + 160).
+// jacks sit ON its border, DIRECTLY ACROSS each other (IN at the middle
+// of the LEFT border, OUT at the middle of the RIGHT — the one reading
+// since vertical flow was retired 2026-08-31) over the placeholder card
+// box (160 wide, 48 tall — real browsers measure the live card); OUT IN
+// at the board's foot (16, maxY + 160).
 var MIC = { x: 16, y: -32 };
 var CARD_W = 160;
 var CARD_H = 48;
-function seatIn(seat) { return { x: seat.x + CARD_W / 2, y: seat.y }; }
-function seatOut(seat) { return { x: seat.x + CARD_W / 2, y: seat.y + CARD_H }; }
+function seatIn(seat) { return { x: seat.x, y: seat.y + CARD_H / 2 }; }
+function seatOut(seat) { return { x: seat.x + CARD_W, y: seat.y + CARD_H / 2 }; }
 
 // ----------------------------------------------------------------------
 console.log('A. layer construction + the pinned DOM contracts');
@@ -407,14 +404,14 @@ check(
 );
 var d12 = dOf(1);
 check(
-  !!d12 && startPoint(d12).x === seatOut({ x: 16, y: 0 }).x && startPoint(d12).y === seatOut({ x: 16, y: 0 }).y &&
-    endPoint(d12).x === seatIn({ x: 16, y: 160 }).x && endPoint(d12).y === seatIn({ x: 16, y: 160 }).y,
-  'B5: mid-chain endpoints derive from the seats (n1 out-jack 96,48 -> n2 in-jack 96,160 — ON the border, across from each other)'
+  !!d12 && startPoint(d12).x === seatOut({ x: 0, y: 16 }).x && startPoint(d12).y === seatOut({ x: 0, y: 16 }).y &&
+    endPoint(d12).x === seatIn({ x: 192, y: 16 }).x && endPoint(d12).y === seatIn({ x: 192, y: 16 }).y,
+  'B5: mid-chain endpoints derive from the row seats (n1 out-jack 160,40 -> n2 in-jack 192,40 — ON the border, across from each other)'
 );
 var dLast = dOf(3);
 check(
-  !!dLast && endPoint(dLast).x === 16 && endPoint(dLast).y === 320 + 160,
-  'B6: the OUT IN jack rides the board\'s foot (lowest seat 320 + one row pitch)'
+  !!dLast && endPoint(dLast).x === 16 && endPoint(dLast).y === 16 + 160,
+  'B6: the OUT IN jack rides the board\'s foot (lowest seat 16 + one row pitch)'
 );
 check(
   !!d01 && d01.indexOf(' C') !== -1,
@@ -426,21 +423,21 @@ console.log('C. a grip MOVE re-routes the cords live (positions map only)');
 var micToN1Before = dOf(0);
 var h2 = handleOf('n2');
 h2.__fire('pointerdown', { clientX: 100, clientY: 100, button: 0 });
-documentStub.__fire('pointermove', { clientX: 139, clientY: 122 }); // n2 -> (48, 176)
+documentStub.__fire('pointermove', { clientX: 139, clientY: 122 }); // n2 -> (224, 32)
 documentStub.__fire('pointerup', {});
 check(
-  CC.currentLayout().n2.x === 48 && CC.currentLayout().n2.y === 176,
-  'C1: the drag moved n2\'s seat (48, 176) — snap-quantized'
+  CC.currentLayout().n2.x === 224 && CC.currentLayout().n2.y === 32,
+  'C1: the drag moved n2\'s seat (224, 32) — snap-quantized'
 );
 var intoN2 = dOf(1);
 var outOfN2 = dOf(2);
 check(
-  !!intoN2 && endPoint(intoN2).x === seatIn({ x: 48, y: 176 }).x && endPoint(intoN2).y === seatIn({ x: 48, y: 176 }).y,
-  'C2: the cord INTO n2 now ends at its moved in-jack (128, 176 — top-center of the seat)'
+  !!intoN2 && endPoint(intoN2).x === seatIn({ x: 224, y: 32 }).x && endPoint(intoN2).y === seatIn({ x: 224, y: 32 }).y,
+  'C2: the cord INTO n2 now ends at its moved in-jack (224, 56 — middle of the left border)'
 );
 check(
-  !!outOfN2 && startPoint(outOfN2).x === seatOut({ x: 48, y: 176 }).x && startPoint(outOfN2).y === seatOut({ x: 48, y: 176 }).y,
-  'C3: the cord OUT OF n2 now starts at its moved out-jack (128, 224 — bottom-center, directly across)'
+  !!outOfN2 && startPoint(outOfN2).x === seatOut({ x: 224, y: 32 }).x && startPoint(outOfN2).y === seatOut({ x: 224, y: 32 }).y,
+  'C3: the cord OUT OF n2 now starts at its moved out-jack (384, 56 — middle of the right border, directly across)'
 );
 check(
   dOf(0) === micToN1Before,
@@ -448,38 +445,15 @@ check(
 );
 
 // ----------------------------------------------------------------------
-console.log('D. TIDY re-routes the cords onto the restored stack');
+console.log('D. TIDY re-routes the cords onto the compacted row');
 CC.tidyChain();
 check(
-  endPoint(dOf(1)).x === seatIn({ x: 16, y: 160 }).x && endPoint(dOf(1)).y === seatIn({ x: 16, y: 160 }).y,
-  'D1: after TIDY the cord into n2 returns to the stack seat (96, 160)'
+  endPoint(dOf(1)).x === seatIn({ x: 192, y: 16 }).x && endPoint(dOf(1)).y === seatIn({ x: 192, y: 16 }).y,
+  'D1: after TIDY the cord into n2 returns to the row seat (192, 40)'
 );
 
-// ----------------------------------------------------------------------
-console.log('D2. jack ORIENTATION derives from each card\'s OWN flow field');
-// OQ-9: HORIZONTAL flow moves the jacks to the card\'s sides — IN at the
-// middle of the LEFT border, OUT at the middle of the RIGHT border (the
-// per-card field FEW-6\'s glyph will flip; today the canvas toggle is
-// its uniform writer — the LAYOUT FIELD is what the geometry reads).
-CC.loadModel(model3(), {
-  n1: { x: 16, y: 0, flow: 'horizontal' },
-  n2: { x: 16, y: 160 },
-  n3: { x: 16, y: 320 }
-});
-var dIntoN1 = dOf(0);
-var dOutOfN1 = dOf(1);
-check(
-  !!dIntoN1 && endPoint(dIntoN1).x === 16 && endPoint(dIntoN1).y === 0 + CARD_H / 2,
-  'D2a: a HORIZONTAL card\'s in-jack sits at the middle of its LEFT border (16, 24)'
-);
-check(
-  !!dOutOfN1 && startPoint(dOutOfN1).x === 16 + CARD_W && startPoint(dOutOfN1).y === 0 + CARD_H / 2,
-  'D2b: a HORIZONTAL card\'s out-jack sits at the middle of its RIGHT border (176, 24) — directly across'
-);
-check(
-  !!dOutOfN1 && endPoint(dOutOfN1).y === 160,
-  'D2c: the vertical neighbor\'s in-jack stays on its top border (mixing orientations routes cleanly)'
-);
+// (The old D2 mixed-orientation block is retired with vertical flow:
+// every card reads horizontal jacks — the left/right across-from rule.)
 
 // ----------------------------------------------------------------------
 console.log('E. remove x closes the chain over the removed seat');

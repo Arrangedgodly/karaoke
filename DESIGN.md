@@ -271,45 +271,43 @@ height; the palette and presets flanks scroll their own content; the
 chain face (Single Face Chassis: display register on the top edge; the
 FACE — MIC IN jack print → the board → OUT jack print — scrolling
 inside; base plate carrying the pinned OUT footer mirror / VU corner,
-bottom-right, always visible, never dimmed — and the flow switch + TIDY
-key, bottom-left) owns the pan in BOTH axes in either flow mode. Below
-901px the zones stack and the page keeps its scroll. The HORIZONTAL
-reading is the board's default: condensed modules in a left-to-right
-row; the persisted FLOW toggle REVERSES to the vertical stacked reading,
-re-tidying the board into the new orientation's incumbent layout.
+bottom-right, always visible, never dimmed — and the TIDY key) owns the
+pan in BOTH axes. Below 901px the zones stack and the page keeps its
+scroll. VERTICAL FLOW IS RETIRED (same day, user direction): the board
+has exactly ONE reading — horizontal, condensed modules in a
+left-to-right row; the FLOW toggle, its preference key, and the vertical
+geometry branches are deleted (`.flow-horizontal` is a permanent panel
+class), and legacy vertical payloads load horizontal.
 
-**The board (free positioning, cycle 4 + the 2026-08-31
-horizontal-default round):** every section is an absolutely positioned
-slab translated to its board seat by JS (`transform: translate(x,y)`,
-snap-quantized to the 16px grid). In the horizontal (default) reading
-each section is a CONDENSED PORTRAIT MODULE — the rail collapses into a
-compact header band (grip · code · label · fold/eject right) over the
-wrapping encoder field, one uniform condensed width (240px, clamped
-176–384px) with a min-height one notch above it (slightly taller than
-wide); in the vertical reading sections are full-width rows with the
-side rail anatomy. Position AND width are STYLE ONLY — DOM order always
-equals chain order (PD-4), so bring-to-front z-order is paint, never
-sequence. The grip drag moves a section's seat and the corner resize
-grip (a machined dot-field mark, bottom-right) adjusts its width
-(`w` joins x/y in the layout entry; snap-quantized, clamped, end-only
-persistence); neither ever touches sound. The arrangement autosaves;
-TIDY recomputes the incumbent layout for the current orientation — the
-horizontal row (x accumulating each module's width plus one grid unit)
-or the vertical stack (x = 16px, rows stacking on each section's
-MEASURED height plus one grid unit of breathing room — never
-overlapping, never a fixed pitch).
+**The board (free positioning, cycle 4 + the 2026-08-31 rounds):** every
+section is an absolutely positioned slab translated to its board seat by
+JS (`transform: translate(x,y)`, snap-quantized to the 16px grid). Each
+section is a CONDENSED MODULE — the rail collapses into a compact header
+band (grip · code · label · fold/eject right) over the wrapping encoder
+field. Width defaults to the RESIZER'S FLOOR (176px/11rem, clamped
+176–384px): at the floor each control row fits exactly one unit, so a
+module opens as a SINGLE STACK of controls with no right-hand dead
+space; widening re-wraps the field to fill. Height hugs content.
+Position AND width are STYLE ONLY — DOM order always equals chain order
+(PD-4), so bring-to-front z-order is paint, never sequence. The header
+band and grip drag move a section's seat; the corner resize grip (a
+machined dot-field mark, bottom-right) adjusts its width (`w` joins x/y
+in the layout entry; snap-quantized, clamped, end-only persistence);
+neither ever touches sound. The arrangement autosaves; TIDY COMPACTS —
+column/row bands clustered by overlap, packed flush at the tidy pitch
+from the arrangement's own anchor — preserving the operator's layout
+while closing the free space (a single row degenerates to the exact
+incumbent row: x accumulating each module's width plus one grid unit).
 
 **Patch cords (FEW-3/FEW-4, geometry by OQ-9):** an SVG cord layer
 behind the sections draws MIC OUT → sections in chain order → OUT IN
 from the same positions map (nodes + 1 segments, re-routed by every
-position/order write path). Jack geometry is the across-from rule: a
-VERTICAL card's input sits at the TOP-CENTER of its border and its
-output at the BOTTOM-CENTER (directly across); a HORIZONTAL card's at
-the middle of its LEFT and RIGHT borders — orientation derives from each
-card's OWN layout flow field (today uniform, written by the canvas FLOW
-toggle; per-card when FEW-6 lands). The panel anchors rhyme: MIC IN's
-out-jack at its print row's bottom-center, the OUT anchor's in-jack at
-its top-center, so the column reads mic → down through the cards → out.
+position/order write path). Jack geometry is the across-from rule — one
+reading since vertical flow was retired: a card's input sits at the
+middle of its LEFT border and its output at the middle of its RIGHT
+(directly across). The panel anchors rhyme the same way: MIC IN's
+out-jack at its block's middle-right, the OUT anchor's in-jack at its
+middle-left, so the row reads mic → across through the modules → out.
 Every jack is ONE drawn vocabulary — a 15px ring with a dark socket dot,
 sitting ON the border line it serves (half-buried in the slab's edge)
 with a quiet print-lift hover. Jack rings are the layer's only
@@ -318,9 +316,9 @@ changes ONLY on a completed link; drop nowhere reverts (keyboard Escape
 is the twin). Ghost cords and hot drop targets take the accent ink.
 
 Spacing rhythm is console-tight (4/8/12/16px); panel padding ~0.85–1rem;
-section padding 0.4/0.6/0.45/0.7rem on a 6.5rem rail (horizontal mode:
-header band + wrapping body inside the condensed 240px module) + fluid
-encoder field grid.
+section padding 0.4/0.6/0.45/0.7rem (the board: header band + wrapping
+body inside the condensed module, default width at the 176px resize
+floor so controls open as a single stack) + fluid encoder field grid.
 
 ## Elevation & Depth
 

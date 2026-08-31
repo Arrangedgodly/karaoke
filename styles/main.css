@@ -1693,42 +1693,6 @@ select.control {
   margin-right: 0.25rem;
 }
 
-/* OQ-9 (QA-5) — vertical mode: the panel anchors rhyme with the cards'
-   across-from geometry. The MIC IN row's jack sits at its BOTTOM-CENTER,
-   the OUT row's at its TOP-CENTER, and the CORD LAYER draws those jacks
-   (ring + socket, the one board vocabulary) exactly there — so the
-   print row's own left-edge ring retires in this mode and the label
-   prints beside the real jack. The meter stays pinned at the row's
-   right end (absolute; the row is already position:relative via the
-   occlusion guard). Horizontal mode keeps the stacked print ring as
-   before (the jack there is the anchor block's top mark). */
-.canvas-panel:not(.flow-horizontal) .anchor::before {
-  content: none;
-}
-
-.canvas-panel:not(.flow-horizontal) .anchor {
-  justify-content: flex-start;
-  padding-left: calc(50% + 0.8rem);
-  padding-right: 0.15rem;
-}
-
-.canvas-panel:not(.flow-horizontal) .anchor .meter-unit {
-  position: absolute;
-  right: 0.15rem;
-  top: 50%;
-  transform: translateY(-50%);
-  margin: 0;
-}
-
-/* Vertical mode retires the printed flow arrows: the PATCH CORDS are the
-   flow indication on a free board, they run down the column's center,
-   and a dim chevron printed exactly where the cord drops would only
-   collide with the new jack line. (Horizontal mode keeps them — its
-   cords run edge-to-edge along the row.) */
-.canvas-panel:not(.flow-horizontal) .arrow {
-  display: none;
-}
-
 /* Signal-flow arrows — the same aria-hidden decorative spans, drawn as
    print chevrons (the glyph text is zeroed; the mark is CSS geometry
    pointing down the vertical flow). */
@@ -2357,7 +2321,6 @@ select.control {
   opacity: 1;
 }
 
-.canvas-panel:not(.flow-horizontal) .node-resize,
 .node-card.collapsed .node-resize {
   display: none;
 }
@@ -3498,15 +3461,13 @@ input.preset-name-input:focus-visible {
 }
 
 /* ===========================================================================
-   FLOW-DIRECTION SWITCH (VIS-7b behavior, Pattern Machine restyle).
-   src/canvas.js flips .flow-horizontal on the canvas panel from the
-   .flow-toggle button and persists the choice under
-   karaoke-flow-orientation-v1. HORIZONTAL is the board's default reading
-   (2026-08-31 round): condensed portrait sections in a left-to-right
-   row. Flipping to VERTICAL reverses to the stacked full-width reading;
-   there the switch rides the base plate's LEFT end (absolutely placed
-   against the panel's bottom edge so the OUT corner owns the right — one
-   base strip, two ends); in horizontal mode it returns to static flow.
+   BOARD CHROME (the TIDY key). Vertical flow is RETIRED (2026-08-31,
+   user direction): the board has ONE reading — horizontal, condensed
+   modules left-to-right — and .flow-horizontal is a permanent class the
+   canvas applies at init (the scoping stays so the rules read as the
+   board's own). The FLOW toggle and the vertical-mode geometry branches
+   are deleted; TIDY (the board's one chrome control, static flow on the
+   panel's tail) compacts the arrangement.
    =========================================================================== */
 
 .canvas-panel {
@@ -3522,7 +3483,6 @@ input.preset-name-input:focus-visible {
 /* FEW-2: the TIDY control rides the SAME chrome zone and the SAME rule
    (the existing .control + panel-scope vocabulary — VIS-1: no new chrome
    vocabulary, just one more key in the flow-toggle's row). */
-.canvas-panel .flow-toggle,
 .canvas-panel .tidy-toggle {
   display: block;
   padding: 0.3rem 0.8rem;
@@ -3535,32 +3495,18 @@ input.preset-name-input:focus-visible {
   color: var(--pm-print);
 }
 
-.flow-toggle:not(:disabled):hover,
 .tidy-toggle:not(:disabled):hover {
   border-color: var(--pm-print);
   color: var(--pm-print-hi);
 }
 
-.canvas-panel:not(.flow-horizontal) .flow-toggle {
-  position: absolute;
-  left: 0.9rem;
-  bottom: 0.4rem;
-  margin: 0;
-}
-
-.canvas-panel:not(.flow-horizontal) .tidy-toggle {
-  position: absolute;
-  left: 0.9rem;
-  bottom: 0.4rem;
-  margin-left: 8.5rem;
-}
-
-/* HORIZONTAL MODE — the default reading: MIC IN at the left, chain runs
-   left→right, OUT at the right. The panel stays a bounded column of the
-   fixed one-page console and the FACE owns the pan (overflow both axes —
-   the row's reach plus any card dragged below it), anchors return to
-   compact stacked blocks with their meters beneath, the drawn chevrons
-   point right, sections take their content width in a row list. */
+/* THE BOARD READING (horizontal, the only one): MIC IN at the left,
+   chain runs left→right, OUT at the right. The panel stays a bounded
+   column of the fixed one-page console and the FACE owns the pan
+   (overflow both axes — the row's reach plus any card dragged below
+   it), anchors are compact stacked blocks with their meters beneath,
+   the drawn chevrons point right, sections take their content width in
+   a row list. */
 .canvas-panel.flow-horizontal .canvas {
   flex-direction: row;
   overflow: auto;
@@ -3602,13 +3548,13 @@ input.preset-name-input:focus-visible {
    header band (grip · code · label · badge · fold/eject right) over the
    encoder field, which wraps below. The card's WIDTH is the JS-applied
    per-card width (layout entry `w`, written by the corner resize grip)
-   defaulting to one uniform condensed width — every module the same size
-   until the operator widens one. Height HUGS CONTENT (the user's dead
-   -space direction): no forced min-height — multi-param modules land
-   naturally taller than wide, one-knob modules stay slim, and TIDY
-   aligns the row's tops. */
+   defaulting to the resizer's FLOOR (11rem/176px) — at the floor each
+   control row fits exactly one unit, so every module opens as a SINGLE
+   STACK of controls with no right-hand dead space; widening the card
+   re-wraps the field to fill. Height HUGS CONTENT (no forced
+   min-height) and TIDY aligns the row's tops. */
 .canvas-panel.flow-horizontal .node-card {
-  width: 15rem;
+  width: 11rem;
   min-width: 11rem;
   max-width: 24rem;
   padding: 0.35rem 0.45rem 0.4rem;

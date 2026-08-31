@@ -110,7 +110,10 @@
   // x/y/scale/flow; an absent w means the CSS default (the uniform
   // condensed width every card shares until resized). The clamp bounds
   // mirror main.css's horizontal-mode min/max-width (11rem..24rem).
-  var CARD_W_DEFAULT_PX = 240; // 15rem — the uniform condensed default
+  // 176px (11rem, the resizer's floor) is the DEFAULT width: at the
+  // floor each control row fits exactly one unit, so every module opens
+  // as a single stack of controls — widening re-wraps to fill.
+  var CARD_W_DEFAULT_PX = 176;
   var CARD_W_MIN_PX = 176; // 11rem
   var CARD_W_MAX_PX = 384; // 24rem
   var positions = {}; // id -> {x, y, w?, scale, flow} (scale/flow carried, FEW-5/6 wire them)
@@ -145,15 +148,14 @@
     return clampCardW(pos && typeof pos.w === 'number' ? pos.w : undefined);
   }
 
-  /** Paint one layout entry onto its card: the seat (transform) and, in
-   *  horizontal mode, the width (vertical cards stay full-width rows —
-   *  their width comes from the board, not the entry). */
+  /** Paint one layout entry onto its card: the seat (transform) and the
+   *  card's own condensed width. Since the vertical reading was retired
+   *  (2026-08-31) every card is a width-defined module on the horizontal
+   *  board. */
   function applyPositionToCard(card, x, y, id) {
     card.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
-    if (id && boardFlow === 'horizontal') {
+    if (id) {
       card.style.width = cardWidth(id) + 'px';
-    } else if (id && card.style) {
-      card.style.width = '';
     }
   }
 
@@ -162,12 +164,11 @@
     card.style.zIndex = String(zCounter);
   }
 
-  /** One row's contribution to the tidy COLUMN: the card's MEASURED height
-   *  snapped up to the grid plus one grid unit of breathing room (the
-   *  console rhythm's own pitch — not an arbitrary gap). A layout-less
-   *  host falls back to the incumbent fixed 160px row pitch. OQ-9: the
-   *  fixed pitch overlapped real expanded sections (a knob field runs
-   *  ~200-280px), which is what "smashed together" was at real sizes. */
+  /** One card's contribution to the board's vertical rhythm: its MEASURED
+   *  height snapped up to the grid plus one grid unit of breathing room
+   *  (the console rhythm's own pitch — not an arbitrary gap). A
+   *  layout-less host falls back to the fixed 160px pitch. Used by the
+   *  extent math and TIDY's row-band packing. */
   function tidyRowHeight(id) {
     var size = measuredSize(cardElById(id));
     if (size.h) {
@@ -176,8 +177,8 @@
     return TIDY_ROW_PITCH;
   }
 
-  /** The horizontal twin: one card's contribution to the tidy ROW — its
-   *  effective width snapped up to the grid plus one grid unit of
+  /** The horizontal twin: one card's contribution along the row axis —
+   *  its effective width snapped up to the grid plus one grid unit of
    *  breathing room. A layout-less host has no measured width, so the
    *  entry's `w` (or the uniform default) carries the math. */
   function tidyRowWidth(id) {
@@ -186,59 +187,8 @@
     return Math.ceil(w / GRID_PITCH) * GRID_PITCH + GRID_PITCH;
   }
 
-  /** The incumbent board layout for the CURRENT chain order, preserving
-   *  each node's existing scale/flow/w (TIDY rewrites only x/y). The
-   *  vertical branch stacks rows on their own measured heights; the
-   *  horizontal branch lays the condensed sections in one left-to-right
-   *  row — the mirror of the same discipline (no overlap, grid-aligned,
-   *  one grid unit of air between neighbors). */
-  function tidyStackLayout() {
-    var layout = {};
-    if (boardFlow === 'horizontal') {
-      var x = 0;
-      chainModel.forEach(function (entry) {
-        var prev = positions[entry.id] || {};
-        layout[entry.id] = {
-          x: x,
-          y: TIDY_X,
-          w: typeof prev.w === 'number' && isFinite(prev.w) ? prev.w : undefined,
-          scale: typeof prev.scale === 'number' && isFinite(prev.scale) ? prev.scale : 1,
-          flow: 'horizontal'
-        };
-        x += tidyRowWidth(entry.id);
-      });
-      return layout;
-    }
-    var y = 0;
-    chainModel.forEach(function (entry) {
-      var prev = positions[entry.id] || {};
-      layout[entry.id] = {
-        x: TIDY_X,
-        y: y,
-        w: typeof prev.w === 'number' && isFinite(prev.w) ? prev.w : undefined,
-        scale: typeof prev.scale === 'number' && isFinite(prev.scale) ? prev.scale : 1,
-        flow: prev.flow === 'horizontal' ? 'horizontal' : 'vertical'
-      };
-      y += tidyRowHeight(entry.id);
-    });
-    return layout;
-  }
-
-  /** First free grid slot down the tidy column: below the lowest card's
-   *  measured bottom (FEW-7 will generalize). */
-  function firstFreeSlotY() {
-    var maxY = 0;
-    Object.keys(positions).forEach(function (id) {
-      var bottom = positions[id].y + tidyRowHeight(id);
-      if (bottom > maxY) {
-        maxY = bottom;
-      }
-    });
-    return snapToGrid(maxY);
-  }
-
-  /** The horizontal twin: first free grid slot along the tidy row — right
-   *  of the rightmost card's right edge. */
+  /** First free grid slot along the row: right of the rightmost card's
+   *  right edge (new modules join the row's end). */
   function firstFreeSlotX() {
     var maxX = 0;
     Object.keys(positions).forEach(function (id) {
@@ -251,9 +201,7 @@
   }
 
   function placeNewNode(id) {
-    positions[id] = boardFlow === 'horizontal'
-      ? { x: firstFreeSlotX(), y: TIDY_X, scale: 1, flow: 'horizontal' }
-      : { x: TIDY_X, y: firstFreeSlotY(), scale: 1, flow: 'vertical' };
+    positions[id] = { x: firstFreeSlotX(), y: TIDY_X, scale: 1, flow: 'horizontal' };
     return positions[id];
   }
 
@@ -282,7 +230,7 @@
       }
     });
     chainListEl.style.minHeight = maxY + 'px';
-    chainListEl.style.minWidth = boardFlow === 'horizontal' ? maxX + 'px' : '';
+    chainListEl.style.minWidth = maxX + 'px';
   }
 
   function applyPositionsToCards() {
@@ -403,7 +351,7 @@
         y: yByid[e.id],
         w: typeof e.prev.w === 'number' && isFinite(e.prev.w) ? e.prev.w : undefined,
         scale: typeof e.prev.scale === 'number' && isFinite(e.prev.scale) ? e.prev.scale : 1,
-        flow: e.prev.flow === 'horizontal' ? 'horizontal' : 'vertical'
+        flow: 'horizontal'
       };
     });
     return layout;
@@ -416,19 +364,6 @@
     positions = compactLayout();
     applyPositionsToCards();
     renderCords(); // FEW-3: re-route onto the compacted board
-    if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
-    }
-  }
-
-  /** The FLOW toggle's re-orientation: the strict incumbent layout for
-   *  the NEW reading (the condensed row or the vertical stack) — flipping
-   *  the reading direction is an explicit re-orientation, not a
-   *  compaction. Same store discipline as TIDY. */
-  function orientChain() {
-    positions = tidyStackLayout();
-    applyPositionsToCards();
-    renderCords();
     if (window.Persistence) {
       window.Persistence.saveCurrentChain(chainModel, positions);
     }
@@ -595,14 +530,11 @@
   var CORD_DETACH_THRESHOLD = 6;
   var jackEls = []; // the live jack elements ({el, jack}), rebuilt by renderCords
   var cordDrag = null; // the live cord edit, if any (FEW-4 block below)
-  // The canvas-wide flow mode the FLOW toggle owns (VIS-7b). Today it is
-  // the uniform value written into every card's layout flow field;
-  // FEW-6 makes the field per-card and this becomes only the default.
-  // Horizontal-default round (2026-08-31, user direction): the board's
-  // DEFAULT reading is HORIZONTAL (condensed portrait sections in a
-  // left-to-right row); the FLOW toggle flips to the vertical stacked
-  // reading. A persisted preference always wins over this default.
-  var boardFlow = 'horizontal';
+  // VERTICAL FLOW IS RETIRED (2026-08-31, user direction): the board has
+  // exactly ONE reading — horizontal, condensed modules left-to-right.
+  // The FLOW toggle, its preference key, and the vertical geometry
+  // branches are deleted; .flow-horizontal is a permanent panel class
+  // (the CSS scoping stays so the rules read as the board's own).
 
   function createSvgEl(tag) {
     if (typeof document.createElementNS === 'function') {
@@ -661,15 +593,11 @@
     var h = size.h || CARD_H_FALLBACK;
     var x0 = origin.x + pos.x;
     var y0 = origin.y + pos.y;
-    if (pos.flow === 'horizontal') {
-      return {
-        inPt: { x: x0, y: y0 + h / 2 },
-        outPt: { x: x0 + w, y: y0 + h / 2 }
-      };
-    }
+    // Vertical flow retired: every card's jacks sit at the middles of its
+    // LEFT and RIGHT borders (the across-from rule).
     return {
-      inPt: { x: x0 + w / 2, y: y0 },
-      outPt: { x: x0 + w / 2, y: y0 + h }
+      inPt: { x: x0, y: y0 + h / 2 },
+      outPt: { x: x0 + w, y: y0 + h / 2 }
     };
   }
 
@@ -693,32 +621,27 @@
     return which === 'out' ? anchors[anchors.length - 1] : anchors[0];
   }
 
-  /** MIC IN's OUT jack — the source's board-facing edge, centered on the
-   *  print row (bottom-center in the vertical reading, middle-right in the
-   *  horizontal one — the same across-from rule the cards follow). */
+  /** MIC IN's OUT jack — the source's board-facing edge, the MIDDLE of
+   *  its RIGHT border (the same across-from rule the cards follow). */
   function micOutPoint() {
     var el = panelAnchorEl('mic');
     var size = measuredSize(el);
     var origin = boardOrigin();
     if (size.w && size.h) {
-      return boardFlow === 'horizontal'
-        ? { x: el.offsetLeft + size.w, y: el.offsetTop + size.h / 2 }
-        : { x: el.offsetLeft + size.w / 2, y: el.offsetTop + size.h };
+      return { x: el.offsetLeft + size.w, y: el.offsetTop + size.h / 2 };
     }
     return { x: origin.x + TIDY_X, y: origin.y + PANEL_MIC_DY };
   }
 
-  /** The OUT anchor's IN jack — the receiver's board-facing edge
-   *  (top-center vertical / middle-left horizontal). The layout-less
-   *  fallback rides the board's foot below the lowest seat. */
+  /** The OUT anchor's IN jack — the receiver's board-facing edge, the
+   *  MIDDLE of its LEFT border. The layout-less fallback rides the
+   *  board's foot below the lowest seat. */
   function outInPoint(maxY) {
     var el = panelAnchorEl('out');
     var size = measuredSize(el);
     var origin = boardOrigin();
     if (size.w && size.h) {
-      return boardFlow === 'horizontal'
-        ? { x: el.offsetLeft, y: el.offsetTop + size.h / 2 }
-        : { x: el.offsetLeft + size.w / 2, y: el.offsetTop };
+      return { x: el.offsetLeft, y: el.offsetTop + size.h / 2 };
     }
     return { x: origin.x + TIDY_X, y: origin.y + maxY + TIDY_ROW_PITCH };
   }
@@ -2347,13 +2270,10 @@
           // board's own geometry contract); absent -> the CSS default.
           w: typeof saved.w === 'number' && isFinite(saved.w) ? clampCardW(saved.w) : undefined,
           scale: typeof saved.scale === 'number' && isFinite(saved.scale) ? saved.scale : 1,
-          // An EXPLICIT saved flow wins — but only when the user has ever
-          // expressed a flow preference (see flowPrefExplicit): a legacy
-          // entry's flow was default-written, not chosen, so it follows
-          // the board mode instead.
-          flow: !flowPrefExplicit ? boardFlow
-            : saved.flow === 'horizontal' ? 'horizontal'
-            : saved.flow === 'vertical' ? 'vertical' : boardFlow
+          // Vertical flow is retired: whatever a legacy payload says, the
+          // entry loads horizontal (the field survives for store-shape
+          // compatibility; the store normalizes it on save).
+          flow: 'horizontal',
         };
       } else if (previous[entry.id]) {
         positions[entry.id] = previous[entry.id];
@@ -2592,112 +2512,30 @@
   }
 
   // ---------------------------------------------------------------------
-  // VIS-7b (2026-08-28 user direction) — flow-direction toggle. The chain
-  // canvas ships TOP-DOWN (VIS-7) with LEFT→RIGHT kept one click away:
-  // a class flip on the canvas panel (all orientation styling is scoped
-  // under .flow-horizontal in main.css) plus a persisted preference under
-  // this app's own localStorage key (karaoke-*-v1 naming, same try/catch
-  // discipline as preset-store/persistence). SortableJS needs no config
-  // change in either mode — its detectDirection reads the container's
-  // computed flex-direction, exactly the property the class flip changes.
+  // BOARD CHROME. Vertical flow is RETIRED (2026-08-31, user direction):
+  // the board has one reading — horizontal, condensed modules in a
+  // left-to-right row — so the FLOW toggle, its preference key, and every
+  // vertical geometry branch are deleted. The panel carries
+  // .flow-horizontal permanently (the CSS scoping stays so the rules read
+  // as the board's own). The TIDY key remains the board's one chrome
+  // control.
   // ---------------------------------------------------------------------
-  var FLOW_KEY = 'karaoke-flow-orientation-v1';
-  var flowPanel = null;
-  var flowButton = null;
-  // Horizontal-default migration flag: TRUE once a flow preference was
-  // ever PERSISTED (the user clicked the toggle at least once). Only then
-  // are saved per-entry flow fields honored as deliberate choices; with
-  // no stored preference, a legacy autosave's entry flows were written by
-  // the OLD default (vertical), not chosen — loadModel follows the board
-  // mode instead, so pre-update chains land on the new default reading.
-  var flowPrefExplicit = false;
-
-  function readFlowPreference() {
-    var stored = null;
-    try {
-      stored = window.localStorage.getItem(FLOW_KEY);
-    } catch (e) {
-      /* private mode / storage disabled — default below, one-time warn on write */
-    }
-    flowPrefExplicit = stored === 'vertical' || stored === 'horizontal';
-    // Horizontal-default round: a persisted VERTICAL preference wins;
-    // everything else (nothing saved yet, storage unavailable, or an
-    // unrecognized value) takes the new default reading — horizontal.
-    return stored === 'vertical' ? 'vertical' : 'horizontal';
-  }
-
-  function writeFlowPreference(mode) {
-    try {
-      window.localStorage.setItem(FLOW_KEY, mode);
-    } catch (e) {
-      console.warn('ChainCanvas: could not persist flow orientation (storage unavailable)');
-    }
-  }
-
-  function applyFlow(mode) {
-    boardFlow = mode === 'horizontal' ? 'horizontal' : 'vertical';
-    if (flowPanel) {
-      if (boardFlow === 'horizontal') {
-        flowPanel.classList.add('flow-horizontal');
-      } else {
-        flowPanel.classList.remove('flow-horizontal');
-      }
-    }
-    if (flowButton) {
-      flowButton.textContent = boardFlow === 'horizontal' ? 'FLOW: HORIZONTAL' : 'FLOW: VERTICAL';
-      flowButton.setAttribute('aria-pressed', boardFlow === 'vertical' ? 'true' : 'false');
-    }
-    // OQ-9: jack geometry derives from each card's OWN flow field. Today
-    // the field is UNIFORM and this toggle is its single writer (FEW-6
-    // will make it per-card); writing it here keeps the cords and the
-    // panel class in lockstep, and persists the per-entry field so a
-    // reload round-trips. A layout-less host has nothing to sync.
-    var changed = false;
-    Object.keys(positions).forEach(function (id) {
-      if (positions[id] && positions[id].flow !== boardFlow) {
-        positions[id].flow = boardFlow;
-        changed = true;
-      }
-    });
-    if (changed) {
-      renderCords(); // re-route onto the flipped orientation
-      if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel, positions);
-      }
-    }
-  }
-
-  function initFlowToggle() {
+  function initBoardChrome() {
     if (typeof document.querySelector !== 'function' ||
         typeof document.createElement !== 'function') {
       return;
     }
-    flowPanel = document.querySelector('.canvas-panel');
+    var flowPanel = document.querySelector('.canvas-panel');
     if (!flowPanel) {
       return;
     }
-    flowButton = document.createElement('button');
-    flowButton.type = 'button';
-    flowButton.className = 'control flow-toggle';
-    flowButton.setAttribute('aria-label', 'Toggle chain flow direction');
-    flowButton.addEventListener('click', function () {
-      var next = flowPanel.classList.contains('flow-horizontal') ? 'vertical' : 'horizontal';
-      writeFlowPreference(next);
-      applyFlow(next);
-      // Horizontal-default round: flipping the flow REVERSES the reading,
-      // so the board re-orients into the new reading's incumbent layout
-      // (the condensed row ↔ the vertical stack). Re-orientation, not
-      // compaction — TIDY's arrangement-preserving pass is the button's.
-      orientChain();
-    });
-    flowPanel.appendChild(flowButton);
+    flowPanel.classList.add('flow-horizontal');
 
-    // FEW-2: the TIDY control rides the same chrome zone as the flow
-    // toggle (existing .control vocabulary, VIS-1 — no new chrome). One
-    // click COMPACTS the board: the free space between cards collapses
-    // to the tidy pitch while the arrangement itself is preserved (see
-    // compactLayout). It rewrites ONLY x/y in the layout store,
-    // preserving each entry's w/scale/flow.
+    // FEW-2: the TIDY control (existing .control vocabulary, VIS-1 — no
+    // new chrome). One click COMPACTS the board: the free space between
+    // cards collapses to the tidy pitch while the arrangement itself is
+    // preserved (see compactLayout). It rewrites ONLY x/y in the layout
+    // store, preserving each entry's w/scale/flow.
     var tidyButton = document.createElement('button');
     tidyButton.type = 'button';
     tidyButton.className = 'control tidy-toggle';
@@ -2707,11 +2545,9 @@
       tidyChain();
     });
     flowPanel.appendChild(tidyButton);
-
-    applyFlow(readFlowPreference());
   }
 
-  initFlowToggle();
+  initBoardChrome();
 
   window.ChainCanvas = {
     onEngineStarted: onEngineStarted,

@@ -79,13 +79,13 @@
   //     rejects exactly like an unsupported PresetSchema version: clear
   //     error, default-chain fallback, never a misread.
   //   - Layout entries: `x`/`y` finite numbers (px, canvas-panel
-  //     coordinates), `scale` finite number (default 1), `flow`
-  //     'vertical'|'horizontal' (default 'horizontal' — the board's
-  //     default reading since the 2026-08-31 horizontal-default round),
-  //     and `w` an optional finite number (the card's own condensed
-  //     width, clamped 176..384 px; absent = the uniform CSS default).
-  //     sanitizeLayout() normalizes every entry to exactly that shape,
-  //     PRUNES entries for node ids the accompanying chain does not
+  //     coordinates), `scale` finite number (default 1), `flow` — vestigial
+  //     since vertical flow was retired (2026-08-31): always normalized to
+  //     'horizontal', kept only so legacy payloads round-trip
+  //     shape-compatibly — and `w` an optional finite number (the card's
+  //     own condensed width, clamped 176..384 px; absent = the uniform CSS
+  //     default). sanitizeLayout() normalizes every entry to exactly that
+  //     shape, PRUNES entries for node ids the accompanying chain does not
   //     contain (node removed —
   //     pruning happens on both save and load), and drops hostile
   //     entries (non-object, non-finite x/y) rather than throwing: a
@@ -145,9 +145,10 @@
             typeof entry.scale === 'number' && isFinite(entry.scale)
               ? entry.scale
               : 1,
-          // Horizontal-default round: an omitted/illegal flow defaults to
-          // the board's new default reading — horizontal.
-          flow: entry.flow === 'vertical' ? 'vertical' : 'horizontal'
+          // Vertical flow is retired (2026-08-31): every entry normalizes
+          // to 'horizontal' on save — legacy vertical payloads load once
+          // and re-save horizontal.
+          flow: 'horizontal'
         };
       });
     } catch (err) {

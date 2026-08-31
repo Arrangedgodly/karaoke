@@ -145,8 +145,8 @@ function seedRaw(env, value) {
 function main() {
   var LAYOUT_FULL = {
     a1: { x: 12, y: 40, scale: 1.25, flow: 'horizontal' },
-    a2: { x: 12, y: 260, scale: 1, flow: 'vertical' },
-    a3: { x: 96, y: 520, scale: 0.75, flow: 'vertical' }
+    a2: { x: 12, y: 260, scale: 1, flow: 'horizontal' },
+    a3: { x: 96, y: 520, scale: 0.75, flow: 'horizontal' }
   };
 
   // ----------------------------------------------------------------
@@ -219,7 +219,8 @@ function main() {
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        b1: { x: 10, y: 10, scale: 1, flow: 'vertical' }
+        // flow normalizes to 'horizontal' on save (vertical retired)
+        b1: { x: 10, y: 10, scale: 1, flow: 'horizontal' }
       }),
       'A4: unknown node ids in a saved layout are PRUNED (removed node, stale ghost)'
     );

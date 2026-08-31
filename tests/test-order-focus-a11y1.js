@@ -417,10 +417,11 @@ function tabOrderEqualsDomOrder() {
 }
 
 // --- Jack coordinates, computed from the LIVE positions map (the board
-// may no longer be at the tidy stack after earlier gestures). OQ-9
+// may no longer be at the tidy row after earlier gestures). OQ-9
 // geometry: a section's jacks sit ON its border, DIRECTLY ACROSS each
-// other over the placeholder card box (160w x 48h) — vertical flow: IN
-// at the seat's top-center, OUT at its bottom-center.
+// other over the placeholder card box (160w x 48h) — since vertical
+// flow was retired (2026-08-31): IN at the middle of the seat's LEFT
+// border, OUT at the middle of its RIGHT.
 var CARD_W = 160;
 var CARD_H = 48;
 var MIC_OUT = { x: 16, y: -32 };
@@ -435,10 +436,10 @@ function jackPt(kind, id) {
     });
     return { x: 16, y: maxY + 160 };
   }
-  var seat = layout[id] || { x: 16, y: 0 };
+  var seat = layout[id] || { x: 0, y: 16 };
   return kind === 'section-in'
-    ? { x: seat.x + CARD_W / 2, y: seat.y }
-    : { x: seat.x + CARD_W / 2, y: seat.y + CARD_H };
+    ? { x: seat.x, y: seat.y + CARD_H / 2 }
+    : { x: seat.x + CARD_W, y: seat.y + CARD_H / 2 };
 }
 
 function grabJack(kind, id) {

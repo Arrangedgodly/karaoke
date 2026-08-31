@@ -8,17 +8,15 @@
 // / test-cord-layer-few3 / test-cord-editing-few4, which stub an explicit
 // stored vertical preference. This file pins the NEW default end to end:
 //
-//   H1  a host with NO stored flow preference boots the board horizontal
+//   H1  the board boots horizontal — the ONLY reading (vertical flow was
+//       retired 2026-08-31); no FLOW toggle exists anywhere in the chrome
 //   H2  absent layout -> the incumbent ROW (x accumulates widths, y fixed)
-//   H3  every card paints the uniform condensed width (240px) + its seat
+//   H3  every card paints the FLOOR width (176px — the single-stack default)
 //   H4  the board extent maintains minWidth (the row's right edge)
 //   H5  a saved per-card width `w` is honored and clamped
 //   H6  the corner resize grip adjusts `w` live, snap-quantized, clamped,
 //       and persists exactly once on gesture end
-//   H7  flipping the FLOW toggle REVERSES the reading: vertical stack,
-//       preference persisted, seats re-tidied
-//   H8  legacy default-written vertical entries follow the new board mode
-//       when no preference was ever stored (the migration rule)
+//   H7  legacy vertical entries load horizontal (the retirement migration)
 //
 // Zero-dependency, plain `node`, browser globals stubbed — same harness
 // shape as test-board-positioning-few2.js.
@@ -254,30 +252,34 @@ check(
 );
 
 check(
-  CC.CARD_W_DEFAULT_PX === 240 && CC.CARD_W_MIN_PX === 176 && CC.CARD_W_MAX_PX === 384,
-  'H1b: the condensed-width contract exports (default 240, clamp 176..384)'
+  CC.CARD_W_DEFAULT_PX === 176 && CC.CARD_W_MIN_PX === 176 && CC.CARD_W_MAX_PX === 384,
+  'H1b: the condensed-width contract exports (default = the 176 floor, clamp 176..384 — modules open as a single stack)'
+);
+check(
+  queryAll(canvasPanelEl, '.flow-toggle').length === 0,
+  'H1c: the FLOW toggle is GONE from the chrome (vertical flow retired)'
 );
 
 CC.loadModel(model3());
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({
     n1: { x: 0, y: 16, scale: 1, flow: 'horizontal' },
-    n2: { x: 256, y: 16, scale: 1, flow: 'horizontal' },
-    n3: { x: 512, y: 16, scale: 1, flow: 'horizontal' }
+    n2: { x: 192, y: 16, scale: 1, flow: 'horizontal' },
+    n3: { x: 384, y: 16, scale: 1, flow: 'horizontal' }
   }),
-  'H2: absent layout -> the incumbent ROW (x accumulates card+pitch, y fixed at the grid edge, flow horizontal)'
+  'H2: absent layout -> the incumbent ROW (x accumulates card+pitch at the 176 floor + 16, y fixed at the grid edge)'
 );
 
 check(
-  cardById('n1').style.width === '240px' &&
-    cardById('n2').style.width === '240px' &&
-    cardById('n3').style.transform === 'translate(512px, 16px)',
-  'H3: every card paints the uniform condensed width + its translate seat'
+  cardById('n1').style.width === '176px' &&
+    cardById('n2').style.width === '176px' &&
+    cardById('n3').style.transform === 'translate(384px, 16px)',
+  'H3: every card paints the floor width + its translate seat'
 );
 
 check(
-  chainListEl.style.minWidth === '768px' && chainListEl.style.minHeight === '176px',
-  'H4: the board extent maintains minWidth (row right edge 512+256) alongside minHeight'
+  chainListEl.style.minWidth === '576px' && chainListEl.style.minHeight === '176px',
+  'H4: the board extent maintains minWidth (row right edge 384+192) alongside minHeight'
 );
 
 // ----------------------------------------------------------------------
@@ -290,8 +292,8 @@ CC.loadModel(model3(), {
 check(
   cardById('n1').style.width === '320px' &&
     cardById('n2').style.width === '384px' &&
-    cardById('n3').style.width === '240px',
-  'H5: a saved width is honored, an out-of-range one clamps, a missing one takes the uniform default'
+    cardById('n3').style.width === '176px',
+  'H5: a saved width is honored, an out-of-range one clamps, a missing one takes the floor default'
 );
 
 // ----------------------------------------------------------------------
@@ -318,54 +320,15 @@ check(
 
 // ----------------------------------------------------------------------
 
-saves.length = 0;
-flowWrites.length = 0;
-var flowButton = queryAll(canvasPanelEl, '.flow-toggle')[0];
-flowButton.__fire('click', {});
-check(
-  !canvasPanelEl.classList.contains('flow-horizontal') &&
-    flowWrites.length >= 1 && flowWrites[flowWrites.length - 1].value === 'vertical',
-  'H7a: flipping the FLOW toggle reverses the reading and persists the vertical preference'
-);
-check(
-  JSON.stringify(CC.currentLayout()) === JSON.stringify({
-    n1: { x: 16, y: 0, w: 384, scale: 1, flow: 'vertical' },
-    n2: { x: 16, y: 160, w: 384, scale: 1, flow: 'vertical' },
-    n3: { x: 16, y: 320, scale: 1, flow: 'vertical' }
-  }),
-  'H7b: the flip re-tidies into the incumbent VERTICAL stack (x=16, one row pitch per node) preserving saved widths (n3 never had one)'
-);
-check(
-  cardById('n1').style.width === '' && cardById('n1').style.transform === 'translate(16px, 0px)',
-  'H7c: vertical cards return to full-width rows (no inline width) at their stacked seats'
-);
-
-// Flip back: the row returns, widths still honored.
-flowButton.__fire('click', {});
-check(
-  canvasPanelEl.classList.contains('flow-horizontal') &&
-    cardById('n1').style.width === '384px' &&
-    cardById('n1').style.transform === 'translate(0px, 16px)',
-  'H7d: flipping back restores the horizontal row with the saved width (384px) at the row seat'
-);
-
-// ----------------------------------------------------------------------
-
-// Legacy migration: this sandbox booted with NO stored preference
-// (flowPrefExplicit is a boot-time fact — the toggle writes above were
-// recorded but never re-read), which is exactly the fresh-profile host
-// the round targets. Entries whose flow was default-written by the OLD
-// vertical default (never chosen) follow the board mode instead. The
-// explicit-preference case — per-entry flows honored individually —
-// keeps its coverage in test-cord-layer-few3.js D2 (that harness stubs
-// a stored preference).
+// Retirement migration: vertical flow no longer exists, so whatever a
+// legacy payload claims, every entry loads horizontal.
 CC.loadModel(model3(), {
   n1: { x: 16, y: 0, flow: 'vertical' },
   n2: { x: 16, y: 160 }
 });
 check(
   CC.currentLayout().n1.flow === 'horizontal' && CC.currentLayout().n2.flow === 'horizontal',
-  'H8: legacy default-written vertical entries follow the new board mode when no preference was ever stored (the migration rule)'
+  'H7: legacy vertical entries load horizontal (the retirement migration)'
 );
 
 // ----------------------------------------------------------------------

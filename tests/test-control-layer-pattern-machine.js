@@ -905,11 +905,11 @@ check(
     cssDecl(registerMainRule2, 'font-variant-numeric') === 'tabular-nums',
   'register value line keeps the panel-instrument tier (' + REGISTER_TIER + ', tabular — one tier up by direction)'
 );
-var flowToggleRule = cssRule('.canvas-panel .flow-toggle');
+var flowToggleRule = cssRule('.canvas-panel .tidy-toggle');
 check(
   flowToggleRule !== null &&
     cssDecl(flowToggleRule, 'font-size') === VALUE_TIER,
-  'flow-state print: scoped rule rides the value tier (bare .flow-toggle lost the cascade to button.control 0.9rem and rendered 14.4px)'
+  'board-chrome print: the scoped tidy rule rides the value tier (the flow toggle is retired — vertical flow removed 2026-08-31)'
 );
 // The ladder is CLOSED: no other rule re-sizes a ladder element away
 // from its tier (the ten value/state selectors carry exactly the two
