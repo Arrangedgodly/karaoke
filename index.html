@@ -249,7 +249,7 @@
       </div>
     </div>
 
-    <!-- JS-built by src/canvas.js (see buildSignalOrderStrip in that
+    <!-- JS-built by src/canvas.js (see renderSignalOrderStrip in that
          file) — the full mic-to-safe-out order in one readable line. -->
     <div class="panel signal-order" id="signal-order-panel" aria-label="Complete signal order"></div>
 
@@ -258,7 +258,7 @@
       column with one two-tab panel. Wired by src/canvas.js (Effects tab:
       renderPalette() into #palette-list, unchanged) and
       src/presets-ui.js (Presets tab: window.PresetStore,
-      window.FactoryPresets, window.ChainCanvas.loadModel()). Sibling of
+      window.FactoryPresets, window.ChainEditing.apply()). Sibling of
       .canvas-panel above, so it's gated by the same `engine-not-started`
       class on #chain-layout (see styles/main.css's
       `.layout.engine-not-started` rule, retargeted from

@@ -220,9 +220,9 @@ var documentStub = {
 };
 
 // ----------------------------------------------------------------------
-// Stub collaborators + the REAL canvas.js. Unlike the FEW-3 harness the
-// engine IS started here so rebuildGraph() actually reaches
-// AudioGraph.buildGraph — the single-rebuild assertions count real calls.
+// Stub collaborators + the REAL canvas.js. The engine is started so the
+// transaction boundary is eligible; this harness records ChainEditing
+// requests and proves Canvas performs no direct graph or persistence writes.
 // ----------------------------------------------------------------------
 function SortableStub(el, opts) { SortableStub.instances.push({ el: el, opts: opts }); }
 SortableStub.instances = [];
