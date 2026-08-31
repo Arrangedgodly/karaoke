@@ -267,3 +267,65 @@ Fresh cycle-4 file; cycle-3's log is archived under cycle-3/.
   removed. Tree clean at 2bd8466.
 - Verified: `node tests/run.js` exit 0 (all files pass) after revert.
 - Verdict: T-FEW-3 deferred (over budget) — zero code retained; re-queue FEW-3.
+
+## FEW-3 — Jack points + cord layer (read-only cords) — LANDED on re-run
+
+- Status: `awaiting-approval` (owner FE, after FEW-2; FEW-4 now unblocked
+  on this seam).
+- Context: the re-queued task after the wrap-up revert (entry above),
+  re-sized small → medium. Read-only cords painted from model order;
+  cord EDITING is FEW-4's scope. The prior run's four failure classes
+  (svg-first-child side effects, positions-map coords, reorder
+  re-route, keyboard-add splice) are each covered by a named check
+  below.
+
+### What landed (files)
+- `src/canvas.js` — the cord engine, one block after the FEW-2 position
+  engine: `buildCordLayer()` (svg.cord-layer, aria-hidden, APPENDED as
+  #chain-canvas's LAST child — never a first child, never inside
+  #chain-list, the two DOM contracts the reverted run broke), ONE shared
+  `renderCords()` that rebuilds the path children from `positions` +
+  DOM order (no parallel bookkeeping, ever), `cordSegments()`
+  (mic -> sections in DOM order -> out; always nodes+1 segments, the
+  empty chain shows the direct mic->out bypass cord), `cordPathD()`
+  (horizontal cubic bezier), `boardOrigin()` (the chain-list's live
+  offsetLeft/offsetTop when the host reports them, {0,0} in the vm
+  harness). Re-route hooks in the FIVE existing write paths only:
+  onPositionPointerMove (live), tidyChain, loadModel,
+  commitStructuralChange (keyboard/click add), the remove-× handler.
+  Placeholder jack geometry is grid-derived constants (CORD_MIC_DY,
+  CORD_JACK_DY/DX); paths carry data-from/data-to for FEW-4's future
+  hit targets. No new window.ChainCanvas exports.
+- `styles/main.css` — `.canvas` becomes position:relative (ONE
+  coordinate space shared by the layer and the chain-list, and the
+  layer scrolls WITH the board); `.cord-layer` (absolute, z-index 0,
+  pointer-events none, overflow visible) + `.cord` (stroke
+  var(--pm-print-dim)) — --pm-* tokens only, VIS-1 in-world
+  placeholder; `.node-card` gains a z-index:1 paint floor (JS
+  bring-to-front still climbs from it).
+- `tests/test-cord-layer-few3.js` — NEW, 26 checks, the FEW-2 vm-harness
+  convention PLUS a #chain-canvas face carrying index.html's real child
+  order. A wiring/DOM contracts (layer last child, face's pinned first
+  child/OUT anchor untouched, nothing cord-related ever in #chain-list);
+  B loadModel route (mic>n1>n2>n3>out, 4 segments, endpoints are
+  positions-map values verbatim, bezier); C move re-route (into/out-of
+  cords follow the dragged seat; the untouched mic->n1 cord
+  byte-stable); D TIDY re-route; E remove-× closes the chain
+  (no removed id survives); F keyboard-add SPLICE before the terminal
+  limiter re-routes (5 segments for 4 nodes); G empty chain bypass cord
+  + final DOM-contract pins.
+
+### Validation
+- `node tests/test-cord-layer-few3.js` isolated → PASS, 26/26, exit 0.
+- `node tests/run.js` → exit 0, **28/28 files, 2203 checks, all green**
+  (FEW-2 baseline 27/2177; the prior run's side-effect failures in
+  test-preset-tools.js / test-read-tool-purity.js are absent — the
+  layer never touches #chain-list or any firstChild index).
+
+### Honest seams (gated to later tasks, not gaps)
+- Jack geometry is placeholder constants (VIS-1/OQ-9's redesign pass
+  trues up the visual cord/jack round); FEW-5 (resize) will re-home the
+  layer's overflow at the board foot; FEW-4 owns every editing verb on
+  top of the data-from/data-to paths.
+- Palette CLONE-drag still reverts (FEW-2's disclosed seam, FEW-7's).
+- Verdict: T-FEW-3 PASS — tests/test-cord-layer-few3.js

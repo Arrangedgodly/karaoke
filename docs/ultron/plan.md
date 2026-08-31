@@ -83,11 +83,11 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
 - Acceptance: move/tidy/reload round-trip; order provably untouched by
   moves (graph + model byte-stable); suite green.
 
-**FEW-3 — Jack points + cord layer (read-only cords)** · small · deferred (over budget)
-- Deferred 2026-08-30: the prior worker was stopped mid-edit; the partial cord layer
-  (svg-first-child z-order, positions-map-derived jack coords, reorder/keyboard-add
-  re-route) left 6 suite checks RED, so wrap-up reverted to the verified FEW-2 tree
-  (2bd8466, suite green) rather than ship a half-finished layer. Re-queue as-is.
+**FEW-3 — Jack points + cord layer (read-only cords)** · medium · completed (after FEW-2)
+- Deferred once 2026-08-30 (prior worker over budget; wrap-up reverted
+  the partial layer to the verified FEW-2 tree 2bd8466). Landed same
+  day on the re-run, sized medium — see docs/ultron/production-log.md's
+  FEW-3 entry.
 - SVG cord layer; jack points: MIC IN out, per-section in+out, OUT in;
   cords drawn FROM model order (visual only, this task); in-world
   placeholder styling (redesign pass later — OQ-9).

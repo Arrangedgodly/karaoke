@@ -1573,6 +1573,11 @@ select.control {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* FEW-3: the positioning context for the cord layer — the SVG and the
+     .chain-list then share ONE coordinate space (the list's live
+     offsetLeft/offsetTop map 1:1 onto the layer's origin), and the
+     layer scrolls WITH the board instead of floating over the panel. */
+  position: relative;
 }
 
 /* Canvas anchors (MIC IN / OUT) — silkscreen JACK PRINT, not cards: the
@@ -1659,6 +1664,36 @@ select.control {
   z-index: 1;
 }
 
+/* --- FEW-3: the cord layer ---------------------------------------------
+   Read-only signal cords (MIC OUT -> sections in chain order -> OUT IN),
+   painted by src/canvas.js's renderCords() from the positions map. The
+   layer is APPENDED as the canvas face's LAST child (never a first
+   child, never inside .chain-list — those DOM contracts are pinned by
+   other tests) and paints BEHIND the sections purely by z-index.
+   In-world placeholder styling: recessed print-dim ink in the panel's
+   own vocabulary (--pm-* tokens only); the full cord/jack visual pass
+   is the later redesign round (OQ-9). Cord editing is FEW-4's scope —
+   the layer is decorative and pointer-inert. */
+.cord-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* behind every section (z-index >= 1) and all fixed
+                 instrumentation (the occlusion guard above) */
+  pointer-events: none; /* read-only: a cord is never a hit target */
+  overflow: visible; /* cords may leave the face's box at the board's
+                        foot while scrolling (FEW-5 re-homes this) */
+}
+
+.cord {
+  fill: none;
+  stroke: var(--pm-print-dim);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 /* Taught empty state — a printed EMPTY SOCKET on the face: recessed
    register ground, hairline dashed print boundary (a drop target earns a
    visible boundary, in the print register — no card island). */
@@ -1701,6 +1736,9 @@ select.control {
   left: 0;
   right: 0;
   top: 0;
+  /* FEW-3: sections always paint above the cord layer (z-index 0);
+     bring-to-front's JS zIndex climbs from this floor. */
+  z-index: 1;
   flex: none;
   display: grid;
   grid-template-columns: 8.5rem 1fr;

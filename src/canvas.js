@@ -190,6 +190,7 @@
   function tidyChain() {
     positions = tidyStackLayout();
     applyPositionsToCards();
+    renderCords(); // FEW-3: re-route onto the restored stack
     if (window.Persistence) {
       window.Persistence.saveCurrentChain(chainModel, positions);
     }
@@ -211,6 +212,7 @@
       applyPositionToCard(positionDrag.card, x, y);
       positionDrag.moved = true;
       refreshBoardExtent();
+      renderCords(); // FEW-3: live re-route while the seat moves
     }
   }
 
@@ -239,6 +241,149 @@
   }
 
   initPositionDragWiring();
+
+  // ---------------------------------------------------------------------
+  // FEW-3 (cycle 4): the CORD LAYER — read-only signal cords painted from
+  // model order over the board. MIC OUT -> each section in DOM order
+  // (== chain order, PD-4) -> OUT IN, one bezier per hop, drawn in a
+  // single SVG inside the canvas FACE (#chain-canvas, NEVER inside
+  // #chain-list — the list's children ARE the chain, and its child count
+  // feeds updateEmptyHint; both are DOM contracts other tests pin).
+  //
+  // Discipline (postmortem of the reverted first attempt):
+  //   - INSERTION: the SVG is APPENDED as #chain-canvas's LAST child.
+  //     Never a first child (firstChild indexes are pinned elsewhere),
+  //     never inside .chain-list (serialized + counted by other tests).
+  //     z-order is CSS-only: the layer sits at z-index 0, the absolutely
+  //     positioned sections at z-index >= 1 (styles/main.css).
+  //   - COORDINATES: every jack point DERIVES from the positions map +
+  //     the section list element (offsetLeft/offsetTop when the host
+  //     reports them; 0 in a stripped vm harness). No parallel
+  //     bookkeeping ever — renderCords() READS the same `positions` map
+  //     every position write maintains, and is called from each of the
+  //     existing write paths (pointer move, TIDY, loadModel, structural
+  //     add/remove). Rebuilding the paths from scratch on every call is
+  //     the point: the map is the only state.
+  //   - READ-ONLY this task: pointer-events none, aria-hidden decorative.
+  //     Cord EDITING (drag-to-relink) is FEW-4's scope.
+  //   - Placeholder jack geometry: fixed grid-derived offsets (VIS-1's
+  //     in-world vocabulary, --pm-* tokens only; the full visual pass is
+  //     the later redesign round, OQ-9).
+  // ---------------------------------------------------------------------
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var CORD_MIC_DY = -2 * GRID_PITCH; // the MIC OUT jack print, above the board's first row
+  var CORD_JACK_DY = GRID_PITCH * 3; // a section's jack line (mid-rail)
+  var CORD_JACK_DX = GRID_PITCH * 10; // section in->out jack span (placeholder width)
+  var cordSvgEl = null;
+
+  function createSvgEl(tag) {
+    if (typeof document.createElementNS === 'function') {
+      return document.createElementNS(SVG_NS, tag);
+    }
+    return document.createElement(tag);
+  }
+
+  function buildCordLayer() {
+    if (typeof document.createElement !== 'function') {
+      return;
+    }
+    var canvasFace = document.getElementById('chain-canvas');
+    if (!canvasFace || typeof canvasFace.appendChild !== 'function') {
+      return; // no canvas face (e.g. a stripped harness) — cords simply don't paint
+    }
+    cordSvgEl = createSvgEl('svg');
+    cordSvgEl.className = 'cord-layer';
+    cordSvgEl.setAttribute('aria-hidden', 'true');
+    canvasFace.appendChild(cordSvgEl); // LAST child — see insertion note above
+    renderCords();
+  }
+
+  /** The board origin (chain-list content-box top-left) in the SVG's
+   *  coordinate space. Both share .canvas as their positioning context
+   *  (made position:relative for the cord layer, styles/main.css), so the
+   *  list's live offsets map 1:1; a vm harness without layout reports
+   *  none and gets {0, 0} — the positions map alone then defines the
+   *  cords, which is exactly the test contract. */
+  function boardOrigin() {
+    var ox = typeof chainListEl.offsetLeft === 'number' && isFinite(chainListEl.offsetLeft) ? chainListEl.offsetLeft : 0;
+    var oy = typeof chainListEl.offsetTop === 'number' && isFinite(chainListEl.offsetTop) ? chainListEl.offsetTop : 0;
+    return { x: ox, y: oy };
+  }
+
+  /** The read-only route: MIC OUT -> each section in DOM order -> OUT IN.
+   *  One segment per hop, so the segment count is always nodes + 1 (an
+   *  empty chain still shows the direct MIC -> OUT bypass cord). */
+  function cordSegments() {
+    var origin = boardOrigin();
+    var cardEls = chainListEl.querySelectorAll('.node-card');
+    var ids = Array.prototype.map.call(cardEls, function (el) {
+      return el.getAttribute('data-node-id');
+    });
+    var maxY = 0;
+    ids.forEach(function (id) {
+      var pos = positions[id];
+      if (pos && pos.y > maxY) {
+        maxY = pos.y;
+      }
+    });
+
+    // Panel jack prints: MIC OUT above the board's top row, OUT IN at the
+    // board's foot (the same lowest-seat extent refreshBoardExtent sizes
+    // the list's min-height to).
+    var segments = [];
+    var prevId = 'mic';
+    var prevPt = { x: origin.x + TIDY_X, y: origin.y + CORD_MIC_DY };
+    var outPt = { x: origin.x + TIDY_X, y: origin.y + maxY + TIDY_ROW_PITCH };
+
+    ids.forEach(function (id) {
+      var pos = positions[id];
+      if (!pos) {
+        return; // seatless sections never exist on a painted board
+      }
+      segments.push({
+        from: prevId,
+        to: id,
+        a: prevPt,
+        b: { x: origin.x + pos.x, y: origin.y + pos.y + CORD_JACK_DY }
+      });
+      prevId = id;
+      prevPt = { x: origin.x + pos.x + CORD_JACK_DX, y: origin.y + pos.y + CORD_JACK_DY };
+    });
+    segments.push({ from: prevId, to: 'out', a: prevPt, b: outPt });
+    return segments;
+  }
+
+  /** Horizontal cubic bezier between two jack points — the classic patch
+   *  cord sag, deterministic in x only (tests pin endpoints, not sag). */
+  function cordPathD(a, b) {
+    var dx = Math.max(GRID_PITCH, Math.min(Math.abs(b.x - a.x) / 2, GRID_PITCH * 4));
+    return 'M' + a.x + ' ' + a.y +
+      ' C' + (a.x + dx) + ' ' + a.y +
+      ', ' + (b.x - dx) + ' ' + b.y +
+      ', ' + b.x + ' ' + b.y;
+  }
+
+  /** THE one re-render entry point — rebuilds the cord paths from the
+   *  current positions map + DOM order. Called from each existing
+   *  position/order write path; never maintains state of its own. */
+  function renderCords() {
+    if (!cordSvgEl) {
+      return;
+    }
+    cordSvgEl.children.slice().forEach(function (child) {
+      child.remove();
+    });
+    cordSegments().forEach(function (seg) {
+      var path = createSvgEl('path');
+      path.className = 'cord';
+      path.setAttribute('d', cordPathD(seg.a, seg.b));
+      path.setAttribute('data-from', seg.from);
+      path.setAttribute('data-to', seg.to);
+      cordSvgEl.appendChild(path);
+    });
+  }
+
+  buildCordLayer();
 
   // ---------------------------------------------------------------------
   // DISPLAY REGISTER (redesign item 1, Single Face Chassis) — the
@@ -780,6 +925,7 @@
     updateEmptyHint();
     refreshRegisterState();
     rebuildGraph();
+    renderCords(); // FEW-3: an add (or any order change) re-routes the cords
     // PS-2: persist the chain after every structural add/remove/reorder.
     // Pass chainModel explicitly rather than AudioGraph.getModel() — see
     // the comment on Persistence.saveCurrentChain() for why: AudioGraph's
@@ -1071,6 +1217,7 @@
       // would prune it on save anyway; keeping the live map exact means
       // currentLayout() is always garbage-free).
       delete positions[id];
+      renderCords(); // FEW-3: the chain closes over the removed seat
     });
 
     // FEW-2: pointerdown anywhere on the section brings it to FRONT
@@ -1289,6 +1436,7 @@
       }
     });
     applyPositionsToCards();
+    renderCords(); // FEW-3: re-route onto the freshly-loaded board
 
     updateEmptyHint();
     refreshRegisterState();

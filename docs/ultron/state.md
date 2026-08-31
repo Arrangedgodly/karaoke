@@ -19,10 +19,13 @@ bypass cue. Executing the refinement checklist one entry at a time, pausing
 for user approval after each.
 
 ## Active Task
-**FEW-3 (jack points + cord layer) deferred 2026-08-30 — over budget.** Prior
-worker stopped mid-edit (6 suite checks RED); wrap-up reverted the partial
-canvas.js/CSS/test delta to the verified FEW-2 tree 2bd8466 — `node tests/run.js`
-exit 0, tree clean. FEW-3 re-queued in plan.md; FEW-4 remains gated on it.
+**FEW-3 (jack points + cord layer) landed 2026-08-30 on the re-run — FEW-3 auto-approved (ultron-overlord) — evidence: tests/test-cord-layer-few3.js — budget 10:00 (re-sized), actual ~7:24 + verify.**
+Read-only SVG cord layer in #chain-canvas (last child, aria-hidden): one shared
+renderCords() over the positions map, re-route hooks in all five existing
+position/order write paths (move, TIDY, loadModel, keyboard add, remove ×);
+always nodes+1 segments. New tests/test-cord-layer-few3.js (26 checks);
+`node tests/run.js` exit 0 — **28/28 files, 2203 checks, all green**. FEW-4 is
+now unblocked. (First attempt was reverted over budget — see production-log.)
 (Prior cycle context: impeccable phase complete, cycle acceptance was the gate.)
 round 1 (5 entries: occlusion, plain-language params, error recovery, 11px
 floor, bypass indication) + round 2 (3 entries: pinned OUT footer, keyboard
