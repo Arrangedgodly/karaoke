@@ -252,8 +252,8 @@ check(
 );
 
 check(
-  CC.CARD_W_DEFAULT_PX === 176 && CC.CARD_W_MIN_PX === 176 && CC.CARD_W_MAX_PX === 384,
-  'H1b: the condensed-width contract exports (default = the 176 floor, clamp 176..384 — modules open as a single stack)'
+  CC.CARD_W_DEFAULT_PX === 128 && CC.CARD_W_MIN_PX === 128 && CC.CARD_W_MAX_PX === 384,
+  'H1b: the condensed-width contract exports (default = the 128 floor, clamp 128..384 — modules open as a flush single stack)'
 );
 check(
   queryAll(canvasPanelEl, '.flow-toggle').length === 0,
@@ -264,22 +264,22 @@ CC.loadModel(model3());
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({
     n1: { x: 0, y: 16, scale: 1, flow: 'horizontal' },
-    n2: { x: 192, y: 16, scale: 1, flow: 'horizontal' },
-    n3: { x: 384, y: 16, scale: 1, flow: 'horizontal' }
+    n2: { x: 144, y: 16, scale: 1, flow: 'horizontal' },
+    n3: { x: 288, y: 16, scale: 1, flow: 'horizontal' }
   }),
   'H2: absent layout -> the incumbent ROW (x accumulates card+pitch at the 176 floor + 16, y fixed at the grid edge)'
 );
 
 check(
-  cardById('n1').style.width === '176px' &&
-    cardById('n2').style.width === '176px' &&
-    cardById('n3').style.transform === 'translate(384px, 16px)',
+  cardById('n1').style.width === '128px' &&
+    cardById('n2').style.width === '128px' &&
+    cardById('n3').style.transform === 'translate(288px, 16px)',
   'H3: every card paints the floor width + its translate seat'
 );
 
 check(
-  chainListEl.style.minWidth === '576px' && chainListEl.style.minHeight === '176px',
-  'H4: the board extent maintains minWidth (row right edge 384+192) alongside minHeight'
+  chainListEl.style.minWidth === '432px' && chainListEl.style.minHeight === '176px',
+  'H4: the board extent maintains minWidth (row right edge 288+144) alongside minHeight'
 );
 
 // ----------------------------------------------------------------------
@@ -292,7 +292,7 @@ CC.loadModel(model3(), {
 check(
   cardById('n1').style.width === '320px' &&
     cardById('n2').style.width === '384px' &&
-    cardById('n3').style.width === '176px',
+    cardById('n3').style.width === '128px',
   'H5: a saved width is honored, an out-of-range one clamps, a missing one takes the floor default'
 );
 

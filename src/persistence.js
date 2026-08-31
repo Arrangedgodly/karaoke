@@ -83,7 +83,7 @@
   //     since vertical flow was retired (2026-08-31): always normalized to
   //     'horizontal', kept only so legacy payloads round-trip
   //     shape-compatibly — and `w` an optional finite number (the card's
-  //     own condensed width, clamped 176..384 px; absent = the uniform CSS
+  //     own condensed width, clamped 128..384 px; absent = the uniform CSS
   //     default). sanitizeLayout() normalizes every entry to exactly that
   //     shape, PRUNES entries for node ids the accompanying chain does not
   //     contain (node removed —
@@ -133,13 +133,13 @@
           x: entry.x,
           y: entry.y,
           // Per-card WIDTH (2026-08-31 round): a finite number clamped
-          // into the condensed range (11rem..24rem, mirroring main.css's
-          // horizontal-mode bounds and canvas.js's constants); anything
-          // else drops the field — the card takes the uniform CSS
-          // default. Additive field: older payloads simply load default.
+          // into the condensed range (8rem..24rem, mirroring main.css's
+          // bounds and canvas.js's constants); anything else drops the
+          // field — the card takes the uniform CSS default. Additive
+          // field: older payloads simply load default.
           w:
             typeof entry.w === 'number' && isFinite(entry.w)
-              ? Math.min(384, Math.max(176, entry.w))
+              ? Math.min(384, Math.max(128, entry.w))
               : undefined,
           scale:
             typeof entry.scale === 'number' && isFinite(entry.scale)

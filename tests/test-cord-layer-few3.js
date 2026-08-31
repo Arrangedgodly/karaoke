@@ -405,8 +405,8 @@ check(
 var d12 = dOf(1);
 check(
   !!d12 && startPoint(d12).x === seatOut({ x: 0, y: 16 }).x && startPoint(d12).y === seatOut({ x: 0, y: 16 }).y &&
-    endPoint(d12).x === seatIn({ x: 192, y: 16 }).x && endPoint(d12).y === seatIn({ x: 192, y: 16 }).y,
-  'B5: mid-chain endpoints derive from the row seats (n1 out-jack 160,40 -> n2 in-jack 192,40 — ON the border, across from each other)'
+    endPoint(d12).x === seatIn({ x: 144, y: 16 }).x && endPoint(d12).y === seatIn({ x: 144, y: 16 }).y,
+  'B5: mid-chain endpoints derive from the row seats (n1 out-jack 160,40 -> n2 in-jack 144,40 — ON the border, across from each other)'
 );
 var dLast = dOf(3);
 check(
@@ -423,37 +423,26 @@ console.log('C. a grip MOVE re-routes the cords live (positions map only)');
 var micToN1Before = dOf(0);
 var h2 = handleOf('n2');
 h2.__fire('pointerdown', { clientX: 100, clientY: 100, button: 0 });
-documentStub.__fire('pointermove', { clientX: 139, clientY: 122 }); // n2 -> (224, 32)
+documentStub.__fire('pointermove', { clientX: 139, clientY: 122 }); // n2 -> (176, 32)
 documentStub.__fire('pointerup', {});
 check(
-  CC.currentLayout().n2.x === 224 && CC.currentLayout().n2.y === 32,
-  'C1: the drag moved n2\'s seat (224, 32) — snap-quantized'
+  CC.currentLayout().n2.x === 176 && CC.currentLayout().n2.y === 32,
+  'C1: the drag moved n2\'s seat (176, 32) — snap-quantized'
 );
 var intoN2 = dOf(1);
 var outOfN2 = dOf(2);
 check(
-  !!intoN2 && endPoint(intoN2).x === seatIn({ x: 224, y: 32 }).x && endPoint(intoN2).y === seatIn({ x: 224, y: 32 }).y,
-  'C2: the cord INTO n2 now ends at its moved in-jack (224, 56 — middle of the left border)'
+  !!intoN2 && endPoint(intoN2).x === seatIn({ x: 176, y: 32 }).x && endPoint(intoN2).y === seatIn({ x: 176, y: 32 }).y,
+  'C2: the cord INTO n2 now ends at its moved in-jack (176, 56 — middle of the left border)'
 );
 check(
-  !!outOfN2 && startPoint(outOfN2).x === seatOut({ x: 224, y: 32 }).x && startPoint(outOfN2).y === seatOut({ x: 224, y: 32 }).y,
-  'C3: the cord OUT OF n2 now starts at its moved out-jack (384, 56 — middle of the right border, directly across)'
+  !!outOfN2 && startPoint(outOfN2).x === seatOut({ x: 176, y: 32 }).x && startPoint(outOfN2).y === seatOut({ x: 176, y: 32 }).y,
+  'C3: the cord OUT OF n2 now starts at its moved out-jack (336, 56 — middle of the right border, directly across)'
 );
 check(
   dOf(0) === micToN1Before,
   'C4: the untouched mic->n1 cord is byte-stable across n2\'s move'
 );
-
-// ----------------------------------------------------------------------
-console.log('D. TIDY re-routes the cords onto the compacted row');
-CC.tidyChain();
-check(
-  endPoint(dOf(1)).x === seatIn({ x: 192, y: 16 }).x && endPoint(dOf(1)).y === seatIn({ x: 192, y: 16 }).y,
-  'D1: after TIDY the cord into n2 returns to the row seat (192, 40)'
-);
-
-// (The old D2 mixed-orientation block is retired with vertical flow:
-// every card reads horizontal jacks — the left/right across-from rule.)
 
 // ----------------------------------------------------------------------
 console.log('E. remove x closes the chain over the removed seat');

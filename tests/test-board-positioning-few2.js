@@ -308,14 +308,10 @@ check(
 );
 check(
   CC.GRID_PITCH === 16 && typeof CC.snapToGrid === 'function' &&
-    typeof CC.tidyChain === 'function' && typeof CC.currentLayout === 'function',
-  'A2: the FEW-2 seams export (GRID_PITCH 16, snapToGrid, tidyChain, currentLayout)'
+    typeof CC.currentLayout === 'function',
+  'A2: the FEW-2 seams export (GRID_PITCH 16, snapToGrid, currentLayout — the tidy seam is retired with its button)'
 );
 check(CC.snapToGrid(55) === 48 && CC.snapToGrid(-7) === 0, 'A3: snapToGrid quantizes to the 16px pitch');
-check(
-  queryAll(canvasPanelEl, '.tidy-toggle').length === 1,
-  'A4: the TIDY control is built in the canvas chrome (flow-toggle zone)'
-);
 
 // ----------------------------------------------------------------------
 console.log('B. loadModel auto-layouts the incumbent ROW when no layout is given (vertical flow retired 2026-08-31)');
@@ -323,18 +319,18 @@ CC.loadModel(model());
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({
     n1: { x: 0, y: 16, scale: 1, flow: 'horizontal' },
-    n2: { x: 192, y: 16, scale: 1, flow: 'horizontal' },
-    n3: { x: 384, y: 16, scale: 1, flow: 'horizontal' }
+    n2: { x: 144, y: 16, scale: 1, flow: 'horizontal' },
+    n3: { x: 288, y: 16, scale: 1, flow: 'horizontal' }
   }),
-  'B1: absent layout -> the incumbent ROW (x accumulates the 176px floor + 16 pitch, y at the grid edge)'
+  'B1: absent layout -> the incumbent ROW (x accumulates the 128px floor + 16 pitch, y at the grid edge)'
 );
 check(
-  cardById('n2').style.transform === 'translate(192px, 16px)' &&
-    cardById('n2').style.width === '176px',
+  cardById('n2').style.transform === 'translate(144px, 16px)' &&
+    cardById('n2').style.width === '128px',
   'B2: positions + the floor width are painted as styles on each card'
 );
 check(
-  chainListEl.style.minHeight === '176px' && chainListEl.style.minWidth === '576px',
+  chainListEl.style.minHeight === '176px' && chainListEl.style.minWidth === '432px',
   'B3: the board extent covers the row\'s right edge (both axes maintained)'
 );
 check(
@@ -359,11 +355,11 @@ check(
 
 documentStub.__fire('pointermove', { clientX: 139, clientY: 122 });
 check(
-  CC.currentLayout().n2.x === 224 && CC.currentLayout().n2.y === 32,
-  'C3: the move is snap-quantized to the grid (192+39 -> 224, 16+22 -> 32)'
+  CC.currentLayout().n2.x === 176 && CC.currentLayout().n2.y === 32,
+  'C3: the move is snap-quantized to the grid (144+39 -> 176, 16+22 -> 32)'
 );
 check(
-  cardById('n2').style.transform === 'translate(224px, 32px)',
+  cardById('n2').style.transform === 'translate(176px, 32px)',
   'C4: the snapped seat is painted live during the drag'
 );
 check(saves.length === savesBefore, 'C5: NO save during pointermove (persist on move-end only)');
@@ -373,7 +369,7 @@ check(CC.isDragActive() === false, 'C6: the gesture ends the drag flag');
 check(
   saves.length === savesBefore + 1 &&
     saves[saves.length - 1].layout &&
-    saves[saves.length - 1].layout.n2.x === 224 &&
+    saves[saves.length - 1].layout.n2.x === 176 &&
     saves[saves.length - 1].layout.n2.y === 32,
   'C7: move-end persists the layout through the FEW-1 store seam (exactly one save)'
 );
@@ -388,62 +384,9 @@ check(builds.length === 0, 'C9: a position move never rebuilds the audio graph (
 console.log('D. reload round-trip: the saved layout reapplies exactly');
 CC.loadModel(model(), saves[saves.length - 1].layout);
 check(
-  CC.currentLayout().n2.x === 224 && CC.currentLayout().n2.y === 32 &&
-    CC.currentLayout().n1.y === 16 && CC.currentLayout().n3.x === 384,
+  CC.currentLayout().n2.x === 176 && CC.currentLayout().n2.y === 32 &&
+    CC.currentLayout().n1.y === 16 && CC.currentLayout().n3.x === 288,
   'D1: loadModel(model, savedLayout) restores every seat exactly (round-trip)'
-);
-
-// ----------------------------------------------------------------------
-console.log('E. TIDY compacts — a near-row arrangement collapses to the exact row, a 2D arrangement keeps its shape');
-CC.tidyChain();
-var tidied = CC.currentLayout();
-check(
-  tidied.n1.x === 0 && tidied.n1.y === 16 &&
-    tidied.n2.x === 192 && tidied.n2.y === 16 &&
-    tidied.n3.x === 384 && tidied.n3.y === 16,
-  'E1: TIDY compacts the seats (the near-row arrangement collapses back to the exact incumbent row)'
-);
-var tidySave = saves[saves.length - 1];
-check(
-  !!tidySave.layout && tidySave.layout.n2.x === 192 && tidySave.layout.n2.y === 16,
-  'E2: TIDY persists the tidied layout through the store seam'
-);
-// scale/flow survive TIDY (they are FEW-5/6's fields — TIDY rewrites x/y only)
-CC.loadModel(model(), {
-  n1: { x: 48, y: 176, scale: 1.5, flow: 'horizontal' },
-  n2: { x: 16, y: 0 },
-  n3: { x: 16, y: 160 }
-});
-CC.tidyChain();
-// 2026-08-31 compaction round: TIDY no longer re-stacks by chain order —
-// it PRESERVES the arrangement. n1 (y=176) genuinely shares n3's band
-// (y=160, 16px apart), so compaction keeps it BESIDE n3 in row 2 rather
-// than returning it to the stack's top seat.
-check(
-  CC.currentLayout().n1.scale === 1.5 && CC.currentLayout().n1.flow === 'horizontal' &&
-    CC.currentLayout().n1.x === 16 && CC.currentLayout().n1.y === TIDY.row &&
-    CC.currentLayout().n2.y === 0 && CC.currentLayout().n3.y === TIDY.row,
-  'E3: TIDY preserves each entry\'s scale/flow AND the arrangement (n1 keeps its band beside n3 — no re-stack by chain order)'
-);
-
-// ----------------------------------------------------------------------
-console.log('E2D. TIDY on a deliberately 2D arrangement preserves the topology');
-// A scatter with real dead space: n2 far right of n1, n3 well below.
-// Compaction packs each band flush against its predecessor (one tidy
-// pitch of air) — the 2D shape survives, the gaps close, and nothing
-// collapses into a single chain-ordered line.
-CC.loadModel(model(), {
-  n1: { x: 16, y: 0 },
-  n2: { x: 400, y: 0 },
-  n3: { x: 16, y: 400 }
-});
-CC.tidyChain();
-var twoD = CC.currentLayout();
-check(
-  twoD.n1.x === 16 && twoD.n1.y === 0 &&
-    twoD.n2.x === 16 + 176 + 16 && twoD.n2.y === 0 &&
-    twoD.n3.x === 16 && twoD.n3.y === TIDY.row,
-  'E4: the gaps collapse to exactly one tidy pitch (n2 flush right of n1, n3 one row below) — the arrangement is preserved, never re-stacked'
 );
 
 // ----------------------------------------------------------------------
@@ -461,14 +404,13 @@ check(
 
 // ----------------------------------------------------------------------
 console.log('G. the palette add verb places at the FIRST FREE GRID SLOT');
-CC.tidyChain(); // n1@0, n2@160 (n3 removed) — next free row is 320
 var idsBefore = domOrder().slice();
 CC.addNodeType('gain');
 var newId = domOrder().filter(function (id) { return idsBefore.indexOf(id) === -1; })[0];
 check(!!newId, 'G1: addNodeType mints and appends a fresh card');
 check(
-  CC.currentLayout()[newId].x === 16 + 176 + 16 + 176 + 16 && CC.currentLayout()[newId].y === TIDY.x,
-  'G2: the new section lands at the first free grid slot (400, 16 — right of the compacted row\'s rightmost card)'
+  CC.currentLayout()[newId].x === 320 && CC.currentLayout()[newId].y === TIDY.x,
+  'G2: the new section lands at the first free grid slot (320, 16 — right of the row\'s rightmost card)'
 );
 check(
   JSON.stringify(domOrder()) === JSON.stringify(idsBefore.concat([newId])),
@@ -476,7 +418,6 @@ check(
 );
 // The terminal-limiter guard still holds when a limiter IS terminal:
 CC.loadModel(model(), null); // n3 (limiter) back, terminal — board tidy
-CC.tidyChain();
 CC.addNodeType('gain');
 check(
   domOrder()[domOrder().length - 1] === 'n3',
@@ -484,7 +425,7 @@ check(
 );
 
 if (failures.length === 0) {
-  console.log('PASS: free positioning + TIDY (FEW-2)');
+  console.log('PASS: free positioning (FEW-2)');
   process.exit(0);
 }
 console.log('FAIL: ' + failures.length + ' check(s) failed:');

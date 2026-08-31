@@ -168,8 +168,7 @@ full-width fader rows the redesign brief demanded. The board underneath
 is FREE: sections sit wherever the operator puts them (snap-grid
 quantized), patch cords drawn between jacks are how the chain is
 EDITED — sound changes only when a cord link completes, never while
-dragging — and TIDY restores the incumbent layout for the current
-orientation (the condensed horizontal row or the vertical stack). Every value
+dragging. Every value
 the machine holds answers on one display register. The world is matte:
 brightness is saturation on a near-black ground, never glow.
 
@@ -187,7 +186,7 @@ legend squares.
 - One instrument, two decks, three printed zones — machined grooves and one deck seam, no floating panels, no border-radius islands.
 - Single Face Chassis: display register on the top edge, sections as print zones, jack-print anchors, VU corner + flow switch on the base plate.
 - Encoder field: 54px knobs (family-colored arcs), pad radio-groups, trim slots; the display register answers the touched control.
-- Free board: snap-grid positioning, TIDY re-stack, patch cords that EDIT order but never gate audio; DOM order is always chain order.
+- Free board: snap-grid positioning, patch cords that EDIT order but never gate audio; DOM order is always chain order. No arrange/tidy key — the board is a free canvas (retired 2026-08-31).
 - One signal orange for system states only; family color on the arc alone; BYPASS's split-role red outranks everything on the deck.
 - Two-register type (silkscreen sans / dot-matrix mono tabular), 12px/13.6px value ladder, 11px floor.
 - One disabled grammar — diagonal hatch + recede — for exactly two states (pre-Start gate, bypassed chain).
@@ -271,8 +270,7 @@ height; the palette and presets flanks scroll their own content; the
 chain face (Single Face Chassis: display register on the top edge; the
 FACE — MIC IN jack print → the board → OUT jack print — scrolling
 inside; base plate carrying the pinned OUT footer mirror / VU corner,
-bottom-right, always visible, never dimmed — and the TIDY key) owns the
-pan in BOTH axes. Below 901px the zones stack and the page keeps its
+bottom-right, always visible, never dimmed) owns the pan in BOTH axes. Below 901px the zones stack and the page keeps its
 scroll. VERTICAL FLOW IS RETIRED (same day, user direction): the board
 has exactly ONE reading — horizontal, condensed modules in a
 left-to-right row; the FLOW toggle, its preference key, and the vertical
@@ -284,20 +282,20 @@ section is an absolutely positioned slab translated to its board seat by
 JS (`transform: translate(x,y)`, snap-quantized to the 16px grid). Each
 section is a CONDENSED MODULE — the rail collapses into a compact header
 band (grip · code · label · fold/eject right) over the wrapping encoder
-field. Width defaults to the RESIZER'S FLOOR (176px/11rem, clamped
-176–384px): at the floor each control row fits exactly one unit, so a
-module opens as a SINGLE STACK of controls with no right-hand dead
-space; widening re-wraps the field to fill. Height hugs content.
+field. Width defaults to the RESIZER'S FLOOR (128px/8rem, clamped
+128–384px): at the floor the widest control row (dial + gap + the
+longest silkscreen label) fills the module EDGE TO EDGE, so a module
+opens as a SINGLE STACK of controls with no right-hand dead space;
+widening re-wraps the field to fill. Height hugs content.
 Position AND width are STYLE ONLY — DOM order always equals chain order
 (PD-4), so bring-to-front z-order is paint, never sequence. The header
 band and grip drag move a section's seat; the corner resize grip (a
 machined dot-field mark, bottom-right) adjusts its width (`w` joins x/y
 in the layout entry; snap-quantized, clamped, end-only persistence);
-neither ever touches sound. The arrangement autosaves; TIDY COMPACTS —
-column/row bands clustered by overlap, packed flush at the tidy pitch
-from the arrangement's own anchor — preserving the operator's layout
-while closing the free space (a single row degenerates to the exact
-incumbent row: x accumulating each module's width plus one grid unit).
+neither ever touches sound. The arrangement autosaves. THE BOARD HAS NO
+TIDY/ARRANGE KEY (retired 2026-08-31, user direction: not helpful) —
+nothing moves the operator's cards but the operator; the board is a
+free canvas.
 
 **Patch cords (FEW-3/FEW-4, geometry by OQ-9):** an SVG cord layer
 behind the sections draws MIC OUT → sections in chain order → OUT IN
@@ -361,7 +359,7 @@ never shadow or glow.
 ### Buttons (control keys)
 - **Shape:** 4px radius, key ground #1d1e26, cut-edge bezel #343746, bright print; padding 0.5rem 1rem.
 - **Start (the one orange key):** signal-orange fill, chassis ink, 700; hover #ff8558, press #e85a20; ink focus ring inside the fill. Recedes to the shared disabled treatment once the engine runs.
-- **Control keys (device, presets, flow, TIDY):** shared vocabulary; hover leans the bezel to full print; pressed = the one orange fill with ink; disabled = recede (0.55, cut-edge seam, not-allowed). TIDY rides the base plate next to the flow switch in the same key rule (mono 12px).
+- **Control keys (device, presets):** shared vocabulary; hover leans the bezel to full print; pressed = the one orange fill with ink; disabled = recede (0.55, cut-edge seam, not-allowed).
 - **BYPASS (the red-ringed end key):** 3rem min-height, 1.05rem/700 tracked — the loudest element on the deck. OFF: key ground + bright print + 2px edge-red ring. ON: red-fill ground + white text + edge-red ring. Sticky-deck placement never leaves the visible top.
 
 ### Knobs (the encoder field's rotary voice)

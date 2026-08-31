@@ -343,13 +343,13 @@ function model3() {
 // section's jacks sit ON its border, DIRECTLY ACROSS each other over the
 // placeholder card box (160w x 48h): since vertical flow was retired
 // (2026-08-31) every card reads IN at the middle of its LEFT border, OUT
-// at the middle of its RIGHT. Row seats: n1 x=0, n2 x=192, n3 x=384
-// (all y=16 — the 176px floor + 16 pitch).
+// at the middle of its RIGHT. Row seats: n1 x=0, n2 x=144, n3 x=288
+// (all y=16 — the 128px floor + 16 pitch).
 var MIC_OUT = { x: 16, y: -32 };
 var OUT_IN = { x: 16, y: 176 };
 var CARD_W = 160;
 var CARD_H = 48;
-var SEAT_X = { n1: 0, n2: 192, n3: 384 };
+var SEAT_X = { n1: 0, n2: 144, n3: 288 };
 function seatIn(id) {
   return { x: SEAT_X[id], y: 16 + CARD_H / 2 };
 }

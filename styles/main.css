@@ -608,7 +608,7 @@ body {
    as a physical KEY on the panel: --pm-key ground, cut-edge bezel,
    bright print. Hover leans the bezel to full print; the pressed state
    is the ONE orange fill with chassis ink (the accent-as-brightness
-   economy). The canvas flow-toggle carries its own scoped key rule.
+   economy).
    =========================================================================== */
 
 button.control,
@@ -861,7 +861,7 @@ select.control {
 
      per-control value   0.75rem (12px) / 400 / mono / tabular /
                          min-width 6ch — .param-value (knob + trim),
-                         .pad legends, .meter-readout (dB), .flow-toggle
+                         .pad legends, .meter-readout (dB)
                          (flow-state print), .register-help (the
                          register's subordinate line)
      register line       0.85rem (13.6px) / 400 + 700 segments / mono /
@@ -3461,43 +3461,17 @@ input.preset-name-input:focus-visible {
 }
 
 /* ===========================================================================
-   BOARD CHROME (the TIDY key). Vertical flow is RETIRED (2026-08-31,
-   user direction): the board has ONE reading — horizontal, condensed
-   modules left-to-right — and .flow-horizontal is a permanent class the
-   canvas applies at init (the scoping stays so the rules read as the
-   board's own). The FLOW toggle and the vertical-mode geometry branches
-   are deleted; TIDY (the board's one chrome control, static flow on the
-   panel's tail) compacts the arrangement.
+   BOARD CHROME. Vertical flow is RETIRED (2026-08-31, user direction):
+   the board has ONE reading — horizontal, condensed modules
+   left-to-right — and .flow-horizontal is a permanent class the canvas
+   applies at init (the scoping stays so the rules read as the board's
+   own). The FLOW toggle, the vertical-mode geometry branches, and the
+   TIDY key (retired the same day — the board is a free canvas) are all
+   deleted; the panel carries no chrome controls of its own.
    =========================================================================== */
 
 .canvas-panel {
-  position: relative; /* anchor for the vertical-mode switch placement */
-}
-
-/* Scoped .canvas-panel .flow-toggle (not bare .flow-toggle): the button
-   carries the shared .control class, whose `button.control` font-size
-   (0.9rem) OUTRANKED the old single-class rule — the switch rendered
-   14.4px, a mono size matching nothing on the surface (the size bug the
-   ladder audit caught). At the panel scope it wins the cascade and rides
-   the ladder's per-control value tier like every other state readout. */
-/* FEW-2: the TIDY control rides the SAME chrome zone and the SAME rule
-   (the existing .control + panel-scope vocabulary — VIS-1: no new chrome
-   vocabulary, just one more key in the flow-toggle's row). */
-.canvas-panel .tidy-toggle {
-  display: block;
-  padding: 0.3rem 0.8rem;
-  border-color: var(--pm-key-edge);
-  background: var(--pm-chassis);
-  font-family: var(--font-readout);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
-  color: var(--pm-print);
-}
-
-.tidy-toggle:not(:disabled):hover {
-  border-color: var(--pm-print);
-  color: var(--pm-print-hi);
+  position: relative;
 }
 
 /* THE BOARD READING (horizontal, the only one): MIC IN at the left,
@@ -3647,13 +3621,11 @@ input.preset-name-input:focus-visible {
    so the scoping below leaves them at full strength.
    =========================================================================== */
 
-.canvas-panel .chain-list,
-.canvas-panel .flow-toggle {
+.canvas-panel .chain-list {
   transition: opacity 150ms ease;
 }
 
-.canvas-panel.bypassed .chain-list,
-.canvas-panel.bypassed .flow-toggle {
+.canvas-panel.bypassed .chain-list {
   opacity: 0.55;
 }
 
