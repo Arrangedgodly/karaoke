@@ -13,6 +13,7 @@
 //     candidate?: [{id, type, params}],
 //     change?: {nodeId, param, value},
 //     layout?: Object,
+//     renderOptions?: {freshSeats?: boolean},
 //     forceStructural?: boolean,
 //     preset?: {name: string|null, modified: boolean},
 //     undoLabel?: string,
@@ -304,11 +305,15 @@
     });
   }
 
-  function renderModel(model, layout) {
+  function renderModel(model, layout, options) {
     if (!window.ChainCanvas || typeof window.ChainCanvas.renderModel !== 'function') {
       throw new Error('ChainEditing: ChainCanvas.renderModel adapter is unavailable.');
     }
-    if (window.ChainCanvas.renderModel(cloneModel(model), layout === null ? undefined : clone(layout)) === false) {
+    if (window.ChainCanvas.renderModel(
+      cloneModel(model),
+      layout === null ? undefined : clone(layout),
+      options ? clone(options) : undefined
+    ) === false) {
       throw new Error('ChainEditing: canvas refused the candidate model.');
     }
   }
@@ -524,7 +529,11 @@
           throw makeAbortError();
         }
         applyReusedParams(previous, candidate);
-        renderModel(candidate, request.layout === undefined ? previousLayout : request.layout);
+        renderModel(
+          candidate,
+          request.layout === undefined ? previousLayout : request.layout,
+          request.renderOptions
+        );
       });
     }
 

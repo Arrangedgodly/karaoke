@@ -35,6 +35,29 @@ console.log('App scaffold loaded');
   var statusTextEl = document.getElementById('status-text');
   var startHintEl = document.getElementById('start-hint');
   var bypassButton = document.getElementById('bypass-toggle-button');
+  // #16 finding: the latched autosave-failure warning. Shown while
+  // window.Persistence.isSaveFailed() is true; driven by the module's
+  // 'chain-autosave-failed' / 'chain-autosave-recovered' events so the
+  // element only ever reflects VERIFIED save outcomes (it clears exactly
+  // when a later save succeeds — never on a timer).
+  var autosaveWarningEl = document.getElementById('autosave-warning');
+  function updateAutosaveWarning() {
+    if (!autosaveWarningEl) {
+      return;
+    }
+    var failed = false;
+    try {
+      failed = !!(window.Persistence &&
+        typeof window.Persistence.isSaveFailed === 'function' &&
+        window.Persistence.isSaveFailed());
+    } catch (err) {
+      failed = false;
+    }
+    autosaveWarningEl.hidden = !failed;
+  }
+  ['chain-autosave-failed', 'chain-autosave-recovered'].forEach(function (evtName) {
+    document.addEventListener(evtName, updateAutosaveWarning);
+  });
   // Refinement entry 5: the canvas panel carrying the bypassed indication
   // (class toggled in setBypassButtonLabel below, removed on lifecycle
   // loss — see surfaceLoss). Resolved lazily, not at load: the node-side
@@ -589,6 +612,12 @@ console.log('App scaffold loaded');
         if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
           throw new Error('ChainEditing is required for startup restoration.');
         }
+        // The restore step is its own failure domain (#16). If a saved
+        // node cannot be constructed, commit an empty passthrough through
+        // the same transaction seam and keep the microphone session live.
+        // The original autosave is then restored so a transient factory
+        // failure does not erase the operator's saved chain.
+        var restoreFailed = false;
         var restore = window.ChainEditing.apply({
           source: 'startup',
           candidate: initialModel,
@@ -596,7 +625,20 @@ console.log('App scaffold loaded');
           forceStructural: true
         });
 
-        return Promise.resolve(restore).then(function () {
+        return Promise.resolve(restore).catch(function (restoreErr) {
+          console.error('Saved chain could not be restored; starting with an empty chain:', restoreErr);
+          restoreFailed = true;
+          return window.ChainEditing.apply({
+            source: 'startup',
+            candidate: [],
+            layout: null,
+            forceStructural: true
+          }).then(function () {
+            if (window.Persistence && typeof window.Persistence.saveCurrentChain === 'function') {
+              window.Persistence.saveCurrentChain(initialModel, initialLayout || {});
+            }
+          });
+        }).then(function () {
           // AE-3: (re-)establish the independent bypass dry tap now that
           // sourceNode exists. Must be called any time sourceNode changes —
           // see the comment on AudioBypass.reconnectSource() in
@@ -640,7 +682,14 @@ console.log('App scaffold loaded');
             window.StatusReadouts.onEngineStarted(window.AudioEngine.audioContext);
           }
 
-          setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+          // The engine remains live after an empty-chain fallback, but the
+          // status must say that the saved effect chain did not load.
+          setStatus(
+            restoreFailed
+              ? 'Live — saved chain failed to load; started empty'
+              : (isEngineLive() ? 'Live' : 'Stopped'),
+            restoreFailed ? true : isEngineLive()
+          );
           contextLost = false; // issue #4: a fresh start clears any suspend state
 
           return populateDeviceList(window.AudioEngine.currentDeviceId);

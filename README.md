@@ -2,11 +2,11 @@
 
 **Live: https://voxchain.arrangedgodly.com/**
 
-A live karaoke vocal chain in your browser: mic in → effects (reverb, delay, compression, EQ, noise gate, distortion, chorus — even autotune) → PA out. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
+A live karaoke vocal chain in your browser: mic in → 14 effects (gain, compression, EQ, delay, reverb, limiter, noise gate, distortion, chorus, autotune, pitch shift, tremolo, bitcrusher, phaser) → PA out. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
 
-![VOXCHAIN — the dark pro-audio console: status strip on top, effects rack left, chain canvas middle, presets right](docs/screenshot.png)
+![VOXCHAIN — the dark instrument console: system deck on top, palette / free cord board / presets on the voice deck below](docs/screenshot.png)
 
-The console's dark pro-audio look — amber lamps, legible from two meters — as it sits before you press Start, with the default chain ready to go.
+The console live: the default chain on the free board, cords carrying the signal left to right, meters reading real levels.
 
 ## For judges: the 60-second path
 
@@ -53,6 +53,8 @@ Chrome's flag, DevTools pane, Inspector extension, and this project's `?dev` har
 - Add, remove, and reorder effects, and set parameters — within published safety limits.
 - Retrieve and load presets (factory or saved), and save new ones.
 
+Chain mutations are refused with a stable `ENGINE_NOT_STARTED` result until the operator presses Start — the human board is gated before the engine is live, so an agent edit would otherwise change state the operator cannot see. Reads work at any time.
+
 **An agent cannot (human-only):**
 - Touch **Bypass** — it works from the button or the **spacebar**, always.
 - Start or stop the engine.
@@ -75,7 +77,7 @@ Registered by the app for in-browser agents (see `src/mcp-tools.js`):
 | `set_chain` | write | Replace the whole chain in one validated pass (also the preset-loading path). |
 | `add_node` | write | Insert one effect node (position optional). |
 | `remove_node` | write | Remove one node — refused if it breaks a chain rule (e.g. the limiter). |
-| `set_param` | write | Set a single parameter with a policy-checked, param-only ramp. |
+| `set_param` | write | Set a single parameter with a policy check — ramped over ~15 ms on every AudioParam-backed control (three Tone plain-property params are documented immediate-write exceptions). |
 | `list_presets` | read | Factory library plus the user's saved presets. |
 | `get_preset` | read | One listed preset's complete nodes, without loading it (namespace explicit when a name exists in both groups). |
 | `load_preset` | write | Load a listed preset as the live chain — same policy and visible UI path as `set_chain`, with summary toast and Undo. |
@@ -84,9 +86,12 @@ Registered by the app for in-browser agents (see `src/mcp-tools.js`):
 `get_capabilities` has two focused responses. The default `policy` response
 lists exact parameters, ranges, and chain rules. The optional `sound_design`
 response translates language such as "deeper," "a little reverb," "ghostly,"
-"warm," "clear," "thick," "gritty," and "robotic" into safe starting ranges.
-The browser agent still interprets the request. The app supplies the audio
-vocabulary, enforces every resulting change, and stays LLM-free.
+"warm," "clear," "thick," "gritty," "robotic," "transposed," "spacey,"
+"warble," and "lo-fi" into safe starting ranges, and its verify workflow has
+the agent read `get_chain`'s output authority (Bypass / watchdog mute) before
+asking the human to listen. The browser agent still interprets the request.
+The app supplies the audio vocabulary, enforces every resulting change, and
+stays LLM-free.
 
 ## Shared-state architecture
 
@@ -98,7 +103,7 @@ Agent and human drive the **same accepted model, UI, and audio graph** through `
 node tests/run.js
 ```
 
-Zero dependencies — needs only Node, works from a clean clone; exit code 0 means green. The suite covers: 10-tool registration, policy round-trips of all factory presets, safety refusals, the node-reuse type guard, watchdog tap/latch, mutation + undo, persistence honesty, param-only ramps, the preset retrieve/load tools, and the four newer effects (Noise Gate, Distortion, Chorus, Autotune) — their audio structure, palette cards, discrete key/scale params, agent string params, and preset round-trips.
+Zero dependencies — needs only Node, works from a clean clone; exit code 0 means green. The suite covers: 10-tool registration, policy round-trips of all factory presets, safety refusals, the node-reuse type guard, watchdog tap/latch, mutation + undo, persistence honesty, param-only ramps, the preset retrieve/load tools, the four cycle-3 effects (Noise Gate, Distortion, Chorus, Autotune) and the four Tone.js effects (Pitch Shift, Tremolo, Bitcrusher, Phaser) — audio structure, palette cards, discrete key/scale params, agent string params, and preset round-trips — plus the 2026-08-31 submission-hardening round: pre-Start mutation refusal, crash rollback honesty, superseded-rebuild disposal, the autosave-failure latch, sound-design guide identity/direction/degraded-registry filtering, and the output-authority readout.
 
 **Honest boundaries:** automation does not prove the physical mic → PA path, audible DSP quality, or hidden-tab watchdog behavior. Those live in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
@@ -124,12 +129,13 @@ Across the top, the status strip shows whether the engine is **Stopped** or **Li
 
 ### Building your sound
 
-- The left panel has your effects — the originals (Gain, Compressor, EQ, Delay, Reverb, Limiter) plus four newer ones (Noise Gate, Distortion, Chorus, Autotune — see the next section). **Drag one into the middle column** to add it to the chain — or just click it (Tab to it and press Enter works too; new effects are added just before the limiter so it stays last). The chain flows top to bottom by default, mic in at the top and sound out at the bottom. Prefer the old left-to-right view? The **FLOW** button under the chain flips it back, and it remembers your choice.
-- The meters on the **MIC IN** and **OUT** bars show your incoming and outgoing levels at a glance, and the small **OUT** readout pinned at the bottom of the chain area shows your output level even when the chain is too long to fit on screen.
-- **Move a card** — grab it by its `⋮⋮` handle and drag it anywhere on the canvas. Moving a card never changes your sound, and the arrangement is saved automatically (the **TIDY** button under the chain stacks everything back neatly).
+- The left panel has your effects — the originals (Gain, Compressor, EQ, Delay, Reverb, Limiter), the cycle-3 four (Noise Gate, Distortion, Chorus, Autotune), and the Tone.js four (Pitch Shift, Tremolo, Bitcrusher, Phaser). **Click a chip to add it** to the chain — Tab to a chip and press Enter works too, and new effects are added just before the limiter so it stays last. The board reads left to right, mic in on the left, sound out at the bottom-right port; nothing rearranges your cards but you.
+- The meters on the **MIC IN** (top-left) and **OUT** (bottom-right) units show your incoming and outgoing levels at a glance; the **OUT** readout is pinned to the board's base plate so it stays visible even when the chain is longer than the screen.
+- **Move a section** — drag it by its header anywhere on the board. Moving (or resizing) a section never changes your sound; the arrangement is saved automatically.
+- **Resize a section** — drag the machined corner mark at its bottom-right to widen it; controls re-wrap to fill the wider card.
 - **Reorder by cord** — drag from a jack point on one card to a jack point on another. The sound changes only when the link completes; drop the cord on empty space and it snaps back with nothing changed.
 - Click the **×** on a card to remove it.
-- Use the sliders under each effect to tune it (Autotune's **Key** and **Scale** are dropdowns instead of sliders). Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
+- Tune with the knobs and sliders under each effect — Autotune's **Key** and **Scale** are pressable pads instead of sliders. Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
 
 ### The four newer effects — what they're for
 
@@ -145,6 +151,18 @@ Across the top, the status strip shows whether the engine is **Stopped** or **Li
 - It adds a fixed **20 ms delay** (a fiftieth of a second) to the vocal. You won't notice it while singing, but if you A/B it against the dry sound the corrected voice lands a hair late. That's the engine's declared latency — expected behavior, not a fault.
 
 **Want to hear all four before a show?** They were accepted on a fixed test vocal — `assets/test-vocal.mp3` (CC0; source credited in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)) — and you can reproduce exactly that demo yourself: with Node and ffmpeg installed, run `node tests/qa-out/run-qa1.js`, then follow the guided A/B listening order in [`tests/qa-out/LISTENING.md`](tests/qa-out/LISTENING.md). It renders before/after audio for every effect at default and extreme settings, offline, through the same node code the app runs live.
+
+### The Tone.js four — what they're for
+
+Four more effects (Pitch Shift, Tremolo, Bitcrusher, Phaser) built on the vendored [Tone.js](https://tonejs.github.io) 15.1.22 — promoted out of experimental status 2026-08-31.
+
+**Pitch Shift** — the app's only *actual* pitch control: it moves the voice up or down in semitones (±12; keep |shift| ≤ 7 for intelligibility). "Take it up 2 semitones" when the backing track sits above the singer. **Mix** blends shifted and original.
+
+**Tremolo** — volume wobble: amplitude dips and swells at an adjustable **Rate** (0.1–20 Hz) and **Depth**. Slow rates read as gentle breathing; mid rates are the classic 60s surf shimmer.
+
+**Bitcrusher** — lo-fi digital grunge: it re-quantizes the signal to fewer **Bits** (1–8 — *fewer bits = more crushed*) and blends it with the clean signal via **Mix**. The factory "Phone Call Gag" preset uses the telephone-voice end of this range.
+
+**Phaser** — a sweeping, spacey filter sweep: **Rate** sets how fast the notch rides (0.05–8 Hz), **Depth** how far (0–100 %), **Base** where the sweep starts (50–1500 Hz). Slower rates with high depth give the "spacey" vocal bed; like chorus it reads best in stereo. One honest note: pitch shift's `pitch` and phaser's `depth`/`baseHz` are Tone.js plain properties with no rampable AudioParam underneath — the app's published click-safe-ramp promise names exactly these three as immediate-write exceptions (see `get_capabilities`).
 
 ### Saving your setup
 
@@ -184,7 +202,9 @@ Recording checklist (the judge script above doubles as the shot list):
 ## License & credits
 
 This project is open source under the MIT License — see [LICENSE](LICENSE).
-Two bundled third-party pieces ship under their own terms, detailed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): **Sortable.js 1.15.7**
-(MIT, vendored for drag-and-drop) and the **reverb impulse response**
-"IR Rollo Transparent Plate" by Rollo145 (CC0 1.0, from Freesound).
+Bundled third-party pieces ship under their own terms, detailed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): **Tone.js 15.1.22** (MIT,
+vendored for the four Tone-backed effects), the **reverb impulse response**
+"IR Rollo Transparent Plate" by Rollo145 (CC0 1.0, from Freesound), and the
+**test vocal** by Ehved (CC0 1.0, from Freesound). (Sortable.js was retired
+with the palette drag on 2026-08-31 and is no longer bundled.)

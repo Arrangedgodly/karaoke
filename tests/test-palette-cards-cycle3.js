@@ -483,8 +483,8 @@ check(
   'flat palette list carries 10 chips + 3 group headers as direct children'
 );
 check(
-  windowStub.Sortable.instances.length === 1,
-  'exactly ONE SortableJS instance wired (palette only — the chain instance is retired per FEW-2/PD-1)'
+  windowStub.Sortable.instances.length === 0,
+  'ZERO SortableJS instances wired (the chain instance retired per FEW-2/PD-1; the palette drag retired 2026-08-31 — click/keyboard are the add verbs)'
 );
 
 // ----------------------------------------------------------------------
@@ -570,8 +570,8 @@ check(
 );
 check(
   emptyHintEl.textContent ===
-    'Drag an effect here to start building your chain',
-  'empty-hint copy flips at the Start transition'
+    'Click an effect to add it to the chain',
+  'empty-hint copy flips at the Start transition (the working add verbs — palette drag is retired)'
 );
 
 var persistBefore = calls.persist.length;
@@ -1257,9 +1257,10 @@ check(
   'first group header drops its top margin (the panel h2 already separates it)'
 );
 
-// The palette Sortable scopes drag items to the chips: with headers
-// interleaved, the default '>*' would make a header grabbable. The chain
-// instance is RETIRED (FEW-2/PD-1: grip drag moves POSITION, never order).
+// The palette Sortable is RETIRED entirely (2026-08-31 honesty round):
+// the drag had no receiver on the free board, so it could never add —
+// click/keyboard are the add verbs. Zero instances may be constructed,
+// palette or chain.
 var paletteSortableInstance = null;
 var chainSortableInstance = null;
 windowStub.Sortable.instances.forEach(function (inst) {
@@ -1267,9 +1268,8 @@ windowStub.Sortable.instances.forEach(function (inst) {
   if (inst.el === chainListEl) { chainSortableInstance = inst; }
 });
 check(
-  !!paletteSortableInstance &&
-    paletteSortableInstance.opts.draggable === '.node-chip',
-  'palette Sortable restricts drag items to .node-chip (headers are pointer-inert)'
+  paletteSortableInstance === null,
+  'NO palette Sortable is constructed (drag retired 2026-08-31 — click/keyboard add)'
 );
 check(
   chainSortableInstance === null,

@@ -143,7 +143,7 @@ function createSandbox() {
     }
   };
   sandbox.window = sandbox;
-  sandbox.AudioEngine = { isStarted: false };
+  sandbox.AudioEngine = { isStarted: true };
   vm.createContext(sandbox);
   return sandbox;
 }

@@ -238,8 +238,8 @@ var flowTags = canvasEl ? descendants(canvasEl, function () { return true; }).ma
 check(
   canvasEl !== null &&
     JSON.stringify(flowTags) ===
-      JSON.stringify(['div.anchor', 'span.arrow', 'div.chain-list', 'div.empty-hint', 'span.arrow', 'div.anchor']),
-  'canvas internals untouched: anchor → arrow → chain-list → empty-hint → arrow → anchor'
+      JSON.stringify(['div.anchor', 'span.arrow', 'div.chain-list', 'div.empty-hint']),
+  'canvas internals: anchor → arrow → chain-list → empty-hint (MIC relocates to the register at runtime; the OUT anchor is retired — 2026-08-31 cord round)'
 );
 
 // ----------------------------------------------------------------------

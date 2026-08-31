@@ -2563,6 +2563,23 @@ select.control {
   font-size: 0.75rem;
 }
 
+/* #16 finding: the latched autosave-failure warning — safety-red edge
+   ring (the split-role red rule: edge for attention, never a solid
+   fill), mono print at the unsaved-dot's own tier. role="alert" on the
+   element carries the announcement; this only paints it. */
+.autosave-warning {
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--red-edge);
+  border-radius: 3px;
+  font-family: var(--font-readout);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--pm-print-hi);
+  background: var(--pm-register-bg);
+  overflow-wrap: anywhere;
+}
+
 /* Direct children only — Save As… and the <select> stack full-width in the
    column; the Load/Delete pair below is laid out separately via
    .preset-actions so they can sit side by side instead. */
@@ -2695,19 +2712,6 @@ input.preset-name-input:focus-visible {
   margin: 0.5rem 0 0;
   font-size: 0.7rem;
   color: var(--pm-print);
-}
-
-/* Issue #20: a failed autosave is durable operational state, not a
-   four-second note. ChainEditing keeps this alert visible until a later
-   write is read back and verified. */
-.persistence-warning {
-  margin: 0.5rem 0 0;
-  padding-left: 0.5rem;
-  border-left: 2px solid var(--pm-accent);
-  color: var(--pm-accent);
-  font-family: var(--font-readout);
-  font-size: 0.7rem;
-  line-height: 1.35;
 }
 
 /* Visually hide (but keep accessible to assistive tech) the device-select
@@ -3548,23 +3552,6 @@ input.preset-name-input:focus-visible {
 
 .canvas-panel.flow-horizontal .arrow::before {
   transform: rotate(-45deg); /* points right down the row */
-}
-
-.canvas-panel.flow-horizontal .anchor {
-  flex-direction: column;
-  align-items: center;
-  width: auto;
-  min-width: 5.5rem;
-  justify-content: flex-start;
-}
-
-.canvas-panel.flow-horizontal .anchor::before {
-  margin-right: 0;
-  margin-bottom: 0.45rem;
-}
-
-.canvas-panel.flow-horizontal .meter-unit {
-  margin-top: 0.35rem;
 }
 
 /* CONDENSED SECTION (2026-08-31 horizontal-default round, tightened by

@@ -157,8 +157,6 @@ canvasPanelEl.className = 'canvas-panel';
 var canvasFaceEl = new FakeElement('div'); // #chain-canvas — the cord layer's host
 var micAnchorEl = new FakeElement('div');
 micAnchorEl.className = 'anchor';
-var outAnchorEl = new FakeElement('div');
-outAnchorEl.className = 'anchor';
 var arrowElA = new FakeElement('span');
 arrowElA.className = 'arrow';
 var arrowElB = new FakeElement('span');
@@ -168,7 +166,6 @@ canvasFaceEl.appendChild(arrowElA);
 canvasFaceEl.appendChild(chainListEl);
 canvasFaceEl.appendChild(emptyHintEl);
 canvasFaceEl.appendChild(arrowElB);
-canvasFaceEl.appendChild(outAnchorEl);
 // No offsetLeft/offsetTop on chainListEl — board origin is {0, 0}, so
 // the pins below are the positions map verbatim (the FEW-3 contract).
 
@@ -353,15 +350,16 @@ function model3() {
   ];
 }
 
-// Board-space jack constants (src/canvas.js, OQ-9 geometry): mic
-// (16,-32) and out-in (16,176) — the layout-less panel fallbacks; a
-// section's jacks sit ON its border, DIRECTLY ACROSS each other over the
-// placeholder card box (160w x 48h): since vertical flow was retired
-// (2026-08-31) every card reads IN at the middle of its LEFT border, OUT
-// at the middle of its RIGHT. Row seats: n1 x=0, n2 x=144, n3 x=288
-// (all y=16 — the 128px floor + 16 pitch).
-var MIC_OUT = { x: 16, y: -32 };
-var OUT_IN = { x: 16, y: 176 };
+// Board-space jack constants (src/canvas.js, 2026-08-31 cord round): mic
+// drops at the content top under the fixed header unit (16, 0); the
+// chain's OUT exits at the board's bottom-right corner — rightmost seat
+// (288) + card width (160) - one grid unit in = 432, extent foot - one
+// grid unit = 160. A section's jacks sit ON its border, DIRECTLY ACROSS
+// each other over the placeholder card box (160w x 48h): IN at the
+// middle of its LEFT border, OUT at the middle of its RIGHT. Row seats:
+// n1 x=0, n2 x=144, n3 x=288 (all y=16).
+var MIC_OUT = { x: 16, y: 0 };
+var OUT_IN = { x: 432, y: 160 };
 var CARD_W = 160;
 var CARD_H = 48;
 var SEAT_X = { n1: 0, n2: 144, n3: 288 };
@@ -424,9 +422,14 @@ var baseSeam = seamRequests.length;
 // ----------------------------------------------------------------------
 console.log('B. deliberate-drag threshold: a click on a jack is not an unplug');
 grabJack('section-out', 'n2');
-check(CC.isDragActive() === false, 'B1: press alone does not engage the drag flag');
+// 2026-08-31 (#16 race fix): the drag flag now engages at ARM (press),
+// not at the detach threshold — the agent-mutation queue polls this flag,
+// and arming late left a window for a structural agent edit to replace
+// the board under an armed press. A press still detaches nothing and
+// commits nothing; the threshold below still governs the EDIT.
+check(CC.isDragActive() === true, 'B1: press alone engages the drag flag at ARM (agent mutations queue from the press)');
 move({ x: seatOut('n2').x + 3, y: seatOut('n2').y }); // 3px past n2's out-jack — sub-threshold
-check(CC.isDragActive() === false && !ghostEl(), 'B2: sub-threshold move detaches nothing (no flag, no ghost)');
+check(CC.isDragActive() === true && !ghostEl(), 'B2: sub-threshold move detaches nothing (flag stays up from the press, no ghost yet)');
 drop({ x: 99, y: 208 });
 check(
   buildCount === baseBuild && saves.length === baseSaves &&
@@ -503,7 +506,7 @@ check(seamRequests.length === baseSeam + 1 && buildCount === baseBuild && saves.
   'E3: one seam request and zero adapter-owned graph/persistence writes');
 
 // ----------------------------------------------------------------------
-console.log('F. relink 4/4 — the out-anchor IN point links the dragged node LAST');
+console.log('F. relink 4/4 — the OUT corner-exit point links the dragged node LAST');
 CC.renderModel(model3());
 baseBuild = buildCount;
 baseSaves = saves.length;
@@ -512,9 +515,10 @@ grabJack('section-out', 'n1');
 move({ x: 120, y: 120 }); // detach
 move(OUT_IN);
 check(jackAt('out-in').classList.contains('cord-jack-hot'),
-  'F1: the out-anchor IN point highlights for an OUT end');
+  'F1: the board-corner OUT exit point highlights for an OUT end');
 drop(OUT_IN);
-check(domOrder().join('|') === 'n2|n3|n1', 'F2: out-in links n1 as the LAST node');
+check(domOrder().join('|') === 'n2|n3|n1',
+  'F2: out-in links n1 as the LAST node (the corner exit is the chain\'s end port)');
 check(seamRequests.length === baseSeam + 1 && buildCount === baseBuild && saves.length === baseSaves,
   'F3: one seam request and zero adapter-owned graph/persistence writes');
 

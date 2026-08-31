@@ -270,7 +270,7 @@ function createSandbox() {
     fetch: function () {
       return new Promise(function () {});
     },
-    AudioEngine: { isStarted: false }
+    AudioEngine: { isStarted: true }
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
@@ -643,7 +643,19 @@ async function main() {
     'D1: a non-string get_capabilities focus resolves INVALID_ARGUMENTS'
   );
 
-  var chainResult = await byName(apiRegisterCalls, 'get_chain').execute({});
+  // Reads stay available pre-Start (#15 parity rule: only chain MUTATIONS
+  // refuse with ENGINE_NOT_STARTED). get_chain's honest pre-Start shape
+  // (empty nodes + the Start note) is asserted against a not-started
+  // engine; the sandbox stub itself models a STARTED engine so mutation
+  // checks reach the real planning stack.
+  var sandboxForRead = createSandbox();
+  sandboxForRead.AudioEngine = { isStarted: false };
+  [
+    'src/node-types.js',
+    'src/mcp-server.js',
+    'src/mcp-tools.js'
+  ].forEach(function (relPath) { loadSrc(sandboxForRead, relPath); });
+  var chainResult = await getTool(sandboxForRead, 'get_chain').execute({});
   check(
     !!chainResult &&
       chainResult.schemaVersion === 1 &&

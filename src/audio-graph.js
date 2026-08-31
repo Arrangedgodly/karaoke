@@ -267,13 +267,12 @@
       note.setAttribute('role', 'note');
       note.textContent =
         'Safe output: ON, ceiling ' + OUTPUT_CEILING_DBFS + ' dBFS';
-      // "Next to the OUT anchor": the canvas's LAST .anchor is OUT
-      // (index.html order: MIC IN anchor ... chain list ... OUT anchor).
-      // Insert immediately after it; fall back to appending at the end.
-      var anchors = canvasEl.querySelectorAll('.anchor');
-      var outAnchor = anchors.length > 0 ? anchors[anchors.length - 1] : null;
-      if (outAnchor && outAnchor.parentNode === canvasEl) {
-        canvasEl.insertBefore(note, outAnchor.nextSibling);
+      // 2026-08-31 cord round: the in-flow OUT anchor is retired — the
+      // note rides the pinned BASE PLATE next to the OUT meter unit (the
+      // operator's output ground truth), never inside the scrolling face.
+      var footer = document.querySelector('.canvas-footer');
+      if (footer) {
+        footer.appendChild(note);
       } else {
         canvasEl.appendChild(note);
       }
@@ -684,37 +683,58 @@
       oldModelTypes[entry.id] = entry.type;
     });
 
-    var resolvedNodes = model.map(function (entry) {
-      // Issue #1 (P0): reuse demands an id AND TYPE match against the
-      // model the live instances were built from. Id alone is not
-      // identity — a live instance is a concrete GainNode or
-      // DynamicsCompressorNode, not a label, so "reusing" it for an entry
-      // whose type changed would RELABEL a physically wrong node: worst
-      // case a GainNode left standing in for the required terminal
-      // limiter while the model and every tool result claim a limiter is
-      // present. A type-changed id therefore falls through to the factory
-      // path below (fresh instance, entry params applied at creation),
-      // and Phase 2's teardown then treats its old instance exactly like
-      // any dropped node — disconnected, never carried into the new
-      // nodeInstances map. Same id + same type remains a genuine reuse:
-      // the SAME object is returned, preserving internal DSP state (e.g.
-      // a compressor's envelope, a delay's buffer contents) across a pure
-      // reorder or param-only change.
-      if (
-        Object.prototype.hasOwnProperty.call(oldNodeInstances, entry.id) &&
-        oldModelTypes[entry.id] === entry.type
-      ) {
-        return oldNodeInstances[entry.id];
-      }
-      var factory = nodeFactories[entry.type];
-      if (!factory) {
-        throw new Error(
-          'AudioGraph.buildGraph: unknown node type "' + entry.type + '" ' +
-          '(id "' + entry.id + '"). Register it first with AudioGraph.registerNodeType().'
-        );
-      }
-      return factory(audioContext, entry.params || {});
-    });
+    var resolvedNodes;
+    var createdThisBuild = [];
+    try {
+      resolvedNodes = model.map(function (entry) {
+        // Issue #1 (P0): reuse demands an id AND TYPE match against the
+        // model the live instances were built from. Id alone is not
+        // identity — a live instance is a concrete GainNode or
+        // DynamicsCompressorNode, not a label, so "reusing" it for an entry
+        // whose type changed would RELABEL a physically wrong node: worst
+        // case a GainNode left standing in for the required terminal
+        // limiter while the model and every tool result claim a limiter is
+        // present. A type-changed id therefore falls through to the factory
+        // path below (fresh instance, entry params applied at creation),
+        // and Phase 2's teardown then treats its old instance exactly like
+        // any dropped node — disconnected, never carried into the new
+        // nodeInstances map. Same id + same type remains a genuine reuse:
+        // the SAME object is returned, preserving internal DSP state (e.g.
+        // a compressor's envelope, a delay's buffer contents) across a pure
+        // reorder or param-only change.
+        if (
+          Object.prototype.hasOwnProperty.call(oldNodeInstances, entry.id) &&
+          oldModelTypes[entry.id] === entry.type
+        ) {
+          return oldNodeInstances[entry.id];
+        }
+        var factory = nodeFactories[entry.type];
+        if (!factory) {
+          throw new Error(
+            'AudioGraph.buildGraph: unknown node type "' + entry.type + '" ' +
+            '(id "' + entry.id + '"). Register it first with AudioGraph.registerNodeType().'
+          );
+        }
+        var fresh = factory(audioContext, entry.params || {});
+        // Created-but-never-committed instances are this staged build's
+        // disposal responsibility. A Tone-backed composite holds worklet
+        // clocks and internal nodes that a plain disconnect never releases.
+        createdThisBuild.push(fresh);
+        return fresh;
+      });
+    } catch (phase1Err) {
+      // A mid-map throw (e.g. an unknown type past the first factory
+      // call) leaves this build's earlier creations orphaned — they were
+      // never connected (no .connect() runs in Phase 1) but a Tone node
+      // still owns live resources. Release them, then rethrow: the live
+      // chain is untouched, exactly as before.
+      createdThisBuild.forEach(function (node) {
+        if (node && typeof node.dispose === 'function') {
+          try { node.dispose(); } catch (e) { /* already gone */ }
+        }
+      });
+      throw phase1Err;
+    }
 
     // ---- Phase 2 (deferred): duck, then perform the actual graph surgery ----
     // Cancel any previously-scheduled-but-not-yet-executed rewire (debounces

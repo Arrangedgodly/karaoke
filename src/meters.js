@@ -658,39 +658,39 @@
       lastAriaText: 'silence',
     };
 
-    if (side === SIDE_OUT) {
-      buildFooterMirror(units[side], anchorEl);
-    }
   }
 
-  /** R2-1 — the pinned OUT footer: one compact row (silkscreen "OUT"
-   *  legend + the SAME 96 x 26 canvas scene + the SAME mono dB readout)
-   *  appended to the canvas PANEL immediately after the scrolling
-   *  .canvas, so output level stays inside the always-visible region of
-   *  the bounded vertical canvas no matter where .canvas is scrolled or
-   *  how cards collapse. Renders the OUT unit's own state — one feed,
-   *  one ballistics, two views (paint()/updateOutputs() fan out to
-   *  u.views). Its canvas is aria-hidden (the anchor meter's role=meter
-   *  already carries announcements; a duplicate announcer would only
-   *  double-talk). Silently skipped when the panel or the .canvas
-   *  element cannot be found (bare-harness safety), and when a footer
-   *  already exists (idempotence). */
-  function buildFooterMirror(u, anchorEl) {
-    if (!anchorEl.closest || typeof document.createElement !== 'function') {
-      return;
+  /**
+   * 2026-08-31 cord round: the in-flow OUT anchor is RETIRED (the chain's
+   * cable exits at the board's bottom-right toward the base plate). The
+   * OUTPUT meter therefore lives ONLY in the pinned footer — this builds
+   * the footer row (legend + the PRIMARY 96x26 canvas + mono readout)
+   * and the unit state that owns it. The canvas carries role=meter (it
+   * is the one output announcer — no anchor duplicate exists anymore).
+   * Silently skipped when the panel or .canvas cannot be found
+   * (bare-harness safety) or when a footer already exists
+   * (idempotence). */
+  function buildOutFooterUnit() {
+    if (typeof document.createElement !== 'function' ||
+        typeof document.querySelector !== 'function') {
+      return false;
     }
-    var panel = anchorEl.closest('.canvas-panel');
-    var canvasEl = anchorEl.closest('.canvas');
-    if (!panel || !canvasEl || !panel.insertBefore) {
-      return;
+    var panel = document.querySelector('.canvas-panel');
+    var canvasEl = document.getElementById('chain-canvas');
+    if (!panel || !canvasEl || !panel.insertBefore ||
+        panel.querySelector('.canvas-footer')) {
+      return false;
     }
-    if (panel.querySelector('.canvas-footer')) {
-      return;
-    }
+
+    var dpr = clampNum(
+      (typeof window !== 'undefined' && isNum(window.devicePixelRatio)) ? window.devicePixelRatio : 1,
+      1,
+      3
+    );
 
     var footer = document.createElement('div');
     footer.className = 'canvas-footer';
-    footer.setAttribute('data-meter-footer', SIDE_OUT);
+    footer.setAttribute('data-meter-footer', 'out');
 
     var legend = document.createElement('span');
     legend.className = 'canvas-footer-legend';
@@ -698,38 +698,64 @@
 
     var unit = document.createElement('div');
     unit.className = 'meter-unit canvas-footer-unit';
+    unit.setAttribute('data-meter', 'out');
 
     var canvas = document.createElement('canvas');
     canvas.className = 'meter-canvas';
-    // Same logical size as the anchor canvas (see the contract block:
-    // ONE 96 x 26 size serves both views — no size variant exists).
-    canvas.width = CANVAS_W * u.dpr;
-    canvas.height = CANVAS_H * u.dpr;
-    canvas.setAttribute('aria-hidden', 'true');
+    canvas.width = CANVAS_W * dpr;
+    canvas.height = CANVAS_H * dpr;
+    canvas.setAttribute('role', 'meter');
+    canvas.setAttribute('aria-valuemin', String(SCALE_MIN));
+    canvas.setAttribute('aria-valuemax', String(SCALE_MAX));
+    canvas.setAttribute('aria-valuenow', String(SCALE_MIN));
+    canvas.setAttribute('aria-valuetext', 'silence');
+    canvas.setAttribute('aria-label', 'Output level');
 
     var readout = document.createElement('div');
     readout.className = 'meter-readout';
-    readout.textContent = u.readoutText;
+    readout.textContent = '\u2212\u221E';
+
+    var srLabel = document.createElement('span');
+    srLabel.className = 'sr-only';
+    srLabel.textContent = 'Output level';
 
     unit.appendChild(canvas);
     unit.appendChild(readout);
+    unit.appendChild(srLabel);
     footer.appendChild(legend);
     footer.appendChild(unit);
-    // Between the scrolling .canvas and the flow toggle — a PANEL child,
-    // never a .canvas child (no flex-rhythm or insertion-point impact).
+    // A PANEL child right after the scrolling .canvas — the pinned base
+    // plate (never inside .canvas, so no scroll or insertion impact).
     panel.insertBefore(footer, canvasEl.nextSibling);
 
-    var fctx = null;
+    var ctx = null;
     try {
-      fctx = canvas.getContext ? canvas.getContext('2d') : null;
+      ctx = canvas.getContext ? canvas.getContext('2d') : null;
     } catch (err) {
-      fctx = null;
+      ctx = null;
     }
-    u.views.push({ ctx: fctx, readoutEl: readout });
-    // No immediate paint here: colors are not resolved until init()'s
-    // post-build resolveColors() (and a buildUnit-time paint would read
-    // a null palette). init()'s immediate considerPaint pass repaints
-    // every unit — footer views included — once tokens are live.
+
+    units[SIDE_OUT] = {
+      side: SIDE_OUT,
+      canvas: canvas,
+      readoutEl: readout,
+      ctx: ctx,
+      dpr: dpr,
+      views: [],
+      lastT: null,
+      feed: null,
+      peak: SILENT_DB,
+      rms: SILENT_DB,
+      hold: SILENT_DB,
+      holdUntil: 0,
+      clipUntil: 0,
+      clip: false,
+      lastPaint: null,
+      readoutText: '\u2212\u221E',
+      lastAriaT: 0,
+      lastAriaText: 'silence'
+    };
+    return true;
   }
 
   /** Clear all ballistics + input on one unit (reset() and the
@@ -811,6 +837,9 @@
       }
       buildUnit(side, anchors[i]);
       found++;
+    }
+    if (!units[SIDE_OUT]) {
+      buildOutFooterUnit();
     }
     if (found === 0) {
       return false;

@@ -796,17 +796,22 @@ async function main() {
   }
 
   // --------------------------------------------------------------------
-  console.log('K. startup restore failure stops capture through the ChainEditing adapter');
+  console.log('K. startup restore failure falls back safely through the ChainEditing adapter');
   // --------------------------------------------------------------------
   {
     var sandbox3 = createSandbox();
-    var startupRequest = null;
+    var startupRequests = [];
+    var restoredAutosave = null;
     sandbox3.Persistence = {
       loadInitialModel: function () {
         return [{ id: 'saved', type: 'gain', params: { gainDb: 1 } }];
       },
       loadInitialLayout: function () {
         return { saved: { x: 32, y: 16 } };
+      },
+      saveCurrentChain: function (model, layout) {
+        restoredAutosave = { model: model, layout: layout };
+        return { saved: true };
       }
     };
     sandbox3.ChainCanvas = {
@@ -814,7 +819,10 @@ async function main() {
     };
     sandbox3.ChainEditing = {
       apply: function (request) {
-        startupRequest = request;
+        startupRequests.push(request);
+        if (request.candidate.length === 0) {
+          return Promise.resolve({ applied: true, saved: true, mode: 'structural' });
+        }
         var rejection = new Error('saved chain could not become live');
         rejection.code = 'CHAIN_APPLY_FAILED';
         rejection.rollback = { attempted: true, succeeded: true };
@@ -829,15 +837,17 @@ async function main() {
     resolveGumAt(0, 'd1');
     await settle();
     check(
-      startupRequest && startupRequest.source === 'startup' &&
-        startupRequest.forceStructural === true && startupRequest.candidate[0].id === 'saved',
+      startupRequests[0] && startupRequests[0].source === 'startup' &&
+        startupRequests[0].forceStructural === true && startupRequests[0].candidate[0].id === 'saved',
       'K1: the real startup adapter routes the saved chain through ChainEditing'
     );
     check(
-      sandbox3.AudioEngine.isStarted === false &&
-        sandbox3.__els['start-button'].disabled === false &&
-        sandbox3.__els['status'].classList.contains('error'),
-      'K2: rejected startup restoration stops mic capture and returns to a retryable failed state'
+      startupRequests.length === 2 && startupRequests[1].candidate.length === 0 &&
+        sandbox3.AudioEngine.isStarted === true &&
+        sandbox3.__els['status-text'].textContent ===
+          'Live — saved chain failed to load; started empty' &&
+        restoredAutosave && restoredAutosave.model[0].id === 'saved',
+      'K2: rejected restoration keeps capture live on an empty chain and preserves the saved model'
     );
   }
 

@@ -298,7 +298,7 @@ function createEnv() {
     localStorage: storage
   };
   sandbox.window = sandbox;
-  sandbox.AudioEngine = { isStarted: false };
+  sandbox.AudioEngine = { isStarted: true };
   vm.createContext(sandbox);
   env.sandbox = sandbox;
 
@@ -327,6 +327,13 @@ function createEnv() {
       filename: relPath
     });
   });
+
+  // The harness models a STARTED engine (isStarted: true, so mcp-tools'
+  // pre-Start refusal stays out of the way) but has no real
+  // AudioContext — a started page already HAS its graph, so the rebuild
+  // call is no-op'd instead of running the real audio-graph machinery
+  // against a context that does not exist.
+  sandbox.AudioGraph.buildGraph = function () {};
 
   sandbox.AgentUI = {
     pushUndo: function (entry) {

@@ -225,17 +225,20 @@
         <!--
           Refinement entry 2: the empty-hint is STATE-AWARE. This static
           default is the PRE-START copy — the palette is pointer-locked
-          until Start succeeds, so teaching "drag" here would be an
+          until Start succeeds, so teaching the add verb here would be an
           invitation the gated surface cannot honor (critique P2).
           src/canvas.js's onEngineStarted() flips this element to the
-          cycle-1 drag teaching copy ("Drag an effect here to start
-          building your chain", verbatim) at the exact transition where
-          dragging becomes possible; styles/main.css retires the dashed
-          drop-target affordance while the engine-not-started gate holds.
+          working add verbs ("Click an effect to add it to the chain",
+          verbatim — palette drag is retired; click and keyboard are the
+          add paths) at the exact transition where adding becomes
+          possible; styles/main.css retires the dashed drop-target
+          affordance while the engine-not-started gate holds.
         -->
         <div class="empty-hint" id="empty-hint">Press Start to power on</div>
-        <span class="arrow" aria-hidden="true">→</span>
-        <div class="anchor">OUT</div>
+        <!-- 2026-08-31 cord round: the in-flow OUT anchor is RETIRED — the
+             chain's cable exits at the board's bottom-right corner toward
+             the fixed base-plate OUT unit (the footer's meter port), the
+             mirror of MIC IN's fixed header unit. -->
       </div>
     </div>
 
@@ -256,6 +259,14 @@
       <div class="preset-current">
         <span id="current-preset-name" class="preset-name">Unsaved chain</span>
         <span id="unsaved-indicator" class="unsaved-dot" style="display:none;">• unsaved changes</span>
+      </div>
+      <!-- #16 finding: autosave failures were console-only, so edits could
+           look durable and then vanish on reload. src/main.js shows this
+           latched warning while window.Persistence.isSaveFailed() is true
+           (the 'chain-autosave-failed'/'chain-autosave-recovered' events
+           drive it); it clears only after a later save VERIFIES. -->
+      <div class="autosave-warning" id="autosave-warning" role="alert" hidden>
+        Autosave is failing — changes will not survive a reload
       </div>
       <button id="save-preset-btn" class="control" type="button">Save As…</button>
       <label for="preset-select" class="sr-only">Saved presets</label>
@@ -363,14 +374,6 @@
   -->
   <script src="src/factory-presets.js"></script>
   <script src="src/preset-store.js"></script>
-  <!--
-    DEL-2: vendored locally (vendor/sortable.min.js, SortableJS 1.15.7, MIT)
-    instead of loaded from a CDN — this app is meant to run at
-    locally-hosted events with no internet dependency assumed (see DEL-1's
-    own acceptance criteria), and a CDN script tag would silently break
-    drag-and-drop at any venue without a live internet connection.
-  -->
-  <script src="vendor/sortable.min.js"></script>
   <script src="src/canvas.js"></script>
   <script src="src/persistence.js"></script>
   <!--
@@ -464,8 +467,5 @@
   -->
   <script src="src/status-readouts.js"></script>
   <script src="src/main.js"></script>
-<!-- impeccable-live-start -->
-<script src="http://localhost:8400/live.js?token=ff754d30-76f8-417f-ae5c-209f190c0c99"></script>
-<!-- impeccable-live-end -->
 </body>
 </html>

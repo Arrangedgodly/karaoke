@@ -109,7 +109,7 @@
   var presetNoteTimer = null;
   // Issue #20: unlike the transient preset note, this warning is latched
   // until ChainEditing observes a later verified autosave.
-  var persistenceWarningEl = null;
+  var persistenceWarningEl = document.getElementById('autosave-warning');
 
   // R2-3: the inline Save As naming row (lazily created on first use —
   // see openNamingRow) and its pieces. `namingRowOpen` mirrors the row's
@@ -451,13 +451,13 @@
     if (!persistenceWarningEl) {
       persistenceWarningEl = document.createElement('p');
       persistenceWarningEl.id = 'autosave-warning';
-      persistenceWarningEl.className = 'persistence-warning';
+      persistenceWarningEl.className = 'autosave-warning';
       persistenceWarningEl.setAttribute('role', 'alert');
-      persistenceWarningEl.style.display = 'none';
+      persistenceWarningEl.hidden = true;
       host.appendChild(persistenceWarningEl);
     }
     persistenceWarningEl.textContent = message || '';
-    persistenceWarningEl.style.display = message ? '' : 'none';
+    persistenceWarningEl.hidden = !message;
   }
 
   /**
@@ -591,6 +591,8 @@
     window.ChainEditing.apply({
       source: 'preset',
       candidate: preset.nodes,
+      layout: null,
+      renderOptions: { freshSeats: true },
       forceStructural: true,
       preset: { name: preset.name, modified: false }
     }).catch(function (err) {

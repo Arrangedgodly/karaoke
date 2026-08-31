@@ -201,8 +201,6 @@ canvasPanelEl.className = 'canvas-panel';
 var canvasFaceEl = new FakeElement('div'); // #chain-canvas — the cord layer's host
 var micAnchorEl = new FakeElement('div');
 micAnchorEl.className = 'anchor';
-var outAnchorEl = new FakeElement('div');
-outAnchorEl.className = 'anchor';
 var arrowElA = new FakeElement('span');
 arrowElA.className = 'arrow';
 var arrowElB = new FakeElement('span');
@@ -212,7 +210,6 @@ canvasFaceEl.appendChild(arrowElA);
 canvasFaceEl.appendChild(chainListEl);
 canvasFaceEl.appendChild(emptyHintEl);
 canvasFaceEl.appendChild(arrowElB);
-canvasFaceEl.appendChild(outAnchorEl);
 // No offsetLeft/offsetTop on chainListEl — board origin is {0, 0}, so
 // jack coordinates below are the positions map verbatim (FEW-3/4 contract).
 
@@ -437,17 +434,26 @@ function tabOrderEqualsDomOrder() {
 // border, OUT at the middle of its RIGHT.
 var CARD_W = 160;
 var CARD_H = 48;
-var MIC_OUT = { x: 16, y: -32 };
+var MIC_OUT = { x: 16, y: 0 }; // content-top drop under the header unit
 
 function jackPt(kind, id) {
   if (kind === 'mic-out') { return MIC_OUT; }
   var layout = CC.currentLayout();
   if (kind === 'out-in') {
+    // The board's bottom-right corner exit (2026-08-31 cord round):
+    // rightmost seat + card width - one grid unit in; extent foot - one
+    // grid unit — mirroring src/canvas.js's outInPoint over the fallback
+    // card box (160 x 48).
+    var maxX = 0;
     var maxY = 0;
     Object.keys(layout).forEach(function (k) {
+      if (layout[k].x > maxX) { maxX = layout[k].x; }
       if (layout[k].y > maxY) { maxY = layout[k].y; }
     });
-    return { x: 16, y: maxY + 160 };
+    return {
+      x: (maxX ? maxX + 160 : 0) - 16,
+      y: (maxY ? maxY + 160 : 0) - 16
+    };
   }
   var seat = layout[id] || { x: 0, y: 16 };
   return kind === 'section-in'
@@ -564,7 +570,7 @@ resetBoard();
 relink('section-out', 'n1', 'out-in'); // n1's OUT on the out anchor: LAST
 check(
   JSON.stringify(domOrder()) === JSON.stringify(['n2', 'n3', 'n1']),
-  'B4: OUT-end relink on the out-anchor IN point: the dragged section is LAST in DOM order'
+  'B4: OUT-end relink on the OUT corner-exit point: the dragged section is LAST in DOM order'
 );
 check(tabOrderEqualsDomOrder(), 'B5: the tab order followed (n2, n3, n1)');
 

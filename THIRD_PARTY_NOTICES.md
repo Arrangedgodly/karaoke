@@ -3,17 +3,10 @@
 This project's own code is licensed under the MIT License — see [LICENSE](LICENSE).
 The bundled third-party assets below are distributed under their own terms.
 
-## Sortable.js 1.15.7 (MIT)
-
-- **Vendored at:** `vendor/sortable.min.js` (license banner retained in the file header)
-- **Upstream:** https://github.com/SortableJS/Sortable
-- **License:** MIT — Copyright (c) 2013-2015 Lebedev Konstantin <ibnRubaXa@gmail.com>
-  and contributors. Full text:
-  https://github.com/SortableJS/Sortable/blob/master/LICENSE
-
-Used for drag-and-drop chain building and reordering (palette → chain, card
-reorder) under the project's no-build-step constraint. Unmodified upstream
-build.
+(Sortable.js 1.15.7, MIT, was vendored through 2026-08-31 for drag-and-drop
+chain building. The palette drag was retired that day — click and keyboard
+activation are the add verbs — and the vendored file was removed, so it is
+no longer bundled with this project.)
 
 ## Tone.js 15.1.22 (MIT)
 

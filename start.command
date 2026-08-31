@@ -15,7 +15,7 @@ else
     exit 1
 fi
 
-echo "Starting the Karaoke Chain Builder server..."
+echo "Starting the VOXCHAIN server..."
 echo "Do not close this window while using the app - closing it stops the app."
 echo ""
 
