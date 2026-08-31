@@ -818,3 +818,14 @@ half, FEW-8, VIS-1, QA-3 remainder, redesign items 3/5-7 (shed at
 sitting), item-4 extract (protected, queued for a calm run);
 create-readme trimmed into QA-4's README audit (disclosed). REMAINING
 GATE: user acceptance (QA-5) — ears/eyes on the delivered app.
+
+### PR #19 merged (2026-08-30, user-directed)
+codex/natural-language-voice-intents → redesign/pattern-machine
+(cycle-3 reconciliation pattern): agent sound-design vocabulary via
+get_capabilities({focus:'sound_design'}) — plain-language voice goals
+(deeper/warm/ghostly/gritty/robotic…) mapped to registered params with
+mild-to-strong starting values; policy response byte-equivalent; ten
+tools unchanged. Auto-merge clean (no conflicts); voxchain app id
+verified intact; suite green post-merge (30 files incl. their +105
+test checks). Branch consolidation to main awaits user acceptance +
+push decision.
