@@ -468,6 +468,13 @@ async function main() {
   loadSrc(sandbox, 'src/node-chorus.js');
   loadSrc(sandbox, 'src/node-gate.js');
   loadSrc(sandbox, 'src/node-autotune.js');
+  // cycle 4: the Tone-backed types the guide's transposed/spacey entries
+  // reference (registration only — ToneAdapter.register needs no Tone).
+  loadSrc(sandbox, 'src/tone-adapter.js');
+  loadSrc(sandbox, 'src/node-pitchshift.js');
+  loadSrc(sandbox, 'src/node-tremolo.js');
+  loadSrc(sandbox, 'src/node-bitcrusher.js');
+  loadSrc(sandbox, 'src/node-phaser.js');
   loadSrc(sandbox, 'src/preset-schema.js');
   loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
@@ -504,15 +511,22 @@ async function main() {
   //   experimental.<type> = disclosure note (autotune only)
   var byType = caps.nodeTypes;
   var typeKeys = Object.keys(byType);
-  check(typeKeys.length === 10, 'A1: readout lists all 10 registered types');
+  // 10 through cycle 3; +4 Tone-backed types in cycle 4 (loaded above).
+  check(typeKeys.length === 14, 'A1: readout lists all 14 registered types');
   check(!!byType.autotune && !!byType.gate && !!byType.distortion && !!byType.chorus,
     'A2: gate/distortion/chorus/autotune all present in the readout');
   check(caps.experimental && typeof caps.experimental.autotune === 'string' &&
     /EXPERIMENTAL/i.test(caps.experimental.autotune),
     'A3: autotune carries the experimental disclosure note');
-  check(Object.keys(caps.experimental || {}).length === 1 &&
+  // cycle 3: autotune alone. cycle 4: the four Tone-backed types join it
+  // (same badge + disclosure mechanism; gate and the other natives never).
+  var badged = Object.keys(caps.experimental || {});
+  check(badged.length === 5 &&
+    ['autotune', 'pitchshift', 'tremolo', 'bitcrusher', 'phaser'].every(function (t) {
+      return badged.indexOf(t) !== -1 && typeof caps.experimental[t] === 'string';
+    }) &&
     caps.experimental.gate === undefined,
-    'A4: autotune is the ONLY badged type');
+    'A4: exactly autotune + the four Tone types are badged');
   check(sandbox.NodeTypes.isExperimental('autotune') === true &&
     sandbox.NodeTypes.isExperimental('gate') === false,
     'A5: the registry itself is the badge source (NodeTypes.isExperimental)');
@@ -561,7 +575,9 @@ async function main() {
       }
     });
   });
-  check(guideSteps.length === 24 && guideSteps.every(function (entry) {
+  // 24 through cycle 3; +3 from the cycle-4 guide additions (transposed 1,
+  // spacey 2 — src/mcp-tools.js SOUND_DESIGN_GUIDE).
+  check(guideSteps.length === 27 && guideSteps.every(function (entry) {
     return byType[entry.type] && byType[entry.type][entry.param];
   }), 'A17: every actionable guide step names a registered node parameter');
   check(guideSteps.every(function (entry) {

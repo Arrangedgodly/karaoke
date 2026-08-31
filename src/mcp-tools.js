@@ -1173,7 +1173,13 @@
       clear: ['eq lowGain -2..-4 dB', 'reverb mix 0..15%'],
       thick: ['chorus depthMs 2..4 ms', 'chorus rateHz 0.8..1.8 Hz', 'chorus mix 15..35%'],
       gritty: ['distortion drive 0.15..0.4', 'distortion tone 0.4..0.7', 'distortion output -6..-3 dB'],
-      robotic: ['autotune retune 40..0 ms', 'autotune mix 70..100%', 'autotune scale Chromatic', 'EXPERIMENTAL: verify by ear before a show.']
+      robotic: ['autotune retune 40..0 ms', 'autotune mix 70..100%', 'autotune scale Chromatic', 'EXPERIMENTAL: verify by ear before a show.'],
+      // cycle 4 additions (Tone-backed types): the two concepts the 1500-char
+      // PR #18 ceiling has room for. pitchshift is the app's ONLY actual-pitch
+      // control (see `deeper`'s honesty note); both types' EXPERIMENTAL status
+      // rides the default capabilities readout's experimental map.
+      transposed: ['pitchshift pitch -4..+4 st'],
+      spacey: ['phaser rateHz 0.3..1 Hz', 'phaser depth 40..70%']
     },
     boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
   };

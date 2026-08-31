@@ -502,6 +502,28 @@ async function main() {
   check(liveComp.tone.pitch === 12, 'D5: live Tone node received the clamped 12');
 
   // --------------------------------------------------------------------
+  console.log('E. sound-design guide: additive vocabulary for the Tone types');
+  // --------------------------------------------------------------------
+
+  var guide = await getTool(sandbox, 'get_capabilities').execute({ focus: 'sound_design' });
+  check(guide && guide.focus === 'sound_design', 'E1: guide served for focus sound_design');
+  check(
+    guide && guide.vocabulary && Array.isArray(guide.vocabulary.transposed) &&
+    guide.vocabulary.transposed.indexOf('pitchshift pitch -4..+4 st') !== -1,
+    'E1: transposed entry maps to pitchshift pitch inside the spec range'
+  );
+  check(
+    guide && guide.vocabulary && Array.isArray(guide.vocabulary.spacey) &&
+    guide.vocabulary.spacey.indexOf('phaser rateHz 0.3..1 Hz') !== -1 &&
+    guide.vocabulary.spacey.indexOf('phaser depth 40..70%') !== -1,
+    'E1: spacey entry maps to phaser rate/depth inside the spec ranges'
+  );
+  check(
+    JSON.stringify(guide).length <= 1500,
+    'E2: guide payload still inside the PR #18 1500-char ceiling (' + JSON.stringify(guide).length + ')'
+  );
+
+  // --------------------------------------------------------------------
   if (failures.length === 0) {
     console.log('PASS: Tone effects (pitchshift/tremolo/bitcrusher/phaser) contract');
     return 0;
