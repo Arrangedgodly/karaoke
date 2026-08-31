@@ -149,6 +149,22 @@ function main() {
     a3: { x: 96, y: 520, scale: 0.75, flow: 'horizontal' }
   };
 
+  // Issue #20: autosave is part of ChainEditing's result, so this adapter
+  // must distinguish a verified write from a silent storage drop.
+  console.log('0. save result truthfulness');
+  {
+    var truthEnv = createEnv();
+    var healthy = truthEnv.sandbox.Persistence.saveCurrentChain(chainA(), LAYOUT_FULL);
+    check(healthy && healthy.saved === true,
+      '0A: a write whose exact payload reads back reports saved:true');
+
+    var droppedEnv = createEnv();
+    droppedEnv.storage.setItem = function () { /* browser silently dropped the write */ };
+    var dropped = droppedEnv.sandbox.Persistence.saveCurrentChain(chainA(), LAYOUT_FULL);
+    check(dropped && dropped.saved === false && dropped.error,
+      '0B: a silent storage drop reports saved:false with an error');
+  }
+
   // ----------------------------------------------------------------
   console.log('A. round-trip: save with layout, reload keeps it exactly');
   // ----------------------------------------------------------------

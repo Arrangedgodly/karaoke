@@ -249,16 +249,23 @@
       } else {
         layoutToSave = layout;
       }
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          autosaveVersion: AUTOSAVE_VERSION,
-          chain: serialized,
-          layout: sanitizeLayout(layoutToSave, knownIds)
-        })
-      );
+      var payload = JSON.stringify({
+        autosaveVersion: AUTOSAVE_VERSION,
+        chain: serialized,
+        layout: sanitizeLayout(layoutToSave, knownIds)
+      });
+      localStorage.setItem(STORAGE_KEY, payload);
+
+      // Issue #20: setItem returning is not proof of persistence. Some
+      // storage shims/privacy modes silently drop a write, so verify the
+      // exact bytes through the same slot before reporting saved:true.
+      if (localStorage.getItem(STORAGE_KEY) !== payload) {
+        throw new Error('Autosave verification failed: storage did not retain the written payload.');
+      }
+      return { saved: true };
     } catch (err) {
       console.error('Persistence: failed to save chain to localStorage', err);
+      return { saved: false, error: err };
     }
   }
 

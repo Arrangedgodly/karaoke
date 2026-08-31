@@ -408,6 +408,19 @@
     emit({ type: 'track-lost', reason: reason || 'device' });
   }
 
+  /**
+   * Explicitly return to the pre-start session shape. Used when startup
+   * acquired a microphone but the initial chain could not be restored:
+   * the UI must never show a failed start over a still-live capture.
+   */
+  function stop(reason) {
+    var hadSession = !!mediaStream || !!sourceNode || started;
+    teardownSession();
+    if (hadSession) {
+      emit({ type: 'track-lost', reason: reason || 'stopped' });
+    }
+  }
+
   function getDeviceIdFromStream(stream) {
     var track = stream.getAudioTracks()[0];
     if (!track) {
@@ -427,6 +440,7 @@
     start: start,
     listInputDevices: listInputDevices,
     switchInputDevice: switchInputDevice,
+    stop: stop,
 
     // Issue #4 lifecycle surface.
     onLifecycle: onLifecycle,

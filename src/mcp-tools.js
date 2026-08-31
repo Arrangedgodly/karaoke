@@ -719,6 +719,11 @@
    */
   var DRAG_QUEUE_TIMEOUT_MS = 5000;
   var DRAG_POLL_MS = 50;
+  // Agent mutations include policy planning before ChainEditing.apply().
+  // Serialize that whole read-plan-apply unit so two simultaneous tool
+  // calls cannot both plan from the same accepted pre-state and have the
+  // later candidate overwrite the earlier one.
+  var agentMutationQueue = Promise.resolve();
 
   /**
    * Counter for the node ids this layer mints on add_node (the tool takes
@@ -1270,6 +1275,12 @@
    */
   function readCurrentModel() {
     try {
+      if (window.ChainEditing && typeof window.ChainEditing.getModel === 'function') {
+        var accepted = window.ChainEditing.getModel();
+        if (Array.isArray(accepted)) {
+          return accepted;
+        }
+      }
       if (window.ChainCanvas && typeof window.ChainCanvas.getCurrentModel === 'function') {
         var model = window.ChainCanvas.getCurrentModel();
         if (Array.isArray(model)) {
@@ -4241,6 +4252,8 @@
    *   tools pass nothing and get today's behavior byte-for-byte):
    *   skipParamOnlyFastPath (boolean) — force the FULL loadModel path
    *   even for a param-shaped candidate (a preset load is structural);
+   *   presetState (plan) — production ChainEditing preset display state
+   *   applied only after the live chain commits;
    *   postApply (plan, snapshot) — run after the write succeeded and
    *   BEFORE the undo entry is pushed, for tool-specific display
    *   semantics (load_preset shows the preset name + clears the unsaved
@@ -4280,7 +4293,9 @@
         reportAgentRejection(name, invalid);
         return Promise.resolve(invalid);
       }
-      return waitForDragSettle(signal).then(function (settled) {
+      var run = agentMutationQueue.then(function () {
+        return waitForDragSettle(signal);
+      }).then(function (settled) {
         if (settled === 'aborted') {
           return abortedResult(name);
         }
@@ -4289,14 +4304,21 @@
           reportAgentRejection(name, busy);
           return busy;
         }
-        // TOCTOU recheck: the signal may have aborted in the same tick the
-        // settle resolved (or even between the poll's drag check and this
-        // line). Re-verify immediately before anything is planned, written
-        // or disclosed — the apply below must never follow a cancellation.
-        if (signalAborted(signal)) {
-          return abortedResult(name);
-        }
-        try {
+        // Wait for an already-accepted human/preset/startup edit before
+        // planning. This keeps the policy candidate based on the model the
+        // ChainEditing queue will actually edit, not a stale pre-commit
+        // snapshot from a simultaneous human gesture.
+        var ready =
+          window.ChainEditing && typeof window.ChainEditing.whenIdle === 'function'
+            ? window.ChainEditing.whenIdle()
+            : Promise.resolve();
+        return ready.then(function () {
+          // TOCTOU recheck: cancellation may have arrived during drag wait
+          // or while waiting for the shared mutation queue.
+          if (signalAborted(signal)) {
+            return abortedResult(name);
+          }
+          try {
           var model = readCurrentModel(); // fresh, post-drag, read-only copy
           var plan = planner(input, model);
           if (plan.error) {
@@ -4306,10 +4328,62 @@
             reportAgentRejection(name, plan.error);
             return plan.error;
           }
-          // MC-5: the exact-state snapshot — taken AFTER the drag settles
-          // (a queued mutation snapshots the state it will actually edit,
-          // never a stale pre-drag one) and BEFORE the write, from the
-          // same post-settle model read the plan was computed against.
+          // Issue #20 production path: ChainEditing owns the accepted
+          // model, structural/parameter classification, rollback,
+          // persistence truth, preset state, and post-commit Undo snapshot.
+          // The legacy block below remains only for stripped test harnesses
+          // that intentionally load mcp-tools.js without chain-editing.js.
+          if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
+            var presetState = typeof hooks.presetState === 'function'
+              ? hooks.presetState(plan)
+              : null;
+            return window.ChainEditing.apply({
+              source: 'agent',
+              candidate: plan.candidate,
+              forceStructural: !!hooks.skipParamOnlyFastPath,
+              preset: presetState,
+              undoLabel: plan.label,
+              signal: signal
+            }).then(function (editResult) {
+              reportAgentMutation(plan.summary, plan.nodeIds, plan.clamped);
+              var result = {
+                applied: true,
+                tool: name,
+                changes: plan.changes,
+                clamped: plan.clamped || [],
+                nodeIds: plan.nodeIds || []
+              };
+              if (editResult && editResult.saved === false) {
+                result.saved = false;
+                result.warning = editResult.warning;
+              }
+              if (plan.note) {
+                result.note = plan.note;
+              }
+              if (plan.resultExtras) {
+                Object.keys(plan.resultExtras).forEach(function (key) {
+                  result[key] = plan.resultExtras[key];
+                });
+              }
+              return result;
+            }, function (err) {
+              if (signalAborted(signal) || (err && err.name === 'AbortError')) {
+                return abortedResult(name);
+              }
+              var applyFault = schemaLayerFaultResult(name, err);
+              if (err && err.rollback) {
+                applyFault.rollback = {
+                  attempted: !!err.rollback.attempted,
+                  succeeded: !!err.rollback.succeeded
+                };
+              }
+              reportAgentRejection(name, applyFault);
+              return applyFault;
+            });
+          }
+
+          // MC-5 legacy harness path: the exact-state snapshot is taken
+          // after drag settle and before the synchronous fallback write.
           var snapshot = captureUndoSnapshot(model);
           // Issue #5: a candidate that is exactly ONE param change on one
           // existing same-id same-type node (a set_param by definition;
@@ -4355,12 +4429,18 @@
             });
           }
           return result;
-        } catch (err) {
-          var applyFault = schemaLayerFaultResult(name, err);
-          reportAgentRejection(name, applyFault);
-          return applyFault;
-        }
+          } catch (err) {
+            var applyFault = schemaLayerFaultResult(name, err);
+            reportAgentRejection(name, applyFault);
+            return applyFault;
+          }
+        });
       });
+      agentMutationQueue = run.catch(function () {
+        // Refusals are result values, but keep the queue usable even if an
+        // unexpected promise rejection escapes a damaged dependency.
+      });
+      return run;
     };
   }
 
@@ -4692,6 +4772,9 @@
           // mutationExecute snapshot (taken pre-apply) already captured
           // the prior name + dot, so the undo entry restores both.
           skipParamOnlyFastPath: true,
+          presetState: function (plan) {
+            return { name: plan.resultExtras.loaded, modified: false };
+          },
           postApply: function (plan) {
             presetsUiSetCurrentPreset(plan.resultExtras.loaded);
             presetsUiClearModified();

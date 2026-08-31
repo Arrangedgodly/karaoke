@@ -25,10 +25,11 @@ This is browser-native **WebMCP**, not a conventional local or remote MCP server
 
 Judges do not need an MCP package, manifest, connector, API key, local process, browser extension, `?dev`, or separate connection. The Devpost Plugin helps with the competition workflow, and Chrome's Model Context Tool Inspector helps developers inspect tools. Neither is part of this app's runtime.
 
-The implementation is split into two plain browser scripts:
+The WebMCP and shared-mutation implementation centers on three plain browser scripts:
 
 - `src/mcp-server.js` is the small in-page WebMCP registration adapter. Despite the historical filename, it is not a server and has no transport.
-- `src/mcp-tools.js` defines the ten page tools and connects each tool to the same visible model, canvas, audio graph, policy, toast, and Undo paths used by the human interface.
+- `src/mcp-tools.js` defines the ten page tools and their validation and safety policy.
+- `src/chain-editing.js` is the one mutation interface shared by human gestures, WebMCP, preset loads, startup restore, and Undo. It commits the live audio graph and rendered canvas transactionally, preserves the parameter-only no-rebuild path, and reports autosave/rollback truthfully.
 
 See [RQ-6: WebMCP competition and judge-client contract](docs/ultron/research/rq6-webmcp-competition-client.md) for the source-backed architecture review.
 
@@ -89,7 +90,7 @@ vocabulary, enforces every resulting change, and stays LLM-free.
 
 ## Shared-state architecture
 
-Agent and human drive the **same model, UI, and audio graph** — agent mutations land through the UI path, not a parallel channel, so the canvas, meters, and physical Web Audio graph are always one consistent state. Every mutation produces a change summary plus one-click Undo; a watchdog guards the output; the chain auto-saves. The app itself is **LLM-free**: no API keys, no cloud calls — all the intelligence runs in the agent's (or the human's) hands, and the app just enforces its safety contract.
+Agent and human drive the **same accepted model, UI, and audio graph** through `ChainEditing`; neither the canvas nor WebMCP owns a competing mutation path. Structural edits stage and commit the audio graph before the canvas and autosave advance, while one-parameter edits keep their existing live ramp without rebuilding cards or ducking the chain. Every agent mutation produces a change summary plus one-click Undo; a watchdog guards the output; the chain auto-saves. The app itself is **LLM-free**: no API keys, no cloud calls — all the intelligence runs in the agent's (or the human's) hands, and the app just enforces its safety contract.
 
 ## Verification
 

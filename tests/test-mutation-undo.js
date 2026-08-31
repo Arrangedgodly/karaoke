@@ -615,6 +615,44 @@ async function main() {
   );
 
   // --------------------------------------------------------------------
+  console.log('C. asynchronous restore is consumed only after it commits');
+  // --------------------------------------------------------------------
+  var releaseRestore;
+  sandbox.AgentUI.pushUndo({
+    label: 'async restore',
+    restore: function () {
+      return new Promise(function (resolve) {
+        releaseRestore = resolve;
+      });
+    }
+  });
+  var asyncUndo = sandbox.AgentUI.undo();
+  check(asyncUndo && typeof asyncUndo.then === 'function',
+    'C1: undo returns a promise when restore is asynchronous');
+  check(sandbox.AgentUI.canUndo() === true,
+    'C1: the entry remains available while its restore is pending');
+  if (releaseRestore) {
+    releaseRestore();
+  }
+  var asyncResult = asyncUndo && typeof asyncUndo.then === 'function'
+    ? await asyncUndo
+    : null;
+  check(asyncResult && asyncResult.label === 'async restore' && sandbox.AgentUI.canUndo() === false,
+    'C2: the entry is popped only after the restore promise fulfills');
+
+  sandbox.AgentUI.pushUndo({
+    label: 'async failure',
+    restore: function () { return Promise.reject(new Error('restore failed')); }
+  });
+  var failedAsync = sandbox.AgentUI.undo();
+  var failedResult = failedAsync && typeof failedAsync.then === 'function'
+    ? await failedAsync
+    : failedAsync;
+  check(failedResult === null && sandbox.AgentUI.canUndo() === true,
+    'C3: a rejected async restore retains the entry for retry');
+  sandbox.AgentUI.clearUndo();
+
+  // --------------------------------------------------------------------
   if (failures.length === 0) {
     console.log('PASS: one valid mutation applies to model + physical graph, and Undo restores both exactly (issue #9)');
     return 0;

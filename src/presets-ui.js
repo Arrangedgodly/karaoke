@@ -107,6 +107,9 @@
   // see showPresetNote) and the timer hiding it again.
   var presetNoteEl = null;
   var presetNoteTimer = null;
+  // Issue #20: unlike the transient preset note, this warning is latched
+  // until ChainEditing observes a later verified autosave.
+  var persistenceWarningEl = null;
 
   // R2-3: the inline Save As naming row (lazily created on first use —
   // see openNamingRow) and its pieces. `namingRowOpen` mirrors the row's
@@ -440,6 +443,23 @@
     }, 4000);
   }
 
+  function setPersistenceWarning(message) {
+    var host = presetSelectEl.parentNode;
+    if (!host || typeof host.appendChild !== 'function') {
+      return;
+    }
+    if (!persistenceWarningEl) {
+      persistenceWarningEl = document.createElement('p');
+      persistenceWarningEl.id = 'autosave-warning';
+      persistenceWarningEl.className = 'persistence-warning';
+      persistenceWarningEl.setAttribute('role', 'alert');
+      persistenceWarningEl.style.display = 'none';
+      host.appendChild(persistenceWarningEl);
+    }
+    persistenceWarningEl.textContent = message || '';
+    persistenceWarningEl.style.display = message ? '' : 'none';
+  }
+
   /**
    * Rebuild #preset-select's <option> list: PS-4's two groups — a
    * "Factory" <optgroup> (window.FactoryPresets' library, first) and a
@@ -557,6 +577,33 @@
     }
   }
 
+  function getDisplayState() {
+    return {
+      name: currentPresetName,
+      modified: !!(unsavedIndicatorEl && unsavedIndicatorEl.style.display !== 'none')
+    };
+  }
+
+  function applyLoadedPreset(preset) {
+    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
+      window.ChainEditing.apply({
+        source: 'preset',
+        candidate: preset.nodes,
+        forceStructural: true,
+        preset: { name: preset.name, modified: false }
+      }).catch(function (err) {
+        console.error('Presets panel: load failed', err);
+        showPresetNote('Could not apply that preset. The previous chain was restored when possible.');
+      });
+      return;
+    }
+    // Bare test/legacy harness fallback; production loads ChainEditing.
+    window.ChainCanvas.loadModel(preset.nodes);
+    setCurrentPreset(preset.name);
+    clearModified();
+    noteHumanEditGuarded();
+  }
+
   /**
    * Issue #6: bump the agent-undo state revision — called at this
    * panel's three HUMAN mutation entry points (a successful Save As /
@@ -602,10 +649,7 @@
         showPresetNote('Could not load that preset — it may have been removed.');
         return;
       }
-      window.ChainCanvas.loadModel(factoryPreset.nodes);
-      setCurrentPreset(factoryPreset.name);
-      clearModified();
-      noteHumanEditGuarded();
+      applyLoadedPreset(factoryPreset);
       return;
     }
 
@@ -623,10 +667,7 @@
 
     // ChainCanvas.loadModel() also updates the autosave baseline
     // internally (see src/canvas.js) — nothing extra needed here for that.
-    window.ChainCanvas.loadModel(result.nodes);
-    setCurrentPreset(result.name);
-    clearModified();
-    noteHumanEditGuarded();
+    applyLoadedPreset(result);
   });
 
   // R2-3: Delete is two-step in-panel — no browser confirm(). The first
@@ -728,6 +769,8 @@
     markModified: markModified,
     setCurrentPreset: setCurrentPreset,
     clearModified: clearModified,
-    refreshPresetSelect: refreshPresetSelect
+    refreshPresetSelect: refreshPresetSelect,
+    getDisplayState: getDisplayState,
+    setPersistenceWarning: setPersistenceWarning
   };
 })();

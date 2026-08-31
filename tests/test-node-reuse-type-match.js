@@ -271,8 +271,16 @@ async function main() {
   console.log('A. buildGraph: an id that CHANGES TYPE gets a fresh instance');
   // --------------------------------------------------------------------
 
-  AG.buildGraph([{ id: 'n1', type: 'gain', params: { gainDb: 6 } }]);
-  await settle();
+  var firstBuild = AG.buildGraph([{ id: 'n1', type: 'gain', params: { gainDb: 6 } }]);
+  check(firstBuild && typeof firstBuild.then === 'function',
+    'A0: buildGraph returns a completion promise for the deferred commit');
+  if (firstBuild && typeof firstBuild.then === 'function') {
+    var firstResult = await firstBuild;
+    check(firstResult && firstResult.committed === true,
+      'A0: the promise resolves only after the graph commit');
+  } else {
+    await settle();
+  }
 
   var gainInst = AG.getNodeInstance('n1');
   check(!!gainInst, 'A1: live instance exists for n1 after the first build');
@@ -293,6 +301,24 @@ async function main() {
     modelA.length === 1 && modelA[0].id === 'n1' && modelA[0].type === 'gain',
     'A1: serialized model says one gain node'
   );
+
+  var stagedProbe = null;
+  AG.registerNodeType('probe', function () {
+    stagedProbe = makeBaseNode('ProbeNode');
+    stagedProbe.__disposed = false;
+    stagedProbe.dispose = function () { stagedProbe.__disposed = true; };
+    return stagedProbe;
+  });
+  var superseded = AG.buildGraph([{ id: 'staged', type: 'probe', params: {} }]);
+  var replacement = AG.buildGraph([{ id: 'n1', type: 'gain', params: { gainDb: 6 } }]);
+  var supersededResult = await superseded;
+  var replacementResult = await replacement;
+  check(supersededResult && supersededResult.committed === false && supersededResult.canceled === true,
+    'A1b: a superseded staged build resolves explicitly as cancelled');
+  check(stagedProbe && stagedProbe.__disposed === true,
+    'A1b: a fresh node from cancelled graph work is disposed');
+  check(replacementResult && replacementResult.committed === true && AG.getModel()[0].id === 'n1',
+    'A1b: only the replacement build becomes the accepted live graph');
 
   // The issue's exact shape: a valid model in which the gain id becomes
   // the SOLE TERMINAL LIMITER.

@@ -2697,6 +2697,19 @@ input.preset-name-input:focus-visible {
   color: var(--pm-print);
 }
 
+/* Issue #20: a failed autosave is durable operational state, not a
+   four-second note. ChainEditing keeps this alert visible until a later
+   write is read back and verified. */
+.persistence-warning {
+  margin: 0.5rem 0 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--pm-accent);
+  color: var(--pm-accent);
+  font-family: var(--font-readout);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
 /* Visually hide (but keep accessible to assistive tech) the device-select
    label — the mockup shows no separate label text, relying on context. */
 .sr-only {

@@ -1620,8 +1620,28 @@
   function commitStructuralChange() {
     recomputeModelFromDom();
     updateEmptyHint();
-    rebuildGraph();
     renderCords(); // FEW-3: an add (or any order change) re-routes the cords
+    // Issue #20: in the production page, the gesture stops here. The
+    // ChainEditing module decides whether the candidate is accepted and
+    // owns graph commit, persistence, preset dirtiness, and the one human
+    // revision bump. The DOM is provisional until that promise settles;
+    // ChainEditing renders the accepted candidate on success and restores
+    // the previous accepted model on failure.
+    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
+      window.ChainEditing.apply({
+        source: 'human',
+        candidate: getCurrentModel(),
+        layout: currentLayout(),
+        forceStructural: true
+      }).catch(function (err) {
+        console.error('ChainCanvas: human structural edit was not accepted', err);
+      });
+      return;
+    }
+
+    // Bare test/legacy harness fallback. index.html always loads
+    // ChainEditing before main.js, so this is not a production bypass.
+    rebuildGraph();
     // PS-2: persist the chain after every structural add/remove/reorder.
     // Pass chainModel explicitly rather than AudioGraph.getModel() — see
     // the comment on Persistence.saveCurrentChain() for why: AudioGraph's
@@ -1813,7 +1833,30 @@
     // in the chain) passes along whatever this node's CURRENT tuned values
     // are — reordering must never reset an already-tuned param back to its
     // type default.
-    window.ParamControls.render(paramsContainer, nodeState, function (updatedParams) {
+    window.ParamControls.render(paramsContainer, nodeState, function (updatedParams, change) {
+      // Issue #20: ParamControls supplies a normalized one-param intent.
+      // ChainEditing applies it against the accepted model when its queue
+      // reaches this edit, so two fast edits on different cards cannot
+      // overwrite one another with stale whole-model candidates.
+      if (
+        change &&
+        window.ChainEditing &&
+        typeof window.ChainEditing.apply === 'function'
+      ) {
+        window.ChainEditing.apply({
+          source: 'human',
+          change: {
+            nodeId: nodeState.id,
+            param: change.param,
+            value: change.value
+          }
+        }).catch(function (err) {
+          console.error('ChainCanvas: human parameter edit was not accepted', err);
+        });
+        return;
+      }
+
+      // Bare test/legacy harness fallback; production uses ChainEditing.
       nodeState.params = updatedParams;
       // Deliberately no rebuildGraph() call here — a plain param tweak is
       // not a structural change (see file-level comment above and Part D
@@ -1884,36 +1927,13 @@
       event.stopPropagation();
       card.remove();
       delete nodesById[id];
-      recomputeModelFromDom();
-      updateEmptyHint();
-        // Structural change (Part D) — recompute then rebuild, exactly once,
-      // immediately (not deferred to some other event).
-      rebuildGraph();
-      // PS-2: persist the chain after this structural change too. Pass
-      // chainModel explicitly (already recomputed above) rather than
-      // AudioGraph.getModel() — see the comment on
-      // Persistence.saveCurrentChain() for why: AudioGraph's own model
-      // commits asynchronously, ~20ms after rebuildGraph() returns, so
-      // reading through it right here would silently save the OLD,
-      // pre-removal model.
-      if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel, positions);
-      }
-      // PS-3: removing a node is a user EDIT — mark unsaved.
-      if (window.PresetsUI) {
-        window.PresetsUI.markModified();
-      }
-      // Issue #6: a HUMAN removal — bump the state revision so a stale
-      // agent Undo entry can no longer auto-apply over it.
-      if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-        window.AgentUI.noteHumanEdit();
-      }
       // FEW-2: drop the removed node's board position too (the store
       // would prune it on save anyway; keeping the live map exact means
       // currentLayout() is always garbage-free).
       delete positions[id];
       delete cardHugW[id];
-      renderCords(); // FEW-3: the chain closes over the removed seat
+      // Same one structural gesture adapter used by add and cord reorder.
+      commitStructuralChange();
     });
 
     // FEW-2: pointerdown anywhere on the section brings it to FRONT
@@ -2157,7 +2177,7 @@
    *   tidy while an autosave restore passed its layout round-trips
    *   exactly.
    */
-  function loadModel(model, layout) {
+  function renderModel(model, layout) {
     chainListEl.innerHTML = '';
     nodesById = {};
 
@@ -2216,20 +2236,30 @@
     renderCords(); // FEW-3: re-route onto the freshly-loaded board
 
     updateEmptyHint();
-    rebuildGraph();
+    return true;
+  }
 
-    // PS-3: persist the newly-loaded state as the new autosave baseline.
-    // This makes "load a named preset" (or the initial autosaved/default
-    // load on page open) immediately become what a page reload restores
-    // too, not just what's currently on screen. chainModel is already
-    // synchronously current at this point (recomputeModelFromDom() ran just
-    // above), so this is safe to read right here — same reasoning as every
-    // other saveCurrentChain() call site in this file. Deliberately NOT
-    // paired with a PresetsUI.markModified() call: a load is by definition
-    // a CLEAN state matching whatever was just loaded, not a modification.
+  /**
+   * Compatibility entry point for stripped harnesses that predate issue
+   * #20. The production page routes every caller directly through
+   * ChainEditing; if a remaining external caller invokes loadModel there,
+   * it is redirected through the same interface instead of bypassing it.
+   */
+  function loadModel(model, layout) {
+    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
+      return window.ChainEditing.apply({
+        source: 'startup',
+        candidate: model,
+        layout: layout,
+        forceStructural: true
+      });
+    }
+    renderModel(model, layout);
+    rebuildGraph();
     if (window.Persistence) {
       window.Persistence.saveCurrentChain(chainModel, positions);
     }
+    return true;
   }
 
   /**
@@ -2282,7 +2312,7 @@
    *   when no such node exists in this canvas (the caller falls back to
    *   the full loadModel() write path — safety over elegance).
    */
-  function updateNodeParam(nodeId, paramId, value) {
+  function renderNodeParam(nodeId, paramId, value) {
     if (typeof nodeId !== 'string') {
       return false;
     }
@@ -2310,14 +2340,24 @@
       // Display-only — never fail the param write for it.
     }
 
-    // PS-2 (same call the human param tweak makes): persist so the
-    // autosave slot reflects the tuned value, not the last structural
-    // state. chainModel is synchronously current (see above).
+    return true;
+  }
+
+  /** Compatibility wrapper; production callers use ChainEditing.apply. */
+  function updateNodeParam(nodeId, paramId, value) {
+    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
+      return window.ChainEditing.apply({
+        source: 'agent',
+        change: { nodeId: nodeId, param: paramId, value: value }
+      });
+    }
+    var updated = renderNodeParam(nodeId, paramId, value);
+    if (!updated) {
+      return false;
+    }
     if (window.Persistence) {
       window.Persistence.saveCurrentChain(chainModel, positions);
     }
-    // PS-3: an agent param edit is an EDIT of whatever preset was
-    // displayed — the same markModified() a human slider move fires.
     if (window.PresetsUI) {
       window.PresetsUI.markModified();
     }
@@ -2467,6 +2507,10 @@
   window.ChainCanvas = {
     onEngineStarted: onEngineStarted,
     loadModel: loadModel,
+    // Issue #20 implementation adapters. Production mutation sources do
+    // not call these directly; ChainEditing owns their sequencing.
+    renderModel: renderModel,
+    renderNodeParam: renderNodeParam,
     getCurrentModel: getCurrentModel,
     isDragActive: isDragActive,
     // Issue #5: the parameter-only write path (see updateNodeParam above).
@@ -2485,6 +2529,7 @@
     CARD_W_MAX_PX: CARD_W_MAX_PX,
     snapToGrid: snapToGrid,
     currentLayout: currentLayout,
+    getCurrentLayout: currentLayout,
     addNodeType: addNodeType
   };
 

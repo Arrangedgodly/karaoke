@@ -448,10 +448,6 @@
       // verbatim).
       // -----------------------------------------------------------------
       function commitValue(newValue) {
-        if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-          window.AgentUI.noteHumanEdit();
-        }
-
         var valueText = formatValue(newValue, spec.unit, spec.displayScale);
         if (valueDisplay) {
           valueDisplay.textContent = valueText;
@@ -470,17 +466,34 @@
         workingParams[spec.id] = newValue;
         var updatedParams = Object.assign({}, workingParams);
 
-        window.AudioGraph.updateNodeParams(modelEntry.id, updatedParams);
+        if (
+          window.ChainEditing &&
+          typeof window.ChainEditing.apply === 'function'
+        ) {
+          // Issue #20: this module translates the gesture only. Canvas
+          // forwards this normalized param intent to ChainEditing, which
+          // owns the live write, model acceptance, persistence, preset
+          // dirtiness, and one human revision bump.
+          if (typeof onParamsChanged === 'function') {
+            onParamsChanged(updatedParams, { param: spec.id, value: newValue });
+          }
+          return;
+        }
 
+        // Bare test/legacy harness fallback. index.html loads
+        // ChainEditing, so production never mutates through this branch.
+        if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
+          window.AgentUI.noteHumanEdit();
+        }
+        window.AudioGraph.updateNodeParams(modelEntry.id, updatedParams);
         window.NodeTypes.applyParam(
           modelEntry.type,
           window.AudioGraph.getNodeInstance(modelEntry.id),
           spec.id,
           newValue
         );
-
         if (typeof onParamsChanged === 'function') {
-          onParamsChanged(updatedParams);
+          onParamsChanged(updatedParams, null);
         }
       }
 

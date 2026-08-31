@@ -211,6 +211,7 @@
   var currentState = 'unavailable';
   var initialized = false;
   var undoStack = [];
+  var restoringPromise = null;
   // A mutation normally pushes its undo entry immediately before it
   // reports the matching toast. These one-turn handoff slots preserve
   // that association while still supporting the documented reverse
@@ -673,11 +674,15 @@
    *
    * @param {boolean} [confirm] - true to apply past a revision conflict
    *   (the toast's second "Undo anyway" press).
-   * @returns {Object|null} the popped entry, null when empty, when a
-   *   conflict was surfaced, or when restore failed. Nothing is consumed
-   *   in any null-return case.
+   * @returns {Object|null|Promise<Object|null>} the popped entry for a
+   *   synchronous restore, or a promise for an asynchronous restore. Null
+   *   means empty, conflict surfaced, or restore failed; nothing is
+   *   consumed in those cases.
    */
   function undo(confirm) {
+    if (restoringPromise) {
+      return restoringPromise;
+    }
     if (undoStack.length === 0) {
       return null;
     }
@@ -694,27 +699,38 @@
       return null;
     }
 
+    var restored;
     try {
-      entry.restore();
+      restored = entry.restore();
     } catch (err) {
-      var errorText = err && err.message ? err.message : String(err);
-      console.error(
-        'AgentUI.undo: restore() failed for "' + entry.label + '"; the undo entry was retained for retry.',
-        err
-      );
-      showUndoFailure(entry, errorText);
-      resetUndoConfirmation(entry);
-      emit(UNDO_FAILED_EVENT, {
-        label: entry.label,
-        remaining: undoStack.length,
-        confirmed: conflicted,
-        errorText: errorText
-      });
-      refreshUndoButtons();
-      return null;
+      return failUndo(entry, conflicted, err);
     }
 
-    undoStack.pop();
+    if (restored && typeof restored.then === 'function') {
+      restoringPromise = Promise.resolve(restored).then(
+        function () {
+          var completed = completeUndo(entry, conflicted);
+          restoringPromise = null;
+          return completed;
+        },
+        function (err) {
+          var failed = failUndo(entry, conflicted, err);
+          restoringPromise = null;
+          return failed;
+        }
+      );
+      return restoringPromise;
+    }
+
+    return completeUndo(entry, conflicted);
+  }
+
+  function completeUndo(entry, conflicted) {
+    var index = undoStack.indexOf(entry);
+    if (index === -1) {
+      return null;
+    }
+    undoStack.splice(index, 1);
     markUndoEntryToastUndone(entry);
     refreshUndoButtons();
     emit(UNDO_EVENT, {
@@ -723,6 +739,24 @@
       confirmed: conflicted
     });
     return entry;
+  }
+
+  function failUndo(entry, conflicted, err) {
+    var errorText = err && err.message ? err.message : String(err);
+    console.error(
+      'AgentUI.undo: restore() failed for "' + entry.label + '"; the undo entry was retained for retry.',
+      err
+    );
+    showUndoFailure(entry, errorText);
+    resetUndoConfirmation(entry);
+    emit(UNDO_FAILED_EVENT, {
+      label: entry.label,
+      remaining: undoStack.length,
+      confirmed: conflicted,
+      errorText: errorText
+    });
+    refreshUndoButtons();
+    return null;
   }
 
   /** @returns {boolean} true while the undo stack is non-empty. */

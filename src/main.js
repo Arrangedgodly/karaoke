@@ -577,76 +577,92 @@ console.log('App scaffold loaded');
         // empty model. window.Persistence.loadInitialModel() returns
         // whatever was last autosaved, or (nothing saved yet, e.g. first
         // run or cleared localStorage) PX-3's "Classic Karaoke" default —
-        // see src/persistence.js and src/default-preset.js. Routing through
-        // window.ChainCanvas.loadModel() (rather than calling
-        // AudioGraph.buildGraph() directly) is what actually populates the
-        // palette/canvas UI with real node cards for the restored model, in
-        // addition to building the live audio graph — loadModel() calls
-        // rebuildGraph() (-> AudioGraph.buildGraph()) internally, so this
-        // replaces the old direct buildGraph([]) call rather than adding a
-        // second graph build alongside it.
+        // see src/persistence.js and src/default-preset.js. Issue #20 routes
+        // restoration through ChainEditing so the live graph commits before
+        // cards, autosave, and later lifecycle hooks become visible.
         var initialModel = window.Persistence ? window.Persistence.loadInitialModel() : [];
         // FEW-2: the layout half of the same slot — the saved board
         // positions (FEW-1's store seam). {} (nothing saved, a legacy
         // payload, or a preset-load baseline) means every section takes
         // the incumbent tidy stack; nothing is synthesized here.
         var initialLayout = window.Persistence ? window.Persistence.loadInitialLayout() : null;
-        if (window.ChainCanvas) {
-          window.ChainCanvas.loadModel(initialModel, initialLayout);
+        var restore;
+        if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
+          restore = window.ChainEditing.apply({
+            source: 'startup',
+            candidate: initialModel,
+            layout: initialLayout,
+            forceStructural: true
+          });
+        } else if (window.ChainCanvas) {
+          // Bare test/legacy harness fallback; index.html loads
+          // ChainEditing in production.
+          restore = window.ChainCanvas.loadModel(initialModel, initialLayout);
         } else {
-          window.AudioGraph.buildGraph(initialModel);
+          restore = window.AudioGraph.buildGraph(initialModel);
         }
 
-        // AE-3: (re-)establish the independent bypass dry tap now that
-        // sourceNode exists. Must be called any time sourceNode changes —
-        // see the comment on AudioBypass.reconnectSource() in
-        // src/audio-bypass.js.
-        window.AudioBypass.reconnectSource();
-        if (bypassButton) {
-          bypassButton.disabled = false;
-        }
-        setBypassButtonLabel();
+        return Promise.resolve(restore).then(function () {
+          // AE-3: (re-)establish the independent bypass dry tap now that
+          // sourceNode exists. Must be called any time sourceNode changes —
+          // see the comment on AudioBypass.reconnectSource() in
+          // src/audio-bypass.js.
+          window.AudioBypass.reconnectSource();
+          if (bypassButton) {
+            bypassButton.disabled = false;
+          }
+          setBypassButtonLabel();
 
-        // UI-3: un-gate the palette/chain canvas now that there's a live
-        // audioContext/sourceNode for AudioGraph.buildGraph() to build
-        // against — mirrors how bypassButton is enabled just above.
-        if (window.ChainCanvas) {
-          window.ChainCanvas.onEngineStarted();
-        }
+          // UI-3: un-gate the palette/chain canvas now that there's a live
+          // audioContext/sourceNode for AudioGraph.buildGraph() to build
+          // against — mirrors how bypassButton is enabled just above.
+          if (window.ChainCanvas) {
+            window.ChainCanvas.onEngineStarted();
+          }
 
-        // FEW-3: meter side-taps + runtime watchdog. Now that
-        // audioContext/sourceNode exist AND the first buildGraph() has
-        // run (loadModel above), create/reconnect the two AnalyserNode
-        // taps (IN off AudioEngine.sourceNode, OUT off the persistent
-        // chainGate — docs/ultron/research/rq4-meters.md), flip
-        // window.Meters live (setEngineState(true)), and start the one
-        // shared rAF loop that feeds both meters and the rq3 watchdog
-        // every frame. See src/meter-taps.js.
-        if (window.MeterTaps) {
-          window.MeterTaps.onEngineStarted();
-        }
+          // FEW-3: meter side-taps + runtime watchdog. Now that
+          // audioContext/sourceNode exist AND the first buildGraph() has
+          // run (the ChainEditing restore above), create/reconnect the two AnalyserNode
+          // taps (IN off AudioEngine.sourceNode, OUT off the persistent
+          // chainGate — docs/ultron/research/rq4-meters.md), flip
+          // window.Meters live (setEngineState(true)), and start the one
+          // shared rAF loop that feeds both meters and the rq3 watchdog
+          // every frame. See src/meter-taps.js.
+          if (window.MeterTaps) {
+            window.MeterTaps.onEngineStarted();
+          }
 
-        // FEW-2: fill the VIS-2 status-LCD readouts with real engine
-        // values — RATE from context.sampleRate, LATENCY from
-        // baseLatency+outputLatency (the context-REPORTED estimate —
-        // a different figure from cycle-1 QA-4's slow-mo measured
-        // ~12 ms, not a replacement for it), and NODES, refreshed at
-        // 1 Hz off ChainCanvas's live model. window.AudioEngine's
-        // audioContext GETTER is the real access path here (same one
-        // isEngineLive() above reads) — never the Start result object,
-        // which could go stale if the context is ever recreated. See
-        // src/status-readouts.js.
-        if (window.StatusReadouts) {
-          window.StatusReadouts.onEngineStarted(window.AudioEngine.audioContext);
-        }
+          // FEW-2: fill the VIS-2 status-LCD readouts with real engine
+          // values — RATE from context.sampleRate, LATENCY from
+          // baseLatency+outputLatency (the context-REPORTED estimate —
+          // a different figure from cycle-1 QA-4's slow-mo measured
+          // ~12 ms, not a replacement for it), and NODES, refreshed at
+          // 1 Hz off ChainCanvas's live model. window.AudioEngine's
+          // audioContext GETTER is the real access path here (same one
+          // isEngineLive() above reads) — never the Start result object,
+          // which could go stale if the context is ever recreated. See
+          // src/status-readouts.js.
+          if (window.StatusReadouts) {
+            window.StatusReadouts.onEngineStarted(window.AudioEngine.audioContext);
+          }
 
-        setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
-        contextLost = false; // issue #4: a fresh start clears any suspend state
+          setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+          contextLost = false; // issue #4: a fresh start clears any suspend state
 
-        return populateDeviceList(window.AudioEngine.currentDeviceId);
+          return populateDeviceList(window.AudioEngine.currentDeviceId);
+        });
       })
       .catch(function (err) {
         console.error('AudioEngine failed to start:', err);
+        // Issue #20: if mic acquisition succeeded but chain restoration
+        // failed, tear the capture session down before surfacing Failed.
+        if (
+          window.AudioEngine &&
+          window.AudioEngine.isStarted &&
+          typeof window.AudioEngine.stop === 'function'
+        ) {
+          window.AudioEngine.stop('startup-chain-failed');
+        }
         // Entry 3: the short WHAT HAPPENED sentence alone on the status
         // line (it must read in full even on the tight strip); the NEXT
         // ACTION + demoted technical footnote land in the .start-hint
