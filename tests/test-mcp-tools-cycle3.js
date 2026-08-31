@@ -895,12 +895,12 @@ async function main() {
     'E12: refused mutations pushed no undo entries');
 
   // ====================================================================
-  console.log('F. raw enum forms are equally legal (preset-schema contract)');
+  console.log('F. raw enum forms are equally legal (preset-schema contract) — canonicalized to strings (#16 stale-pad fix)');
   // ====================================================================
   var enumRes = await setParam.execute({ nodeId: addedIds[3], param: 'key', value: 9 });
   check(enumRes.applied === true &&
-    nodeById(modelSnapshot(), addedIds[3]).params.key === 9,
-    'F1: set_param key 9 (raw enum) applied — preserved as the enum form');
+    nodeById(modelSnapshot(), addedIds[3]).params.key === 'A',
+    'F1: set_param key 9 (raw enum) applied — stored as the CANONICAL STRING "A" (the pad can only match strings)');
   var enumChain = await setChain.execute({
     chain: {
       schemaVersion: 1,
@@ -913,14 +913,14 @@ async function main() {
   });
   check(enumChain.applied === true, 'F2: set_chain with raw enums key 5 / scale 1 applied');
   var eModel = nodeById(modelSnapshot(), 'e1');
-  check(eModel && eModel.params.key === 5 && eModel.params.scale === 1,
-    'F3: enum forms preserved verbatim in the model');
+  check(eModel && eModel.params.key === 'F' && eModel.params.scale === 'Major',
+    'F3: enum forms CANONICALIZED in the model (5 -> "F", 1 -> "Major") — model, pads, and autosave carry one truth');
   await settle();
   var eInstance = AG.getNodeInstance('e1');
   check(eInstance && eInstance.worklet &&
     eInstance.worklet.parameters.get('key').value === 5 &&
     eInstance.worklet.parameters.get('scale').value === 1,
-    'F4: worklet received enums 5 / 1 at creation');
+    'F4: worklet received enums 5 / 1 (the node file maps the canonical strings back at apply time)');
 
   // ====================================================================
   console.log('G. bare harness: snapshot registry + badge fallback hold');

@@ -529,6 +529,27 @@
   }
 
   /**
+   * The CANONICAL form of a legal discrete value: the declared STRING. A
+   * raw numeric enum is equally legal on the wire (preset-schema's PRE-1
+   * contract), but it must not survive INTO the model — the visible pads
+   * match strings only, so a numeric enum would update the model and the
+   * audio while the pressed pad sat on the old value (the #16 stale-pad
+   * finding). Numbers map by index here; anything else passes through.
+   * Assumes legalDiscreteValue already said yes.
+   *
+   * @param {Object} spec - a discrete spec/policy carrying `values`.
+   * @param {*} value
+   * @returns {string|*} the canonical string for a numeric enum; the
+   *   input otherwise.
+   */
+  function canonicalDiscreteValue(spec, value) {
+    if (typeof value === 'number' && value >= 0 && value <= spec.values.length - 1) {
+      return spec.values[value];
+    }
+    return value;
+  }
+
+  /**
    * @param {Array<Object>} specs
    * @returns {Array<string>} the spec ids, in order.
    */
@@ -1047,7 +1068,15 @@
     },
     {
       id: 'host-param-ramps',
-      rule: 'The host ramps every param change over 10-20 ms — no instantaneous jumps, so edits never click.',
+      // #5: the promise is narrowed to what the code actually does. Every
+      // AudioParam-backed param (all native types, plus Tone wet/frequency
+      // Params) ramps over ~15 ms via window.AudioParamRamp. THREE Tone
+      // plain-property setters have no AudioParam to ramp and apply as
+      // single immediate writes: pitchshift pitch, phaser depth, phaser
+      // baseHz (src/tone-adapter.js falls back to direct assignment).
+      // Claiming them ramped was the audit's #5 finding; this text is the
+      // honest contract until a stepped transition lands (if ever).
+      rule: 'The host ramps every AudioParam-backed param change over 10-20 ms — no instantaneous jumps, so edits never click. Exceptions: pitchshift pitch, phaser depth, and phaser baseHz are Tone.js plain properties with no AudioParam — they apply as one immediate write each.',
       enforcement: 'host behavior (disclosure)'
     },
     {
@@ -1152,12 +1181,19 @@
   ];
 
   var SOUND_DESIGN_GUIDE = {
-    app: 'karaoke-chain-builder',
+    // Canonical identity (#15 finding): both capability modes report the
+    // same app identity — VOXCHAIN, matching the policy index's own
+    // `app` field and the page's product name.
+    app: 'voxchain',
     focus: CAPABILITY_FOCUS.SOUND_DESIGN,
     workflow: {
       edit: 'Call get_chain first; preserve nodes unless the user asks to rebuild.',
       apply: 'Use set_param on existing nodes; add_node only for a missing effect.',
-      verify: 'Describe changes and ask the human to listen.'
+      verify:
+        'Before asking the human to listen, read get_chain\'s outputAuthority: if bypass ' +
+        'is true or outputMuted is true, say so first (both are human-only controls — the ' +
+        'human must disengage Bypass or Restore output themselves) — then describe changes ' +
+        'and ask the human to listen.'
     },
     intensity: {
       slight: 'Use the first listed value in each range and make 1-2 changes.',
@@ -1187,10 +1223,70 @@
       ],
       spacey: ['phaser rateHz 0.3..1 Hz', 'phaser depth 40..70%'],
       warble: ['tremolo rateHz 4..7 Hz', 'tremolo depth 30..60%'],
-      lofi: ['bitcrusher bits 3..5', 'bitcrusher mix 20..45%']
+      // #15 finding fix: bit depth runs OPPOSITE to the slight-first
+      // convention — FEWER bits = MORE crushed. The range is written
+      // descending (slight 6 -> strong 3) with the direction spelled out
+      // so an intensity-following agent cannot map "stronger lo-fi" to a
+      // HIGHER (cleaner) bit depth.
+      lofi: ['bitcrusher bits 6..3 (fewer bits = more crushed)', 'bitcrusher mix 20..45%']
     },
     boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
   };
+
+  /**
+   * The served sound-design vocabulary, filtered against the LIVE
+   * registry (#15 finding): a degraded page (one whose node files
+   * partially failed to load) must not keep recommending effects the
+   * running graph cannot create. Filtering is PER-LINE — an adjective
+   * keeps its still-installable recommendations and loses only lines
+   * naming missing effects (a single optional mention must not erase a
+   * whole goal); an adjective left with nothing survives as nothing and
+   * is dropped. Dropped lines are disclosed once via
+   * `unavailableEffects` so the agent knows why a favorite move is
+   * absent. In a healthy page (and in the bare-harness tests, where the
+   * static snapshot is the registry) this is a no-op copy.
+   *
+   * @returns {Object} the guide copy to serve.
+   */
+  function buildSoundDesignGuide() {
+    var guide = freshCopy(SOUND_DESIGN_GUIDE);
+    try {
+      var registered = registryTypes();
+      var typeWords = [
+        'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter', 'distortion',
+        'chorus', 'gate', 'autotune', 'pitchshift', 'tremolo', 'bitcrusher', 'phaser'
+      ];
+      var mentionedMissing = {};
+      Object.keys(guide.vocabulary).forEach(function (adjective) {
+        var kept = [];
+        guide.vocabulary[adjective].forEach(function (line) {
+          // A recommendation line names its effect as the leading word
+          // ('reverb mix 10..25%'). Prose lines name none and always stay.
+          var lead = String(line).split(/\s+/)[0].toLowerCase();
+          if (typeWords.indexOf(lead) !== -1 && registered.indexOf(lead) === -1) {
+            mentionedMissing[lead] = true;
+            return; // this recommendation names an effect this page cannot build
+          }
+          kept.push(line);
+        });
+        if (kept.length > 0) {
+          guide.vocabulary[adjective] = kept;
+        } else {
+          delete guide.vocabulary[adjective];
+        }
+      });
+      var unavailable = Object.keys(mentionedMissing);
+      if (unavailable.length > 0) {
+        guide.unavailableEffects =
+          'Not installed in this running page (recommendations mentioning them ' +
+          'are omitted): ' + unavailable.join(', ') + '.';
+      }
+    } catch (err) {
+      // Filtering is advisory — the unfiltered guide is still truthful
+      // about policy; serving it beats failing the read.
+    }
+    return guide;
+  }
 
   // ---------------------------------------------------------------------
   // MC-3 read-tool helpers. Every app read here is guarded: an absent or
@@ -1324,6 +1420,34 @@
   }
 
   /**
+   * The human-owned output authority state an agent needs before asking
+   * the human to listen (#15 finding): Bypass engagement (AE-3) and the
+   * watchdog latch (FEW-3/RQ-3). Read-only; each read is guarded so a
+   * bare harness gets honest nulls, never a throw.
+   *
+   * @returns {{bypass: boolean|null, outputMuted: boolean|null}}
+   */
+  function readOutputAuthorityState() {
+    var bypass = null;
+    var outputMuted = null;
+    try {
+      if (window.AudioBypass && typeof window.AudioBypass.isEngaged === 'function') {
+        bypass = !!window.AudioBypass.isEngaged();
+      }
+    } catch (err) {
+      // Absent/damaged — stays null (unknown), never a guess.
+    }
+    try {
+      if (window.MeterTaps && typeof window.MeterTaps.isTripped === 'function') {
+        outputMuted = !!window.MeterTaps.isTripped();
+      }
+    } catch (err) {
+      // Same honest-null contract.
+    }
+    return { bypass: bypass, outputMuted: outputMuted };
+  }
+
+  /**
    * get_chain's payload: the live model in the exact PresetSchema/
    * set_chain shape plus engine + preset display context.
    *
@@ -1356,6 +1480,11 @@
       };
     }
     result.engine = engine;
+    // The output-authority context: if Bypass is engaged or the watchdog
+    // has muted the output, asking the human to "listen to the change"
+    // without saying so is misleading — the agent can read WHY the chain
+    // is silent here instead of guessing. Both are human-only controls.
+    result.outputAuthority = readOutputAuthorityState();
     result.preset = { name: preset.name, unsaved: preset.unsaved };
     if (!engine.started && result.nodes.length === 0) {
       result.note =
@@ -1769,7 +1898,7 @@
    */
   function buildCapabilitiesResult(input) {
     if (input && input.focus === CAPABILITY_FOCUS.SOUND_DESIGN) {
-      return freshCopy(SOUND_DESIGN_GUIDE);
+      return buildSoundDesignGuide();
     }
     var nodeTypes = {};
     registryTypes().forEach(function (type) {
@@ -2364,6 +2493,29 @@
   }
 
   /**
+   * @param {string} toolName
+   * @returns {Object} the stable pre-Start refusal result (#15): the
+   *   human board is gated until Start, so an agent chain edit now would
+   *   be invisible to the operator. Stable code, retryable once the
+   *   engine is live.
+   */
+  function engineNotStartedResult(toolName) {
+    return {
+      error: true,
+      code: 'ENGINE_NOT_STARTED',
+      tool: toolName,
+      applied: false,
+      retry: true,
+      reason:
+        'The engine has not been started — the operator has not pressed Start yet, so the ' +
+        'board is gated and an agent edit now would change state the human cannot see.',
+      suggestion:
+        'Ask the human to press Start (their authority), then re-issue the call. Reads ' +
+        '(get_chain, get_capabilities, list_presets, get_preset) remain available.'
+    };
+  }
+
+  /**
    * Apply the rq3 per-param policy to every PROVIDED param of a candidate
    * node list (omitted params keep the type defaults — a default can never
    * be an agent "request", which is also what keeps get_chain's output
@@ -2392,7 +2544,10 @@
         }
         if (policy.values) {
           // MCP-1: discrete param — membership replaces the numeric range
-          // compare (a string against min/max would silently pass).
+          // compare (a string against min/max would silently pass). The
+          // stored value is the CANONICAL STRING (a legal raw enum maps
+          // by index) so the candidate, the pads, and the undo snapshot
+          // carry one truth.
           if (!legalDiscreteValue({ values: policy.values }, value)) {
             return {
               nodes: appliedNodes,
@@ -2400,7 +2555,7 @@
               reject: paramIllegalValueResult(entry.id, entry.type, key, policy, value)
             };
           }
-          params[key] = value;
+          params[key] = canonicalDiscreteValue(policy, value);
           continue;
         }
         if (value < policy.min || value > policy.max) {
@@ -3564,6 +3719,10 @@
           error: paramIllegalValueResult(entry.id, entry.type, input.param, policy, input.value)
         };
       }
+      // Canonical STRING into the candidate (a legal raw enum maps by
+      // index) — the model, the visible pad, the autosave, and the
+      // result summary then all carry one truth.
+      finalValue = canonicalDiscreteValue(policy, input.value);
     } else if (policy && (input.value < policy.min || input.value > policy.max)) {
       if (policy.treatment === 'reject') {
         // Budget context for the cumulative-feeding params: the would-be
@@ -4280,6 +4439,20 @@
         reportAgentRejection(name, invalid);
         return Promise.resolve(invalid);
       }
+      // Pre-Start parity (#15): until the operator presses Start, the
+      // palette/canvas/presets are gated (engine-not-started) — a chain
+      // mutation applied now would change the model invisibly behind the
+      // gate, with no human oversight over an edit they cannot see. On
+      // the real page (window.AudioEngine present) mutations are refused
+      // with one stable, documented result until the engine has started;
+      // reads stay available, and bare harnesses (no AudioEngine) keep
+      // today's model-only behavior so tests exercise the full planning
+      // stack.
+      if (window.AudioEngine && !window.AudioEngine.isStarted) {
+        var notStarted = engineNotStartedResult(name);
+        reportAgentRejection(name, notStarted);
+        return Promise.resolve(notStarted);
+      }
       return waitForDragSettle(signal).then(function (settled) {
         if (settled === 'aborted') {
           return abortedResult(name);
@@ -4357,6 +4530,53 @@
           return result;
         } catch (err) {
           var applyFault = schemaLayerFaultResult(name, err);
+          // Mid-apply crash (#16 false-'nothing changed' finding): the
+          // full write path (loadModel) commits the VISIBLE model/DOM
+          // before rebuildGraph()'s node-factory pass, so a synchronous
+          // factory failure can leave the board already replaced while
+          // the live graph keeps the prior topology. In that state the
+          // stock "Nothing in the app was changed" hint is FALSE. When a
+          // snapshot exists (the crash was at/after the apply), restore
+          // the pre-edit chain through the same write path and report
+          // the rollback outcome truthfully. Crashes BEFORE the snapshot
+          // (planner/read) changed nothing, so the stock hint stands.
+          if (snapshot) {
+            var rolledBack = false;
+            try {
+              // Raw applyCandidateViaUi (NOT makeSnapshotRestore, which
+              // swallows errors): a restore failure must be REPORTED as
+              // split state, not hidden behind a clean-looking refusal.
+              applyCandidateViaUi(snapshot.nodes);
+              rolledBack = true;
+            } catch (restoreErr) {
+              rolledBack = false;
+            }
+            if (rolledBack) {
+              // The preset display state rides the same snapshot.
+              try {
+                presetsUiSetCurrentPreset(snapshot.presetName);
+                if (snapshot.unsaved === true) {
+                  if (window.PresetsUI && typeof window.PresetsUI.markModified === 'function') {
+                    window.PresetsUI.markModified();
+                  }
+                } else if (snapshot.unsaved === false) {
+                  presetsUiClearModified();
+                }
+              } catch (displayErr) {
+                // Display-only; the chain restore above already ran.
+              }
+              applyFault.rollback = 'restored';
+              applyFault.hint =
+                'The edit failed while applying and the PREVIOUS chain was restored — ' +
+                'the failed edit is not live. This is a bug in the tool layer; please report it.';
+            } else {
+              applyFault.rollback = 'failed';
+              applyFault.hint =
+                'The edit failed while applying AND the restore failed: the visible board ' +
+                'may not match the live sound. Reload the page to reconcile. This is a bug ' +
+                'in the tool layer; please report it.';
+            }
+          }
           reportAgentRejection(name, applyFault);
           return applyFault;
         }

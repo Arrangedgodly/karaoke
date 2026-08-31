@@ -72,6 +72,12 @@ function cdpCall(ws, id, method, params) {
 var pendingCalls = {};
 var nextId = 1;
 var consoleEvents = [];
+// #15 finding: the probe used to REPORT console output without ever
+// failing on it, and never watched the network at all — a 404 script or
+// a console.error sailed through a green run. Both streams now feed the
+// exit code: console 'error'/'exception' events and non-canceled network
+// failures (plus any subresource response >= 400) fail the probe.
+var networkFailures = [];
 
 function pump(ws) {
   ws.onmessage = function (ev) {
@@ -96,6 +102,17 @@ function pump(ws) {
         type: 'exception',
         text: (d.exception && (d.exception.description || d.exception.value)) || d.text || 'exception'
       });
+    } else if (msg.method === 'Network.loadingFailed') {
+      if (!msg.params.canceled) {
+        networkFailures.push('load failed: ' + (msg.params.errorText || 'unknown') +
+          ' (blocked=' + !!msg.params.blockedReason + ')');
+      }
+    } else if (msg.method === 'Network.responseReceived') {
+      var status = msg.params.response && msg.params.response.status;
+      var url = (msg.params.response && msg.params.response.url) || '';
+      if (status >= 400) {
+        networkFailures.push('HTTP ' + status + ' ' + url);
+      }
     }
   };
 }
@@ -155,6 +172,7 @@ async function main() {
 
     await cdpCall(ws, nextId++, 'Runtime.enable');
     await cdpCall(ws, nextId++, 'Page.enable');
+    await cdpCall(ws, nextId++, 'Network.enable');
 
     // Wait for the page's load event, then give scripts a beat to run.
     await sleep(1500);
@@ -193,9 +211,30 @@ async function main() {
     await sleep(300);
     try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
   }
+  // The strictness gates (#15): console errors/exceptions and network
+  // failures each fail the probe on their own — a green run now means a
+  // clean console AND every subresource actually loaded. Warnings stay
+  // report-only (benign degraded-mode warnings exist by design).
+  var consoleFailures = consoleEvents.filter(function (c) {
+    return c.type === 'error' || c.type === 'exception';
+  });
   if (consoleEvents.length) {
     console.error('--- page console (' + consoleEvents.length + ') ---');
     consoleEvents.forEach(function (c) { console.error('[' + c.type + '] ' + c.text); });
+  }
+  if (networkFailures.length) {
+    console.error('--- network failures (' + networkFailures.length + ') ---');
+    networkFailures.forEach(function (f) { console.error(f); });
+  }
+  if (consoleFailures.length) {
+    console.error('browser-probe: FAILING — ' + consoleFailures.length +
+      ' console error/exception event(s) (see above)');
+    exitCode = 1;
+  }
+  if (networkFailures.length) {
+    console.error('browser-probe: FAILING — ' + networkFailures.length +
+      ' network failure(s) (see above)');
+    exitCode = 1;
   }
   process.exit(exitCode);
 }

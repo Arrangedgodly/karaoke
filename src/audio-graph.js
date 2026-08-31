@@ -174,6 +174,11 @@
   // an earlier call had scheduled, so only the LAST call's model actually
   // gets built.
   var pendingRewireTimer = null;
+  // The factory-fresh instances created by the CURRENTLY-PENDING build's
+  // Phase 1 (see buildGraph): when a superseding build cancels that
+  // rewire, these never-connected orphans are disposed — a Tone-backed
+  // composite holds live resources beyond a disconnect (#16 finding).
+  var pendingRewireCreated = [];
 
   /**
    * Get the shared chain gate GainNode, creating it on first call if it
@@ -605,37 +610,59 @@
       oldModelTypes[entry.id] = entry.type;
     });
 
-    var resolvedNodes = model.map(function (entry) {
-      // Issue #1 (P0): reuse demands an id AND TYPE match against the
-      // model the live instances were built from. Id alone is not
-      // identity — a live instance is a concrete GainNode or
-      // DynamicsCompressorNode, not a label, so "reusing" it for an entry
-      // whose type changed would RELABEL a physically wrong node: worst
-      // case a GainNode left standing in for the required terminal
-      // limiter while the model and every tool result claim a limiter is
-      // present. A type-changed id therefore falls through to the factory
-      // path below (fresh instance, entry params applied at creation),
-      // and Phase 2's teardown then treats its old instance exactly like
-      // any dropped node — disconnected, never carried into the new
-      // nodeInstances map. Same id + same type remains a genuine reuse:
-      // the SAME object is returned, preserving internal DSP state (e.g.
-      // a compressor's envelope, a delay's buffer contents) across a pure
-      // reorder or param-only change.
-      if (
-        Object.prototype.hasOwnProperty.call(oldNodeInstances, entry.id) &&
-        oldModelTypes[entry.id] === entry.type
-      ) {
-        return oldNodeInstances[entry.id];
-      }
-      var factory = nodeFactories[entry.type];
-      if (!factory) {
-        throw new Error(
-          'AudioGraph.buildGraph: unknown node type "' + entry.type + '" ' +
-          '(id "' + entry.id + '"). Register it first with AudioGraph.registerNodeType().'
-        );
-      }
-      return factory(audioContext, entry.params || {});
-    });
+    var resolvedNodes;
+    var createdThisBuild = [];
+    try {
+      resolvedNodes = model.map(function (entry) {
+        // Issue #1 (P0): reuse demands an id AND TYPE match against the
+        // model the live instances were built from. Id alone is not
+        // identity — a live instance is a concrete GainNode or
+        // DynamicsCompressorNode, not a label, so "reusing" it for an entry
+        // whose type changed would RELABEL a physically wrong node: worst
+        // case a GainNode left standing in for the required terminal
+        // limiter while the model and every tool result claim a limiter is
+        // present. A type-changed id therefore falls through to the factory
+        // path below (fresh instance, entry params applied at creation),
+        // and Phase 2's teardown then treats its old instance exactly like
+        // any dropped node — disconnected, never carried into the new
+        // nodeInstances map. Same id + same type remains a genuine reuse:
+        // the SAME object is returned, preserving internal DSP state (e.g.
+        // a compressor's envelope, a delay's buffer contents) across a pure
+        // reorder or param-only change.
+        if (
+          Object.prototype.hasOwnProperty.call(oldNodeInstances, entry.id) &&
+          oldModelTypes[entry.id] === entry.type
+        ) {
+          return oldNodeInstances[entry.id];
+        }
+        var factory = nodeFactories[entry.type];
+        if (!factory) {
+          throw new Error(
+            'AudioGraph.buildGraph: unknown node type "' + entry.type + '" ' +
+            '(id "' + entry.id + '"). Register it first with AudioGraph.registerNodeType().'
+          );
+        }
+        var fresh = factory(audioContext, entry.params || {});
+        // Created-but-never-committed instances are THIS build's disposal
+        // responsibility (see pendingRewireCreated below): a Tone-backed
+        // composite holds worklet clocks and internal nodes a plain
+        // disconnect never releases.
+        createdThisBuild.push(fresh);
+        return fresh;
+      });
+    } catch (phase1Err) {
+      // A mid-map throw (e.g. an unknown type past the first factory
+      // call) leaves this build's earlier creations orphaned — they were
+      // never connected (no .connect() runs in Phase 1) but a Tone node
+      // still owns live resources. Release them, then rethrow: the live
+      // chain is untouched, exactly as before.
+      createdThisBuild.forEach(function (node) {
+        if (node && typeof node.dispose === 'function') {
+          try { node.dispose(); } catch (e) { /* already gone */ }
+        }
+      });
+      throw phase1Err;
+    }
 
     // ---- Phase 2 (deferred): duck, then perform the actual graph surgery ----
     // Cancel any previously-scheduled-but-not-yet-executed rewire (debounces
@@ -645,11 +672,30 @@
     if (pendingRewireTimer !== null) {
       clearTimeout(pendingRewireTimer);
       pendingRewireTimer = null;
+      // The superseded build's Phase 1 created factory-fresh instances that
+      // never committed (commit is deferred) and never connected (no
+      // .connect() runs in Phase 1) — the NEXT build's Phase 1 resolves
+      // against the still-live oldNodeInstances map, so it cannot reuse
+      // them either. Without this, rapid superseding rebuilds abandoned
+      // newly-created Tone.js effects undisposed (#16 finding): a Tone node
+      // keeps internal nodes and a JS-tick clock alive after a mere
+      // disconnect, so orphans leak for the session. Plain AudioNodes have
+      // no dispose() — the guard makes this a no-op for them, they were
+      // always GC-eligible.
+      pendingRewireCreated.forEach(function (node) {
+        if (node && typeof node.dispose === 'function') {
+          try { node.dispose(); } catch (e) { /* already gone */ }
+        }
+      });
+      pendingRewireCreated = [];
     }
 
     rampGateTo(gate, 0.0001, audioContext);
 
+    pendingRewireCreated = createdThisBuild;
     pendingRewireTimer = setTimeout(function () {
+      pendingRewireTimer = null;
+      pendingRewireCreated = [];
       pendingRewireTimer = null;
 
       // Teardown: fully disconnect the OLD topology. Nodes being reused are

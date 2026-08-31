@@ -257,8 +257,45 @@
           layout: sanitizeLayout(layoutToSave, knownIds)
         })
       );
+      announceSaveState(true);
     } catch (err) {
       console.error('Persistence: failed to save chain to localStorage', err);
+      announceSaveState(false);
+    }
+  }
+
+  // ---- Autosave health latch (#16 finding) --------------------------------
+  //
+  // A failed save used to be console-only: edits looked durable and then
+  // silently disappeared after reload. The latch records the last save's
+  // outcome, announces transitions on a DOM event (guarded — a harness
+  // with no document just skips the event), and exposes the state via
+  // isSaveFailed() so the UI can warn the operator for as long as saves
+  // keep failing. The LIVE chain is unaffected either way — a storage
+  // failure never interrupts audio.
+
+  var lastSaveFailed = false;
+
+  function announceSaveState(succeeded) {
+    var was = lastSaveFailed;
+    lastSaveFailed = !succeeded;
+    try {
+      if (typeof document !== 'undefined' && document &&
+          typeof document.dispatchEvent === 'function' &&
+          typeof CustomEvent === 'function') {
+        document.dispatchEvent(
+          new CustomEvent(succeeded ? 'chain-autosave-recovered' : 'chain-autosave-failed')
+        );
+      }
+    } catch (err) {
+      // Event dispatch is advisory; the latch above is the state.
+    }
+    if (was !== lastSaveFailed && typeof console !== 'undefined' && console.warn) {
+      console.warn(
+        succeeded
+          ? 'Persistence: autosave recovered — edits are durable again.'
+          : 'Persistence: autosave is FAILING — edits will not survive a reload.'
+      );
     }
   }
 
@@ -417,5 +454,10 @@
     saveCurrentChain: saveCurrentChain,
     loadInitialModel: loadInitialModel,
     loadInitialLayout: loadInitialLayout,
+    // Autosave health for the operator warning (#16): true while the most
+    // recent save failed (latched until a later save succeeds).
+    isSaveFailed: function () {
+      return lastSaveFailed;
+    },
   };
 })();

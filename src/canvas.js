@@ -298,6 +298,14 @@
     }
     var x = snapToGrid(positionDrag.originX + ((event && event.clientX ? event.clientX : 0) - positionDrag.startX));
     var y = snapToGrid(positionDrag.originY + ((event && event.clientY ? event.clientY : 0) - positionDrag.startY));
+    // The board has no negative region — a drag past the origin wall
+    // clamps at 0 instead of parking a live card off the reachable board.
+    if (x < 0) {
+      x = 0;
+    }
+    if (y < 0) {
+      y = 0;
+    }
     var pos = positions[positionDrag.id];
     if (pos && (pos.x !== x || pos.y !== y)) {
       pos.x = x;
@@ -975,6 +983,14 @@
     if (event && typeof event.preventDefault === 'function') {
       event.preventDefault();
     }
+    // dragActive from ARM, not from detach-threshold (the #16 race
+    // finding): the agent-mutation queue polls this flag, and arming it
+    // only after the deliberate-drag threshold left a window where a
+    // structural agent edit could replace the board while a cord press
+    // was already armed against it. One gesture at a time still holds;
+    // every resolution path (drop, revert, cancel, loadModel
+    // invalidation) clears it.
+    dragActive = true;
     cordDrag = {
       id: jp.nodeId,
       endKind: jp.kind === 'section-in' ? 'in' : 'out',
@@ -1325,6 +1341,55 @@
       /* stripped harness — the type key is the fallback label */
     }
     return String(label).replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || String(type).slice(0, 3).toUpperCase();
+  }
+
+  /**
+   * Discrete-enum canonicalization (2026-08-31 honesty round): a param
+   * whose registered spec declares `values` (autotune key/scale) accepts
+   * BOTH wire forms — the UI strings and the raw 0..N enums preset-schema
+   * blesses — but the MODEL, the visible pads, and the autosave carry one
+   * truth: the canonical string. A numeric enum that slipped through (an
+   * agent write, a hand-edited payload) would otherwise update the model
+   * and the audio while the visible pad sat on the old value — the pad
+   * can only match strings. Numbers map by index; every other value (and
+   * every non-discrete param) passes through untouched, so validation
+   * behavior elsewhere is unchanged.
+   *
+   * @param {string} type
+   * @param {string} paramId
+   * @param {*} value
+   * @returns {*} the canonical value (the matching string for a legal
+   *   numeric enum; the input otherwise).
+   */
+  function canonicalParamValue(type, paramId, value) {
+    try {
+      if (window.NodeTypes && typeof window.NodeTypes.getParamSpec === 'function') {
+        var specs = window.NodeTypes.getParamSpec(type);
+        if (specs) {
+          for (var i = 0; i < specs.length; i++) {
+            var spec = specs[i];
+            if (spec && spec.id === paramId && Array.isArray(spec.values) &&
+                typeof value === 'number' && isFinite(value) &&
+                Math.floor(value) === value &&
+                value >= 0 && value <= spec.values.length - 1) {
+              return spec.values[value];
+            }
+          }
+        }
+      }
+    } catch (err) {
+      /* stripped harness — the raw value passes through */
+    }
+    return value;
+  }
+
+  /** canonicalParamValue over a whole params object (fresh copy). */
+  function canonicalParams(type, params) {
+    var out = {};
+    Object.keys(params || {}).forEach(function (key) {
+      out[key] = canonicalParamValue(type, key, params[key]);
+    });
+    return out;
   }
 
   // ---------------------------------------------------------------------
@@ -1883,6 +1948,12 @@
       // some minimal DOM stubs return undefined from toggle().
       var collapsed = card.classList.contains('collapsed');
       collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      // Folding re-boxes the section (the rail becomes the slim row), so
+      // the jack points MOVE with it — the cords must re-derive now, not
+      // at the next unrelated paint (the stale-cord #16 finding). Same
+      // for the board extent, which reads live card geometry.
+      renderCords();
+      refreshBoardExtent();
     });
 
     removeBtn.addEventListener('click', function (event) {
@@ -2039,42 +2110,16 @@
   }
 
   // ---------------------------------------------------------------------
-  // SortableJS wiring (Part E) — FEW-2/PD-1: THE CHAIN SORTABLE IS
-  // RETIRED. Order changes move to cord editing (FEW-4); the grip now
-  // MOVES POSITION (see the FEW-2 block above), and the DOM order always
-  // equals the chain order (PD-4). Only the PALETTE instance survives.
+  // SortableJS wiring (Part E) — RETIRED ENTIRELY (2026-08-31 honesty
+  // round, the #16 dead-affordance finding). The chain-side instance was
+  // retired by FEW-2/PD-1 (order moves live in cord editing; the grip
+  // moves position); the PALETTE instance is now retired too: it dragged
+  // a clone with no receiver on the free board, so the gesture could
+  // never add anything — a documented verb that cannot work. The
+  // committed add verbs are the chip CLICK and keyboard activation (both
+  // addNodeType, first-free-slot placement). vendor/sortable.min.js is
+  // no longer loaded; SortableJS leaves THIRD_PARTY_NOTICES with it.
   // ---------------------------------------------------------------------
-
-  // Palette list: source-only. `pull: 'clone'` leaves the original chip in
-  // place and drags out a clone; `put: false` means nothing can ever be
-  // dropped INTO the palette; `sort: false` means the palette's own item
-  // order never changes via drag. onStart/onEnd maintain the MC-4 drag flag
-  // (see `dragActive` above) — a palette drag is heading for the chain
-  // list, so agent mutations must queue behind it too.
-  //
-  // Refinement entry 3: `draggable: '.node-chip'` scopes the drag ITEMS to
-  // the chips now that the palette list also carries interleaved group
-  // headers — SortableJS resolves the drag target with
-  // closest(target, options.draggable, el), so a press on a header matches
-  // nothing and never starts a drag, while a press on a chip resolves to
-  // exactly the element the default '>*' selector would have picked
-  // (chips are direct children). Chip drag behavior is unchanged; the
-  // headers are inert to the pointer.
-  //
-  // FEW-2 honesty note: with no chain-side receiver, a palette CLONE drag
-  // no longer lands anywhere (SortableJS reverts it). The committed add
-  // verbs this task are the chip CLICK and keyboard activation (both
-  // addNodeType, first-free-slot placement); drop-point placement is
-  // FEW-7's scope.
-  var paletteSortable = new window.Sortable(paletteListEl, {
-    group: { name: 'chain-group', pull: 'clone', put: false },
-    sort: false,
-    draggable: '.node-chip',
-    forceFallback: true,
-    animation: 150,
-    onStart: function () { dragActive = true; },
-    onEnd: function () { dragActive = false; },
-  });
 
   /**
    * Called once by src/main.js right after AudioEngine.start() resolves
@@ -2101,15 +2146,15 @@
     // Refinement entry 2 ($impeccable clarify): the empty-hint's copy is
     // STATE-AWARE. Pre-Start, index.html's static default teaches the true
     // first action ("Press Start to power on") because the palette is
-    // pointer-locked and dragging is impossible in that state — the old
-    // always-drag default was an invitation the gated surface could not
-    // honor (critique P2). Flipped HERE, at the exact transition where the
-    // palette un-locks, to the cycle-1 drag teaching copy (verbatim — the
-    // only place that string lives now). updateEmptyHint() only ever
+    // pointer-locked and adding is impossible in that state. Flipped HERE,
+    // at the exact transition where the palette un-locks, to the working
+    // add verbs — click / keyboard activation. (The retired palette DRAG
+    // had no receiver on the free board, so teaching "drag" here was an
+    // invitation the surface could not honor.) updateEmptyHint() only ever
     // toggles display, so the live copy persists across every later
     // empty/populated state (e.g. removing the last node re-shows it).
     if (emptyHintEl) {
-      emptyHintEl.textContent = 'Drag an effect here to start building your chain';
+      emptyHintEl.textContent = 'Click an effect to add it to the chain';
     }
     // The display register's state line flips at the same transition —
     // ENGINE LIVE with the live module count (mode returns to 'state';
@@ -2166,11 +2211,31 @@
    *   exactly.
    */
   function loadModel(model, layout) {
+    // Chain replacement invalidates every in-flight board gesture (the
+    // #16 race finding): a cord edit / seat move / width resize armed
+    // against the OLD chain must never commit against the replacement
+    // board. finishCordDrag(null) is the REVERT path (no target = no
+    // commit), and the seat/resize drags are dropped wholesale — loadModel
+    // re-derives every position below, so their pending writes are
+    // meaningless. This runs FIRST, before the DOM swap clears the
+    // elements those gestures hold.
+    if (cordDrag) {
+      cancelCordDrag();
+    }
+    if (positionDrag || resizeDrag) {
+      positionDrag = null;
+      resizeDrag = null;
+      dragActive = false;
+    }
     chainListEl.innerHTML = '';
     nodesById = {};
 
     model.forEach(function (entry) {
-      var card = createNodeCard(entry.type, entry.params, entry.id);
+      // Discrete-enum canonicalization: the card (and the nodeState it
+      // seeds, which recomputeModelFromDom() and the autosave read) gets
+      // the canonical STRING for any `values` param, never a raw numeric
+      // enum that the visible pad could not display.
+      var card = createNodeCard(entry.type, canonicalParams(entry.type, entry.params), entry.id);
       chainListEl.appendChild(card);
     });
 
@@ -2203,8 +2268,11 @@
       if (saved && typeof saved.x === 'number' && isFinite(saved.x) &&
           typeof saved.y === 'number' && isFinite(saved.y)) {
         positions[entry.id] = {
-          x: snapToGrid(saved.x),
-          y: snapToGrid(saved.y),
+          // Math.max(0, ...) — the board has no negative region: a hostile
+          // or hand-edited payload with negative seats would otherwise
+          // park live cards outside the reachable board (the #16 finding).
+          x: Math.max(0, snapToGrid(saved.x)),
+          y: Math.max(0, snapToGrid(saved.y)),
           // A saved width rides along clamped (the condensed range is the
           // board's own geometry contract); absent -> the CSS default.
           w: typeof saved.w === 'number' && isFinite(saved.w) ? clampCardW(saved.w) : undefined,
@@ -2299,7 +2367,11 @@
       return false;
     }
     var updated = Object.assign({}, nodeState.params);
-    updated[paramId] = value;
+    // Canonical STRING for a discrete param (autotune key/scale): a legal
+    // raw numeric enum written by an agent or a hand-edited payload maps
+    // to its declared value here, so the model, the visible pad, and the
+    // autosave below all hold ONE truth (the pad matches strings only).
+    updated[paramId] = canonicalParamValue(nodeState.type, paramId, value);
     // nodeState is the SAME object reference chainModel holds for this id
     // (file-level model-bookkeeping comment), so this assignment is already
     // reflected in chainModel for the persistence read below — no

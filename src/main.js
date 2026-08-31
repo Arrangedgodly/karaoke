@@ -35,6 +35,29 @@ console.log('App scaffold loaded');
   var statusTextEl = document.getElementById('status-text');
   var startHintEl = document.getElementById('start-hint');
   var bypassButton = document.getElementById('bypass-toggle-button');
+  // #16 finding: the latched autosave-failure warning. Shown while
+  // window.Persistence.isSaveFailed() is true; driven by the module's
+  // 'chain-autosave-failed' / 'chain-autosave-recovered' events so the
+  // element only ever reflects VERIFIED save outcomes (it clears exactly
+  // when a later save succeeds — never on a timer).
+  var autosaveWarningEl = document.getElementById('autosave-warning');
+  function updateAutosaveWarning() {
+    if (!autosaveWarningEl) {
+      return;
+    }
+    var failed = false;
+    try {
+      failed = !!(window.Persistence &&
+        typeof window.Persistence.isSaveFailed === 'function' &&
+        window.Persistence.isSaveFailed());
+    } catch (err) {
+      failed = false;
+    }
+    autosaveWarningEl.hidden = !failed;
+  }
+  ['chain-autosave-failed', 'chain-autosave-recovered'].forEach(function (evtName) {
+    document.addEventListener(evtName, updateAutosaveWarning);
+  });
   // Refinement entry 5: the canvas panel carrying the bypassed indication
   // (class toggled in setBypassButtonLabel below, removed on lifecycle
   // loss — see surfaceLoss). Resolved lazily, not at load: the node-side
@@ -591,10 +614,47 @@ console.log('App scaffold loaded');
         // payload, or a preset-load baseline) means every section takes
         // the incumbent tidy stack; nothing is synthesized here.
         var initialLayout = window.Persistence ? window.Persistence.loadInitialLayout() : null;
-        if (window.ChainCanvas) {
-          window.ChainCanvas.loadModel(initialModel, initialLayout);
-        } else {
-          window.AudioGraph.buildGraph(initialModel);
+        // The restore step is its own failure domain (#16 finding): a
+        // saved chain whose node factories throw synchronously (e.g. a
+        // Tone-backed effect that cannot construct in this environment)
+        // used to fall into the MIC-failure catch below — reporting an
+        // error/stopped UI while the microphone capture stayed LIVE
+        // behind it, and making every Start retry repeat the same
+        // failure. Instead: fall back to an EMPTY chain (factory-proof —
+        // a pure source->gate passthrough), keep the engine live,
+        // un-gate the UI below as on any successful start, and say so
+        // truthfully on the status line. The autosave slot is
+        // deliberately re-written with the ORIGINAL saved model so a
+        // transient factory failure cannot destroy the operator's chain
+        // — it restores again once the environment can build it.
+        var restoreFailed = false;
+        try {
+          if (window.ChainCanvas) {
+            window.ChainCanvas.loadModel(initialModel, initialLayout);
+          } else {
+            window.AudioGraph.buildGraph(initialModel);
+          }
+        } catch (restoreErr) {
+          console.error('Saved chain could not be restored; starting with an empty chain:', restoreErr);
+          restoreFailed = true;
+          try {
+            if (window.ChainCanvas) {
+              window.ChainCanvas.loadModel([]);
+            } else {
+              window.AudioGraph.buildGraph([]);
+            }
+            // loadModel([]) re-baselined the autosave to the empty chain;
+            // put the original saved model back so a later healthy start
+            // (or a reload in a working environment) still finds it.
+            if (window.Persistence && typeof window.Persistence.saveCurrentChain === 'function') {
+              window.Persistence.saveCurrentChain(initialModel, initialLayout || {});
+            }
+          } catch (fallbackErr) {
+            // An empty chain invokes no factories; unreachable in
+            // practice — and never allowed to break a Start that already
+            // succeeded.
+            console.error('Empty-chain fallback also failed:', fallbackErr);
+          }
         }
 
         // AE-3: (re-)establish the independent bypass dry tap now that
@@ -640,7 +700,18 @@ console.log('App scaffold loaded');
           window.StatusReadouts.onEngineStarted(window.AudioEngine.audioContext);
         }
 
-        setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+        // Truthful status even when the chain restore fell back: the
+        // engine IS live (mic + passthrough), and the operator must see
+        // that their saved chain did not load rather than a bare "error".
+        // The lamp keeps its own truth (isEngineLive) in the normal path —
+        // only the fallback case forces it on, because the engine that
+        // just started successfully is live by definition there.
+        setStatus(
+          restoreFailed
+            ? 'Live — saved chain failed to load; started empty'
+            : (isEngineLive() ? 'Live' : 'Stopped'),
+          restoreFailed ? true : isEngineLive()
+        );
         contextLost = false; // issue #4: a fresh start clears any suspend state
 
         return populateDeviceList(window.AudioEngine.currentDeviceId);

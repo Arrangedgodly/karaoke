@@ -300,11 +300,10 @@ function model() {
 var TIDY = { x: 16, row: 160 };
 
 // ----------------------------------------------------------------------
-console.log('A. wiring (PD-1: chain Sortable retired, palette kept)');
+console.log('A. wiring (PD-1: chain Sortable retired; palette drag retired 2026-08-31 — zero instances)');
 check(
-  SortableStub.instances.length === 1 &&
-    SortableStub.instances[0].el === paletteListEl,
-  'A1: exactly ONE Sortable instance — the PALETTE (the chain instance is retired)'
+  SortableStub.instances.length === 0,
+  'A1: ZERO Sortable instances (the chain instance retired by PD-1; the palette drag retired 2026-08-31 — click/keyboard are the add verbs)'
 );
 check(
   CC.GRID_PITCH === 16 && typeof CC.snapToGrid === 'function' &&

@@ -529,9 +529,9 @@ async function main() {
   );
   check(
     guide && guide.vocabulary && Array.isArray(guide.vocabulary.lofi) &&
-    guide.vocabulary.lofi.indexOf('bitcrusher bits 3..5') !== -1 &&
+    guide.vocabulary.lofi.indexOf('bitcrusher bits 6..3 (fewer bits = more crushed)') !== -1 &&
     guide.vocabulary.lofi.indexOf('bitcrusher mix 20..45%') !== -1,
-    'E1: lofi maps to bitcrusher bits/mix inside the spec ranges'
+    'E1: lofi maps to bitcrusher bits/mix inside the spec ranges, DESCENDING (slight 6 -> strong 3 — fewer bits = more crushed, so intensity-following agents crush MORE, not less)'
   );
   // The coverage property the owner asked for: every one of the four
   // Tone types is reachable by at least one plain-language intent.

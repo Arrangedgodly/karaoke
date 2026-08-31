@@ -406,9 +406,14 @@ var baseSaves = saves.length;
 // ----------------------------------------------------------------------
 console.log('B. deliberate-drag threshold: a click on a jack is not an unplug');
 grabJack('section-out', 'n2');
-check(CC.isDragActive() === false, 'B1: press alone does not engage the drag flag');
+// 2026-08-31 (#16 race fix): the drag flag now engages at ARM (press),
+// not at the detach threshold — the agent-mutation queue polls this flag,
+// and arming late left a window for a structural agent edit to replace
+// the board under an armed press. A press still detaches nothing and
+// commits nothing; the threshold below still governs the EDIT.
+check(CC.isDragActive() === true, 'B1: press alone engages the drag flag at ARM (agent mutations queue from the press)');
 move({ x: seatOut('n2').x + 3, y: seatOut('n2').y }); // 3px past n2's out-jack — sub-threshold
-check(CC.isDragActive() === false && !ghostEl(), 'B2: sub-threshold move detaches nothing (no flag, no ghost)');
+check(CC.isDragActive() === true && !ghostEl(), 'B2: sub-threshold move detaches nothing (flag stays up from the press, no ghost yet)');
 drop({ x: 99, y: 208 });
 check(
   buildCount === baseBuild && saves.length === baseSaves &&

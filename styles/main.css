@@ -2563,6 +2563,23 @@ select.control {
   font-size: 0.75rem;
 }
 
+/* #16 finding: the latched autosave-failure warning — safety-red edge
+   ring (the split-role red rule: edge for attention, never a solid
+   fill), mono print at the unsaved-dot's own tier. role="alert" on the
+   element carries the announcement; this only paints it. */
+.autosave-warning {
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--red-edge);
+  border-radius: 3px;
+  font-family: var(--font-readout);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--pm-print-hi);
+  background: var(--pm-register-bg);
+  overflow-wrap: anywhere;
+}
+
 /* Direct children only — Save As… and the <select> stack full-width in the
    column; the Load/Delete pair below is laid out separately via
    .preset-actions so they can sit side by side instead. */
