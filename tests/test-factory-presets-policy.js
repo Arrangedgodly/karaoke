@@ -155,11 +155,8 @@ function loadSrc(sandbox, relPath) {
 }
 
 // ----------------------------------------------------------------------
-// ChainCanvas stub — the read surface the tools use (getCurrentModel as
-// read-only copies, isDragActive always idle) plus the single write path:
-// loadModel takes ownership of copies of what it is handed. With the
-// engine not started it skips the audio rebuild, exactly like the real
-// pre-Start path applyCandidateViaUi documents.
+// ChainCanvas adapter stub. ChainEditing owns accepted model changes; the
+// policy suite runs pre-Start, so only the rendered model matters here.
 // ----------------------------------------------------------------------
 function installChainCanvasStub(sandbox) {
   var canvasModel = [];
@@ -170,11 +167,21 @@ function installChainCanvasStub(sandbox) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       canvasModel = copyNodes(model);
-      // Engine not started -> the guarded no-op rebuild the app itself
-      // takes before Start (the policy layer under test never depends on
-      // the physical graph).
+      return true;
+    },
+    renderNodeParam: function (id, param, value) {
+      for (var i = 0; i < canvasModel.length; i++) {
+        if (canvasModel[i].id === id) {
+          canvasModel[i].params[param] = value;
+          return true;
+        }
+      }
+      return false;
     }
   };
 }
@@ -214,8 +221,9 @@ async function main() {
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/default-preset.js');
   loadSrc(sandbox, 'src/factory-presets.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var setChain = getTool(sandbox, 'set_chain');
   var getChain = getTool(sandbox, 'get_chain');
@@ -377,7 +385,11 @@ async function main() {
   // A fresh profile gets the default chain (src/persistence.js's fallback
   // — loadInitialModel() uses window.DEFAULT_PRESET.nodes when nothing is
   // autosaved yet). Seed the canvas the same way, then round-trip.
-  sandbox.ChainCanvas.loadModel(copyNodes(sandbox.DEFAULT_PRESET.nodes));
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: copyNodes(sandbox.DEFAULT_PRESET.nodes),
+    forceStructural: true
+  });
 
   var readRes = await getChain.execute({});
   check(

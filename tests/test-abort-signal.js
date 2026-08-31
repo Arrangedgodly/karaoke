@@ -365,8 +365,7 @@ function loadSrc(sandbox, relPath) {
 }
 
 // ----------------------------------------------------------------------
-// ChainCanvas stub — same single-write-path shape as the mutation-undo
-// test, plus a controllable isDragActive (the mechanism that holds the
+// ChainCanvas adapter stub, plus a controllable isDragActive (the mechanism that holds the
 // drag-settle queue) with a one-shot release hook: __setReleaseHook(fn,
 // afterCalls) arms the hook to fire on the isDragActive call AFTER the
 // next `afterCalls` calls (so the wait's INITIAL drag check can be told
@@ -406,15 +405,21 @@ function installChainCanvasStub(sandbox, drag) {
       releaseHook = fn;
       hookPendingCalls = afterCalls || 0;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
+      return true;
+    },
+    renderNodeParam: function (id, param, value) {
+      for (var i = 0; i < canvasModel.length; i++) {
+        if (canvasModel[i].id === id) {
+          canvasModel[i].params[param] = value;
+          return true;
+        }
       }
+      return false;
     }
   };
 }
@@ -495,16 +500,15 @@ async function main() {
   loadSrc(sandbox, 'src/node-reverb.js');
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/default-preset.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   var drag = { active: false };
   installChainCanvasStub(sandbox, drag);
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var AG = sandbox.AudioGraph;
   var DEFAULTS = sandbox.DEFAULT_PRESET.nodes;
 
-  // Persistence: the fast path's ChainCanvas.updateNodeParam /
-  // applyCandidateViaUi route through Persistence.saveCurrentChain when
-  // the module is present — count writes through a recorder stub.
+  // Count ChainEditing autosave writes through a recorder stub.
   var ctx = {
     undoPushes: 0,
     persistenceWrites: 0,
@@ -560,8 +564,13 @@ async function main() {
   // --------------------------------------------------------------------
   console.log('0. seed the live default chain (n5 reverb mix 20)');
   // --------------------------------------------------------------------
-  sandbox.ChainCanvas.loadModel(DEFAULTS);
-  await settle();
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: DEFAULTS,
+    forceStructural: true
+  });
+  ctx.persistenceWrites = 0;
+  ctx.presetUiWrites = 0;
 
   ctx.reverb = AG.getNodeInstance('n5');
   ctx.wet20 = wetAt(20);
@@ -882,8 +891,7 @@ async function main() {
   // --------------------------------------------------------------------
   console.log('G. production WebMCP mutations fail closed without ChainEditing');
   // --------------------------------------------------------------------
-  delete sandbox.ChainEditing;
-  vm.runInContext('document.defaultView = window;', sandbox);
+  vm.runInContext('window.ChainEditing = undefined; document.defaultView = window;', sandbox);
   var beforeFailClosed = sandbox.ChainCanvas.getCurrentModel();
   var failClosedResult = await getTool(sandbox, 'set_param').execute({
     nodeId: 'n5',
@@ -891,9 +899,12 @@ async function main() {
     value: 35
   });
   check(failClosedResult && failClosedResult.code === 'SCHEMA_LAYER_FAULT',
-    'G1: a production-like page reports dependency failure instead of using the legacy write path');
+    'G1: a production-like page reports dependency failure instead of using the legacy write path (got ' +
+      JSON.stringify(failClosedResult) + ')');
   check(JSON.stringify(sandbox.ChainCanvas.getCurrentModel()) === JSON.stringify(beforeFailClosed),
-    'G2: the missing-seam failure performs no logical mutation');
+    'G2: the missing-seam failure performs no logical mutation (before ' +
+      JSON.stringify(beforeFailClosed) + ', after ' +
+      JSON.stringify(sandbox.ChainCanvas.getCurrentModel()) + ')');
 
   // --------------------------------------------------------------------
   if (failures.length === 0) {

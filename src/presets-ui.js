@@ -585,26 +585,18 @@
   }
 
   function applyLoadedPreset(preset) {
-    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
-      window.ChainEditing.apply({
-        source: 'preset',
-        candidate: preset.nodes,
-        forceStructural: true,
-        preset: { name: preset.name, modified: false }
-      }).catch(function (err) {
-        console.error('Presets panel: load failed', err);
-        showPresetNote('Could not apply that preset. The previous chain was restored when possible.');
-      });
-      return;
+    if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
+      throw new Error('ChainEditing is required for every preset mutation.');
     }
-    // Bare test/legacy harness fallback; production loads ChainEditing.
-    if (document && document.defaultView === window) {
-      throw new Error('ChainEditing is required for preset mutations in the production page.');
-    }
-    window.ChainCanvas.loadModel(preset.nodes);
-    setCurrentPreset(preset.name);
-    clearModified();
-    noteHumanEditGuarded();
+    window.ChainEditing.apply({
+      source: 'preset',
+      candidate: preset.nodes,
+      forceStructural: true,
+      preset: { name: preset.name, modified: false }
+    }).catch(function (err) {
+      console.error('Presets panel: load failed', err);
+      showPresetNote('Could not apply that preset. The previous chain was restored when possible.');
+    });
   }
 
   /**

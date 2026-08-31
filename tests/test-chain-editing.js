@@ -424,6 +424,23 @@ async function main() {
   check(presetIndex !== -1 && presetIndex < editingIndex && editingIndex < toolsIndex && editingIndex < mainIndex,
     'H1: PresetsUI loads before ChainEditing, which loads before WebMCP and startup');
 
+  var mutationSources = [
+    'src/canvas.js',
+    'src/param-controls.js',
+    'src/presets-ui.js',
+    'src/mcp-tools.js',
+    'src/main.js'
+  ].map(function (relPath) {
+    return fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+  }).join('\n');
+  check(
+    mutationSources.indexOf('legacy harness fallback') === -1 &&
+      mutationSources.indexOf('applyCandidateViaUi') === -1 &&
+      mutationSources.indexOf('applyParamOnlyViaUi') === -1 &&
+      mutationSources.indexOf('assertLegacyMutationHarness') === -1,
+    'H2: production and test callers have no legacy mutation bypass around ChainEditing'
+  );
+
   if (failures > 0) {
     console.error('\n' + failures + ' check(s) failed');
     process.exit(1);

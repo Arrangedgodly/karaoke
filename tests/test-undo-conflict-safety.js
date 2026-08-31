@@ -523,6 +523,7 @@ function createEnv() {
     'src/presets-ui.js',
     'src/param-controls.js',
     'src/canvas.js',
+    'src/chain-editing.js',
     'src/mcp-tools.js'
   ].forEach(function (relPath) {
     vm.runInContext(src(relPath), sandbox, { filename: relPath });
@@ -636,6 +637,14 @@ function agentSetParamMix40(env) {
   return getTool(env, 'set_param').execute({ nodeId: 'n5', param: 'mix', value: 40 });
 }
 
+function seedDefault(env) {
+  return env.sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: env.sandbox.DEFAULT_PRESET.nodes,
+    forceStructural: true
+  });
+}
+
 // ----------------------------------------------------------------------
 // Per-case conflict runner. `humanEdit` performs the human mutation
 // (through its REAL entry point) and returns a label; `humanState`
@@ -648,7 +657,7 @@ async function conflictCase(caseLabel, humanEdit, assertHumanState, assertRestor
   // -- Part 1: the conflict is surfaced, NOT applied. ------------------
   var env = createEnv();
   var sandbox = env.sandbox;
-  sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+  await seedDefault(env);
   await settle();
 
   var res = await agentSetParamMix40(env);
@@ -723,7 +732,7 @@ async function conflictCase(caseLabel, humanEdit, assertHumanState, assertRestor
   //    survives and the entry stays available-but-unapplied. ----------
   var env2 = createEnv();
   var sandbox2 = env2.sandbox;
-  sandbox2.ChainCanvas.loadModel(sandbox2.DEFAULT_PRESET.nodes);
+  await seedDefault(env2);
   await settle();
   await agentSetParamMix40(env2);
   await settle();
@@ -850,7 +859,7 @@ async function main() {
         }
       });
       sandbox.PresetStore.save('Stage', variant); // test seeding — no bump
-      sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+      await seedDefault(env);
       await settle();
       await agentSetParamMix40(env);
       await settle();
@@ -934,7 +943,7 @@ async function main() {
         }
       });
       sandbox.PresetStore.save('Del Target', variant); // test seeding
-      sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+      await seedDefault(env);
       await settle();
       await agentSetParamMix40(env);
       await settle();
@@ -1012,7 +1021,7 @@ async function main() {
   {
     var env = createEnv();
     var sandbox = env.sandbox;
-    sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+    await seedDefault(env);
     await settle();
     await agentSetParamMix40(env);
     await settle();
@@ -1045,7 +1054,7 @@ async function main() {
   {
     var env = createEnv();
     var sandbox = env.sandbox;
-    sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+    await seedDefault(env);
     await settle();
     var r1 = await agentSetParamMix40(env);
     var r2 = await getTool(env, 'set_param').execute({ nodeId: 'n5', param: 'mix', value: 60 });
@@ -1089,7 +1098,7 @@ async function main() {
     // Non-conflicted: the keyboard path finds the latest entry.
     var env = createEnv();
     var sandbox = env.sandbox;
-    sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+    await seedDefault(env);
     await settle();
     await agentSetParamMix40(env);
     await settle();
@@ -1108,7 +1117,7 @@ async function main() {
     // Conflicted: the keyboard path refuses (confirm lives on the toast).
     var env = createEnv();
     var sandbox = env.sandbox;
-    sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+    await seedDefault(env);
     await settle();
     await agentSetParamMix40(env);
     await settle();

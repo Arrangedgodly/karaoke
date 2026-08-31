@@ -260,7 +260,7 @@ check(
   'H1c: the FLOW toggle is GONE from the chrome (vertical flow retired)'
 );
 
-CC.loadModel(model3());
+CC.renderModel(model3());
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({
     n1: { x: 0, y: 16, scale: 1, flow: 'horizontal' },
@@ -284,7 +284,7 @@ check(
 
 // ----------------------------------------------------------------------
 
-CC.loadModel(model3(), {
+CC.renderModel(model3(), {
   n1: { x: 0, y: 16, w: 320, flow: 'horizontal' },
   n2: { x: 0, y: 16, w: 5000, flow: 'horizontal' },
   n3: { x: 0, y: 16, flow: 'horizontal' }
@@ -322,7 +322,7 @@ check(
 
 // Retirement migration: vertical flow no longer exists, so whatever a
 // legacy payload claims, every entry loads horizontal.
-CC.loadModel(model3(), {
+CC.renderModel(model3(), {
   n1: { x: 16, y: 0, flow: 'vertical' },
   n2: { x: 16, y: 160 }
 });

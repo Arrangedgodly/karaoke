@@ -586,23 +586,15 @@ console.log('App scaffold loaded');
         // payload, or a preset-load baseline) means every section takes
         // the incumbent tidy stack; nothing is synthesized here.
         var initialLayout = window.Persistence ? window.Persistence.loadInitialLayout() : null;
-        var restore;
-        if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
-          restore = window.ChainEditing.apply({
-            source: 'startup',
-            candidate: initialModel,
-            layout: initialLayout,
-            forceStructural: true
-          });
-        } else if (document && document.defaultView === window) {
-          throw new Error('ChainEditing is required for startup restoration in the production page.');
-        } else if (window.ChainCanvas) {
-          // Bare test/legacy harness fallback; index.html loads
-          // ChainEditing in production.
-          restore = window.ChainCanvas.loadModel(initialModel, initialLayout);
-        } else {
-          restore = window.AudioGraph.buildGraph(initialModel);
+        if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
+          throw new Error('ChainEditing is required for startup restoration.');
         }
+        var restore = window.ChainEditing.apply({
+          source: 'startup',
+          candidate: initialModel,
+          layout: initialLayout,
+          forceStructural: true
+        });
 
         return Promise.resolve(restore).then(function () {
           // AE-3: (re-)establish the independent bypass dry tap now that

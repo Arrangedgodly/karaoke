@@ -486,7 +486,7 @@ function partA() {
 // B. PARAM-CONTROLS — the UI-1 discrete branch never touches a legacy row.
 // ======================================================================
 function partB() {
-  console.log('B. param-controls: legacy rows are sliders with numeric commits');
+  console.log('B. param-controls: legacy rows emit normalized numeric intents');
 
   var s = createSandbox();
   CORE_FILES.concat(LEGACY_NODE_FILES).forEach(function (f) {
@@ -561,13 +561,20 @@ function partB() {
   LEGACY_TYPES.forEach(function (type) {
     applied.length = 0;
     modelUpdates.length = 0;
+    var intents = [];
     var inst = fakeInstanceFor(type);
     var target = firstParamTarget(type, inst);
     s.AudioGraph.getNodeInstance = function (id) {
       return id === 'x-' + type ? inst : null;
     };
     container = makeElement('div');
-    s.ParamControls.render(container, { id: 'x-' + type, type: type, params: {} });
+    s.ParamControls.render(
+      container,
+      { id: 'x-' + type, type: type, params: {} },
+      function (params, change) {
+        intents.push({ params: params, change: change });
+      }
+    );
 
     var rows = container.children;
     var spec = s.NodeTypes.getParamSpec(type);
@@ -600,8 +607,8 @@ function partB() {
     check(allRanges, 'B2: ' + type + ': every control is an input[type=range] (no select)');
 
     // Fire a non-default string value on the FIRST param's slider and
-    // verify the exact pre-cycle-1..2 commit semantics: parseFloat to a
-    // NUMBER, passed verbatim to applyParam, model updated with numbers.
+    // verify the gesture translator parses to a NUMBER and emits the
+    // normalized intent without writing live/model state itself.
     var first = spec[0];
     var firstInput = deepInputs(rows[0])[0];
     var probe = String(first.default === 0 ? 7.5 : first.default / 2);
@@ -609,29 +616,22 @@ function partB() {
     firstInput.__fire('input');
 
     check(
-      applied.length === 1 &&
-        applied[0].type === type &&
-        applied[0].paramId === first.id &&
-        typeof applied[0].value === 'number' &&
-        applied[0].value === parseFloat(probe),
-      'B3: ' + type + '.' + first.id + ': input event commits parseFloat(value)=' +
-        parseFloat(probe) + ' as a NUMBER to NodeTypes.applyParam'
+      intents.length === 1 &&
+        intents[0].change.param === first.id &&
+        typeof intents[0].change.value === 'number' &&
+        intents[0].change.value === parseFloat(probe),
+      'B3: ' + type + '.' + first.id + ': input emits parseFloat(value)=' +
+        parseFloat(probe) + ' as a normalized NUMBER intent'
     );
     check(
-      modelUpdates.length === 1 &&
-        typeof modelUpdates[0].params[first.id] === 'number' &&
-        modelUpdates[0].params[first.id] === parseFloat(probe),
-      'B4: ' + type + '.' + first.id + ': AudioGraph.updateNodeParams receives the numeric value'
+      typeof intents[0].params[first.id] === 'number' &&
+        intents[0].params[first.id] === parseFloat(probe),
+      'B4: ' + type + '.' + first.id + ': candidate params carry the numeric value'
     );
 
-    // The real applyParam wrote through AudioParamRamp onto the right
-    // sub-param with the type's documented conversion (dB->linear, ms->s,
-    // %->equal-power) — the live-write path, not just the commit value.
-    var expectedValue = target.expected(parseFloat(probe));
     check(
-      approx(target.param.value, expectedValue),
-      'B5: ' + type + '.' + first.id + ': the real applyParam ramped the destination param to ' +
-        expectedValue + ' (documented conversion, AudioParamRamp path)'
+      applied.length === 0 && modelUpdates.length === 0 && target.param.value === 0,
+      'B5: ' + type + '.' + first.id + ': ParamControls leaves live and graph state untouched until acceptance'
     );
   });
 
@@ -800,7 +800,7 @@ async function partD() {
     noteHumanEdit: function () {}
   };
 
-  // ChainCanvas stub: the read surface + the single write path.
+  // ChainCanvas adapter stub; ChainEditing is the only mutation path.
   var canvasModel = [];
   function copyModel(model) {
     return model.map(function (entry) {
@@ -814,13 +814,24 @@ async function partD() {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       canvasModel = copyModel(model);
-      if (s.AudioEngine && s.AudioEngine.isStarted) {
-        s.AudioGraph.buildGraph(canvasModel);
+      return true;
+    },
+    renderNodeParam: function (id, param, value) {
+      for (var i = 0; i < canvasModel.length; i++) {
+        if (canvasModel[i].id === id) {
+          canvasModel[i].params[param] = value;
+          return true;
+        }
       }
+      return false;
     }
   };
+  loadSrc(s, 'src/chain-editing.js');
 
   function getTool(name) {
     var defs = s.McpTools.getDefs();

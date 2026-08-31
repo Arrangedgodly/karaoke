@@ -235,9 +235,8 @@ function loadSrc(sandbox, relPath) {
   });
 }
 
-// ChainCanvas stub — the same responsibilities the real export has for the
-// mutation tools (model copy semantics + the updateNodeParam in-place
-// path). Persuasively minimal: same shape as test-param-only-mutation.js's.
+// ChainCanvas adapter stub. ChainEditing owns mutation sequencing; this
+// keeps only accepted rendered state for the Tone-node assertions.
 function installChainCanvasStub(sandbox) {
   var canvasModel = [];
   function copyModel(model) {
@@ -252,13 +251,14 @@ function installChainCanvasStub(sandbox) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
-      canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(canvasModel);
-      }
+    getCurrentLayout: function () {
+      return {};
     },
-    updateNodeParam: function (nodeId, paramId, value) {
+    renderModel: function (model) {
+      canvasModel = copyModel(model);
+      return true;
+    },
+    renderNodeParam: function (nodeId, paramId, value) {
       var entry = null;
       for (var i = 0; i < canvasModel.length; i++) {
         if (canvasModel[i].id === nodeId) {
@@ -302,10 +302,11 @@ async function main() {
   loadSrc(sandbox, 'src/node-tremolo.js');
   loadSrc(sandbox, 'src/node-bitcrusher.js');
   loadSrc(sandbox, 'src/node-phaser.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
   sandbox.Persistence = { saveCurrentChain: function () {} };
   sandbox.PresetsUI = { markModified: function () {} };
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var AG = sandbox.AudioGraph;
   var NT = sandbox.NodeTypes;
@@ -458,11 +459,14 @@ async function main() {
 
   // Seed a chain with the terminal limiter the chain rules require, plus
   // a live pitchshift to mutate.
-  sandbox.ChainCanvas.loadModel([
-    { id: 't1', type: 'pitchshift', params: { pitch: 0, mix: 100 } },
-    { id: 'n6', type: 'limiter', params: { ceiling: -1, release: 50 } }
-  ]);
-  await settle();
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: [
+      { id: 't1', type: 'pitchshift', params: { pitch: 0, mix: 100 } },
+      { id: 'n6', type: 'limiter', params: { ceiling: -1, release: 50 } }
+    ],
+    forceStructural: true
+  });
 
   var liveComp = AG.getNodeInstance('t1');
   check(!!liveComp && liveComp.tone.__fakeToneName === 'PitchShift', 'D3: live pitchshift instance before set_param');

@@ -329,6 +329,7 @@ function createEnv() {
     'src/param-controls.js',
     'src/presets-ui.js',
     'src/canvas.js',
+    'src/chain-editing.js',
     'src/mcp-server.js',
     'src/mcp-tools.js'
   ].forEach(function (relPath) {
@@ -351,9 +352,9 @@ function createEnv() {
     undo: function () {
       var entry = env.agentUi.undoPushes.pop() || null;
       if (entry && typeof entry.restore === 'function') {
-        entry.restore();
+        return Promise.resolve(entry.restore()).then(function () { return entry; });
       }
-      return entry;
+      return Promise.resolve(entry);
     }
   };
 
@@ -569,7 +570,11 @@ async function main() {
     await sleep(0);
 
     // Seed: the default chain live, displayed as a named baseline.
-    sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+    await sandbox.ChainEditing.apply({
+      source: 'startup',
+      candidate: sandbox.DEFAULT_PRESET.nodes,
+      forceStructural: true
+    });
     sandbox.PresetsUI.setCurrentPreset('Baseline');
     sandbox.PresetsUI.clearModified();
     var baselineUndoPushes = 0;
@@ -608,7 +613,11 @@ async function main() {
     // two in a row, then undo both (a stacked pure-agent sequence, no
     // human edit in between: nothing conflicts).
     env.agentUi.undoPushes.length = 0;
-    sandbox.ChainCanvas.loadModel(sandbox.DEFAULT_PRESET.nodes);
+    await sandbox.ChainEditing.apply({
+      source: 'startup',
+      candidate: sandbox.DEFAULT_PRESET.nodes,
+      forceStructural: true
+    });
     sandbox.PresetsUI.setCurrentPreset('Baseline');
     await getTool(sandbox, 'load_preset').execute({ name: 'Warm Ballad' });
     await getTool(sandbox, 'load_preset').execute({ name: 'Rock Night' });
@@ -617,7 +626,7 @@ async function main() {
         env.panel.byId['current-preset-name'].textContent === 'Rock Night',
       'C2: stacked loads — the live model is Rock Night and its name is displayed'
     );
-    sandbox.AgentUI.undo(); // pops Rock Night -> restores Warm Ballad + its name
+    await sandbox.AgentUI.undo(); // pops Rock Night -> restores Warm Ballad + its name
     var warm = sandbox.FactoryPresets.list().filter(function (p) {
       return p.name === 'Warm Ballad';
     })[0];
@@ -626,7 +635,7 @@ async function main() {
         env.panel.byId['current-preset-name'].textContent === 'Warm Ballad',
       'C2: undo #1 restores Warm Ballad — the chain AND the prior preset name'
     );
-    sandbox.AgentUI.undo(); // pops Warm Ballad -> restores the Baseline default chain
+    await sandbox.AgentUI.undo(); // pops Warm Ballad -> restores the Baseline default chain
     check(
       deepEqual(sandbox.ChainCanvas.getCurrentModel(), sandbox.DEFAULT_PRESET.nodes) &&
         env.panel.byId['current-preset-name'].textContent === 'Baseline',

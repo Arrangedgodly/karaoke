@@ -192,11 +192,8 @@ function loadSrc(sandbox, relPath) {
 }
 
 // ----------------------------------------------------------------------
-// ChainCanvas stub — just enough of src/canvas.js's exported surface for
-// the mutation tools: getCurrentModel (read-only copy), isDragActive
-// (always idle — no drag queue), and loadModel, which mirrors the real
-// one's essentials for this test: take ownership of copies, then rebuild
-// the audio graph via the same guarded call rebuildGraph() makes.
+// ChainCanvas adapter stub. ChainEditing owns graph mutation and accepted
+// state; this records only the rendered model/parameter view.
 // ----------------------------------------------------------------------
 function installChainCanvasStub(sandbox) {
   var canvasModel = [];
@@ -212,15 +209,21 @@ function installChainCanvasStub(sandbox) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
+      return true;
+    },
+    renderNodeParam: function (id, param, value) {
+      for (var i = 0; i < canvasModel.length; i++) {
+        if (canvasModel[i].id === id) {
+          canvasModel[i].params[param] = value;
+          return true;
+        }
       }
+      return false;
     }
   };
 }
@@ -261,8 +264,9 @@ async function main() {
   loadSrc(sandbox, 'src/audio-param-ramp.js'); // issue #5: the ramp helper the node applyParam handlers call
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-limiter.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
   var applyParamCalls = installApplyParamRecorder(sandbox);
 
   var AG = sandbox.AudioGraph;
@@ -434,11 +438,14 @@ async function main() {
 
   // Seed a default-chain-shaped live graph (src/default-preset.js's ids):
   // n1 a live GainNode, n6 the terminal limiter.
-  sandbox.ChainCanvas.loadModel([
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: [
     { id: 'n1', type: 'gain', params: { gainDb: 0 } },
     { id: 'n6', type: 'limiter', params: { ceiling: -1, release: 50 } }
-  ]);
-  await settle();
+    ],
+    forceStructural: true
+  });
 
   var oldGain = AG.getNodeInstance('n1');
   var oldN6 = AG.getNodeInstance('n6');

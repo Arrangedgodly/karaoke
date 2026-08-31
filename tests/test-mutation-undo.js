@@ -333,8 +333,8 @@ function loadSrc(sandbox, relPath) {
   });
 }
 
-// ChainCanvas stub — same single-write-path shape as the other tool-path
-// tests: loadModel takes ownership of copies and rebuilds the graph.
+// ChainCanvas adapter stub. ChainEditing owns graph commit, accepted state,
+// persistence, and Undo; this adapter only renders accepted model changes.
 function installChainCanvasStub(sandbox) {
   var canvasModel = [];
   function copyModel(model) {
@@ -349,15 +349,21 @@ function installChainCanvasStub(sandbox) {
     isDragActive: function () {
       return false;
     },
-    loadModel: function (model) {
+    getCurrentLayout: function () {
+      return {};
+    },
+    renderModel: function (model) {
       canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
+      return true;
+    },
+    renderNodeParam: function (id, param, value) {
+      for (var i = 0; i < canvasModel.length; i++) {
+        if (canvasModel[i].id === id) {
+          canvasModel[i].params[param] = value;
+          return true;
+        }
       }
+      return false;
     }
   };
 }
@@ -399,8 +405,9 @@ async function main() {
   loadSrc(sandbox, 'src/node-reverb.js');
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/default-preset.js');
-  loadSrc(sandbox, 'src/mcp-tools.js');
   installChainCanvasStub(sandbox);
+  loadSrc(sandbox, 'src/chain-editing.js');
+  loadSrc(sandbox, 'src/mcp-tools.js');
 
   var AG = sandbox.AudioGraph;
   var DEFAULTS = sandbox.DEFAULT_PRESET.nodes;
@@ -425,8 +432,11 @@ async function main() {
   // --------------------------------------------------------------------
   console.log('0. seed the live default chain (n5 reverb mix 20)');
   // --------------------------------------------------------------------
-  sandbox.ChainCanvas.loadModel(DEFAULTS);
-  await settle();
+  await sandbox.ChainEditing.apply({
+    source: 'startup',
+    candidate: DEFAULTS,
+    forceStructural: true
+  });
 
   var reverb0 = AG.getNodeInstance('n5');
   check(

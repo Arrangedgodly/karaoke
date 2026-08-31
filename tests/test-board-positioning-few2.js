@@ -244,6 +244,19 @@ vm.runInContext(
 );
 
 var CC = sandbox.ChainCanvas;
+sandbox.ChainEditing = {
+  getModel: function () { return CC.getCurrentModel(); },
+  getLayout: function () { return CC.getCurrentLayout(); },
+  syncLayout: function () {},
+  apply: function (request) {
+    if (request.candidate) {
+      CC.renderModel(request.candidate, request.layout);
+    } else if (request.change) {
+      CC.renderNodeParam(request.change.nodeId, request.change.param, request.change.value);
+    }
+    return Promise.resolve({ applied: true, saved: true });
+  }
+};
 
 // ----------------------------------------------------------------------
 // Helpers.
@@ -315,7 +328,7 @@ check(CC.snapToGrid(55) === 48 && CC.snapToGrid(-7) === 0, 'A3: snapToGrid quant
 
 // ----------------------------------------------------------------------
 console.log('B. loadModel auto-layouts the incumbent ROW when no layout is given (vertical flow retired 2026-08-31)');
-CC.loadModel(model());
+CC.renderModel(model());
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({
     n1: { x: 0, y: 16, scale: 1, flow: 'horizontal' },
@@ -382,7 +395,7 @@ check(builds.length === 0, 'C9: a position move never rebuilds the audio graph (
 
 // ----------------------------------------------------------------------
 console.log('D. reload round-trip: the saved layout reapplies exactly');
-CC.loadModel(model(), saves[saves.length - 1].layout);
+CC.renderModel(model(), saves[saves.length - 1].layout);
 check(
   CC.currentLayout().n2.x === 176 && CC.currentLayout().n2.y === 32 &&
     CC.currentLayout().n1.y === 16 && CC.currentLayout().n3.x === 288,
@@ -396,10 +409,9 @@ check(
   !CC.currentLayout().n3 && Object.keys(CC.currentLayout()).length === 2,
   'F1: removing a node drops its board position (layout garbage-free)'
 );
-var lastSave = saves[saves.length - 1];
 check(
-  !!lastSave.layout && !lastSave.layout.n3,
-  'F2: the post-removal save carries no position for the removed id'
+  !Object.prototype.hasOwnProperty.call(CC.getCurrentLayout(), 'n3'),
+  'F2: the accepted render adapter exposes no position for the removed id'
 );
 
 // ----------------------------------------------------------------------
@@ -417,7 +429,7 @@ check(
   'G3: with no terminal limiter left (removed in F), the add appends at the END of the chain'
 );
 // The terminal-limiter guard still holds when a limiter IS terminal:
-CC.loadModel(model(), null); // n3 (limiter) back, terminal — board tidy
+CC.renderModel(model(), null); // n3 (limiter) back, terminal — board tidy
 CC.addNodeType('gain');
 check(
   domOrder()[domOrder().length - 1] === 'n3',

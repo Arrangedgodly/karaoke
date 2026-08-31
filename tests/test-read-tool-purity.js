@@ -319,6 +319,7 @@ function createEnv() {
     'src/param-controls.js',
     'src/presets-ui.js',
     'src/canvas.js',
+    'src/chain-editing.js',
     'src/mcp-server.js', // the REAL shim, before mcp-tools so it self-registers
     'src/mcp-tools.js'
   ].forEach(function (relPath) {

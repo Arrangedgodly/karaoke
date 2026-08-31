@@ -266,6 +266,19 @@ vm.runInContext(
 );
 
 var CC = sandbox.ChainCanvas;
+sandbox.ChainEditing = {
+  getModel: function () { return CC.getCurrentModel(); },
+  getLayout: function () { return CC.getCurrentLayout(); },
+  syncLayout: function () {},
+  apply: function (request) {
+    if (request.candidate) {
+      CC.renderModel(request.candidate, request.layout);
+    } else if (request.change) {
+      CC.renderNodeParam(request.change.nodeId, request.change.param, request.change.value);
+    }
+    return Promise.resolve({ applied: true, saved: true });
+  }
+};
 
 // ----------------------------------------------------------------------
 // Helpers.
@@ -387,7 +400,7 @@ check(
 
 // ----------------------------------------------------------------------
 console.log('B. loadModel routes cords FROM MODEL ORDER with positions-map coords');
-CC.loadModel(model3());
+CC.renderModel(model3());
 check(
   JSON.stringify(segRoute()) === JSON.stringify(['mic>n1', 'n1>n2', 'n2>n3', 'n3>out']),
   'B1: mic -> n1 -> n2 -> n3 -> out (segments = nodes + 1)'
@@ -455,7 +468,7 @@ check(cordPaths().length === 3, 'E2: 2 nodes -> 3 segments (nodes + 1 holds)');
 
 // ----------------------------------------------------------------------
 console.log('F. keyboard add SPLICES the cord before a terminal limiter');
-CC.loadModel(model3()); // n3 (limiter) terminal, board tidy
+CC.renderModel(model3()); // n3 (limiter) terminal, board tidy
 var idsBefore = domOrder().slice();
 CC.addNodeType('gain'); // insert-before-limiter policy (R2-2)
 var order = domOrder();
@@ -474,7 +487,7 @@ check(cordPaths().length === 5, 'F3: 4 nodes -> 5 segments');
 
 // ----------------------------------------------------------------------
 console.log('G. empty chain + final DOM-contract pins');
-CC.loadModel([]);
+CC.renderModel([]);
 check(
   JSON.stringify(segRoute()) === JSON.stringify(['mic>out']),
   'G1: an empty chain shows the direct MIC -> OUT bypass cord (0 nodes -> 1 segment)'

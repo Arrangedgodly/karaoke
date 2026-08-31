@@ -1,5 +1,5 @@
 // Chain canvas for the VOXCHAIN — drag-and-drop build /
-// reorder / remove, the loadModel rebuild, the parameter-only fast path,
+// reorder / remove, accepted-model rendering, in-place parameter rendering,
 // and (redesign item 1) the canvas panel's Pattern Machine chrome: the
 // display register and the panel-print SECTION anatomy each chain entry
 // renders as (see createNodeCard + buildDisplayRegister below).
@@ -25,16 +25,11 @@
 //     to receive clones from the palette.
 //
 // Model bookkeeping (Part D of the task spec): `chainModel`/`nodesById`
-// below are THIS file's own source of truth for "what nodes exist, in what
-// order, with what params" — kept in sync with the DOM (via the Sortable
-// callbacks) and with each node's live params (via each card's
-// ParamControls onParamsChanged callback). Every STRUCTURAL change (add,
-// remove, reorder) calls AudioGraph.buildGraph() with the fresh array,
-// exactly once, from exactly one place each. A plain param tweak (a slider
-// move on an already-placed node) never calls buildGraph() — that's UI-4's
-// existing contract (AudioGraph.updateNodeParams()/NodeTypes.applyParam()
-// handle that path directly, see src/param-controls.js) and this file
-// doesn't change it.
+// are the Canvas adapter's accepted rendered copy. Human gestures produce
+// normalized candidates/intents for ChainEditing; only that module commits
+// the live graph, accepts logical state, persists, updates preset state,
+// and records revision/Undo. ChainEditing calls renderModel or
+// renderNodeParam only after acceptance, keeping this file presentational.
 (function () {
   'use strict';
 
@@ -123,10 +118,11 @@
   var positionDrag = null; // the live grip drag, if any
   var resizeDrag = null; // the live width-resize drag, if any
 
-  function assertLegacyMutationHarness() {
-    if (document && document.defaultView === window) {
-      throw new Error('ChainEditing is required for mutations in the production page.');
+  function requireChainEditing() {
+    if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
+      throw new Error('ChainEditing is required for every chain mutation.');
     }
+    return window.ChainEditing;
   }
 
   function snapToGrid(v) {
@@ -1271,28 +1267,6 @@
     emptyHintEl.style.display = hasNodes ? 'none' : '';
   }
 
-  /**
-   * Rebuild the live audio graph from the current `chainModel`, exactly
-   * once, via AudioGraph.buildGraph(). No-ops (does not throw) if the
-   * engine hasn't started yet — buildGraph() requires a live
-   * AudioContext/sourceNode (see src/audio-graph.js), and there is nothing
-   * to build against before AudioEngine.start() has resolved. This is the
-   * ONE guarded chokepoint every structural change (add/remove/reorder)
-   * routes through — never called from anywhere else in this file, and
-   * never called merely because a pointer moved during a drag (SortableJS
-   * only fires the callbacks that call this on an actual committed change,
-   * not on every dragover/pointermove).
-   */
-  function rebuildGraph() {
-    if (!window.AudioEngine || !window.AudioEngine.isStarted) {
-      return;
-    }
-    var modelForBuild = chainModel.map(function (entry) {
-      return { id: entry.id, type: entry.type, params: entry.params };
-    });
-    window.AudioGraph.buildGraph(modelForBuild);
-  }
-
   // ---------------------------------------------------------------------
   // Palette (Part B) — one chip per NodeTypes.getAllTypes() entry, built
   // once at load time. Populated dynamically, never a hardcoded type list:
@@ -1643,56 +1617,25 @@
     // revision bump. The DOM is provisional until that promise settles;
     // ChainEditing renders the accepted candidate on success and restores
     // the previous accepted model on failure.
-    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
-      var candidateModel = getCurrentModel();
-      var candidateLayout = currentLayout();
-      // The gesture may have provisionally reordered/added/removed DOM in
-      // order to express its candidate. Put the last accepted render back
-      // synchronously, before graph staging begins, so an operator never
-      // sees a chain that has not yet become live.
-      renderModel(
-        window.ChainEditing.getModel(),
-        typeof window.ChainEditing.getLayout === 'function'
-          ? window.ChainEditing.getLayout()
-          : null
-      );
-      window.ChainEditing.apply({
-        source: 'human',
-        candidate: candidateModel,
-        layout: candidateLayout,
-        forceStructural: true
-      }).catch(function (err) {
-        console.error('ChainCanvas: human structural edit was not accepted', err);
-      });
-      return;
-    }
-
-    // Bare test/legacy harness fallback. index.html always loads
-    // ChainEditing before main.js, so this is not a production bypass.
-    assertLegacyMutationHarness();
-    rebuildGraph();
-    // PS-2: persist the chain after every structural add/remove/reorder.
-    // Pass chainModel explicitly rather than AudioGraph.getModel() — see
-    // the comment on Persistence.saveCurrentChain() for why: AudioGraph's
-    // own model commits asynchronously, ~20ms after rebuildGraph()
-    // returns, so reading through it right here would silently save the
-    // OLD, pre-change model (e.g. a just-dropped-in node would never
-    // actually make it into the autosave slot).
-    if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
-    }
-    // PS-3: a drag-driven add/remove/reorder is a user EDIT — mark unsaved.
-    if (window.PresetsUI) {
-      window.PresetsUI.markModified();
-    }
-    // Issue #6: a HUMAN add/reorder (palette drag OR keyboard add — both
-    // human actions) — bump the state revision so a stale agent Undo
-    // entry can no longer auto-apply over it. The agent write path uses
-    // loadModel() directly, never this commit path, so agent edits do
-    // not bump.
-    if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
-      window.AgentUI.noteHumanEdit();
-    }
+    var editing = requireChainEditing();
+    var candidateModel = getCurrentModel();
+    var candidateLayout = currentLayout();
+    // The gesture may have provisionally reordered/added/removed DOM in
+    // order to express its candidate. Put the last accepted render back
+    // synchronously, before graph staging begins, so an operator never
+    // sees a chain that has not yet become live.
+    renderModel(
+      editing.getModel(),
+      typeof editing.getLayout === 'function' ? editing.getLayout() : null
+    );
+    editing.apply({
+      source: 'human',
+      candidate: candidateModel,
+      layout: candidateLayout,
+      forceStructural: true
+    }).catch(function (err) {
+      console.error('ChainCanvas: human structural edit was not accepted', err);
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -1867,12 +1810,8 @@
       // ChainEditing applies it against the accepted model when its queue
       // reaches this edit, so two fast edits on different cards cannot
       // overwrite one another with stale whole-model candidates.
-      if (
-        change &&
-        window.ChainEditing &&
-        typeof window.ChainEditing.apply === 'function'
-      ) {
-        window.ChainEditing.apply({
+      if (change) {
+        requireChainEditing().apply({
           source: 'human',
           change: {
             nodeId: nodeState.id,
@@ -1884,30 +1823,7 @@
         });
         return;
       }
-
-      // Bare test/legacy harness fallback; production uses ChainEditing.
-      assertLegacyMutationHarness();
-      nodeState.params = updatedParams;
-      // Deliberately no rebuildGraph() call here — a plain param tweak is
-      // not a structural change (see file-level comment above and Part D
-      // of the task spec). ParamControls itself already applies the live
-      // AudioParam change directly; this callback only needs to keep this
-      // card's bookkeeping current for the next structural rebuild.
-      //
-      // PS-2: a param tweak DOES still need to be persisted, though — the
-      // autosave slot must reflect the node's current tuned value, not just
-      // its value as of the last structural change. Saving here is separate
-      // from (and never triggers) rebuildGraph()/buildGraph() above.
-      //
-      // Pass chainModel explicitly rather than letting Persistence fall
-      // back to AudioGraph.getModel(): nodeState is the SAME object
-      // reference chainModel already holds for this id (see the file-level
-      // model-bookkeeping comment above), so the `nodeState.params =
-      // updatedParams` assignment just above is already reflected in
-      // chainModel with zero extra work — no recompute needed here.
-      if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel, positions);
-      }
+      throw new Error('ParamControls must provide a normalized change intent.');
       // PS-3: a param tweak is a user EDIT — mark the currently-displayed
       // preset (if any) as having unsaved changes. Unlike the saveCurrentChain()
       // call just above, this is purely a display concern (the "• unsaved
@@ -2121,11 +2037,9 @@
   /**
    * Called once by src/main.js right after AudioEngine.start() resolves
    * successfully. Removes the "not started yet" gating class so the
-   * palette/canvas read as active instead of dimmed/inert. Purely visual —
-   * rebuildGraph()'s own window.AudioEngine.isStarted check (above) is the
-   * actual functional guard against building a graph with no audioContext/
-   * sourceNode to build against, so a stray drag that somehow completes
-   * before this is called still can't throw.
+   * palette/canvas read as active instead of dimmed/inert. The control is
+   * also a real disabled button before this transition, so a human gesture
+   * cannot submit a mutation before the audio lifecycle is ready.
    */
   function onEngineStarted() {
     if (layoutEl) {
@@ -2269,28 +2183,14 @@
     return true;
   }
 
-  /**
-   * Compatibility entry point for stripped harnesses that predate issue
-   * #20. The production page routes every caller directly through
-   * ChainEditing; if a remaining external caller invokes loadModel there,
-   * it is redirected through the same interface instead of bypassing it.
-   */
+  /** Public full-model mutation entry point; always delegates to the sole seam. */
   function loadModel(model, layout) {
-    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
-      return window.ChainEditing.apply({
-        source: 'startup',
-        candidate: model,
-        layout: layout,
-        forceStructural: true
-      });
-    }
-    assertLegacyMutationHarness();
-    renderModel(model, layout);
-    rebuildGraph();
-    if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
-    }
-    return true;
+    return requireChainEditing().apply({
+      source: 'startup',
+      candidate: model,
+      layout: layout,
+      forceStructural: true
+    });
   }
 
   /**
@@ -2307,41 +2207,15 @@
   }
 
   /**
-   * Issue #5: apply ONE parameter change to an existing node WITHOUT the
-   * loadModel() rebuild — the parameter-only write path. This is the
-   * canvas-side half of exactly what a human slider move does, split the
-   * same way the human path splits it:
-   *
-   *   human slider move:
-   *     src/param-controls.js input handler  -> AudioGraph.updateNodeParams
-   *                                            + NodeTypes.applyParam
-   *                                            (the live-graph half)
-   *     this file's onParamsChanged callback -> nodeState.params
-   *                                            + Persistence autosave
-   *                                            + PresetsUI.markModified
-   *                                            (the canvas half)
-   *   agent set_param (parameter-only candidate, src/mcp-tools.js):
-   *     the fast path plays the input-handler role (the same
-   *     AudioGraph.updateNodeParams + NodeTypes.applyParam calls), then
-   *     calls THIS function for the canvas half.
-   *
-   * What this function owns: the canvas model bookkeeping (nodeState.params
-   * — the object getCurrentModel()/recomputeModelFromDom() read), the
-   * VISIBLE control (the card's slider position + mono value span via
-   * ParamControls.updateControl — the card is never re-rendered, never
-   * replaced), the autosave (Persistence.saveCurrentChain — the same call
-   * a human param tweak makes, so agent param edits persist identically),
-   * and the unsaved dot (PresetsUI.markModified). It deliberately does NOT
-   * call buildGraph() (nothing structural changed) and does NOT touch any
-   * AudioNode (the caller owns the live write, exactly as param-controls
-   * owns it on the human path).
+   * Render one already-accepted parameter change without replacing its
+   * card. ChainEditing has already updated graph bookkeeping, the live
+   * AudioNode, persistence, preset state, and Undo/revision as applicable.
+   * This adapter owns only Canvas bookkeeping and the visible control.
    *
    * @param {string} nodeId - the node whose param changes.
    * @param {string} paramId - the param's registered id.
    * @param {number} value - the new value, already policy-applied.
-   * @returns {boolean} true when the node was found and updated; false
-   *   when no such node exists in this canvas (the caller falls back to
-   *   the full loadModel() write path — safety over elegance).
+   * @returns {boolean} true when the node was found and rendered.
    */
   function renderNodeParam(nodeId, paramId, value) {
     if (typeof nodeId !== 'string') {
@@ -2355,7 +2229,7 @@
     updated[paramId] = value;
     // nodeState is the SAME object reference chainModel holds for this id
     // (file-level model-bookkeeping comment), so this assignment is already
-    // reflected in chainModel for the persistence read below — no
+    // reflected in chainModel for later rendering/readback — no
     // recomputeModelFromDom() needed, same as the human onParamsChanged
     // path.
     nodeState.params = updated;
@@ -2374,26 +2248,12 @@
     return true;
   }
 
-  /** Compatibility wrapper; production callers use ChainEditing.apply. */
+  /** Public one-param mutation entry point; always delegates to the sole seam. */
   function updateNodeParam(nodeId, paramId, value) {
-    if (window.ChainEditing && typeof window.ChainEditing.apply === 'function') {
-      return window.ChainEditing.apply({
-        source: 'agent',
-        change: { nodeId: nodeId, param: paramId, value: value }
-      });
-    }
-    assertLegacyMutationHarness();
-    var updated = renderNodeParam(nodeId, paramId, value);
-    if (!updated) {
-      return false;
-    }
-    if (window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
-    }
-    if (window.PresetsUI) {
-      window.PresetsUI.markModified();
-    }
-    return true;
+    return requireChainEditing().apply({
+      source: 'agent',
+      change: { nodeId: nodeId, param: paramId, value: value }
+    });
   }
 
   /**
@@ -2545,7 +2405,7 @@
     renderNodeParam: renderNodeParam,
     getCurrentModel: getCurrentModel,
     isDragActive: isDragActive,
-    // Issue #5: the parameter-only write path (see updateNodeParam above).
+    // Public mutation wrapper; accepted rendering stays in renderNodeParam.
     updateNodeParam: updateNodeParam,
     // FEW-2 seams: the grid constants (tests + FEW-5/6/7 consumers), the
     // live layout map (read-only by convention — callers must not mutate),

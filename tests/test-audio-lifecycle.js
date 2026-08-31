@@ -365,9 +365,15 @@ function createSandbox() {
       __builds: 0,
       buildGraph: function () {
         sandbox.AudioGraph.__builds += 1;
+        return Promise.resolve({ committed: true });
       },
       getModel: function () {
         return [];
+      }
+    },
+    ChainEditing: {
+      apply: function (request) {
+        return Promise.resolve(sandbox.AudioGraph.buildGraph(request.candidate || []));
       }
     },
     MeterTaps: meterTaps

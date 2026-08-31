@@ -358,6 +358,26 @@ loadSrc('node-gate.js');
 loadSrc('node-autotune.js');
 loadSrc('canvas.js');
 
+var seamRequests = [];
+windowStub.ChainEditing = {
+  getModel: function () { return windowStub.ChainCanvas.getCurrentModel(); },
+  getLayout: function () { return windowStub.ChainCanvas.getCurrentLayout(); },
+  syncLayout: function () {},
+  apply: function (request) {
+    seamRequests.push(request);
+    if (request.candidate) {
+      windowStub.ChainCanvas.renderModel(request.candidate, request.layout);
+    } else if (request.change) {
+      windowStub.ChainCanvas.renderNodeParam(
+        request.change.nodeId,
+        request.change.param,
+        request.change.value
+      );
+    }
+    return Promise.resolve({ applied: true, saved: true });
+  }
+};
+
 var NEW_TYPES = [
   { type: 'distortion', label: 'Distortion', initials: 'DIS', params: 3 },
   { type: 'chorus', label: 'Chorus', initials: 'CHO', params: 3 },
@@ -558,6 +578,7 @@ var persistBefore = calls.persist.length;
 var graphBefore = calls.buildGraph.length;
 var modifiedBefore = calls.markModified;
 var humanBefore = calls.noteHumanEdit;
+var seamBefore = seamRequests.length;
 
 NEW_TYPES.forEach(function (t) {
   chipFor(t.type).fire('click');
@@ -571,25 +592,20 @@ check(
   'cards land in click order (append policy, no terminal limiter present)'
 );
 check(
-  calls.buildGraph.length === graphBefore + 4,
-  'one buildGraph commit per keyboard add (shared structural chokepoint)'
+  seamRequests.length === seamBefore + 4 && calls.buildGraph.length === graphBefore,
+  'one ChainEditing request per keyboard add and no Canvas-owned graph write'
 );
 check(
-  calls.buildGraph[calls.buildGraph.length - 1][3].type === 'autotune',
-  'last structural commit carries the autotune entry'
+  seamRequests[seamRequests.length - 1].candidate[3].type === 'autotune',
+  'last normalized structural candidate carries the autotune entry'
 );
 check(
-  calls.persist.length === persistBefore + 4 &&
-    calls.persist[calls.persist.length - 1].length === 4,
-  'each keyboard add autosaves the chain (PS-2)'
+  calls.persist.length === persistBefore && calls.markModified === modifiedBefore,
+  'Canvas performs no persistence or preset-state write outside ChainEditing'
 );
 check(
-  calls.markModified === modifiedBefore + 4,
-  'each keyboard add marks unsaved (PS-3)'
-);
-check(
-  calls.noteHumanEdit === humanBefore + 4,
-  'each keyboard add bumps the human-edit revision (Issue #6)'
+  calls.noteHumanEdit === humanBefore,
+  'Canvas performs no human-revision write outside ChainEditing'
 );
 
 // ----------------------------------------------------------------------
@@ -797,7 +813,7 @@ check(
 // ----------------------------------------------------------------------
 console.log('G. loadModel restore');
 
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'x1', type: 'distortion', params: { drive: 0.5, tone: 0.5, output: -6 } },
   { id: 'x2', type: 'chorus', params: { depthMs: 5, rateHz: 2, mix: 60 } },
   { id: 'x3', type: 'gate', params: { threshold: -40, attack: 0.01, release: 0.2, floor: -30 } },
@@ -830,15 +846,14 @@ check(
     pressedPad(rowOfClass(restoredRows[1], 'pad-group')) === 'Minor',
   'autotune pads restore saved Key/Scale (A / Minor)'
 );
-var lastPersist = calls.persist[calls.persist.length - 1];
 check(
-  lastPersist.length === 4 && lastPersist[3].params.key === 'A',
-  'loadModel persists the restored model as the new autosave baseline'
+  calls.persist.length === persistBefore,
+  'renderModel restores the accepted view without performing persistence itself'
 );
 
 // Keyboard-add placement policy with a terminal limiter: the new-type add
 // inserts BEFORE the limiter (the safe-output invariant).
-windowStub.ChainCanvas.loadModel([{ id: 'L', type: 'limiter', params: {} }]);
+windowStub.ChainCanvas.renderModel([{ id: 'L', type: 'limiter', params: {} }]);
 chipFor('autotune').fire('click');
 var afterAdd = cards();
 check(
@@ -859,7 +874,7 @@ check(
 // ----------------------------------------------------------------------
 console.log('H. param help layer (finishing entry 1)');
 
-windowStub.ChainCanvas.loadModel(
+windowStub.ChainCanvas.renderModel(
   allTypes.map(function (type, i) {
     return { id: 'h' + i, type: type, params: {} };
   })
@@ -1173,15 +1188,13 @@ check(
   'limiter chip in the safe group is byte-for-byte the chip it always was'
 );
 
-// Every chip remains operative through the shared chokepoint: one click
-// per group (eq from shape, gain from polish, gate from safe) commits
-// buildGraph + autosave + markModified + noteHumanEdit exactly like a
-// drag-add.
-windowStub.ChainCanvas.loadModel([]);
+// Every chip remains operative through the shared ChainEditing seam.
+windowStub.ChainCanvas.renderModel([]);
 var jGraphBefore = calls.buildGraph.length;
 var jPersistBefore = calls.persist.length;
 var jModifiedBefore = calls.markModified;
 var jHumanBefore = calls.noteHumanEdit;
+var jSeamBefore = seamRequests.length;
 ['eq', 'gain', 'gate'].forEach(function (type) {
   chipFor(type).fire('click');
 });
@@ -1192,17 +1205,18 @@ check(
   'one keyboard add from EACH group builds its card (append policy)'
 );
 check(
-  calls.buildGraph.length === jGraphBefore + 3 &&
-    calls.persist.length === jPersistBefore + 3 &&
-    calls.markModified === jModifiedBefore + 3 &&
-    calls.noteHumanEdit === jHumanBefore + 3,
-  'keyboard adds from every group commit through the shared structural chokepoint'
+  seamRequests.length === jSeamBefore + 3 &&
+    calls.buildGraph.length === jGraphBefore &&
+    calls.persist.length === jPersistBefore &&
+    calls.markModified === jModifiedBefore &&
+    calls.noteHumanEdit === jHumanBefore,
+  'keyboard adds from every group emit one seam request with no adapter-owned side effects'
 );
 
 // Limiter add policy unchanged with the grouping: a keyboard limiter add
 // against a terminal limiter still inserts BEFORE it (terminal stays
 // terminal) — the pre-existing addNodeType behavior, byte-identical.
-windowStub.ChainCanvas.loadModel([{ id: 'L', type: 'limiter', params: {} }]);
+windowStub.ChainCanvas.renderModel([{ id: 'L', type: 'limiter', params: {} }]);
 chipFor('limiter').fire('click');
 var jAfterLimiter = cards();
 check(
@@ -1323,7 +1337,7 @@ function rowValueSpan(card, paramId) {
 }
 
 // K1. Defaults: the mono readout reads 0-100 %, the slider stays 0..1.
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'k1', type: 'distortion', params: { drive: 0.25, tone: 0.7, output: -3 } },
   { id: 'k2', type: 'chorus', params: { depthMs: 3, rateHz: 1.5, mix: 30 } }
 ]);
@@ -1363,22 +1377,7 @@ check(
 );
 
 // K2. Min/mid/max through the HUMAN slider path: the readout scales, the
-// committed model value does not.
-var kCapturedParams = null;
-windowStub.AudioGraph.updateNodeParams = function (id, params) {
-  if (id === 'k1') {
-    kCapturedParams = Object.assign({}, params);
-  }
-};
-windowStub.AudioGraph.getNodeInstance = function () {
-  // Distortion-shaped fake so the real NodeTypes.applyParam ramp call
-  // finds the internal nodes it addresses (driveGain/toneFilter/outGain).
-  return {
-    driveGain: { gain: {} },
-    toneFilter: { frequency: {} },
-    outGain: { gain: {} }
-  };
-};
+// normalized intent value does not.
 [
   { raw: '0', display: '0%', model: 0 },
   { raw: '0.5', display: '50%', model: 0.5 },
@@ -1391,9 +1390,12 @@ windowStub.AudioGraph.getNodeInstance = function () {
     rowValueSpan(kDist, 'drive').textContent === c.display,
     'human drag to ' + c.raw + ' reads "' + c.display + '"'
   );
+  var driveRequest = seamRequests[seamRequests.length - 1];
   check(
-    kCapturedParams && kCapturedParams.drive === c.model,
-    'human drag to ' + c.raw + ' commits the INTERNAL value ' + c.model + ' (scale unchanged)'
+    driveRequest.change.nodeId === 'k1' &&
+      driveRequest.change.param === 'drive' &&
+      driveRequest.change.value === c.model,
+    'human drag to ' + c.raw + ' emits the INTERNAL value ' + c.model + ' (scale unchanged)'
   );
 });
 // Float-noise case: 0.33 * 100 === 33.000000000000004 in binary float —
@@ -1406,13 +1408,14 @@ check(
   'tone 0.33 reads "33%" (no binary-float tails in the readout)'
 );
 check(
-  kCapturedParams && kCapturedParams.tone === 0.33,
-  'tone 0.33 commits the internal 0.33 verbatim'
+  seamRequests[seamRequests.length - 1].change.param === 'tone' &&
+    seamRequests[seamRequests.length - 1].change.value === 0.33,
+  'tone 0.33 emits the internal 0.33 verbatim'
 );
 
 // K3. Preset/autosave restore path: values from a saved preset render on
 // the 0-100 convention and the model serialization source is unchanged.
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 'k3', type: 'distortion', params: { drive: 0.42, tone: 0.06, output: -12 } }
 ]);
 var kRestored = cardById('k3');
@@ -1434,7 +1437,7 @@ check(
 // tests/test-mcp-tools-cycle3.js C8: set_param drive 0.9 -> model 0.9.)
 var kPersistBefore = calls.persist.length;
 check(
-  windowStub.ChainCanvas.updateNodeParam('k3', 'drive', 0.5) === true,
+  windowStub.ChainCanvas.renderNodeParam('k3', 'drive', 0.5) === true,
   'updateNodeParam (set_param canvas half) applies drive 0.5'
 );
 check(
@@ -1450,9 +1453,8 @@ check(
   'agent-written drive stores the internal 0.5 in the model'
 );
 check(
-  calls.persist.length === kPersistBefore + 1 &&
-    calls.persist[calls.persist.length - 1][0].params.drive === 0.5,
-  'agent param edit autosaves the internal 0.5 (PS-2 persistence unchanged)'
+  calls.persist.length === kPersistBefore,
+  'accepted parameter rendering performs no persistence write itself'
 );
 
 // K5. Registry-wide convention gate: every % param either already lives on
@@ -1485,7 +1487,7 @@ check(
 
 // K6. Rendered sweep over ALL TEN types at once: no % readout anywhere on
 // the surface matches the "0.X%" fraction pattern the critique flagged.
-windowStub.ChainCanvas.loadModel([
+windowStub.ChainCanvas.renderModel([
   { id: 's1', type: 'gain', params: { gainDb: 0 } },
   { id: 's2', type: 'compressor', params: { threshold: -24, ratio: 4, attack: 0.01, release: 0.25 } },
   { id: 's3', type: 'eq', params: { lowGain: 0, midGain: 0, highGain: 0 } },
