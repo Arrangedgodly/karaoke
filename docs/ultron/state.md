@@ -893,3 +893,79 @@ console logs EMPTY (zero uncaught errors both breakpoints); CDP probes
 proved jack pointer-liveness over the opaque slab, a full relink
 gesture, TIDY overlap-free, and the horizontal flip. DESIGN.md synced.
 Full record + residuals: [redesign.md](redesign.md) OQ-9 entry.
+
+### Tone round BUILT (2026-08-31, cycle 4) — FX library conversion, WebMCP contract preserved
+Goal (user): import new FX cheaply off an established audio library
+(Tone.js) WITHOUT breaking the WebMCP plain-language layer (PRs
+#17/#18/#19). Verdict up front: the registries made this surgical —
+the MCP layer binds to NodeTypes/AudioGraph registries + param ids,
+never to DSP internals, so the contract survived byte-identical.
+
+Built (5 commits, ee244c9..8e7dc66):
+(1) vendor/tone.min.js — Tone.js 15.1.22 UMD, pinned + noticed
+(MIT), loaded per index.html script order; no build step (Sortable
+precedent). Real-Chrome interop smoke: setContext/rawContext identity,
+native<->Tone connect both directions, audio FLOWS through a Tone
+worklet (RMS 0.71), 4 effect classes rampTo/dispose OK.
+(2) src/tone-adapter.js — ONE ToneAdapter.register() call performs
+both registry registrations: factory wraps the Tone node in the AE-7
+native composite ({input, output, tone, dispose}), lazily points
+Tone.setContext at the app's AudioContext (identity-checked, device
+switch = no-op, context recreation handled), and generates applyParam
+from per-spec `set` helpers (15 ms rampParam = AudioParamRamp's law).
+buildGraph teardown gained a guarded dispose() hook for dropped
+instances (identity-checked vs carried-forward; no-op for every
+native type). A new effect is now a ~90-line file.
+(3) Four new effects: pitchshift (Tone.PitchShift, the app's first
+actual-pitch control), tremolo (stereo AM, LFO started at create),
+bitcrusher (worklet, bits 1..8), phaser (10-stage, depth% -> octaves
+1..5 mapping). All experimental (badge + capabilities disclosure).
+MCP picked them up with ZERO tool-layer edits: add_node enum,
+set_param validation, palette chips, preset persistence all
+registry-driven.
+(4) planSetParam registry-range fallback: params without an
+AGENT_PARAM_POLICY entry now clamp to their registered paramSpec
+range (probe-verified behavior-neutral: all 26 native numeric params
+are policy-covered). Closes the honest-ranges gap for every future
+type — brother's future effects included.
+(5) SOUND_DESIGN_GUIDE additive vocabulary: transposed (pitchshift)
++ spacey (phaser) — exactly what fits the PR #18 1500-char ceiling
+(1486 measured; existing entries byte-identical). cycle3 test
+updated additively: loads the 4 files, counts 10->14 types, badge
+set autotune+4, guide steps 24->27.
+
+Verification: suite 33/33 files / 2425 checks green (66 new checks:
+40 adapter + 22 effects + 4 guide). REAL-BROWSER round per the QA-5
+lesson, both breakpoints (1440x900 + 390x844): seeded 6-card chain
+with all 4 Tone effects goes Live on fake mic; audio flows through
+the Tone nodes (gate tap RMS 0.062) and STILL flows after a live
+add_node/remove_node round-trip (0.0086); set_param fast path reused
+the same instance and landed pitch 3 on the live Tone.PitchShift;
+add_node built a real Tone.Tremolo mid-session; zero console
+errors. Rasters + console logs:
+.impeccable/review/tone-round-{desktop,mobile}.png[.console.log].
+New tooling: tests/browser-probe.js (zero-dep CDP driver, viewport +
+post-expression rasters) — reusable for future rounds.
+
+### Migration gate verdict (2026-08-31): NO-GO on converting the existing 10 — evidence, not preference
+The plan gated migrating existing effects on the first one (delay).
+Assessed against the tested invariants, every candidate is lateral
+or worse:
+- The native files' contract tests pin equal-power mix laws,
+  AudioParamRamp on named sub-nodes, and structure — preserving them
+  under Tone means wrapping Tone nodes in the SAME native dry/wet
+  pair (Tone.FeedbackDelay with wet pinned 1), which is
+  line-count-neutral and swaps like-for-like internals (FeedbackDelay
+  IS DelayNode + feedback gain; EQ3 IS the same 3 biquads; Compressor
+  wraps the same DynamicsCompressorNode).
+- Tone.Reverb v15 cannot load the app's CC0 plate IR (procedural IR
+  only) — migration would be a pure character regression.
+- The offline QA renders (tests/qa-out/run-qa1/2.js) execute real
+  node code under the stub Web Audio runtime; Tone cannot run there,
+  so each migration retires objective no-ears coverage for that
+  effect.
+- Real wins are all on the NEW-effect side (the adapter), which is
+  done: Tone's catalog (AutoFilter, AutoWah, Chebyshev,
+  FrequencyShifter, Stereo...) is now importable at ~90 lines each.
+Reversible: any future migration is one small adapter registration +
+test rework per effect, gated the same way.
