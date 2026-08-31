@@ -439,6 +439,8 @@
         registerShow(moduleLabel, spec.label, valueText, helpText || '');
       }
 
+      var restoreAcceptedVisual = function () {};
+
       // -----------------------------------------------------------------
       // The ONE commit pipeline (unchanged in behavior from the fader
       // stack): human-edit bump -> value display -> working-copy re-sync
@@ -448,12 +450,6 @@
       // verbatim).
       // -----------------------------------------------------------------
       function commitValue(newValue) {
-        var valueText = formatValue(newValue, spec.unit, spec.displayScale);
-        if (valueDisplay) {
-          valueDisplay.textContent = valueText;
-        }
-        feedRegister(valueText);
-
         // Issue #5: re-sync the working copy from the model entry FIRST,
         // overlaid on this render's defaults, before applying this row's
         // change. modelEntry is the canvas's live nodeState object (the
@@ -474,6 +470,12 @@
           // forwards this normalized param intent to ChainEditing, which
           // owns the live write, model acceptance, persistence, preset
           // dirtiness, and one human revision bump.
+          var acceptedValue = Object.prototype.hasOwnProperty.call(modelEntry.params || {}, spec.id)
+            ? modelEntry.params[spec.id]
+            : initialValue;
+          restoreAcceptedVisual(acceptedValue);
+          workingParams[spec.id] = acceptedValue;
+          feedRegister(formatValue(acceptedValue, spec.unit, spec.displayScale));
           if (typeof onParamsChanged === 'function') {
             onParamsChanged(updatedParams, { param: spec.id, value: newValue });
           }
@@ -482,6 +484,14 @@
 
         // Bare test/legacy harness fallback. index.html loads
         // ChainEditing, so production never mutates through this branch.
+        if (document && document.defaultView === window) {
+          throw new Error('ChainEditing is required for parameter mutations in the production page.');
+        }
+        var valueText = formatValue(newValue, spec.unit, spec.displayScale);
+        if (valueDisplay) {
+          valueDisplay.textContent = valueText;
+        }
+        feedRegister(valueText);
         if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
           window.AgentUI.noteHumanEdit();
         }
@@ -546,6 +556,11 @@
           }
           return -1;
         }
+
+        restoreAcceptedVisual = function (value) {
+          var index = valueIndex(value);
+          renderPadState(index < 0 ? selectedIndex : index);
+        };
 
         function selectPad(index, options) {
           if (index < 0 || index >= padButtons.length) {
@@ -708,6 +723,12 @@
         setVar(knobEl, '--knob-pos', frac.toFixed(4));
         setVar(knobEl, '--knob-rot', (frac * KNOB_SWEEP_DEG - KNOB_SWEEP_DEG / 2).toFixed(2) + 'deg');
       }
+
+      restoreAcceptedVisual = function (value) {
+        input.value = value;
+        syncKnobVisual(parseFloat(value));
+        valueDisplay.textContent = formatValue(value, spec.unit, spec.displayScale);
+      };
 
       // The 'input' handler — the ONE commit path for both shapes, fired
       // natively (keyboard) and by our drag/wheel dispatches.

@@ -4389,6 +4389,9 @@
 
           // MC-5 legacy harness path: the exact-state snapshot is taken
           // after drag settle and before the synchronous fallback write.
+          if (typeof document !== 'undefined' && document.defaultView === window) {
+            throw new Error('ChainEditing is required for WebMCP mutations in the production page.');
+          }
           var snapshot = captureUndoSnapshot(model);
           // Issue #5: a candidate that is exactly ONE param change on one
           // existing same-id same-type node (a set_param by definition;

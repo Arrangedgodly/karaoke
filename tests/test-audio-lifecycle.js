@@ -790,6 +790,52 @@ async function main() {
   }
 
   // --------------------------------------------------------------------
+  console.log('K. startup restore failure stops capture through the ChainEditing adapter');
+  // --------------------------------------------------------------------
+  {
+    var sandbox3 = createSandbox();
+    var startupRequest = null;
+    sandbox3.Persistence = {
+      loadInitialModel: function () {
+        return [{ id: 'saved', type: 'gain', params: { gainDb: 1 } }];
+      },
+      loadInitialLayout: function () {
+        return { saved: { x: 32, y: 16 } };
+      }
+    };
+    sandbox3.ChainCanvas = {
+      onEngineStarted: function () {}
+    };
+    sandbox3.ChainEditing = {
+      apply: function (request) {
+        startupRequest = request;
+        var rejection = new Error('saved chain could not become live');
+        rejection.code = 'CHAIN_APPLY_FAILED';
+        rejection.rollback = { attempted: true, succeeded: true };
+        return Promise.reject(rejection);
+      }
+    };
+    loadSrc(sandbox3, 'src/audio-engine.js');
+    loadSrc(sandbox3, 'src/main.js');
+    var startBtn3 = sandbox3.__els['start-button'];
+    startBtn3.__fire('click');
+    check(gumQueue.length === 1, 'K1: startup mic acquisition is pending');
+    resolveGumAt(0, 'd1');
+    await settle();
+    check(
+      startupRequest && startupRequest.source === 'startup' &&
+        startupRequest.forceStructural === true && startupRequest.candidate[0].id === 'saved',
+      'K1: the real startup adapter routes the saved chain through ChainEditing'
+    );
+    check(
+      sandbox3.AudioEngine.isStarted === false &&
+        sandbox3.__els['start-button'].disabled === false &&
+        sandbox3.__els['status'].classList.contains('error'),
+      'K2: rejected startup restoration stops mic capture and returns to a retryable failed state'
+    );
+  }
+
+  // --------------------------------------------------------------------
   if (failures.length === 0) {
     console.log('PASS: lifecycle losses detected, device switches serialized (issue #4)');
     return 0;

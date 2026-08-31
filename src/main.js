@@ -594,6 +594,8 @@ console.log('App scaffold loaded');
             layout: initialLayout,
             forceStructural: true
           });
+        } else if (document && document.defaultView === window) {
+          throw new Error('ChainEditing is required for startup restoration in the production page.');
         } else if (window.ChainCanvas) {
           // Bare test/legacy harness fallback; index.html loads
           // ChainEditing in production.

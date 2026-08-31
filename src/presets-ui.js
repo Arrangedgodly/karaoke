@@ -598,6 +598,9 @@
       return;
     }
     // Bare test/legacy harness fallback; production loads ChainEditing.
+    if (document && document.defaultView === window) {
+      throw new Error('ChainEditing is required for preset mutations in the production page.');
+    }
     window.ChainCanvas.loadModel(preset.nodes);
     setCurrentPreset(preset.name);
     clearModified();

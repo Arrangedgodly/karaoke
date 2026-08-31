@@ -463,6 +463,16 @@ check(
   'H3: only acceptance makes the candidate DOM visible'
 );
 
+delete sandbox.ChainEditing;
+vm.runInContext('document.defaultView = window;', sandbox);
+var failedClosed = false;
+try {
+  CC.loadModel(model());
+} catch (err) {
+  failedClosed = /ChainEditing/.test(String(err && err.message));
+}
+check(failedClosed, 'H4: a production-like document fails closed when ChainEditing is missing');
+
 if (failures.length === 0) {
   console.log('PASS: free positioning (FEW-2)');
   process.exit(0);

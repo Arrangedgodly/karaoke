@@ -880,6 +880,22 @@ async function main() {
     'F2: split live state is never flattened into the harmless ABORTED result');
 
   // --------------------------------------------------------------------
+  console.log('G. production WebMCP mutations fail closed without ChainEditing');
+  // --------------------------------------------------------------------
+  delete sandbox.ChainEditing;
+  vm.runInContext('document.defaultView = window;', sandbox);
+  var beforeFailClosed = sandbox.ChainCanvas.getCurrentModel();
+  var failClosedResult = await getTool(sandbox, 'set_param').execute({
+    nodeId: 'n5',
+    param: 'mix',
+    value: 35
+  });
+  check(failClosedResult && failClosedResult.code === 'SCHEMA_LAYER_FAULT',
+    'G1: a production-like page reports dependency failure instead of using the legacy write path');
+  check(JSON.stringify(sandbox.ChainCanvas.getCurrentModel()) === JSON.stringify(beforeFailClosed),
+    'G2: the missing-seam failure performs no logical mutation');
+
+  // --------------------------------------------------------------------
   if (failures.length === 0) {
     console.log('PASS: AbortSignal is honored for queued WebMCP mutations (issue #10)');
     return 0;

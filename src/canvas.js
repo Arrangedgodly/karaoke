@@ -123,6 +123,12 @@
   var positionDrag = null; // the live grip drag, if any
   var resizeDrag = null; // the live width-resize drag, if any
 
+  function assertLegacyMutationHarness() {
+    if (document && document.defaultView === window) {
+      throw new Error('ChainEditing is required for mutations in the production page.');
+    }
+  }
+
   function snapToGrid(v) {
     return Math.round(v / GRID_PITCH) * GRID_PITCH;
   }
@@ -317,8 +323,13 @@
     positionDrag = null;
     dragActive = false;
     // Persist on MOVE-END only — never per pointermove.
-    if (drag.moved && window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
+    if (drag.moved) {
+      if (window.ChainEditing && typeof window.ChainEditing.syncLayout === 'function') {
+        window.ChainEditing.syncLayout(currentLayout());
+      }
+      if (window.Persistence) {
+        window.Persistence.saveCurrentChain(chainModel, positions);
+      }
     }
   }
 
@@ -356,8 +367,13 @@
     resizeDrag = null;
     dragActive = false;
     // Same discipline as a seat move: persist on END only.
-    if (drag.moved && window.Persistence) {
-      window.Persistence.saveCurrentChain(chainModel, positions);
+    if (drag.moved) {
+      if (window.ChainEditing && typeof window.ChainEditing.syncLayout === 'function') {
+        window.ChainEditing.syncLayout(currentLayout());
+      }
+      if (window.Persistence) {
+        window.Persistence.saveCurrentChain(chainModel, positions);
+      }
     }
   }
 
@@ -1653,6 +1669,7 @@
 
     // Bare test/legacy harness fallback. index.html always loads
     // ChainEditing before main.js, so this is not a production bypass.
+    assertLegacyMutationHarness();
     rebuildGraph();
     // PS-2: persist the chain after every structural add/remove/reorder.
     // Pass chainModel explicitly rather than AudioGraph.getModel() — see
@@ -1869,6 +1886,7 @@
       }
 
       // Bare test/legacy harness fallback; production uses ChainEditing.
+      assertLegacyMutationHarness();
       nodeState.params = updatedParams;
       // Deliberately no rebuildGraph() call here — a plain param tweak is
       // not a structural change (see file-level comment above and Part D
@@ -2266,6 +2284,7 @@
         forceStructural: true
       });
     }
+    assertLegacyMutationHarness();
     renderModel(model, layout);
     rebuildGraph();
     if (window.Persistence) {
@@ -2363,6 +2382,7 @@
         change: { nodeId: nodeId, param: paramId, value: value }
       });
     }
+    assertLegacyMutationHarness();
     var updated = renderNodeParam(nodeId, paramId, value);
     if (!updated) {
       return false;

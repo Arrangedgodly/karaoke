@@ -189,6 +189,35 @@
     });
   }
 
+  function cancelStagedBuild(state, error, restoreGate) {
+    if (pendingRewireState !== state) {
+      return false;
+    }
+    if (pendingRewireTimer !== null) {
+      clearTimeout(pendingRewireTimer);
+      pendingRewireTimer = null;
+    }
+    if (
+      state.signal &&
+      typeof state.signal.removeEventListener === 'function' &&
+      state.onAbort
+    ) {
+      state.signal.removeEventListener('abort', state.onAbort);
+    }
+    pendingRewireState = null;
+    disposeStagedNodes(state.model, state.resolvedNodes, state.oldNodeInstances);
+    if (restoreGate && state.commitStarted) {
+      rampGateTo(state.gate, steadyGateTarget(), state.audioContext);
+    }
+    state.resolve({
+      committed: false,
+      canceled: true,
+      error: error,
+      rollback: { attempted: false, succeeded: true }
+    });
+    return true;
+  }
+
   /**
    * Get the shared chain gate GainNode, creating it on first call if it
    * doesn't exist yet. Requires window.AudioEngine.audioContext to already
@@ -694,32 +723,11 @@
     // or ducking from the earlier call, so re-ducking here is harmless).
     if (pendingRewireState) {
       var supersededState = pendingRewireState;
-      if (pendingRewireTimer !== null) {
-        clearTimeout(pendingRewireTimer);
-        pendingRewireTimer = null;
-      }
-      if (
-        supersededState.signal &&
-        typeof supersededState.signal.removeEventListener === 'function' &&
-        supersededState.onAbort
-      ) {
-        supersededState.signal.removeEventListener('abort', supersededState.onAbort);
-      }
-      disposeStagedNodes(
-        supersededState.model,
-        supersededState.resolvedNodes,
-        supersededState.oldNodeInstances
+      cancelStagedBuild(
+        supersededState,
+        new Error('AudioGraph.buildGraph: staged build was superseded.'),
+        true
       );
-      if (supersededState.commitStarted) {
-        rampGateTo(supersededState.gate, steadyGateTarget(), supersededState.audioContext);
-      }
-      pendingRewireState = null;
-      supersededState.resolve({
-        committed: false,
-        canceled: true,
-        error: new Error('AudioGraph.buildGraph: staged build was superseded.'),
-        rollback: { attempted: false, succeeded: true }
-      });
     }
 
     return new Promise(function (resolve) {
@@ -737,24 +745,9 @@
       pendingRewireState = stagedState;
 
       function cancelBeforeCommit() {
-        if (pendingRewireState !== stagedState || stagedState.commitStarted) {
-          return;
+        if (!stagedState.commitStarted) {
+          cancelStagedBuild(stagedState, graphAbortError(), false);
         }
-        if (pendingRewireTimer !== null) {
-          clearTimeout(pendingRewireTimer);
-          pendingRewireTimer = null;
-        }
-        if (signal && typeof signal.removeEventListener === 'function' && stagedState.onAbort) {
-          signal.removeEventListener('abort', stagedState.onAbort);
-        }
-        pendingRewireState = null;
-        disposeStagedNodes(model, resolvedNodes, oldNodeInstances);
-        resolve({
-          committed: false,
-          canceled: true,
-          error: graphAbortError(),
-          rollback: { attempted: false, succeeded: true }
-        });
       }
 
       if (signal && typeof signal.addEventListener === 'function') {

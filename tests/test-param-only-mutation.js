@@ -1238,6 +1238,22 @@ async function main() {
       humanEdits[0].midGain === 6,
     'D3: a human slider move after an agent edit builds on the agent\'s value (midGain stays 6 — no silent revert)'
   );
+  var lowSpan = null;
+  rows.forEach(function (row) {
+    var parts = findRowParts(row, 'lowGain');
+    if (parts.input) {
+      lowSpan = parts.span;
+    }
+  });
+  check(
+    Number(lowInput.value) === 0 && lowSpan && lowSpan.textContent === '0 dB',
+    'D4: a queued human candidate leaves the last accepted control value visible'
+  );
+  sandbox.ParamControls.updateControl('n3', 'lowGain', 3);
+  check(
+    Number(lowInput.value) === 3 && lowSpan.textContent === '3 dB',
+    'D4: the control changes only when the accepted-state adapter renders it'
+  );
 
   // --------------------------------------------------------------------
   console.log('E. click-risk probe: the real ramp math vs a bare jump');

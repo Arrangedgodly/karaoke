@@ -148,6 +148,7 @@ function makeHarness(initial) {
     records: records,
     canvasModel: function () { return copy(canvasModel); },
     graphModel: function () { return copy(graphModel); },
+    layout: function () { return copy(layout); },
     presetState: function () { return copy(presetState); },
     undoEntries: undoEntries,
     setSaveResult: function (result) { saveResult = result; },
@@ -271,6 +272,23 @@ async function main() {
   });
   check(result.saved === true && h.window.ChainEditing.hasPersistenceWarning() === false && h.records.indexOf('warning:clear') !== -1,
     'D3: only a later verified save clears the warning');
+
+  h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
+  h.window.ChainEditing.syncLayout({ a: { x: 96, y: 48 } });
+  h.setGraphBehavior(function (model) {
+    if (model.length > 1) {
+      throw new Error('structural candidate failed');
+    }
+    return Promise.resolve({ committed: true });
+  });
+  err = await expectReject(h.window.ChainEditing.apply({
+    source: 'human',
+    candidate: [node('a', 'gain', { gainDb: 0 }), node('bad', 'unknown')],
+    layout: { a: { x: 96, y: 48 }, bad: { x: 192, y: 48 } },
+    forceStructural: true
+  }));
+  check(err && err.rollback && err.rollback.succeeded === true && h.layout().a.x === 96,
+    'D4: a failed structural edit restores the latest accepted layout-only movement');
 
   console.log('E. preset, startup, cancellation, and Undo cross the same seam');
   h = makeHarness([node('a', 'gain', { gainDb: 0 })]);

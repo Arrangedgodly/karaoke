@@ -20,6 +20,8 @@
 //   }) -> Promise<{applied, saved, mode, model, warning?}>
 //   ChainEditing.getModel() -> detached accepted-model copy
 //   ChainEditing.getLayout() -> detached accepted-layout copy
+//   ChainEditing.syncLayout(layout) -> update accepted layout after a
+//     layout-only board gesture (no logical/audio mutation)
 //   ChainEditing.whenIdle() -> Promise<detached accepted-model copy>
 //   ChainEditing.hasPersistenceWarning() -> boolean
 //
@@ -78,6 +80,11 @@
       acceptedLayout = currentLayout();
     }
     return acceptedLayout === null ? null : clone(acceptedLayout);
+  }
+
+  function syncLayout(layout) {
+    acceptedLayout = layout === null ? null : clone(layout || {});
+    return currentAcceptedLayout();
   }
 
   function currentPresetState() {
@@ -591,6 +598,7 @@
     apply: apply,
     getModel: currentAcceptedModel,
     getLayout: currentAcceptedLayout,
+    syncLayout: syncLayout,
     whenIdle: function () {
       return queue.then(function () { return currentAcceptedModel(); });
     },
