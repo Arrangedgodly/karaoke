@@ -829,3 +829,11 @@ tools unchanged. Auto-merge clean (no conflicts); voxchain app id
 verified intact; suite green post-merge (30 files incl. their +105
 test checks). Branch consolidation to main awaits user acceptance +
 push decision.
+
+### Consolidation to main (2026-08-30/31)
+redesign/pattern-machine pushed and fast-forward merged into main
+(4df4665): Pattern Machine world + Two-Deck Stack + VOXCHAIN + cycle-4
+patch-cord board + PR #19, suite 30/2292 green. PR #19 auto-closed
+MERGED by GitHub. REMAINING: user QA-5 acceptance (user running QA
+shortly); deferred work queued with reasons (FEW-5 resize re-dispatch
+cheapest first).
