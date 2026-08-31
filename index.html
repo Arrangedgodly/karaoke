@@ -281,6 +281,17 @@
     AudioParamRamp.schedule(); needs nothing itself at parse time.
   -->
   <script src="src/audio-param-ramp.js"></script>
+  <!--
+    Tone.js 15.1.22 (UMD build, vendored — no build step, same constraint as
+    vendor/sortable.min.js). Exposes window.Tone. Loaded before the node
+    files so Tone-backed types (registered via src/tone-adapter.js) can reach
+    it; nothing touches Tone at parse time — node files only REGISTER, and
+    Tone is first used at graph-build time (always after a user gesture).
+    The app's own AudioContext stays authoritative: the adapter calls
+    Tone.setContext(audioContext) so Tone nodes live on the same context as
+    the mic source, chain gate, bypass tap, and meters.
+  -->
+  <script src="vendor/tone.min.js"></script>
   <script src="src/node-gain.js"></script>
   <script src="src/node-compressor.js"></script>
   <script src="src/node-eq.js"></script>
