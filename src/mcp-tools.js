@@ -1967,14 +1967,13 @@
   // CHAIN_LIMITS, MAKEUP_DB_PER_THRESHOLD_DB, HOST_OWNED_PARAMS) so
   // disclosure and enforcement share one source. Pipeline per mutation:
   //   (1) structural validation (the shared validators below),
-  //   (2) serialize vs user drags — queue until ChainCanvas reports the
+  //   (2) serialize vs user drags — wait until ChainCanvas reports the
   //       drag done, bounded by DRAG_QUEUE_TIMEOUT_MS (OQ-7),
-  //   (3) read the live model (ChainCanvas.getCurrentModel — the UI's own
-  //       source, read-only), validate the candidate against the rq3
-  //       policy above, and
-  //   (4) apply through ChainCanvas.loadModel — the SAME model+rebuild
-  //       path src/presets-ui.js's Load button uses; never a parallel
-  //       write path — then disclose via AgentUI.reportMutation.
+  //   (3) read ChainEditing's accepted model, validate the candidate
+  //       against the rq3 policy above, and
+  //   (4) submit through ChainEditing.apply — the SAME transaction seam
+  //       src/presets-ui.js and human gestures use; never a parallel write
+  //       path — then disclose via AgentUI.reportMutation.
   // ---------------------------------------------------------------------
 
   /**
@@ -4049,7 +4048,15 @@
       // The human board is gated until Start, so refuse agent mutations
       // on a real page until the live engine exists. Read tools remain
       // available, and model-only harnesses without AudioEngine still run.
-      if (window.AudioEngine && !window.AudioEngine.isStarted) {
+      var engine = window.AudioEngine;
+      var engineContext = engine && engine.audioContext;
+      if (engine && (
+        engine.isStarted === false ||
+        ('isTrackLive' in engine && engine.isTrackLive === false) ||
+        ('sourceNode' in engine && !engine.sourceNode) ||
+        ('audioContext' in engine && !engineContext) ||
+        (engineContext && 'state' in engineContext && engineContext.state !== 'running')
+      )) {
         var notStarted = engineNotStartedResult(name);
         reportAgentRejection(name, notStarted);
         return Promise.resolve(notStarted);
@@ -4140,6 +4147,11 @@
               );
               if (!rollbackFailed && (signalAborted(signal) || (err && err.name === 'AbortError'))) {
                 return abortedResult(name);
+              }
+              if (err && err.code === 'ENGINE_NOT_STARTED') {
+                var stopped = engineNotStartedResult(name);
+                reportAgentRejection(name, stopped);
+                return stopped;
               }
               var applyFault = schemaLayerFaultResult(name, err);
               if (err && err.rollback) {

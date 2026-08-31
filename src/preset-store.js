@@ -26,7 +26,7 @@
 //     whatever window.ChainCanvas.getCurrentModel() returns at that
 //     moment.
 //   - load() backs the "Load" button; presets-ui.js hands its `.nodes`
-//     straight to window.ChainCanvas.loadModel().
+//     straight to window.ChainEditing.apply().
 //   - remove() backs the "Delete" button (and save_preset's undo).
 //
 // Persistence contract (issue #8 — report preset persistence failures

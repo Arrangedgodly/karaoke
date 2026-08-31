@@ -38,6 +38,8 @@ function makeHarness(initial) {
   var graphModel = copy(initial);
   var layout = { a: { x: 10, y: 20 } };
   var saveResult = { saved: true };
+  var saveFailed = false;
+  var savedModel = null;
   var graphBehavior = null;
   var presetState = { name: 'Classic', modified: false };
   var undoEntries = [];
@@ -76,6 +78,15 @@ function makeHarness(initial) {
     }
   };
   sandbox.NodeTypes = {
+    getParamSpec: function (type) {
+      if (type !== 'autotune') {
+        return [];
+      }
+      return [
+        { id: 'key', values: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] },
+        { id: 'scale', values: ['Chromatic', 'Major', 'Minor'] }
+      ];
+    },
     applyParam: function (type, instance, param, value) {
       records.push('live:param:' + instance.id + ':' + param + ':' + value);
     }
@@ -83,11 +94,24 @@ function makeHarness(initial) {
   sandbox.ChainCanvas = {
     getCurrentModel: function () { return copy(canvasModel); },
     getCurrentLayout: function () { return copy(layout); },
-    renderModel: function (model, nextLayout) {
+    renderModel: function (model, nextLayout, options) {
       records.push('canvas:render:' + model.map(function (entry) { return entry.id; }).join(','));
       canvasModel = copy(model);
-      if (nextLayout) {
-        layout = copy(nextLayout);
+      if (options && options.freshSeats) {
+        layout = {};
+        model.forEach(function (entry, index) {
+          layout[entry.id] = { x: index * 96, y: 24, scale: 1, flow: 'horizontal' };
+        });
+      } else if (nextLayout) {
+        layout = {};
+        Object.keys(nextLayout).forEach(function (id) {
+          var seat = nextLayout[id];
+          layout[id] = Object.assign({}, seat, {
+            x: Math.max(0, seat.x),
+            y: Math.max(0, seat.y),
+            flow: 'horizontal'
+          });
+        });
       }
       return true;
     },
@@ -106,8 +130,11 @@ function makeHarness(initial) {
   sandbox.Persistence = {
     saveCurrentChain: function (model) {
       records.push('persist:' + model.map(function (entry) { return entry.id; }).join(','));
+      savedModel = copy(model);
+      saveFailed = !!(saveResult && saveResult.saved === false);
       return saveResult;
-    }
+    },
+    isSaveFailed: function () { return saveFailed; }
   };
   sandbox.PresetsUI = {
     getDisplayState: function () { return copy(presetState); },
@@ -122,9 +149,6 @@ function makeHarness(initial) {
     clearModified: function () {
       records.push('preset:clean');
       presetState.modified = false;
-    },
-    setPersistenceWarning: function (message) {
-      records.push(message ? 'warning:set' : 'warning:clear');
     }
   };
   sandbox.AgentUI = {
@@ -148,6 +172,7 @@ function makeHarness(initial) {
     records: records,
     canvasModel: function () { return copy(canvasModel); },
     graphModel: function () { return copy(graphModel); },
+    savedModel: function () { return copy(savedModel); },
     layout: function () { return copy(layout); },
     presetState: function () { return copy(presetState); },
     undoEntries: undoEntries,
@@ -262,16 +287,16 @@ async function main() {
   });
   check(result.applied === true && result.saved === false && result.warning && result.warning.code === 'AUTOSAVE_FAILED',
     'D1: persistence failure does not roll back a live edit and is returned truthfully');
-  check(h.window.ChainEditing.hasPersistenceWarning() === true && h.records.indexOf('warning:set') !== -1,
-    'D2: autosave failure latches the operator warning');
+  check(h.window.ChainEditing.hasPersistenceWarning() === true,
+    'D2: autosave failure reads the authoritative Persistence latch');
   h.setSaveResult({ saved: true });
   result = await h.window.ChainEditing.apply({
     source: 'agent',
     candidate: [node('a', 'gain', { gainDb: 2 })],
     undoLabel: 'Set gain again'
   });
-  check(result.saved === true && h.window.ChainEditing.hasPersistenceWarning() === false && h.records.indexOf('warning:clear') !== -1,
-    'D3: only a later verified save clears the warning');
+  check(result.saved === true && h.window.ChainEditing.hasPersistenceWarning() === false,
+    'D3: only a later verified save clears the authoritative latch');
 
   h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
   h.window.ChainEditing.syncLayout({ a: { x: 96, y: 48 } });
@@ -314,6 +339,44 @@ async function main() {
     'E3: startup restoration commits without pretending to be a human edit');
 
   h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
+  result = await h.window.ChainEditing.apply({
+    source: 'startup',
+    candidate: [node('t', 'autotune', { key: 9, scale: 2, mix: 80 })],
+    layout: { t: { x: -31, y: -9, scale: 1, flow: 'vertical' } },
+    forceStructural: true
+  });
+  var canonical = [node('t', 'autotune', { key: 'A', scale: 'Minor', mix: 80 })];
+  check(
+    JSON.stringify(result.model) === JSON.stringify(canonical) &&
+      JSON.stringify(h.window.ChainEditing.getModel()) === JSON.stringify(canonical) &&
+      JSON.stringify(h.graphModel()) === JSON.stringify(canonical) &&
+      JSON.stringify(h.canvasModel()) === JSON.stringify(canonical) &&
+      JSON.stringify(h.savedModel()) === JSON.stringify(canonical),
+    'E4: startup numeric enums canonicalize before graph, board, persistence, and result'
+  );
+  check(
+    h.window.ChainEditing.getLayout().t.x === 0 &&
+      h.window.ChainEditing.getLayout().t.y === 0 &&
+      h.window.ChainEditing.getLayout().t.flow === 'horizontal',
+    'E5: Canvas-clamped startup seats become the accepted layout'
+  );
+
+  h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
+  await h.window.ChainEditing.apply({
+    source: 'preset',
+    candidate: [node('a', 'gain', { gainDb: 3 })],
+    layout: null,
+    renderOptions: { freshSeats: true },
+    forceStructural: true,
+    preset: { name: 'Fresh', modified: false }
+  });
+  check(
+    h.window.ChainEditing.getLayout().a.x === 0 &&
+      h.window.ChainEditing.getLayout().a.y === 24,
+    'E6: preset fresh seating replaces stale seats in the accepted layout'
+  );
+
+  h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
   var signal = { aborted: true };
   err = await expectReject(h.window.ChainEditing.apply({
     source: 'agent',
@@ -322,7 +385,7 @@ async function main() {
     undoLabel: 'Cancelled'
   }));
   check(err && err.name === 'AbortError' && h.records.length === 0,
-    'E4: a pre-cancelled request performs no graph, canvas, persistence, preset, revision, or Undo work');
+    'E7: a pre-cancelled request performs no graph, canvas, persistence, preset, revision, or Undo work');
 
   h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
   var preCommitController = new AbortController();
@@ -346,14 +409,18 @@ async function main() {
     signal: preCommitController.signal,
     undoLabel: 'Cancelled while staged'
   });
-  await Promise.resolve();
+  for (var stageTurn = 0; stageTurn < 5 &&
+      h.records.filter(function (x) { return x.indexOf('graph:build:') === 0; }).length === 0;
+      stageTurn++) {
+    await Promise.resolve();
+  }
   preCommitController.abort();
   err = await expectReject(preCommitApply);
   check(err && err.name === 'AbortError' && err.rollback && err.rollback.succeeded === true,
-    'E5: cancellation reaches graph staging and reports the unchanged graph truthfully');
+    'E8a: cancellation reaches graph staging and reports the unchanged graph truthfully');
   check(h.records.filter(function (x) { return x.indexOf('graph:build:') === 0; }).length === 1 &&
       h.records.filter(function (x) { return x.indexOf('canvas:') === 0 || x.indexOf('persist:') === 0 || x.indexOf('undo:') === 0; }).length === 0,
-    'E5: a staged cancellation performs no rollback rebuild, render, persistence, or Undo work');
+    'E8b: a staged cancellation performs no rollback rebuild, render, persistence, or Undo work');
 
   h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
   await h.window.ChainEditing.apply({
@@ -361,12 +428,12 @@ async function main() {
     candidate: [node('a', 'gain', { gainDb: 4 })],
     undoLabel: 'Raise gain'
   });
-  check(h.undoEntries.length === 1, 'E6: a committed agent edit creates one Undo snapshot');
+  check(h.undoEntries.length === 1, 'E9: a committed agent edit creates one Undo snapshot');
   await h.undoEntries[0].restore();
   check(JSON.stringify(h.window.ChainEditing.getModel()) === JSON.stringify([node('a', 'gain', { gainDb: 0 })]),
-    'E7: Undo restores the captured pre-state through ChainEditing');
+    'E10: Undo restores the captured pre-state through ChainEditing');
   check(h.undoEntries.length === 1 && h.records.filter(function (x) { return x.indexOf('undo:push:') === 0; }).length === 1,
-    'E8: an Undo restore never creates a recursive Undo entry');
+    'E11: an Undo restore never creates a recursive Undo entry');
 
   console.log('F. named structural operations share the same interface contract');
   h = makeHarness([node('a', 'gain'), node('b', 'delay'), node('z', 'limiter')]);
@@ -415,14 +482,104 @@ async function main() {
   check(h.records.filter(function (x) { return x === 'revision:human'; }).length === 2,
     'G3: each accepted human intent bumps revision once, with no duplicate bump');
 
-  console.log('H. production script order installs the seam before consumers');
+  console.log('H. engine transitions drain and block the mutation queue');
+  h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
+  var engineTransition = h.window.ChainEditing.beginEngineTransition();
+  await engineTransition.ready;
+  var blockedEdit = h.window.ChainEditing.apply({
+    source: 'agent',
+    candidate: [node('a', 'gain', { gainDb: 4 })],
+    undoLabel: 'Blocked during device switch'
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  check(h.records.length === 0,
+    'H1: an edit queued during a source transition reaches no adapter');
+  h.window.AudioEngine.sourceNode = null;
+  engineTransition.release(false);
+  err = await expectReject(blockedEdit);
+  check(
+    err && err.code === 'ENGINE_NOT_STARTED' &&
+      JSON.stringify(h.window.ChainEditing.getModel()) ===
+        JSON.stringify([node('a', 'gain', { gainDb: 0 })]) &&
+      h.records.length === 0,
+    'H2: if the transition stops the engine, the queued edit rejects instead of reporting accepted'
+  );
+  err = await expectReject(h.window.ChainEditing.apply({
+    source: 'human',
+    change: { nodeId: 'a', param: 'gainDb', value: 6 }
+  }));
+  check(
+    err && err.code === 'ENGINE_NOT_STARTED' &&
+      JSON.stringify(h.window.ChainEditing.getModel()) ===
+        JSON.stringify([node('a', 'gain', { gainDb: 0 })]) &&
+      h.records.length === 0,
+    'H3: edits submitted after a stopped transition fail closed instead of accepting model-only state'
+  );
+
+  h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
+  h.window.AudioEngine.audioContext.state = 'suspended';
+  err = await expectReject(h.window.ChainEditing.apply({
+    source: 'human',
+    change: { nodeId: 'a', param: 'gainDb', value: 2 }
+  }));
+  check(err && err.code === 'ENGINE_NOT_STARTED' && h.records.length === 0,
+    'H4: a suspended context rejects human edits before any adapter runs');
+  result = await h.window.ChainEditing.apply({
+    source: 'startup',
+    candidate: [node('a', 'gain', { gainDb: 1 })],
+    forceStructural: true
+  });
+  check(result.applied === true,
+    'H5: initial startup restoration remains allowed during the known suspended-resume window');
+  h.window.AudioEngine.audioContext.state = 'interrupted';
+  result = await h.window.ChainEditing.apply({
+    source: 'startup',
+    candidate: [node('a', 'gain', { gainDb: 1.5 })],
+    forceStructural: true
+  });
+  check(result.applied === true,
+    'H5b: startup restoration also remains allowed during an interrupted-resume window');
+  h.window.AudioEngine.audioContext.state = 'closed';
+  err = await expectReject(h.window.ChainEditing.apply({
+    source: 'startup',
+    candidate: [node('a', 'gain', { gainDb: 3 })],
+    forceStructural: true
+  }));
+  check(err && err.code === 'ENGINE_NOT_STARTED',
+    'H6: a closed context rejects even startup restoration');
+
+  h = makeHarness([node('a', 'gain', { gainDb: 0 })]);
+  var overlappingA = h.window.ChainEditing.beginEngineTransition();
+  var overlappingB = h.window.ChainEditing.beginEngineTransition();
+  await overlappingA.ready;
+  var overlapBlocked = h.window.ChainEditing.apply({
+    source: 'agent',
+    candidate: [node('a', 'gain', { gainDb: 5 })]
+  });
+  h.window.AudioEngine.sourceNode = null;
+  overlappingA.release(false);
+  err = await expectReject(overlapBlocked);
+  check(err && err.code === 'ENGINE_NOT_STARTED',
+    'H7: one failed overlapping transition releases the whole blocked generation immediately');
+  h.window.AudioEngine.sourceNode = {};
+  result = await h.window.ChainEditing.apply({
+    source: 'startup',
+    candidate: [node('a', 'gain', { gainDb: 2 })],
+    forceStructural: true
+  });
+  overlappingB.release(true);
+  check(result.applied === true && h.window.ChainEditing.getModel()[0].params.gainDb === 2,
+    'H8: a recovery edit does not wait for the obsolete overlapping transition to settle');
+
+  console.log('I. production script order installs the seam before consumers');
   var html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   var presetIndex = html.indexOf('<script src="src/presets-ui.js"');
   var editingIndex = html.indexOf('<script src="src/chain-editing.js"');
   var toolsIndex = html.indexOf('<script src="src/mcp-tools.js"');
   var mainIndex = html.indexOf('<script src="src/main.js"');
   check(presetIndex !== -1 && presetIndex < editingIndex && editingIndex < toolsIndex && editingIndex < mainIndex,
-    'H1: PresetsUI loads before ChainEditing, which loads before WebMCP and startup');
+    'I1: PresetsUI loads before ChainEditing, which loads before WebMCP and startup');
 
   var mutationSources = [
     'src/canvas.js',
@@ -438,7 +595,7 @@ async function main() {
       mutationSources.indexOf('applyCandidateViaUi') === -1 &&
       mutationSources.indexOf('applyParamOnlyViaUi') === -1 &&
       mutationSources.indexOf('assertLegacyMutationHarness') === -1,
-    'H2: production callers have no legacy mutation bypass around ChainEditing'
+    'I2: production callers have no legacy mutation bypass around ChainEditing'
   );
 
   var fixtureSources = fs.readdirSync(path.join(ROOT, 'tests'))
@@ -453,7 +610,7 @@ async function main() {
     /(?:^|[,{]\s*)['"]?(?:loadModel|updateNodeParam)['"]?\s*(?::|\([^)]*\)\s*\{)/m;
   check(
     !retiredFixtureAdapterPattern.test(fixtureSources),
-    'H3: test fixtures contain no retired direct-mutation adapter implementations'
+    'I3: test fixtures contain no retired direct-mutation adapter implementations'
   );
   check(
     [
@@ -464,13 +621,13 @@ async function main() {
     ].every(function (sample) {
       return retiredFixtureAdapterPattern.test(sample);
     }),
-    'H4: the fixture architecture gate rejects function, arrow, helper, and method syntaxes'
+    'I4: the fixture architecture gate rejects function, arrow, helper, and method syntaxes'
   );
   var architectureHarness = makeHarness([node('gate', 'gain', { gainDb: 0 })]);
   check(
     !Object.prototype.hasOwnProperty.call(architectureHarness.window.ChainCanvas, 'loadModel') &&
       !Object.prototype.hasOwnProperty.call(architectureHarness.window.ChainCanvas, 'updateNodeParam'),
-    'H5: this test file\'s ChainCanvas harness exposes no retired mutation adapter'
+    'I5: this test file\'s ChainCanvas harness exposes no retired mutation adapter'
   );
 
   if (failures > 0) {

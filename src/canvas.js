@@ -750,10 +750,9 @@
   // Fixed semantics (town-hall Q4, unchangeable):
   //   - CORDS EDIT ORDER, NEVER GATE AUDIO. Grabbing a jack starts an
   //     EDIT; audio changes ONLY on a completed relink — a drop on a
-  //     compatible point — committed as ONE structural commit through
-  //     the existing commitStructuralChange() chokepoint (DOM reorder
-  //     -> recompute -> rebuildGraph duck -> autosave -> revision
-  //     bump). Unplugging can never remove audio: mid-drag the model,
+  //     compatible point — submitted as ONE candidate through the
+  //     existing commitStructuralChange() -> ChainEditing chokepoint.
+  //     Unplugging can never remove audio: mid-drag the model,
   //     the DOM, and the painted cords are byte-unchanged, and drop
   //     nowhere (or Escape, or pointercancel) reverts the edit with
   //     ZERO rebuilds. Per-node bypass stays DECLINED elsewhere; a cord
@@ -780,8 +779,8 @@
   //   - DELIBERATE-DRAG GUARD: the pointer must travel at least
   //     CORD_DETACH_THRESHOLD px before the end detaches — a click on a
   //     jack is not an unplug, and a sub-threshold release leaves no
-  //     state at all. dragActive (MC-4) goes true at DETACH and false
-  //     at gesture end, so agent mutations QUEUE behind the edit
+  //     committed state at all. dragActive (MC-4) goes true at pointer ARM
+  //     and false at gesture end, so agent mutations QUEUE behind the edit
   //     exactly as they queue behind a palette or grip drag (mcp-tools
   //     already polls isDragActive() — no new seam).
   //   - The commit reorders the DOM (.insertBefore, DOM ORDER = CHAIN
@@ -1058,7 +1057,6 @@
         return; // deliberate-drag guard: not yet an unplug
       }
       cordDrag.detached = true;
-      dragActive = true; // MC-4: agent mutations now queue behind the edit
       cordDrag.anchorPt = anchorPointFor(cordDrag.id, cordDrag.endKind);
     }
     var pt = pointerToLayer({ clientX: cx, clientY: cy });
@@ -1114,7 +1112,7 @@
       return; // a drop that moves nothing commits nothing (no-op)
     }
     applyDomOrder(order);
-    commitStructuralChange(); // DOM reorder -> recompute -> rebuild duck -> autosave -> revision bump, ONCE
+    commitStructuralChange(); // DOM order -> one ChainEditing transaction
   }
 
   // ---------------------------------------------------------------------
@@ -1634,10 +1632,10 @@
    * safe-output invariant), so the card is inserted immediately BEFORE a
    * limiter that currently occupies the last position. With no terminal
    * limiter (or an empty chain) it appends at the end. Commits through
-   * commitStructuralChange() — the SAME chokepoint the SortableJS onSort
-   * handler uses — so autosave (PS-2), the unsaved dot (PS-3), and the
-   * human-edit revision bump (Issue #6) all fire exactly as they do for a
-   * drag-add. No agent toast class: this is a human action.
+   * commitStructuralChange() — the SAME ChainEditing adapter the cord and
+   * removal gestures use — so graph acceptance, autosave (PS-2), the
+   * unsaved dot (PS-3), and the human-edit revision bump (Issue #6) stay
+   * one transaction. No agent toast class: this is a human action.
    *
    * @param {string} type - the node type to add (from the chip's
    *   data-node-type, itself from the registry-driven palette loop).
@@ -1664,11 +1662,10 @@
   }
 
   /**
-   * R2-2 factoring: the SINGLE post-structural-change commit — model
-   * recompute, empty-hint flip, graph rebuild, autosave, unsaved dot,
-   * human-edit revision bump. Previously the body of the SortableJS onSort
-   * handler; now shared verbatim with addNodeType() above so a keyboard
-   * add and a drag add are indistinguishable downstream.
+   * R2-2 factoring: the SINGLE human structural adapter. It translates the
+   * provisional DOM gesture into a candidate, restores the accepted render,
+   * and submits the candidate to ChainEditing. Keyboard add, cord reorder,
+   * and removal are therefore indistinguishable downstream.
    */
   function commitStructuralChange() {
     recomputeModelFromDom();
@@ -2050,6 +2047,8 @@
         id: id,
         startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
         originW: cardWidth(id),
+        hadStoredWidth: Object.prototype.hasOwnProperty.call(pos, 'w'),
+        originStoredW: pos.w,
         moved: false
       };
     });
@@ -2080,6 +2079,7 @@
   function onEngineStarted() {
     if (layoutEl) {
       layoutEl.classList.remove('engine-not-started');
+      layoutEl.inert = false;
     }
     // R2-2: unlock the palette chips at the exact same transition — real
     // disabled attributes come OFF here (they shipped ON in
@@ -2107,6 +2107,73 @@
     // ENGINE LIVE with the live module count (mode returns to 'state';
     // by construction no control has been touched yet at this moment,
     // since the whole panel was pointer-locked and chip-disabled before).
+  }
+
+  /**
+   * Re-gate the board when the live source or audio context is lost. Any
+   * gesture armed against the old session is paint-only from this point:
+   * cancel it without committing or persisting, then disable every human
+   * entry point until main.js reports a successful Start again.
+   */
+  function onEngineStopped() {
+    if (cordDrag) {
+      cancelCordDrag();
+    }
+    var layoutRestored = false;
+    if (positionDrag) {
+      var movedPos = positions[positionDrag.id];
+      if (movedPos) {
+        movedPos.x = positionDrag.originX;
+        movedPos.y = positionDrag.originY;
+        applyPositionToCard(
+          positionDrag.card,
+          positionDrag.originX,
+          positionDrag.originY,
+          positionDrag.id
+        );
+        layoutRestored = true;
+      }
+      positionDrag = null;
+    }
+    if (resizeDrag) {
+      var resizedPos = positions[resizeDrag.id];
+      if (resizedPos) {
+        if (resizeDrag.hadStoredWidth) {
+          resizedPos.w = resizeDrag.originStoredW;
+        } else {
+          delete resizedPos.w;
+        }
+        applyPositionToCard(
+          resizeDrag.card,
+          resizedPos.x,
+          resizedPos.y,
+          resizeDrag.id
+        );
+        layoutRestored = true;
+      }
+      resizeDrag = null;
+    }
+    if (layoutRestored) {
+      refreshBoardExtent();
+      renderCords();
+    }
+    if (!cordDrag) {
+      dragActive = false;
+    }
+    if (layoutEl) {
+      layoutEl.classList.add('engine-not-started');
+      // Native inert removes every descendant control from focus and event
+      // targeting. The CSS class remains the visual gate; this is its
+      // keyboard and assistive-technology equivalent.
+      layoutEl.inert = true;
+    }
+    var chips = paletteListEl.querySelectorAll('.node-chip');
+    Array.prototype.forEach.call(chips, function (chip) {
+      chip.disabled = true;
+    });
+    if (emptyHintEl) {
+      emptyHintEl.textContent = 'Press Start to power on';
+    }
   }
 
   /**
@@ -2471,9 +2538,13 @@
   }
 
   initBoardChrome();
+  if (layoutEl && layoutEl.classList.contains('engine-not-started')) {
+    onEngineStopped();
+  }
 
   window.ChainCanvas = {
     onEngineStarted: onEngineStarted,
+    onEngineStopped: onEngineStopped,
     loadModel: loadModel,
     // Issue #20 implementation adapters. Production mutation sources do
     // not call these directly; ChainEditing owns their sequencing.

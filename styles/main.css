@@ -2435,9 +2435,10 @@ select.control {
    gate with the same hatch + recede the canvas face has always used.
    =========================================================================== */
 
-/* Pre-Start gate, the flanking zones: pointer lock (the functional
-   gate, unchanged) + the SAME recede + diagonal hatch the canvas face
-   carries below — one grammar, three zones. */
+/* Pre-Start gate, the flanking zones: pointer lock plus the SAME recede +
+   diagonal hatch the canvas face carries below — one grammar, three zones.
+   src/canvas.js also sets native `inert` on the whole layout, which is the
+   keyboard and accessibility-tree half of this functional gate. */
 .layout.engine-not-started .palette,
 .layout.engine-not-started .presets {
   position: relative;

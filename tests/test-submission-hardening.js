@@ -242,6 +242,59 @@ async function main() {
       resA2 && resA2.applied === true && sbA.__canvasState.renderCalls === 1,
       'A4: the SAME call applies once the engine has started'
     );
+
+    // A queued WebMCP mutation must preserve the same lifecycle refusal if
+    // the source transition ends stopped while it is waiting at the seam.
+    var transitionA = sbA.ChainEditing.beginEngineTransition();
+    await transitionA.ready;
+    var queuedA = setChainA.execute({
+      chain: {
+        schemaVersion: 1,
+        name: 'stopped while queued',
+        nodes: [
+          { id: 'x1', type: 'reverb', params: { mix: 30 } },
+          { id: 'l1', type: 'limiter', params: { ceiling: -6 } }
+        ]
+      }
+    });
+    await Promise.resolve();
+    sbA.AudioEngine.isStarted = false;
+    transitionA.release(false);
+    var resA3 = await queuedA;
+    check(
+      resA3 && resA3.error === true && resA3.code === 'ENGINE_NOT_STARTED' &&
+        resA3.retry === true,
+      'A5: a queued WebMCP edit preserves ENGINE_NOT_STARTED when the source transition stops'
+    );
+    check(
+      sbA.__canvasState.renderCalls === 1,
+      'A6: the stopped queued WebMCP edit reaches no accepted-state renderer'
+    );
+
+    var lossPromises = [];
+    ['suspended', 'closed'].forEach(function (state) {
+      var sbLoss = createBaseSandbox();
+      sbLoss.AudioEngine = {
+        isStarted: true,
+        isTrackLive: true,
+        sourceNode: {},
+        audioContext: { state: state }
+      };
+      loadSrc(sbLoss, 'src/preset-schema.js');
+      installChainEditingHarness(sbLoss, seedChain(), 0);
+      loadSrc(sbLoss, 'src/mcp-tools.js');
+      lossPromises.push(getTool(sbLoss, 'set_chain').execute({
+        chain: { schemaVersion: 1, name: state, nodes: seedChain() }
+      }).then(function (lossResult) {
+        check(
+          lossResult && lossResult.code === 'ENGINE_NOT_STARTED' && lossResult.retry === true,
+          'A7: WebMCP preserves ENGINE_NOT_STARTED while the context is ' + state
+        );
+        check(sbLoss.__canvasState.renderCalls === 0,
+          'A8: a ' + state + ' context reaches no accepted-state renderer');
+      }));
+    });
+    await Promise.all(lossPromises);
   }
 
   // ====================================================================

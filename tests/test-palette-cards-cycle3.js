@@ -573,6 +573,17 @@ check(
     'Click an effect to add it to the chain',
   'empty-hint copy flips at the Start transition (the working add verbs — palette drag is retired)'
 );
+windowStub.ChainCanvas.onEngineStopped();
+check(
+  layoutEl.classList.contains('engine-not-started') &&
+    layoutEl.inert === true &&
+    paletteListEl.querySelectorAll('.node-chip')
+      .every(function (chip) { return chip.disabled === true; }) &&
+    emptyHintEl.textContent === 'Press Start to power on',
+  'onEngineStopped() re-gates the board, disables every chip, and restores the Start hint'
+);
+windowStub.ChainCanvas.onEngineStarted();
+check(layoutEl.inert === false, 'onEngineStarted() removes the native keyboard/accessibility gate');
 
 var persistBefore = calls.persist.length;
 var graphBefore = calls.buildGraph.length;

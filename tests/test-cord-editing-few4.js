@@ -6,18 +6,19 @@
 // jack points render):
 //   - All FOUR link-point types relink end-to-end (mic-out = FIRST,
 //     OUT-end on B's IN = BEFORE B, IN-end on B's OUT = AFTER B,
-//     out-anchor IN = LAST), each through exactly ONE buildGraph call
-//     and ONE autosave (the single commitStructuralChange chokepoint).
+//     out-anchor IN = LAST), each through exactly ONE ChainEditing apply
+//     (the sole logical-mutation chokepoint).
 //   - The revert path (drop nowhere, incompatible target, Escape,
 //     pointercancel, and a drop that moves nothing) leaves model + DOM
 //     + cords BYTE-unchanged and fires ZERO rebuilds — an unplug is an
 //     edit, never an audio change.
 //   - The deliberate-drag threshold: a sub-threshold press+release is a
-//     complete no-op (no ghost, no dragActive, no state).
-//   - MC-4 agent queue: isDragActive() goes true only at DETACH and
-//     false at gesture end, so a queued set_param applies after the
-//     drag's commit (the mcp-tools waitForDragSettle seam, exercised at
-//     the flag it polls).
+//     commits no edit and leaves no ghost or state after release;
+//     dragActive is transiently true from pointer ARM.
+//   - MC-4 agent queue: isDragActive() goes true at pointer arm and false
+//     at gesture end, so a queued set_param
+//     applies after the drag's commit (the mcp-tools waitForDragSettle
+//     seam, exercised at the flag it polls).
 //   - The ghost + hot-target highlight are paint-only and always
 //     teardown; the FEW-3 DOM contracts survive (layer last child,
 //     nothing cord-related in #chain-list).

@@ -424,6 +424,23 @@ check(
   'D1: loadModel(model, savedLayout) restores every seat exactly (round-trip)'
 );
 
+console.log('E. engine loss cancels provisional layout movement');
+var canceledSeat = JSON.parse(JSON.stringify(CC.currentLayout().n2));
+var savesBeforeLoss = saves.length;
+handleOf('n2').__fire('pointerdown', { clientX: 100, clientY: 100, button: 0 });
+documentStub.__fire('pointermove', { clientX: 180, clientY: 164 });
+check(CC.currentLayout().n2.x !== canceledSeat.x, 'E1: the provisional move is visible before loss');
+CC.onEngineStopped();
+check(
+  CC.currentLayout().n2.x === canceledSeat.x &&
+    CC.currentLayout().n2.y === canceledSeat.y &&
+    CC.isDragActive() === false,
+  'E2: engine loss restores the drag origin and cancels the gesture'
+);
+documentStub.__fire('pointerup', {});
+check(saves.length === savesBeforeLoss, 'E3: the canceled layout never reaches persistence');
+CC.onEngineStarted();
+
 // ----------------------------------------------------------------------
 console.log('F. removal prunes the live layout map');
 removeBtnOf('n3').__fire('click', {});

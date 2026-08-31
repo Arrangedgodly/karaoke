@@ -276,6 +276,17 @@ console.log('App scaffold loaded');
     };
   }
 
+  function deviceGraphError(cause, graphResult) {
+    var err = cause && typeof cause === 'object'
+      ? cause
+      : new Error(cause ? String(cause) : 'The audio chain did not reconnect to the selected microphone.');
+    err.deviceGraphFailure = true;
+    if (graphResult) {
+      err.graphResult = graphResult;
+    }
+    return err;
+  }
+
   // Drives the top bar's status dot + text. `text` is the label shown
   // (e.g. "Live", "Stopped", or an operator error sentence); `isLive`
   // toggles the `.live` class on the wrapper, which is what turns the
@@ -395,7 +406,7 @@ console.log('App scaffold loaded');
       });
       deviceSelect.value = selOpt ? selOpt.value : '';
 
-      deviceSelect.disabled = false;
+      deviceSelect.disabled = !isEngineLive();
     });
   }
 
@@ -433,21 +444,38 @@ console.log('App scaffold loaded');
       line: 'Audio engine paused.',
       action: 'Press Start to resume audio.',
     },
+    graph: {
+      line: 'Audio chain did not reconnect.',
+      action: 'Press Start to rebuild audio.',
+    },
   };
 
   // True between a context-suspend loss and its recovery — keeps a
   // resumed context from "recovering" a session that lost its track in
   // the meantime.
   var contextLost = false;
+  var startupRestoreFailed = false;
+  var startupFinalizationPending = false;
+  var startupMetersPending = false;
+
+  function liveStatusText() {
+    return startupRestoreFailed
+      ? 'Live — saved chain failed to load; started empty'
+      : 'Live';
+  }
 
   function surfaceLoss(copy) {
+    var deviceGraphWasPending = pendingDeviceGraphGeneration !== 0;
+    activeDeviceSwitchGeneration = 0;
+    pendingDeviceGraphGeneration = 0;
     setErrorStatus(copy.line, null, false);
     setStartHint(copy.action);
-    // The gating recovery action: with Start re-enabled, the hint above
-    // is visible and pressing Start is the one-click retry (start()
-    // rebuilds the session fresh — see its recovery path in
-    // audio-engine.js).
-    startButton.disabled = false;
+    // Do not permit a second Start while the first Start's graph/tap
+    // finalization is still pending. Once that transaction settles, the
+    // normal loss recovery action becomes available (or an automatic
+    // running transition completes recovery in place).
+    startButton.disabled = startupFinalizationPending;
+    deviceSelect.disabled = true;
     if (bypassButton) {
       bypassButton.disabled = true; // no live source to bypass anymore
     }
@@ -462,6 +490,35 @@ console.log('App scaffold loaded');
     if (canvasPanel) {
       canvasPanel.classList.remove('bypassed');
     }
+    if (window.ChainCanvas && typeof window.ChainCanvas.onEngineStopped === 'function') {
+      window.ChainCanvas.onEngineStopped();
+    }
+    if (
+      window.AudioEngine &&
+      typeof window.AudioEngine.invalidatePendingSwitches === 'function'
+    ) {
+      window.AudioEngine.invalidatePendingSwitches();
+    }
+    // A pending getUserMedia request cannot be canceled portably. Release
+    // its ChainEditing generation now so an explicit recovery Start can
+    // restore the chain without waiting for that obsolete browser promise.
+    pendingEngineTransitions.slice().forEach(function (transition) {
+      transition.release(false);
+    });
+    pendingEngineTransitions = [];
+    if (
+      deviceGraphWasPending &&
+      window.AudioEngine &&
+      window.AudioEngine.isStarted &&
+      typeof window.AudioEngine.stop === 'function'
+    ) {
+      // The replacement source is already installed but its graph/taps are
+      // not accepted. There is no complete session to resume in place.
+      // Stop it; the nested graph-loss lifecycle event owns the final copy
+      // and explicit Start recovery.
+      window.AudioEngine.stop('graph');
+      return;
+    }
     if (window.MeterTaps) {
       window.MeterTaps.onEngineStopped(); // stops the loop; KEEPS the #3 latch
     }
@@ -472,6 +529,7 @@ console.log('App scaffold loaded');
     // re-hides the hint) and restart the meters/watchdog loop (latch-aware
     // by design; a latched trip keeps defending its mute).
     startButton.disabled = true;
+    deviceSelect.disabled = false;
     if (bypassButton) {
       bypassButton.disabled = false;
     }
@@ -480,14 +538,26 @@ console.log('App scaffold loaded');
     // dropped, it is still engaged now — and the dry path is live again,
     // so the dim honestly returns).
     setBypassButtonLabel();
+    if (window.ChainCanvas && typeof window.ChainCanvas.onEngineStarted === 'function') {
+      window.ChainCanvas.onEngineStarted();
+    }
     if (window.MeterTaps) {
       window.MeterTaps.onEngineStarted();
+      startupMetersPending = false;
     }
-    setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+    setStatus(isEngineLive() ? liveStatusText() : 'Stopped', isEngineLive());
   }
 
   function handleContextState(state) {
     if (state === 'running') {
+      // AudioEngine marks the stream started as soon as getUserMedia
+      // resolves, but startup is not an accepted live session until its
+      // saved-chain restore/fallback, bypass tap, and meter taps all
+      // finalize. A fast resume event must not unlock controls over that
+      // still-staging transaction.
+      if (startupFinalizationPending) {
+        return;
+      }
       if (contextLost) {
         contextLost = false;
         if (isEngineLive()) {
@@ -515,7 +585,19 @@ console.log('App scaffold loaded');
       // failed start) keeps its sentence, and a shown operator failure
       // (the error register) keeps its recovery copy.
       if (isEngineLive() && !(statusWrapper && statusWrapper.classList.contains('error'))) {
-        setStatus('Live', true);
+        deviceSelect.disabled = false;
+        if (bypassButton) {
+          bypassButton.disabled = false;
+        }
+        setBypassButtonLabel();
+        if (window.ChainCanvas && typeof window.ChainCanvas.onEngineStarted === 'function') {
+          window.ChainCanvas.onEngineStarted();
+        }
+        if (startupMetersPending && window.MeterTaps) {
+          window.MeterTaps.onEngineStarted();
+          startupMetersPending = false;
+        }
+        setStatus(liveStatusText(), true);
       }
       return;
     }
@@ -565,7 +647,7 @@ console.log('App scaffold loaded');
         // truthful via isEngineLive().
         setStatus('Mic muted.', isEngineLive());
       } else if (evt.type === 'track-unmuted') {
-        setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
+        setStatus(isEngineLive() ? liveStatusText() : 'Stopped', isEngineLive());
       } else if (evt.type === 'device-change') {
         handleDeviceChange();
       }
@@ -584,6 +666,9 @@ console.log('App scaffold loaded');
   }
 
   startButton.addEventListener('click', function () {
+    if (startupFinalizationPending) {
+      return;
+    }
     // AudioEngine.start() is called synchronously, right here, in the
     // click handler. Inside it, the AudioContext is created and
     // .resume()'d synchronously before any `await` (including before
@@ -593,6 +678,7 @@ console.log('App scaffold loaded');
     // requirement (RQ-4); do not move this call behind any prior await.
     startButton.disabled = true;
     setStatus('Requesting mic access...', false);
+    startupFinalizationPending = true;
 
     window.AudioEngine.start()
       .then(function (result) {
@@ -618,6 +704,7 @@ console.log('App scaffold loaded');
         // The original autosave is then restored so a transient factory
         // failure does not erase the operator's saved chain.
         var restoreFailed = false;
+        startupRestoreFailed = false;
         var restore = window.ChainEditing.apply({
           source: 'startup',
           candidate: initialModel,
@@ -644,16 +731,21 @@ console.log('App scaffold loaded');
           // see the comment on AudioBypass.reconnectSource() in
           // src/audio-bypass.js.
           window.AudioBypass.reconnectSource();
+          var engineLive = isEngineLive();
           if (bypassButton) {
-            bypassButton.disabled = false;
+            bypassButton.disabled = !engineLive;
           }
           setBypassButtonLabel();
 
-          // UI-3: un-gate the palette/chain canvas now that there's a live
-          // audioContext/sourceNode for AudioGraph.buildGraph() to build
-          // against — mirrors how bypassButton is enabled just above.
+          // UI-3: gate or un-gate the palette/chain canvas from the
+          // complete live predicate. A source can exist while its context
+          // is still resuming, which is not yet an editable live session.
           if (window.ChainCanvas) {
-            window.ChainCanvas.onEngineStarted();
+            if (engineLive) {
+              window.ChainCanvas.onEngineStarted();
+            } else if (typeof window.ChainCanvas.onEngineStopped === 'function') {
+              window.ChainCanvas.onEngineStopped();
+            }
           }
 
           // FEW-3: meter side-taps + runtime watchdog. Now that
@@ -664,8 +756,10 @@ console.log('App scaffold loaded');
           // window.Meters live (setEngineState(true)), and start the one
           // shared rAF loop that feeds both meters and the rq3 watchdog
           // every frame. See src/meter-taps.js.
-          if (window.MeterTaps) {
+          startupMetersPending = !engineLive;
+          if (window.MeterTaps && engineLive) {
             window.MeterTaps.onEngineStarted();
+            startupMetersPending = false;
           }
 
           // FEW-2: fill the VIS-2 status-LCD readouts with real engine
@@ -684,18 +778,38 @@ console.log('App scaffold loaded');
 
           // The engine remains live after an empty-chain fallback, but the
           // status must say that the saved effect chain did not load.
-          setStatus(
-            restoreFailed
-              ? 'Live — saved chain failed to load; started empty'
-              : (isEngineLive() ? 'Live' : 'Stopped'),
-            restoreFailed ? true : isEngineLive()
+          startupRestoreFailed = restoreFailed;
+          var surfacedLoss = !!(
+            statusWrapper && statusWrapper.classList.contains('error')
           );
-          contextLost = false; // issue #4: a fresh start clears any suspend state
+          if (engineLive) {
+            setStatus(liveStatusText(), true);
+          } else if (!surfacedLoss) {
+            setStatus(
+              restoreFailed
+                ? 'Stopped — saved chain failed to load; started empty'
+                : 'Stopped',
+              false
+            );
+          }
+          // A successful transaction clears only a pre-existing loss when
+          // the context is already live. If a real suspension arrived
+          // during restoration, preserve contextLost so the later running
+          // event takes recoverFromLoss() and re-gates Start correctly.
+          if (engineLive) {
+            contextLost = false;
+          }
+          startupFinalizationPending = false;
+          if (contextLost || !window.AudioEngine.isStarted) {
+            startButton.disabled = false;
+          }
 
           return populateDeviceList(window.AudioEngine.currentDeviceId);
         });
       })
       .catch(function (err) {
+        startupFinalizationPending = false;
+        startupMetersPending = false;
         console.error('AudioEngine failed to start:', err);
         // Issue #20: if mic acquisition succeeded but chain restoration
         // failed, tear the capture session down before surfacing Failed.
@@ -717,43 +831,111 @@ console.log('App scaffold loaded');
       });
   });
 
+  var deviceSwitchRequestGeneration = 0;
+  var activeDeviceSwitchGeneration = 0;
+  var pendingDeviceGraphGeneration = 0;
+  var pendingEngineTransitions = [];
+
+  function releaseEngineTransition(transition, engineLive) {
+    var index = pendingEngineTransitions.indexOf(transition);
+    if (index !== -1) {
+      pendingEngineTransitions.splice(index, 1);
+    }
+    transition.release(engineLive);
+  }
+
   deviceSelect.addEventListener('change', function () {
     var deviceId = deviceSelect.value;
     if (!deviceId) {
       return;
     }
+    var requestGeneration = ++deviceSwitchRequestGeneration;
+    if (!window.ChainEditing ||
+        typeof window.ChainEditing.beginEngineTransition !== 'function') {
+      throw new Error('ChainEditing engine-transition barrier is required for device switching.');
+    }
+    var engineTransition = window.ChainEditing.beginEngineTransition();
+    pendingEngineTransitions.push(engineTransition);
 
-    window.AudioEngine.switchInputDevice(deviceId)
+    // Once a switch is requested neither the old nor the replacement path
+    // is the accepted live path yet. Keep the lamp gray until the new graph,
+    // bypass tap, and meters have all reconnected.
+    setStatus('Switching mic...', false);
+
+    Promise.resolve(engineTransition.ready)
       .then(function () {
+        return window.AudioEngine.switchInputDevice(deviceId);
+      })
+      .then(function () {
+        activeDeviceSwitchGeneration = requestGeneration;
+        pendingDeviceGraphGeneration = requestGeneration;
         // A device switch creates a fresh MediaStreamAudioSourceNode (see
         // the comment on switchInputDevice() in audio-engine.js for why),
         // which isn't connected to anything yet — rebuild the graph against
-        // the current model (still `[]` for now; AE-2 introduces no real
-        // nodes) so the new source is reconnected through to destination.
-        window.AudioGraph.buildGraph(window.AudioGraph.getModel());
-
-        // AE-3: the new sourceNode also isn't connected to the bypass tap
-        // yet — re-establish it, exactly parallel to the buildGraph() call
-        // above. See the comment on AudioBypass.reconnectSource() in
-        // src/audio-bypass.js.
-        window.AudioBypass.reconnectSource();
-
-        // FEW-3: the meter IN tap must follow the new sourceNode too —
-        // the old one is dead (switchInputDevice() above stopped its
-        // stream and blanket-disconnected it). The OUT tap's chainGate
-        // connection survives every rebuild by design, so only the IN
-        // side is re-tapped; Meters.reset() clears the visual ballistics
-        // for the new input. See src/meter-taps.js.
-        if (window.MeterTaps) {
-          window.MeterTaps.onDeviceSwitched(window.AudioEngine.sourceNode);
+        // the current accepted model so the new source is reconnected
+        // through the operator's live chain to destination.
+        var rebuild;
+        try {
+          rebuild = window.AudioGraph.buildGraph(window.AudioGraph.getModel());
+        } catch (err) {
+          throw deviceGraphError(err);
         }
 
-        setStatus(isEngineLive() ? 'Live' : 'Stopped', isEngineLive());
-        // Issue #4: the selector reflects the ACTIVE stream's device, not
-        // merely whatever was last picked.
-        reconcileSelector();
+        return Promise.resolve(rebuild).then(function (graphResult) {
+          if (
+            requestGeneration !== activeDeviceSwitchGeneration ||
+            requestGeneration !== pendingDeviceGraphGeneration
+          ) {
+            return;
+          }
+          if (graphResult && graphResult.committed === false) {
+            if (graphResult.canceled &&
+                requestGeneration !== activeDeviceSwitchGeneration) {
+              return;
+            }
+            throw deviceGraphError(graphResult.error, graphResult);
+          }
+
+          // Another successful input request replaced this request's
+          // source while its graph was staging. That newer request owns all
+          // finalization; this completion must not retap meters, rewrite the
+          // status, or stop anything.
+          // AE-3: the new sourceNode also isn't connected to the bypass tap
+          // yet — re-establish it only after the graph committed. See the
+          // comment on AudioBypass.reconnectSource() in src/audio-bypass.js.
+          window.AudioBypass.reconnectSource();
+
+          // FEW-3: the meter IN tap must follow the new sourceNode too —
+          // the old one is dead (switchInputDevice() above stopped its
+          // stream and blanket-disconnected it). The OUT tap's chainGate
+          // connection survives every rebuild by design, so only the IN
+          // side is re-tapped; Meters.reset() clears the visual ballistics
+          // for the new input. See src/meter-taps.js.
+          if (window.MeterTaps) {
+            window.MeterTaps.onDeviceSwitched(window.AudioEngine.sourceNode);
+          }
+
+          // A newer request may still be pending (and can still fail while
+          // this source remains active). Restore the physical taps now, but
+          // leave that newer request's Switching/error sentence intact.
+          if (requestGeneration === deviceSwitchRequestGeneration) {
+            setStatus(isEngineLive() ? liveStatusText() : 'Stopped', isEngineLive());
+          }
+          // Issue #4: the selector reflects the ACTIVE stream's device, not
+          // merely whatever was last picked.
+          reconcileSelector();
+          pendingDeviceGraphGeneration = 0;
+        }).then(null, function (err) {
+          throw err && err.deviceGraphFailure ? err : deviceGraphError(err);
+        });
       })
       .catch(function (err) {
+        if (
+          requestGeneration !== activeDeviceSwitchGeneration &&
+          err && err.deviceGraphFailure
+        ) {
+          return;
+        }
         // Issue #4: a STALE completion (a newer switch/Start superseded
         // this one — the engine already stopped and discarded its stream)
         // is not an operator-visible failure: the newer request owns the
@@ -761,6 +943,30 @@ console.log('App scaffold loaded');
         // device so the strip and dropdown tell one story.
         if (err && err.stale) {
           reconcileSelector();
+          return;
+        }
+        // A graph failure happens after the input stream has switched, so
+        // the old-stream-preserved recovery below is no longer true. Tear
+        // the incomplete session down; AudioEngine's lifecycle event makes
+        // Start the explicit rebuild action and prevents a green Live lamp
+        // over a disconnected chain.
+        if (err && err.deviceGraphFailure) {
+          // A merely-requested newer device does not make this failure
+          // harmless: until that request actually replaces the source,
+          // this generation still owns the physical session. Stop it now
+          // rather than letting a later acquisition failure expose a live
+          // lamp over this disconnected graph.
+          if (requestGeneration !== activeDeviceSwitchGeneration) {
+            return;
+          }
+          console.error('Failed to reconnect the audio chain after switching input:', err);
+          if (window.AudioEngine && typeof window.AudioEngine.stop === 'function') {
+            window.AudioEngine.stop('graph');
+          }
+          reconcileSelector();
+          return;
+        }
+        if (requestGeneration !== deviceSwitchRequestGeneration) {
           return;
         }
         console.error('Failed to switch input device:', err);
@@ -776,6 +982,12 @@ console.log('App scaffold loaded');
         // Issue #4: the failed pick is not the active device — snap the
         // selector back to the stream that is actually live.
         reconcileSelector();
+      })
+      .then(function () {
+        releaseEngineTransition(engineTransition, isEngineLive());
+      }, function (err) {
+        releaseEngineTransition(engineTransition, isEngineLive());
+        console.error('Device-switch transition failed unexpectedly:', err);
       });
   });
 })();

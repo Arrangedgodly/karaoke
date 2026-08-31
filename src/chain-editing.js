@@ -23,6 +23,8 @@
 //   ChainEditing.getLayout() -> detached accepted-layout copy
 //   ChainEditing.syncLayout(layout) -> update accepted layout after a
 //     layout-only board gesture (no logical/audio mutation)
+//   ChainEditing.beginEngineTransition() -> {ready, release}; host barrier
+//     that drains accepted edits before a source change and holds new edits
 //   ChainEditing.whenIdle() -> Promise<detached accepted-model copy>
 //   ChainEditing.hasPersistenceWarning() -> boolean
 //
@@ -37,8 +39,10 @@
 
   var acceptedModel = null;
   var acceptedLayout;
-  var persistenceWarning = false;
   var queue = Promise.resolve();
+  var engineTransitionGeneration = 0;
+  var activeEngineTransition = null;
+  var engineTransitionBarrier = Promise.resolve(true);
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -51,6 +55,40 @@
         type: entry.type,
         params: Object.assign({}, entry.params || {})
       };
+    });
+  }
+
+  /**
+   * Convert legal numeric discrete enums to the registry's canonical string
+   * before a candidate reaches any adapter. PresetSchema deliberately accepts
+   * both wire forms, but the accepted model has one form so the graph, board,
+   * persistence, tool readback, and Undo snapshots cannot disagree.
+   */
+  function canonicalizeModel(model) {
+    return cloneModel(model).map(function (entry) {
+      var specs = [];
+      try {
+        if (window.NodeTypes && typeof window.NodeTypes.getParamSpec === 'function') {
+          specs = window.NodeTypes.getParamSpec(entry.type) || [];
+        }
+      } catch (err) {
+        specs = [];
+      }
+      specs.forEach(function (spec) {
+        var value = entry.params[spec.id];
+        if (
+          spec &&
+          Array.isArray(spec.values) &&
+          typeof value === 'number' &&
+          isFinite(value) &&
+          Math.floor(value) === value &&
+          value >= 0 &&
+          value < spec.values.length
+        ) {
+          entry.params[spec.id] = spec.values[value];
+        }
+      });
+      return entry;
     });
   }
 
@@ -141,7 +179,7 @@
 
   function candidateFor(request, previous) {
     if (Array.isArray(request.candidate)) {
-      return cloneModel(request.candidate);
+      return canonicalizeModel(request.candidate);
     }
     var found = false;
     var candidate = cloneModel(previous);
@@ -157,7 +195,7 @@
         request.change.nodeId + '".'
       );
     }
-    return candidate;
+    return canonicalizeModel(candidate);
   }
 
   function singleParamChange(previous, candidate) {
@@ -216,6 +254,53 @@
       window.AudioGraph &&
       typeof window.AudioGraph.buildGraph === 'function'
     );
+  }
+
+  function engineNotStartedError() {
+    var err = new Error(
+      'ChainEditing: the audio engine must be live before a chain edit can be accepted.'
+    );
+    err.code = 'ENGINE_NOT_STARTED';
+    return err;
+  }
+
+  function engineIsExplicitlyUnavailable(request) {
+    var engine = window.AudioEngine;
+    if (!engine) {
+      return false;
+    }
+    if (engine.isStarted === false) {
+      return true;
+    }
+    if ('isTrackLive' in engine && engine.isTrackLive === false) {
+      return true;
+    }
+    // Production AudioEngine exposes these as getters. Some unit harnesses
+    // intentionally omit the live-audio surface so they can exercise the
+    // model transaction in isolation; absence is therefore not evidence of
+    // failure, while an explicitly present null is.
+    if ('sourceNode' in engine && !engine.sourceNode) {
+      return true;
+    }
+    if ('audioContext' in engine && !engine.audioContext) {
+      return true;
+    }
+    if (
+      engine.audioContext &&
+      'state' in engine.audioContext &&
+      engine.audioContext.state !== 'running'
+    ) {
+      // AudioEngine.start() deliberately does not await resume() before
+      // restoring the initial chain. Permit only that known suspended
+      // startup window; every later human/agent/preset/Undo edit fails
+      // closed until the context reports running again.
+      return !(
+        request &&
+        request.source === 'startup' &&
+        ['suspended', 'interrupted'].indexOf(engine.audioContext.state) !== -1
+      );
+    }
+    return false;
   }
 
   function paramPathMatchesLiveGraph(change) {
@@ -381,16 +466,6 @@
     }
   }
 
-  function setPersistenceWarning(message) {
-    if (window.PresetsUI && typeof window.PresetsUI.setPersistenceWarning === 'function') {
-      try {
-        window.PresetsUI.setPersistenceWarning(message || null);
-      } catch (err) {
-        // A display failure must not change the storage result.
-      }
-    }
-  }
-
   function persist(model) {
     if (!window.Persistence || typeof window.Persistence.saveCurrentChain !== 'function') {
       return { saved: true };
@@ -402,10 +477,6 @@
       result = { saved: false, error: err };
     }
     if (result && result.saved === false) {
-      persistenceWarning = true;
-      setPersistenceWarning(
-        'Autosave failed. The live chain is applied, but this change may be lost on reload.'
-      );
       return {
         saved: false,
         warning: {
@@ -414,11 +485,19 @@
         }
       };
     }
-    if (persistenceWarning) {
-      persistenceWarning = false;
-      setPersistenceWarning(null);
-    }
     return { saved: true };
+  }
+
+  function hasPersistenceWarning() {
+    try {
+      return !!(
+        window.Persistence &&
+        typeof window.Persistence.isSaveFailed === 'function' &&
+        window.Persistence.isSaveFailed()
+      );
+    } catch (err) {
+      return false;
+    }
   }
 
   function pushAgentUndo(request, snapshot) {
@@ -494,6 +573,9 @@
     if (request.signal && request.signal.aborted) {
       return Promise.reject(makeAbortError());
     }
+    if (engineIsExplicitlyUnavailable(request)) {
+      return Promise.reject(engineNotStartedError());
+    }
 
     var previous = currentAcceptedModel();
     var candidate;
@@ -514,6 +596,7 @@
     }
     var mode = change ? 'parameter' : 'structural';
     var liveCommitted = false;
+    var renderedLayout = previousLayout;
 
     var commit;
     if (change) {
@@ -534,15 +617,17 @@
           request.layout === undefined ? previousLayout : request.layout,
           request.renderOptions
         );
+        // Canvas owns seating/clamping. Promote its resolved layout back to
+        // accepted state so persistence, rollback, and Undo snapshot what is
+        // actually rendered rather than the caller's pre-render request.
+        renderedLayout = currentLayout();
       });
     }
 
     return commit.then(function () {
       acceptedModel = cloneModel(candidate);
       if (mode === 'structural') {
-        acceptedLayout = request.layout === undefined
-          ? (previousLayout === null ? null : clone(previousLayout))
-          : clone(request.layout);
+        acceptedLayout = renderedLayout === null ? null : clone(renderedLayout);
       }
       markAcceptedEdit(request);
       var saved = persist(candidate);
@@ -594,7 +679,12 @@
   }
 
   function apply(request) {
-    var run = queue.then(function () {
+    var prior = queue;
+    var transition = engineTransitionBarrier;
+    var run = Promise.all([prior, transition]).then(function (settled) {
+      if (settled[1] === false) {
+        throw engineNotStartedError();
+      }
       return perform(request);
     });
     queue = run.catch(function () {
@@ -603,14 +693,69 @@
     return run;
   }
 
+  /**
+   * Hold new chain edits while the host changes AudioEngine.sourceNode.
+   * The first overlapping transition waits for already-queued edits; rapid
+   * device requests share that drain point and may still use AudioEngine's
+   * newest-request-wins acquisition behavior. The final release unblocks
+   * edits in their original queue order.
+   */
+  function beginEngineTransition() {
+    if (!activeEngineTransition) {
+      var transition = {
+        generation: ++engineTransitionGeneration,
+        count: 0,
+        ready: queue,
+        resolve: null
+      };
+      engineTransitionBarrier = new Promise(function (resolve) {
+        transition.resolve = resolve;
+      });
+      activeEngineTransition = transition;
+    }
+    var ownedTransition = activeEngineTransition;
+    ownedTransition.count += 1;
+    var released = false;
+    return {
+      ready: ownedTransition.ready,
+      release: function (engineLive) {
+        if (released) {
+          return;
+        }
+        released = true;
+        // A lifecycle loss closes the whole overlapping generation now.
+        // Pending getUserMedia cannot hold a later recovery Start hostage;
+        // its eventual release belongs to this retired object and is ignored.
+        if (engineLive === false) {
+          if (activeEngineTransition === ownedTransition) {
+            activeEngineTransition = null;
+            engineTransitionBarrier = Promise.resolve(true);
+            ownedTransition.resolve(false);
+          }
+          return;
+        }
+        if (activeEngineTransition !== ownedTransition) {
+          return;
+        }
+        ownedTransition.count -= 1;
+        if (ownedTransition.count === 0) {
+          activeEngineTransition = null;
+          engineTransitionBarrier = Promise.resolve(true);
+          ownedTransition.resolve(true);
+        }
+      }
+    };
+  }
+
   window.ChainEditing = {
     apply: apply,
+    beginEngineTransition: beginEngineTransition,
     getModel: currentAcceptedModel,
     getLayout: currentAcceptedLayout,
     syncLayout: syncLayout,
     whenIdle: function () {
       return queue.then(function () { return currentAcceptedModel(); });
     },
-    hasPersistenceWarning: function () { return persistenceWarning; }
+    hasPersistenceWarning: hasPersistenceWarning
   };
 })();
