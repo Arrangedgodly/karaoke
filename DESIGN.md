@@ -309,9 +309,13 @@ from the same positions map (nodes + 1 segments, re-routed by every
 position/order write path). Jack geometry is the across-from rule — one
 reading since vertical flow was retired: a card's input sits at the
 middle of its LEFT border and its output at the middle of its RIGHT
-(directly across). The panel anchors rhyme the same way: MIC IN's
-out-jack at its block's middle-right, the OUT anchor's in-jack at its
-middle-left, so the row reads mic → across through the modules → out.
+(directly across). The two PANEL TERMINI (2026-08-31 cord round): the
+MIC cable DROPS at the content top directly beneath the fixed header
+unit's meter (content-anchored so it never pans; the ring is the
+drag-to-relink grab point), and the chain's OUT EXITS at the board's
+bottom-right corner — one grid unit in from the extent — dropping
+visually toward the base plate's OUT port. The in-flow OUT anchor block
+is retired; the row reads mic → across through the modules → out.
 Every jack is ONE drawn vocabulary — a 15px ring with a dark socket dot,
 sitting ON the border line it serves (half-buried in the slab's edge)
 with a quiet print-lift hover. Jack rings are the layer's only

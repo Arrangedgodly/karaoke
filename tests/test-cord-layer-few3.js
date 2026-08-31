@@ -145,8 +145,6 @@ canvasPanelEl.className = 'canvas-panel';
 var canvasFaceEl = new FakeElement('div'); // #chain-canvas — the cord layer's host
 var micAnchorEl = new FakeElement('div');
 micAnchorEl.className = 'anchor';
-var outAnchorEl = new FakeElement('div');
-outAnchorEl.className = 'anchor';
 var arrowElA = new FakeElement('span');
 arrowElA.className = 'arrow';
 var arrowElB = new FakeElement('span');
@@ -157,7 +155,6 @@ canvasFaceEl.appendChild(arrowElA);
 canvasFaceEl.appendChild(chainListEl);
 canvasFaceEl.appendChild(emptyHintEl);
 canvasFaceEl.appendChild(arrowElB);
-canvasFaceEl.appendChild(outAnchorEl);
 // NOTE: no offsetLeft/offsetTop on chainListEl — the board origin must
 // resolve to {0, 0} so the pins below are the positions map verbatim.
 
@@ -357,7 +354,7 @@ function model3() {
 // since vertical flow was retired 2026-08-31) over the placeholder card
 // box (160 wide, 48 tall — real browsers measure the live card); OUT IN
 // at the board's foot (16, maxY + 160).
-var MIC = { x: 16, y: -32 };
+var MIC = { x: 16, y: 0 };
 var CARD_W = 160;
 var CARD_H = 48;
 function seatIn(seat) { return { x: seat.x, y: seat.y + CARD_H / 2 }; }
@@ -372,9 +369,8 @@ check(
   'A2: the layer is #chain-canvas\'s LAST child — never a first child (no firstChild index shifts)'
 );
 check(
-  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register') &&
-    canvasFaceEl.children[canvasFaceEl.children.length - 2] === outAnchorEl,
-  'A3: MIC IN lives on the register strip (2026-08-31); the OUT anchor still closes the face'
+  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register'),
+  'A3: MIC IN lives on the register strip; the in-flow OUT anchor is retired (2026-08-31 cord round)'
 );
 check(
   !!layer && layer.attrs['aria-hidden'] === 'true',
@@ -400,7 +396,7 @@ check(
 var d01 = dOf(0);
 check(
   !!d01 && startPoint(d01).x === MIC.x && startPoint(d01).y === MIC.y,
-  'B4: the first cord leaves the MIC OUT jack print (16, -32) — a positions-map value'
+  'B4: the first cord leaves the MIC drop point at the content top (16, 0) — under the header unit'
 );
 var d12 = dOf(1);
 check(
@@ -410,8 +406,8 @@ check(
 );
 var dLast = dOf(3);
 check(
-  !!dLast && endPoint(dLast).x === 16 && endPoint(dLast).y === 16 + 160,
-  'B6: the OUT IN jack rides the board\'s foot (lowest seat 16 + one row pitch)'
+  !!dLast && endPoint(dLast).x === 288 + 160 - 16 && endPoint(dLast).y === 16 + 160 - 16,
+  'B6: the chain\'s OUT exits at the board\'s bottom-right corner (rightmost seat + card width - one grid unit in, one grid above the extent foot)'
 );
 check(
   !!d01 && d01.indexOf(' C') !== -1,

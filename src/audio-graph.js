@@ -224,13 +224,12 @@
       note.setAttribute('role', 'note');
       note.textContent =
         'Safe output: ON, ceiling ' + OUTPUT_CEILING_DBFS + ' dBFS';
-      // "Next to the OUT anchor": the canvas's LAST .anchor is OUT
-      // (index.html order: MIC IN anchor ... chain list ... OUT anchor).
-      // Insert immediately after it; fall back to appending at the end.
-      var anchors = canvasEl.querySelectorAll('.anchor');
-      var outAnchor = anchors.length > 0 ? anchors[anchors.length - 1] : null;
-      if (outAnchor && outAnchor.parentNode === canvasEl) {
-        canvasEl.insertBefore(note, outAnchor.nextSibling);
+      // 2026-08-31 cord round: the in-flow OUT anchor is retired — the
+      // note rides the pinned BASE PLATE next to the OUT meter unit (the
+      // operator's output ground truth), never inside the scrolling face.
+      var footer = document.querySelector('.canvas-footer');
+      if (footer) {
+        footer.appendChild(note);
       } else {
         canvasEl.appendChild(note);
       }

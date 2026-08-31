@@ -3537,23 +3537,6 @@ input.preset-name-input:focus-visible {
   transform: rotate(-45deg); /* points right down the row */
 }
 
-.canvas-panel.flow-horizontal .anchor {
-  flex-direction: column;
-  align-items: center;
-  width: auto;
-  min-width: 5.5rem;
-  justify-content: flex-start;
-}
-
-.canvas-panel.flow-horizontal .anchor::before {
-  margin-right: 0;
-  margin-bottom: 0.45rem;
-}
-
-.canvas-panel.flow-horizontal .meter-unit {
-  margin-top: 0.35rem;
-}
-
 /* CONDENSED SECTION (2026-08-31 horizontal-default round, tightened by
    the dead-space round the same day). In the horizontal reading each
    section is a condensed MODULE: the rail collapses into a compact

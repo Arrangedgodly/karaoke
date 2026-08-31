@@ -435,7 +435,6 @@
   // verbatim; every real browser measures the live card instead.
   var CARD_W_FALLBACK = GRID_PITCH * 10; // 160 — placeholder card width
   var CARD_H_FALLBACK = GRID_PITCH * 3; // 48 — placeholder card height
-  var PANEL_MIC_DY = -2 * GRID_PITCH; // -32 — MIC OUT line above the board (fallback)
   var cordSvgEl = null;
   // FEW-4: jack-point geometry + edit-gesture constants. JACK_R is the
   // HIT disc (pointer-events:all makes the whole disc live); the DRAWN
@@ -546,14 +545,17 @@
     return which === 'out' ? anchors[anchors.length - 1] : anchors[0];
   }
 
-  /** MIC IN's OUT jack — the right edge of the fixed header unit on the
-   *  register strip (the same across-from rule the cards follow). Real
-   *  browsers convert viewport rects into the list's board space; the
-   *  offset path serves layout-full hosts, the constant the stripped
-   *  harnesses. */
+  /** MIC IN's OUT jack — the cable's DROP POINT at the board's top edge,
+   *  directly beneath the fixed header unit's meter (2026-08-31 cord
+   *  round). The cord SVG lives inside the scrolling face and cannot
+   *  paint above its clip, so the cable starts AT the content top under
+   *  the unit — visibly dropping out of the header's port — with its
+   *  draggable jack ring drawn there. Real browsers convert the unit's
+   *  viewport rect into content space (+ scrollLeft so the point stays
+   *  put while the board pans); stripped harnesses take the constant. */
   function micOutPoint() {
-    var el = panelAnchorEl('mic');
     var origin = boardOrigin();
+    var el = panelAnchorEl('mic');
     if (el) {
       try {
         if (typeof el.getBoundingClientRect === 'function' &&
@@ -561,31 +563,33 @@
           var er = el.getBoundingClientRect();
           var lr = chainListEl.getBoundingClientRect();
           if (er && lr && er.width && er.height) {
-            return { x: er.right - lr.left, y: er.top + er.height / 2 - lr.top };
+            var dropX = er.left + er.width / 2 - lr.left +
+              (chainListEl.scrollLeft || 0);
+            if (dropX < GRID_PITCH) {
+              dropX = GRID_PITCH;
+            }
+            return { x: origin.x + dropX, y: origin.y };
           }
         }
       } catch (err) {
-        /* stripped harness — offsets/fallback below */
-      }
-      var size = measuredSize(el);
-      if (size.w && size.h) {
-        return { x: el.offsetLeft + size.w, y: el.offsetTop + size.h / 2 };
+        /* stripped harness — fallback below */
       }
     }
-    return { x: origin.x + TIDY_X, y: origin.y + PANEL_MIC_DY };
+    return { x: origin.x + TIDY_X, y: origin.y };
   }
 
-  /** The OUT anchor's IN jack — the receiver's board-facing edge, the
-   *  MIDDLE of its LEFT border. The layout-less fallback rides the
-   *  board's foot below the lowest seat. */
-  function outInPoint(maxY) {
-    var el = panelAnchorEl('out');
-    var size = measuredSize(el);
+  /** The chain's OUT jack — the cable's EXIT POINT at the board's
+   *  bottom-right corner (2026-08-31 cord round: the in-flow OUT anchor
+   *  is retired; the fixed base-plate OUT unit below the face is the
+   *  port, and this content-anchored point — one grid unit in from the
+   *  board's extent — is where the last cord visibly drops toward it,
+   *  jack ring drawn). */
+  function outInPoint(maxX, maxY) {
     var origin = boardOrigin();
-    if (size.w && size.h) {
-      return { x: el.offsetLeft, y: el.offsetTop + size.h / 2 };
-    }
-    return { x: origin.x + TIDY_X, y: origin.y + maxY + TIDY_ROW_PITCH };
+    return {
+      x: origin.x + Math.max(maxX - GRID_PITCH, TIDY_X),
+      y: origin.y + Math.max(maxY - GRID_PITCH, 0)
+    };
   }
 
   /** The read-only route: MIC OUT -> each section in DOM order -> OUT IN.
@@ -594,17 +598,21 @@
   function cordSegments() {
     var ids = domCardIds();
     var maxY = 0;
+    var maxX = 0;
     ids.forEach(function (id) {
       var pos = positions[id];
       if (pos && pos.y > maxY) {
         maxY = pos.y;
+      }
+      if (pos && pos.x > maxX) {
+        maxX = pos.x;
       }
     });
 
     var segments = [];
     var prevId = 'mic';
     var prevPt = micOutPoint();
-    var outPt = outInPoint(maxY);
+    var outPt = outInPoint(maxX + (maxX ? CARD_W_FALLBACK : 0), maxY + (maxY ? TIDY_ROW_PITCH : 0));
 
     ids.forEach(function (id) {
       var pos = positions[id];
