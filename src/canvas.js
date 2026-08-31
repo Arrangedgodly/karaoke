@@ -105,16 +105,56 @@
   var GRID_PITCH = 16; // the snap quantum (px) — one shared constant
   var TIDY_X = GRID_PITCH; // the incumbent stack's left edge (grid-aligned)
   var TIDY_ROW_PITCH = GRID_PITCH * 10; // 160px — the layout-less tidy-row fallback (real rows use measured heights)
-  var positions = {}; // id -> {x, y, scale, flow} (scale/flow carried, FEW-5/6 wire them)
+  // Per-card WIDTH (2026-08-31 round): a condensed section's own width in
+  // px, snap-quantized and clamped. `w` rides the layout entry beside
+  // x/y/scale/flow; an absent w means the CSS default (the uniform
+  // condensed width every card shares until resized). The clamp bounds
+  // mirror main.css's horizontal-mode min/max-width (11rem..24rem).
+  var CARD_W_DEFAULT_PX = 240; // 15rem — the uniform condensed default
+  var CARD_W_MIN_PX = 176; // 11rem
+  var CARD_W_MAX_PX = 384; // 24rem
+  var positions = {}; // id -> {x, y, w?, scale, flow} (scale/flow carried, FEW-5/6 wire them)
   var zCounter = 0; // bring-to-front counter (pointerdown order)
   var positionDrag = null; // the live grip drag, if any
+  var resizeDrag = null; // the live width-resize drag, if any
 
   function snapToGrid(v) {
     return Math.round(v / GRID_PITCH) * GRID_PITCH;
   }
 
-  function applyPositionToCard(card, x, y) {
+  /** Clamp a candidate width into the condensed range (the board's own
+   *  geometry contract, mirrored in main.css's horizontal min/max). */
+  function clampCardW(w) {
+    if (typeof w !== 'number' || !isFinite(w)) {
+      return CARD_W_DEFAULT_PX;
+    }
+    if (w < CARD_W_MIN_PX) {
+      return CARD_W_MIN_PX;
+    }
+    if (w > CARD_W_MAX_PX) {
+      return CARD_W_MAX_PX;
+    }
+    return w;
+  }
+
+  /** A card's effective width in px: its saved `w` clamped into the
+   *  condensed range, or the uniform CSS default when none was saved.
+   *  Single source for tidy math, board extent, and the width resize. */
+  function cardWidth(id) {
+    var pos = positions[id];
+    return clampCardW(pos && typeof pos.w === 'number' ? pos.w : undefined);
+  }
+
+  /** Paint one layout entry onto its card: the seat (transform) and, in
+   *  horizontal mode, the width (vertical cards stay full-width rows —
+   *  their width comes from the board, not the entry). */
+  function applyPositionToCard(card, x, y, id) {
     card.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+    if (id && boardFlow === 'horizontal') {
+      card.style.width = cardWidth(id) + 'px';
+    } else if (id && card.style) {
+      card.style.width = '';
+    }
   }
 
   function bringCardToFront(card) {
@@ -122,7 +162,7 @@
     card.style.zIndex = String(zCounter);
   }
 
-  /** One row's contribution to the tidy stack: the card's MEASURED height
+  /** One row's contribution to the tidy COLUMN: the card's MEASURED height
    *  snapped up to the grid plus one grid unit of breathing room (the
    *  console rhythm's own pitch — not an arbitrary gap). A layout-less
    *  host falls back to the incumbent fixed 160px row pitch. OQ-9: the
@@ -136,18 +176,46 @@
     return TIDY_ROW_PITCH;
   }
 
-  /** The incumbent vertical stack for the CURRENT chain order, preserving
-   *  each node's existing scale/flow (TIDY rewrites only x/y). Rows stack
-   *  on their own measured heights — no card ever overlaps its neighbor
-   *  just because it grew. */
+  /** The horizontal twin: one card's contribution to the tidy ROW — its
+   *  effective width snapped up to the grid plus one grid unit of
+   *  breathing room. A layout-less host has no measured width, so the
+   *  entry's `w` (or the uniform default) carries the math. */
+  function tidyRowWidth(id) {
+    var size = measuredSize(cardElById(id));
+    var w = size.w ? Math.max(size.w, cardWidth(id)) : cardWidth(id);
+    return Math.ceil(w / GRID_PITCH) * GRID_PITCH + GRID_PITCH;
+  }
+
+  /** The incumbent board layout for the CURRENT chain order, preserving
+   *  each node's existing scale/flow/w (TIDY rewrites only x/y). The
+   *  vertical branch stacks rows on their own measured heights; the
+   *  horizontal branch lays the condensed sections in one left-to-right
+   *  row — the mirror of the same discipline (no overlap, grid-aligned,
+   *  one grid unit of air between neighbors). */
   function tidyStackLayout() {
     var layout = {};
+    if (boardFlow === 'horizontal') {
+      var x = 0;
+      chainModel.forEach(function (entry) {
+        var prev = positions[entry.id] || {};
+        layout[entry.id] = {
+          x: x,
+          y: TIDY_X,
+          w: typeof prev.w === 'number' && isFinite(prev.w) ? prev.w : undefined,
+          scale: typeof prev.scale === 'number' && isFinite(prev.scale) ? prev.scale : 1,
+          flow: 'horizontal'
+        };
+        x += tidyRowWidth(entry.id);
+      });
+      return layout;
+    }
     var y = 0;
     chainModel.forEach(function (entry) {
       var prev = positions[entry.id] || {};
       layout[entry.id] = {
         x: TIDY_X,
         y: y,
+        w: typeof prev.w === 'number' && isFinite(prev.w) ? prev.w : undefined,
         scale: typeof prev.scale === 'number' && isFinite(prev.scale) ? prev.scale : 1,
         flow: prev.flow === 'horizontal' ? 'horizontal' : 'vertical'
       };
@@ -169,8 +237,23 @@
     return snapToGrid(maxY);
   }
 
+  /** The horizontal twin: first free grid slot along the tidy row — right
+   *  of the rightmost card's right edge. */
+  function firstFreeSlotX() {
+    var maxX = 0;
+    Object.keys(positions).forEach(function (id) {
+      var right = positions[id].x + tidyRowWidth(id);
+      if (right > maxX) {
+        maxX = right;
+      }
+    });
+    return snapToGrid(maxX);
+  }
+
   function placeNewNode(id) {
-    positions[id] = { x: TIDY_X, y: firstFreeSlotY(), scale: 1, flow: boardFlow };
+    positions[id] = boardFlow === 'horizontal'
+      ? { x: firstFreeSlotX(), y: TIDY_X, scale: 1, flow: 'horizontal' }
+      : { x: TIDY_X, y: firstFreeSlotY(), scale: 1, flow: 'vertical' };
     return positions[id];
   }
 
@@ -179,19 +262,27 @@
     return positions;
   }
 
-  /** Keep the list tall enough that the lowest card stays reachable in the
-   *  panel's internal scroll (absolute cards do not size their container).
-   *  OQ-9: the extent covers each seat's measured BOTTOM, not a fixed row
-   *  pitch — a tall section at the board's foot is fully scrollable. */
+  /** Keep the list reachable in the panel's internal scroll (absolute
+   *  cards do not size their container). Vertical mode maintains the Y
+   *  extent (each seat's measured BOTTOM); horizontal mode additionally
+   *  maintains the X extent — the row's right edge — so the condensed
+   *  sections stay reachable in the face's horizontal scroll. OQ-9: the
+   *  extent covers measured edges, never a fixed row pitch. */
   function refreshBoardExtent() {
     var maxY = 0;
+    var maxX = 0;
     Object.keys(positions).forEach(function (id) {
       var bottom = positions[id].y + tidyRowHeight(id);
       if (bottom > maxY) {
         maxY = bottom;
       }
+      var right = positions[id].x + tidyRowWidth(id);
+      if (right > maxX) {
+        maxX = right;
+      }
     });
     chainListEl.style.minHeight = maxY + 'px';
+    chainListEl.style.minWidth = boardFlow === 'horizontal' ? maxX + 'px' : '';
   }
 
   function applyPositionsToCards() {
@@ -199,18 +290,145 @@
     Array.prototype.forEach.call(cardEls, function (card) {
       var pos = positions[card.getAttribute('data-node-id')];
       if (pos) {
-        applyPositionToCard(card, pos.x, pos.y);
+        applyPositionToCard(card, pos.x, pos.y, card.getAttribute('data-node-id'));
       }
     });
     refreshBoardExtent();
   }
 
-  /** TIDY: restore the incumbent vertical stack for every node. Saves the
-   *  tidied layout through the FEW-1 store (x/y only — scale/flow kept). */
+  /** The card's RAW on-screen height (no breathing pitch added) — the
+   *  clustering input for TIDY's compaction pass. A layout-less host
+   *  falls back to the fixed row pitch. */
+  function rawCardHeight(id) {
+    var size = measuredSize(cardElById(id));
+    return size.h || TIDY_ROW_PITCH;
+  }
+
+  /**
+   * TIDY'S COMPACTION CLUSTERING (2026-08-31 round, user direction):
+   * group a position-sorted item list into bands whose ranges OVERLAP by
+   * at least a quarter of the incoming item's own extent. Two cards
+   * share a band when they genuinely sit side-by-side (or stacked); a
+   * card clearly beyond a neighbor's edge starts a new band — so the
+   * arrangement's TOPOLOGY (who is left of whom, who is above whom)
+   * survives the tidy, only the dead space between bands collapses.
+   */
+  var CLUSTER_OVERLAP_FRACTION = 0.25;
+
+  function clusterByRange(items, posKey, sizeKey) {
+    var sorted = items.slice().sort(function (a, b) { return a[posKey] - b[posKey]; });
+    var bands = [];
+    sorted.forEach(function (item) {
+      var end = item[posKey] + item[sizeKey];
+      var band = bands[bands.length - 1];
+      if (band) {
+        var overlap = Math.min(band.end, end) - item[posKey];
+        if (overlap >= CLUSTER_OVERLAP_FRACTION * item[sizeKey]) {
+          band.items.push(item);
+          if (end > band.end) {
+            band.end = end;
+          }
+          return;
+        }
+      }
+      bands.push({ items: [item], end: end });
+    });
+    return bands;
+  }
+
+  /**
+   * TIDY'S LAYOUT (the compaction pass): close up the free vertical and
+   * horizontal space BETWEEN cards while PRESERVING the operator's
+   * arrangement — cards cluster into columns by x-overlap and rows by
+   * y-overlap, each band snaps flush against its predecessor (one grid
+   * unit of breathing via the tidy pitches), and the whole board keeps
+   * its original top-left anchor. A single column therefore collapses to
+   * exactly the incumbent stack, and a deliberately 2D arrangement keeps
+   * its shape with the gaps gone. scale/flow/w are carried untouched —
+   * TIDY rewrites only x/y.
+   */
+  function compactLayout() {
+    var entries = chainModel.map(function (entry) {
+      var prev = positions[entry.id] || {};
+      return {
+        id: entry.id,
+        prev: prev,
+        x: typeof prev.x === 'number' ? prev.x : 0,
+        y: typeof prev.y === 'number' ? prev.y : 0
+      };
+    });
+
+    // Column bands from the raw widths, packed with the tidy pitch
+    // (width + one grid unit). The leftmost band keeps its original x.
+    var xByid = {};
+    var colBands = clusterByRange(entries.map(function (e) {
+      return { id: e.id, x: e.x, w: cardWidth(e.id) };
+    }), 'x', 'w');
+    var colX = snapToGrid(colBands.length ? colBands[0].items[0].x : 0);
+    colBands.forEach(function (band) {
+      var widest = 0;
+      band.items.forEach(function (item) {
+        xByid[item.id] = colX;
+        var pitch = tidyRowWidth(item.id);
+        if (pitch > widest) {
+          widest = pitch;
+        }
+      });
+      colX += widest;
+    });
+
+    // Row bands from the raw heights, packed with the tidy pitch — the
+    // vertical twin of the column pass. The topmost band keeps its y.
+    var yByid = {};
+    var rowBands = clusterByRange(entries.map(function (e) {
+      return { id: e.id, y: e.y, h: rawCardHeight(e.id) };
+    }), 'y', 'h');
+    var rowY = snapToGrid(rowBands.length ? rowBands[0].items[0].y : 0);
+    rowBands.forEach(function (band) {
+      var tallest = 0;
+      band.items.forEach(function (item) {
+        yByid[item.id] = rowY;
+        var pitch = tidyRowHeight(item.id);
+        if (pitch > tallest) {
+          tallest = pitch;
+        }
+      });
+      rowY += tallest;
+    });
+
+    var layout = {};
+    entries.forEach(function (e) {
+      layout[e.id] = {
+        x: xByid[e.id],
+        y: yByid[e.id],
+        w: typeof e.prev.w === 'number' && isFinite(e.prev.w) ? e.prev.w : undefined,
+        scale: typeof e.prev.scale === 'number' && isFinite(e.prev.scale) ? e.prev.scale : 1,
+        flow: e.prev.flow === 'horizontal' ? 'horizontal' : 'vertical'
+      };
+    });
+    return layout;
+  }
+
+  /** TIDY (the button): compact the arrangement — close the free space
+   *  between cards, keep the arrangement itself. Saves the tidied layout
+   *  through the FEW-1 store (x/y only — w/scale/flow kept). */
   function tidyChain() {
+    positions = compactLayout();
+    applyPositionsToCards();
+    renderCords(); // FEW-3: re-route onto the compacted board
+    if (window.Persistence) {
+      window.Persistence.saveCurrentChain(chainModel, positions);
+    }
+  }
+
+  /** The FLOW toggle's re-orientation: the strict incumbent layout for
+   *  the NEW reading (the condensed row or the vertical stack) — flipping
+   *  the reading direction is an explicit re-orientation, not a
+   *  compaction. Same store discipline as TIDY. */
+  function orientChain() {
     positions = tidyStackLayout();
     applyPositionsToCards();
-    renderCords(); // FEW-3: re-route onto the restored stack
+    renderCords();
     if (window.Persistence) {
       window.Persistence.saveCurrentChain(chainModel, positions);
     }
@@ -229,7 +447,7 @@
     if (pos && (pos.x !== x || pos.y !== y)) {
       pos.x = x;
       pos.y = y;
-      applyPositionToCard(positionDrag.card, x, y);
+      applyPositionToCard(positionDrag.card, x, y, positionDrag.id);
       positionDrag.moved = true;
       refreshBoardExtent();
       renderCords(); // FEW-3: live re-route while the seat moves
@@ -249,6 +467,45 @@
     }
   }
 
+  // The width-resize pointer-drag (2026-08-31 round): adjusts ONE card's
+  // `w` (snap-quantized, clamped to the condensed range), repaints the
+  // width, re-routes the cords (jack geometry reads the live card box),
+  // and refreshes the board extent. Never an order, never a sound.
+  function onResizePointerMove(event) {
+    if (!resizeDrag) {
+      return;
+    }
+    var dx = ((event && typeof event.clientX === 'number' ? event.clientX : 0) - resizeDrag.startX);
+    var w = snapToGrid(resizeDrag.originW + dx);
+    if (w < CARD_W_MIN_PX) {
+      w = CARD_W_MIN_PX;
+    }
+    if (w > CARD_W_MAX_PX) {
+      w = CARD_W_MAX_PX;
+    }
+    var pos = positions[resizeDrag.id];
+    if (pos && pos.w !== w) {
+      pos.w = w;
+      applyPositionToCard(resizeDrag.card, pos.x, pos.y, resizeDrag.id);
+      resizeDrag.moved = true;
+      refreshBoardExtent();
+      renderCords(); // jacks sit on the border — the border just moved
+    }
+  }
+
+  function onResizePointerEnd() {
+    if (!resizeDrag) {
+      return;
+    }
+    var drag = resizeDrag;
+    resizeDrag = null;
+    dragActive = false;
+    // Same discipline as a seat move: persist on END only.
+    if (drag.moved && window.Persistence) {
+      window.Persistence.saveCurrentChain(chainModel, positions);
+    }
+  }
+
   function initPositionDragWiring() {
     if (typeof document.addEventListener !== 'function' ||
         document.__chainCanvasPointerWired) {
@@ -258,6 +515,9 @@
     document.addEventListener('pointermove', onPositionPointerMove);
     document.addEventListener('pointerup', onPositionPointerEnd);
     document.addEventListener('pointercancel', onPositionPointerEnd);
+    document.addEventListener('pointermove', onResizePointerMove);
+    document.addEventListener('pointerup', onResizePointerEnd);
+    document.addEventListener('pointercancel', onResizePointerEnd);
     // FEW-4: the cord-edit gesture rides the same document-level wiring
     // (each handler no-ops unless ITS drag is armed). Escape reverts an
     // in-progress cord edit (the keyboard twin of drop-nowhere).
@@ -338,7 +598,11 @@
   // The canvas-wide flow mode the FLOW toggle owns (VIS-7b). Today it is
   // the uniform value written into every card's layout flow field;
   // FEW-6 makes the field per-card and this becomes only the default.
-  var boardFlow = 'vertical';
+  // Horizontal-default round (2026-08-31, user direction): the board's
+  // DEFAULT reading is HORIZONTAL (condensed portrait sections in a
+  // left-to-right row); the FLOW toggle flips to the vertical stacked
+  // reading. A persisted preference always wins over this default.
+  var boardFlow = 'horizontal';
 
   function createSvgEl(tag) {
     if (typeof document.createElementNS === 'function') {
@@ -1817,7 +2081,7 @@
     // only ARMS it. dragActive goes true for the whole gesture so agent
     // mutations queue behind it (MC-4 discipline, unchanged consumer).
     handle.addEventListener('pointerdown', function (event) {
-      if (positionDrag || cordDrag) {
+      if (positionDrag || cordDrag || resizeDrag) {
         return; // one gesture at a time (a cord edit owns the pointer too)
       }
       if (event && typeof event.button === 'number' && event.button !== 0) {
@@ -1839,6 +2103,74 @@
         moved: false
       };
     });
+
+    // The header band is the card's MOVE grip (2026-08-31 dead-space
+    // round, user direction "cards aren't moveable"): pointerdown
+    // anywhere on the rail arms the same seat drag the machined grip
+    // icon arms — EXCLUDING the real controls that live in the band
+    // (collapse, eject) so pressing them never starts a move. The grip
+    // icon keeps its own listener for its visual affordance; the guard
+    // `if (positionDrag ...) return` makes double-arming impossible.
+    rail.addEventListener('pointerdown', function (event) {
+      if (positionDrag || cordDrag || resizeDrag) {
+        return;
+      }
+      var target = event && event.target;
+      if (target && typeof target.closest === 'function' &&
+          target.closest('button, input, label, .node-resize')) {
+        return; // a control in the band owns this press
+      }
+      if (event && typeof event.button === 'number' && event.button !== 0) {
+        return; // primary pointer only
+      }
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      var pos = positions[id] || placeNewNode(id);
+      bringCardToFront(card);
+      dragActive = true;
+      positionDrag = {
+        card: card,
+        id: id,
+        startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
+        startY: event && typeof event.clientY === 'number' ? event.clientY : 0,
+        originX: pos.x,
+        originY: pos.y,
+        moved: false
+      };
+    });
+
+    // The width-resize grip (2026-08-31 round): a machined corner mark
+    // (CSS-drawn dot field, .node-resize) at the card's bottom-right.
+    // Pointer-only, like the position grip — the resize is a STYLE edit
+    // (w joins x/y in the layout entry), never an order or a sound. The
+    // drag resolves on the document-level onResizePointerMove/End pair.
+    var resizeGrip = document.createElement('div');
+    resizeGrip.className = 'node-resize';
+    resizeGrip.setAttribute('aria-hidden', 'true');
+    resizeGrip.title = 'Drag to resize';
+    resizeGrip.addEventListener('pointerdown', function (event) {
+      if (positionDrag || cordDrag || resizeDrag) {
+        return; // one gesture at a time
+      }
+      if (event && typeof event.button === 'number' && event.button !== 0) {
+        return; // primary pointer only
+      }
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      var pos = positions[id] || placeNewNode(id);
+      bringCardToFront(card);
+      dragActive = true;
+      resizeDrag = {
+        card: card,
+        id: id,
+        startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
+        originW: cardWidth(id),
+        moved: false
+      };
+    });
+    card.appendChild(resizeGrip);
 
     return card;
   }
@@ -2011,11 +2343,16 @@
         positions[entry.id] = {
           x: snapToGrid(saved.x),
           y: snapToGrid(saved.y),
+          // A saved width rides along clamped (the condensed range is the
+          // board's own geometry contract); absent -> the CSS default.
+          w: typeof saved.w === 'number' && isFinite(saved.w) ? clampCardW(saved.w) : undefined,
           scale: typeof saved.scale === 'number' && isFinite(saved.scale) ? saved.scale : 1,
-          // An EXPLICIT saved flow wins; a missing field defaults to the
-          // canvas-wide mode the FLOW toggle owns (OQ-9: the toggle is
-          // today's uniform writer of the per-card field).
-          flow: saved.flow === 'horizontal' ? 'horizontal'
+          // An EXPLICIT saved flow wins — but only when the user has ever
+          // expressed a flow preference (see flowPrefExplicit): a legacy
+          // entry's flow was default-written, not chosen, so it follows
+          // the board mode instead.
+          flow: !flowPrefExplicit ? boardFlow
+            : saved.flow === 'horizontal' ? 'horizontal'
             : saved.flow === 'vertical' ? 'vertical' : boardFlow
         };
       } else if (previous[entry.id]) {
@@ -2267,6 +2604,13 @@
   var FLOW_KEY = 'karaoke-flow-orientation-v1';
   var flowPanel = null;
   var flowButton = null;
+  // Horizontal-default migration flag: TRUE once a flow preference was
+  // ever PERSISTED (the user clicked the toggle at least once). Only then
+  // are saved per-entry flow fields honored as deliberate choices; with
+  // no stored preference, a legacy autosave's entry flows were written by
+  // the OLD default (vertical), not chosen — loadModel follows the board
+  // mode instead, so pre-update chains land on the new default reading.
+  var flowPrefExplicit = false;
 
   function readFlowPreference() {
     var stored = null;
@@ -2275,7 +2619,11 @@
     } catch (e) {
       /* private mode / storage disabled — default below, one-time warn on write */
     }
-    return stored === 'horizontal' ? 'horizontal' : 'vertical';
+    flowPrefExplicit = stored === 'vertical' || stored === 'horizontal';
+    // Horizontal-default round: a persisted VERTICAL preference wins;
+    // everything else (nothing saved yet, storage unavailable, or an
+    // unrecognized value) takes the new default reading — horizontal.
+    return stored === 'vertical' ? 'vertical' : 'horizontal';
   }
 
   function writeFlowPreference(mode) {
@@ -2336,18 +2684,24 @@
       var next = flowPanel.classList.contains('flow-horizontal') ? 'vertical' : 'horizontal';
       writeFlowPreference(next);
       applyFlow(next);
+      // Horizontal-default round: flipping the flow REVERSES the reading,
+      // so the board re-orients into the new reading's incumbent layout
+      // (the condensed row ↔ the vertical stack). Re-orientation, not
+      // compaction — TIDY's arrangement-preserving pass is the button's.
+      orientChain();
     });
     flowPanel.appendChild(flowButton);
 
     // FEW-2: the TIDY control rides the same chrome zone as the flow
     // toggle (existing .control vocabulary, VIS-1 — no new chrome). One
-    // click restores the incumbent vertical stack for every node; it
-    // rewrites ONLY x/y in the layout store, preserving each entry's
-    // scale/flow (see tidyChain()).
+    // click COMPACTS the board: the free space between cards collapses
+    // to the tidy pitch while the arrangement itself is preserved (see
+    // compactLayout). It rewrites ONLY x/y in the layout store,
+    // preserving each entry's w/scale/flow.
     var tidyButton = document.createElement('button');
     tidyButton.type = 'button';
     tidyButton.className = 'control tidy-toggle';
-    tidyButton.setAttribute('aria-label', 'Tidy the board: restore the default stacked layout');
+    tidyButton.setAttribute('aria-label', 'Tidy the board: close up the space between sections');
     tidyButton.textContent = 'TIDY';
     tidyButton.addEventListener('click', function () {
       tidyChain();
@@ -2373,6 +2727,11 @@
     GRID_PITCH: GRID_PITCH,
     TIDY_ROW_PITCH: TIDY_ROW_PITCH,
     TIDY_X: TIDY_X,
+    // The condensed-width contract (2026-08-31 round) — same role as the
+    // grid constants: tests + future consumers read the one source.
+    CARD_W_DEFAULT_PX: CARD_W_DEFAULT_PX,
+    CARD_W_MIN_PX: CARD_W_MIN_PX,
+    CARD_W_MAX_PX: CARD_W_MAX_PX,
     snapToGrid: snapToGrid,
     currentLayout: currentLayout,
     tidyChain: tidyChain,

@@ -168,7 +168,8 @@ full-width fader rows the redesign brief demanded. The board underneath
 is FREE: sections sit wherever the operator puts them (snap-grid
 quantized), patch cords drawn between jacks are how the chain is
 EDITED — sound changes only when a cord link completes, never while
-dragging — and TIDY restores the incumbent vertical stack. Every value
+dragging — and TIDY restores the incumbent layout for the current
+orientation (the condensed horizontal row or the vertical stack). Every value
 the machine holds answers on one display register. The world is matte:
 brightness is saturation on a near-black ground, never glow.
 
@@ -262,22 +263,40 @@ frame on it. Inside, the Two-Deck Stack:
 - **Deck seam**: 4px machined joint (1px bright lip over a deep cut) — deeper and brighter than any section groove so the two slabs read as one instrument under load.
 - **Voice deck**: grid `200px 1fr 220px`, gap 0 — palette zone | chain face | presets zone as PRINTED ZONES on the one chassis ground, separated by groove halves (palette's right edge is the cut; the face's left border is the lip; cut-then-lip in reading order). Below 900px the zones stack palette → face → presets and the grooves turn horizontal.
 
-The chain face (Single Face Chassis) is a bounded flex column
-(`max-height: calc(100vh - 6.75rem)`) that owns its scrolling: display
-register on the top edge; the FACE (MIC IN jack print → the board → OUT
-jack print) scrolling inside; base plate carrying the pinned OUT footer
-mirror / VU corner (bottom-right, always visible, never dimmed) and the
-flow switch + TIDY key (bottom-left). A persisted FLOW toggle flips to
-the horizontal legacy reading (page-owned scroll).
+The FIXED ONE-PAGE CONSOLE (2026-08-31 round, user direction): at ≥901px
+the instrument IS the page — one viewport-height chassis (`html/body`
+overflow hidden, `.instrument` a 100vh flex column), no page scroll
+anywhere; every zone scrolls INSIDE. The voice deck takes the remaining
+height; the palette and presets flanks scroll their own content; the
+chain face (Single Face Chassis: display register on the top edge; the
+FACE — MIC IN jack print → the board → OUT jack print — scrolling
+inside; base plate carrying the pinned OUT footer mirror / VU corner,
+bottom-right, always visible, never dimmed — and the flow switch + TIDY
+key, bottom-left) owns the pan in BOTH axes in either flow mode. Below
+901px the zones stack and the page keeps its scroll. The HORIZONTAL
+reading is the board's default: condensed modules in a left-to-right
+row; the persisted FLOW toggle REVERSES to the vertical stacked reading,
+re-tidying the board into the new orientation's incumbent layout.
 
-**The board (free positioning, cycle 4):** every section is an
-absolutely positioned full-width row translated to its board seat by JS
-(`transform: translate(x,y)`, snap-quantized to the 16px grid). Position
-is STYLE ONLY — DOM order always equals chain order (PD-4), so
-bring-to-front z-order is paint, never sequence. The grip drag moves a
-section's seat (never its sound); the arrangement autosaves; TIDY
-recomputes the incumbent vertical stack (x = 16px, rows stacking on each
-section's MEASURED height plus one grid unit of breathing room — never
+**The board (free positioning, cycle 4 + the 2026-08-31
+horizontal-default round):** every section is an absolutely positioned
+slab translated to its board seat by JS (`transform: translate(x,y)`,
+snap-quantized to the 16px grid). In the horizontal (default) reading
+each section is a CONDENSED PORTRAIT MODULE — the rail collapses into a
+compact header band (grip · code · label · fold/eject right) over the
+wrapping encoder field, one uniform condensed width (240px, clamped
+176–384px) with a min-height one notch above it (slightly taller than
+wide); in the vertical reading sections are full-width rows with the
+side rail anatomy. Position AND width are STYLE ONLY — DOM order always
+equals chain order (PD-4), so bring-to-front z-order is paint, never
+sequence. The grip drag moves a section's seat and the corner resize
+grip (a machined dot-field mark, bottom-right) adjusts its width
+(`w` joins x/y in the layout entry; snap-quantized, clamped, end-only
+persistence); neither ever touches sound. The arrangement autosaves;
+TIDY recomputes the incumbent layout for the current orientation — the
+horizontal row (x accumulating each module's width plus one grid unit)
+or the vertical stack (x = 16px, rows stacking on each section's
+MEASURED height plus one grid unit of breathing room — never
 overlapping, never a fixed pitch).
 
 **Patch cords (FEW-3/FEW-4, geometry by OQ-9):** an SVG cord layer
@@ -299,8 +318,9 @@ changes ONLY on a completed link; drop nowhere reverts (keyboard Escape
 is the twin). Ghost cords and hot drop targets take the accent ink.
 
 Spacing rhythm is console-tight (4/8/12/16px); panel padding ~0.85–1rem;
-section padding 0.55/0.75/0.6/0.9rem on an 8.5rem rail + fluid encoder
-field grid.
+section padding 0.4/0.6/0.45/0.7rem on a 6.5rem rail (horizontal mode:
+header band + wrapping body inside the condensed 240px module) + fluid
+encoder field grid.
 
 ## Elevation & Depth
 
@@ -347,7 +367,7 @@ never shadow or glow.
 - **BYPASS (the red-ringed end key):** 3rem min-height, 1.05rem/700 tracked — the loudest element on the deck. OFF: key ground + bright print + 2px edge-red ring. ON: red-fill ground + white text + edge-red ring. Sticky-deck placement never leaves the visible top.
 
 ### Knobs (the encoder field's rotary voice)
-- **54px rotary encoder**; the native `input[type=range]` is the clipped, focusable semantic engine (opacity 0, hit-through); the knob draws focus as an orange ring at the dial's edge. Ring: conic arc from 225° sweeping 270°, min→value in the SECTION'S FAMILY COLOR (`--knob-arc`, set per `data-family`) over the unlit ring-track scale; matte cap with a print pointer line (`--knob-rot`); bipolar params print a neutral 12-o'clock detent tick outside the ring. Vertical drag (150px sweep, Shift ×0.2, wheel one step/notch), native arrows/Home/End. Label under the knob in silkscreen; mono value under that (12px, min-width 6ch). Family color lives on the arc ALONE — pointer, track, tick, labels, values stay neutral.
+- **40px rotary encoder** (side-label unit, 2026-08-31 compactness round); the native `input[type=range]` is the clipped, focusable semantic engine (opacity 0, hit-through); the knob draws focus as an orange ring at the dial's edge. Ring: conic arc from 225° sweeping 270°, min→value in the SECTION'S FAMILY COLOR (`--knob-arc`, set per `data-family`) over the unlit ring-track scale; matte cap with a print pointer line (`--knob-rot`); bipolar params print a neutral 12-o'clock detent tick outside the ring. Vertical drag (150px sweep, Shift ×0.2, wheel one step/notch), native arrows/Home/End. The unit reads SIDE-LABEL: dial left, silkscreen label over mono value (12px, min-width 6ch) to its right — one row's height is the dial alone. Family color lives on the arc ALONE — pointer, track, tick, labels, values stay neutral.
 
 ### Pads (discrete params)
 - Real buttons in a radio group (roving tabindex; string commits verbatim): key ground, print text at the 12px value tier, 44px hit floor. The pressed pad is LIT in the accent fill with chassis ink — the accent-as-brightness economy: the selected value is the one bright thing in the group.
@@ -359,7 +379,7 @@ never shadow or glow.
 - One etched slot on the chain face's top edge: inset register ground, machined lip, a 3px accent mark at the left edge, FIXED 3rem height over two lines (main + help) that clip, never reflow. Main line: `module · param · value` in mono tabular 13.6px — module segment in signal orange, segments differentiated by color/weight, never size. Help line at the 12px value tier. The touched control's value writes it; the ONE blink (register-blink) lives here. aria-hidden: the controls carry semantics; this is the redundant display.
 
 ### Sections (chain effects)
-- WEIGHTED SLABS on the one faceplate (OQ-9): radius 0, `--pm-slab` face ground one step lighter than the chassis, a 1px sawn groove-cut edge all round, and the machined slab lip (inset 1px under the top cut) — a raised casting separated from its neighbors by the chassis ground, never a floating card and never a shadow at rest. Grid: 8.5rem family rail | fluid encoder field. **Rail:** the family print block — 3px family tick down its left edge · machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · fold chevron + eject × at the rail's foot; a groove-cut division separates rail from encoder field. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the chosen (held) section's machined lip goes accent; the ghost is a dashed print slot — a groove reservation, not a section. **Agent pulse:** one accent blink on the section's machined lip (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
+- WEIGHTED SLABS on the one faceplate (OQ-9): radius 0, `--pm-slab` face ground one step lighter than the chassis, a 1px sawn groove-cut edge all round, and the machined slab lip (inset 1px under the top cut) — a raised casting separated from its neighbors by the chassis ground, never a floating card and never a shadow at rest. Grid (vertical reading): 6.5rem family rail | fluid encoder field; grid (horizontal/default reading): one column — the rail collapsed into a compact header band over the wrapping body, the module width per its layout `w` (uniform 240px default, 176–384px clamp, corner-resize grip). **Rail:** the family print block — 3px family tick down its left edge · machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · fold chevron + eject × at the rail's foot; a groove-cut division separates rail from encoder field. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the chosen (held) section's machined lip goes accent; the ghost is a dashed print slot — a groove reservation, not a section. **Agent pulse:** one accent blink on the section's machined lip (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
 
 ### Chips (palette zone)
 - Real `<button>`s rendered as KEYS on the voice deck: key ground, cut-edge bezel, a 20px family legend square (saturated rq5 token — the identity mark) beside the module name as a silkscreen legend (12px uppercase). Rest seam is the cut edge; hover raises to full print; active/drag-origin goes signal orange. Ten chips chunk under three non-interactive group legends in operator language ("Shape your voice" / "Polish your sound" / "Keep it safe") as real `<h3>`s.

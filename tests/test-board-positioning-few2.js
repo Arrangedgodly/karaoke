@@ -224,7 +224,17 @@ var sandbox = {
   }
 };
 sandbox.window = sandbox;
-sandbox.window.localStorage = undefined; // flow pref read fails soft to default
+// Horizontal-default round (2026-08-31): the board's DEFAULT reading is
+// now horizontal. These harnesses pin the VERTICAL geometry contracts,
+// so they stub an EXPLICIT stored vertical preference (the user has
+// clicked the toggle) — readFlowPreference honors it and the vertical
+// pins hold verbatim. The horizontal default gets its own coverage
+// below / in test-board-positioning-few2.js.
+sandbox.window.localStorage = {
+  getItem: function (k) { return k === 'karaoke-flow-orientation-v1' ? 'vertical' : null; },
+  setItem: function () {},
+  removeItem: function () {}
+};
 vm.createContext(sandbox);
 
 vm.runInContext(
@@ -383,14 +393,14 @@ check(
 );
 
 // ----------------------------------------------------------------------
-console.log('E. TIDY restores the stack, rewriting ONLY x/y');
+console.log('E. TIDY compacts — a single column collapses to the stack, an arrangement keeps its shape');
 CC.tidyChain();
 var tidied = CC.currentLayout();
 check(
   tidied.n1.x === 16 && tidied.n1.y === 0 &&
     tidied.n2.x === 16 && tidied.n2.y === TIDY.row &&
     tidied.n3.x === 16 && tidied.n3.y === 2 * TIDY.row,
-  'E1: TIDY recomputes the incumbent stack positions for ALL nodes'
+  'E1: TIDY compacts the seats (the near-stack column collapses to the exact incumbent stack)'
 );
 var tidySave = saves[saves.length - 1];
 check(
@@ -404,10 +414,35 @@ CC.loadModel(model(), {
   n3: { x: 16, y: 160 }
 });
 CC.tidyChain();
+// 2026-08-31 compaction round: TIDY no longer re-stacks by chain order —
+// it PRESERVES the arrangement. n1 (y=176) genuinely shares n3's band
+// (y=160, 16px apart), so compaction keeps it BESIDE n3 in row 2 rather
+// than returning it to the stack's top seat.
 check(
   CC.currentLayout().n1.scale === 1.5 && CC.currentLayout().n1.flow === 'horizontal' &&
-    CC.currentLayout().n1.x === 16 && CC.currentLayout().n1.y === 0,
-  'E3: TIDY preserves each entry\'s scale/flow (x/y only — no layout clear)'
+    CC.currentLayout().n1.x === 16 && CC.currentLayout().n1.y === TIDY.row &&
+    CC.currentLayout().n2.y === 0 && CC.currentLayout().n3.y === TIDY.row,
+  'E3: TIDY preserves each entry\'s scale/flow AND the arrangement (n1 keeps its band beside n3 — no re-stack by chain order)'
+);
+
+// ----------------------------------------------------------------------
+console.log('E2D. TIDY on a deliberately 2D arrangement preserves the topology');
+// A scatter with real dead space: n2 far right of n1, n3 well below.
+// Compaction packs each band flush against its predecessor (one tidy
+// pitch of air) — the 2D shape survives, the gaps close, and nothing
+// collapses into a single chain-ordered line.
+CC.loadModel(model(), {
+  n1: { x: 16, y: 0 },
+  n2: { x: 400, y: 0 },
+  n3: { x: 16, y: 400 }
+});
+CC.tidyChain();
+var twoD = CC.currentLayout();
+check(
+  twoD.n1.x === 16 && twoD.n1.y === 0 &&
+    twoD.n2.x === 16 + 240 + 16 && twoD.n2.y === 0 &&
+    twoD.n3.x === 16 && twoD.n3.y === TIDY.row,
+  'E4: the gaps collapse to exactly one tidy pitch (n2 flush right of n1, n3 one row below) — the arrangement is preserved, never re-stacked'
 );
 
 // ----------------------------------------------------------------------
@@ -431,8 +466,8 @@ CC.addNodeType('gain');
 var newId = domOrder().filter(function (id) { return idsBefore.indexOf(id) === -1; })[0];
 check(!!newId, 'G1: addNodeType mints and appends a fresh card');
 check(
-  CC.currentLayout()[newId].x === 16 && CC.currentLayout()[newId].y === 320,
-  'G2: the new section lands at the first free grid slot (16, 320)'
+  CC.currentLayout()[newId].x === 16 && CC.currentLayout()[newId].y === TIDY.row,
+  'G2: the new section lands at the first free grid slot (16, 160 — the compacted board\'s lowest measured bottom)'
 );
 check(
   JSON.stringify(domOrder()) === JSON.stringify(idsBefore.concat([newId])),

@@ -253,6 +253,49 @@ body {
   background: var(--pm-chassis);
 }
 
+/* FIXED ONE-PAGE CONSOLE (2026-08-31 round, user direction): on the
+   desktop event laptop the instrument IS the page — one viewport-sized
+   chassis, no page scroll, every zone scrolls INSIDE. The frame becomes
+   a flex column (system deck · seam · voice deck); the voice deck takes
+   the remaining height and its three zones clamp (min-height: 0) so the
+   palette/presets flanks scroll their own content and the chain face
+   pans the board. Below 901px the zones stack and the page keeps its
+   scroll — the fixed console is the wide-screen reading. */
+@media (min-width: 901px) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .instrument {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar,
+  .deck-seam {
+    flex: none;
+  }
+
+  .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .layout .palette,
+  .layout .canvas-panel,
+  .layout .presets {
+    min-height: 0;
+  }
+
+  .layout .palette,
+  .layout .presets {
+    overflow-y: auto;
+  }
+}
+
 /* THE DECK SEAM — the joint that makes two slabs read as one chassis
    (the locked card's honest risk, solved in-design): a 1px bright
    machined lip over a 4px deep dark cut. It is deliberately DEEPER and
@@ -788,14 +831,14 @@ select.control {
   display: flex;
   flex-flow: row wrap;
   align-items: flex-start;
-  gap: 0.5rem 0.9rem;
+  gap: 0.3rem 0.7rem;
 }
 
 .param-row {
   flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  padding: 0.35rem 0 0.45rem;
+  padding: 0.15rem 0 0.2rem;
   /* Every control row shares the section's lift/recede behavior through
      the section rules below (no per-control brightness). */
 }
@@ -865,26 +908,36 @@ select.control {
 .knob-input {
   position: absolute;
   left: 0;
-  top: 0.35rem;
-  width: 6rem;
-  height: 54px;
+  top: 0.15rem;
+  width: 40px;
+  height: 40px;
   margin: 0;
   opacity: 0;
   pointer-events: none;
 }
 
+/* Compactness round (2026-08-31): the knob unit reads SIDE-LABEL — the
+   dial left, label over value to its right (a grid with named areas, so
+   the DOM order — knob, value, label — and every sibling selector that
+   rides it (the live-value lift below, the focus ring) stay untouched).
+   The row height is now the dial alone (40px), not dial+label+value
+   stacked (~90px). */
 .knob-unit {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'knob label'
+    'knob value';
   align-items: center;
-  gap: 0.3rem;
-  width: 6rem;
+  column-gap: 0.5rem;
+  row-gap: 0;
 }
 
 .knob {
   position: relative;
-  width: 54px;
-  height: 54px;
+  grid-area: knob;
+  width: 40px;
+  height: 40px;
   cursor: ns-resize;
   touch-action: none; /* the vertical drag is ours, not the page's scroll */
   user-select: none;
@@ -930,7 +983,7 @@ select.control {
   left: 50%;
   top: 50%;
   width: 2px;
-  height: 15px;
+  height: 11px;
   background: var(--pm-print-hi);
   transform: translate(-50%, -100%) rotate(var(--knob-rot, 0deg));
   transform-origin: 50% 100%;
@@ -977,11 +1030,13 @@ select.control {
 }
 
 .knob-unit .param-value {
-  text-align: center;
+  grid-area: value;
+  text-align: left;
 }
 
 .knob-unit .param-label {
-  text-align: center;
+  grid-area: label;
+  text-align: left;
 }
 
 /* --- PADS ------------------------------------------------------------ */
@@ -1041,7 +1096,7 @@ select.control {
 /* --- TRIM (mini-slider) ---------------------------------------------- */
 
 .trim-row {
-  width: 11.5rem;
+  width: 10rem;
 }
 
 .trim-unit {
@@ -1850,9 +1905,9 @@ select.control {
   z-index: 1;
   flex: none;
   display: grid;
-  grid-template-columns: 8.5rem 1fr;
+  grid-template-columns: 6.5rem 1fr;
   align-items: stretch;
-  padding: 0.55rem 0.75rem 0.6rem 0.9rem;
+  padding: 0.4rem 0.6rem 0.45rem 0.7rem;
   border-radius: 0;
   /* The slab: face step + sawn cut edge + machined top lip. */
   background: var(--pm-slab);
@@ -1892,7 +1947,7 @@ select.control {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.3rem;
+  gap: 0.2rem;
   min-width: 0;
   /* The family tick: 3px of the family ink down the rail's left edge —
      panel-print marking, not a filled chip (OQ-9: one notch wider than
@@ -1902,8 +1957,8 @@ select.control {
   /* The rail is the module's identity block — a machined division
      separates it from the encoder field (cut, not border island). */
   border-right: 1px solid var(--pm-groove-cut);
-  padding-left: 0.6rem;
-  padding-right: 0.75rem;
+  padding-left: 0.5rem;
+  padding-right: 0.6rem;
 }
 
 /* The explicit GRIP ZONE (the locked card's risk line): with no card
@@ -1913,10 +1968,10 @@ select.control {
 .node-drag-handle {
   display: flex;
   align-items: center;
-  padding: 0.2rem 0.35rem 0.2rem 0;
+  padding: 0.1rem 0.35rem 0.1rem 0;
   margin-left: -0.35rem;
   cursor: grab;
-  min-height: 1.5rem;
+  min-height: 0.75rem;
   user-select: none;
 }
 
@@ -1945,7 +2000,7 @@ select.control {
    table lives in the build record). */
 .section-code {
   font-family: var(--font-readout);
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   line-height: 1;
@@ -1954,10 +2009,10 @@ select.control {
 
 /* Module label — the section's name in the print register. */
 .node-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   line-height: 1.25;
   color: var(--pm-print);
   overflow-wrap: anywhere;
@@ -2031,9 +2086,9 @@ select.control {
 .section-foot {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
   margin-top: auto;
-  padding-top: 0.35rem;
+  padding-top: 0.25rem;
 }
 
 /* --- The experimental badge (autotune only, single-sourced) ------------
@@ -2153,8 +2208,16 @@ select.control {
    right when folded — the disclosure convention, as geometry. */
 .node-collapse {
   flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
+  /* REQUIRED with the hit-floor ::before below: without this anchor the
+     absolutely-positioned ::before resolves against the CARD and becomes
+     a full-card invisible overlay owned by the collapse button — knobs
+     (positioned) still paint above it, but trim sliders and the drag
+     handle fall under it, so clicking a trim or grabbing the card
+     collapses it instead (the defect the 2026-08-31 browser round
+     caught). */
+  position: relative;
+  width: 1.15rem;
+  height: 1.15rem;
   padding: 0;
   border: 1px solid var(--pm-key-edge);
   border-radius: 3px;
@@ -2167,17 +2230,27 @@ select.control {
   display: block;
   width: 6px;
   height: 6px;
-  margin: 0.5rem auto;
+  margin: 4px auto;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: rotate(45deg); /* points down at the visible field */
-  margin-top: 0.55rem;
+  margin-top: 5px;
 }
 
 .node-collapse:hover,
 .node-collapse:active {
   color: var(--pm-print-hi);
   border-color: var(--pm-print);
+}
+
+/* Compactness round: the rail's small buttons shrank below the recorded
+   24px pointer floor — this invisible ::before restores it (visual box
+   1.15rem, hit box ~25px). */
+.node-collapse::before,
+.node-remove-btn::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .node-card.collapsed .node-collapse .chevron-mark {
@@ -2197,8 +2270,8 @@ select.control {
 .node-remove-btn {
   flex: none;
   position: relative;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.15rem;
+  height: 1.15rem;
   padding: 0;
   border: 1px solid var(--pm-key-edge);
   border-radius: 3px;
@@ -2245,6 +2318,43 @@ select.control {
 @media (prefers-reduced-motion: no-preference) {
   .node-remove-btn {
     transition: border-color 150ms ease, color 150ms ease;
+  }
+}
+
+/* --- The width-resize grip (2026-08-31 round) -------------------------
+   A machined corner mark at the section's bottom-right — the same dot
+   field vocabulary as the position grip, anchored to the corner that
+   moves. Pointer-only (like the position grip): the resize is a style
+   edit, never an order or a sound. Hidden outside the horizontal board
+   (vertical rows own their width) and while folded. */
+.node-resize {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 16px;
+  height: 16px;
+  cursor: ew-resize;
+  touch-action: none; /* the horizontal drag is ours, not the page's scroll */
+  user-select: none;
+  background-image: radial-gradient(circle, var(--pm-print-dim) 1px, transparent 1.3px);
+  background-size: 5px 5px;
+  background-position: bottom right;
+  opacity: 0.55;
+}
+
+.node-card:hover .node-resize {
+  background-image: radial-gradient(circle, var(--pm-print) 1.1px, transparent 1.4px);
+  opacity: 1;
+}
+
+.canvas-panel:not(.flow-horizontal) .node-resize,
+.node-card.collapsed .node-resize {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .node-resize {
+    transition: opacity 150ms ease;
   }
 }
 
@@ -3332,8 +3442,9 @@ input.preset-name-input:focus-visible {
    groove along its top edge; NEVER de-emphasized while bypassed or
    gated (the operator's output ground truth in every state — the
    dim/hatch grammar is scoped to the chain and the face, never the base
-   plate). In horizontal flow mode the panel un-bounds and the footer
-   scrolls with it — the pinned guarantee is the vertical default's. */
+   plate). Since the fixed one-page round the panel is bounded in BOTH
+   flow modes, so the footer is pinned in both — the output ground truth
+   never scrolls away. */
 .canvas-footer {
   flex: none;
   display: flex;
@@ -3380,10 +3491,12 @@ input.preset-name-input:focus-visible {
    FLOW-DIRECTION SWITCH (VIS-7b behavior, Pattern Machine restyle).
    src/canvas.js flips .flow-horizontal on the canvas panel from the
    .flow-toggle button and persists the choice under
-   karaoke-flow-orientation-v1. In the default (vertical) mode the switch
-   rides the base plate's LEFT end (absolutely placed against the
-   panel's bottom edge so the OUT corner owns the right — one base
-   strip, two ends); in horizontal mode it returns to static flow.
+   karaoke-flow-orientation-v1. HORIZONTAL is the board's default reading
+   (2026-08-31 round): condensed portrait sections in a left-to-right
+   row. Flipping to VERTICAL reverses to the stacked full-width reading;
+   there the switch rides the base plate's LEFT end (absolutely placed
+   against the panel's bottom edge so the OUT corner owns the right — one
+   base strip, two ends); in horizontal mode it returns to static flow.
    =========================================================================== */
 
 .canvas-panel {
@@ -3432,19 +3545,15 @@ input.preset-name-input:focus-visible {
   margin-left: 8.5rem;
 }
 
-/* HORIZONTAL MODE — the cycle-1 reading: MIC IN at the left, chain runs
-   left→right, OUT at the right. The panel un-bounds (the page owns the
-   scroll), anchors return to compact stacked blocks with their meters
-   beneath, the drawn chevrons point right, sections take their content
-   width in a row list. */
-.canvas-panel.flow-horizontal {
-  max-height: none;
-}
-
+/* HORIZONTAL MODE — the default reading: MIC IN at the left, chain runs
+   left→right, OUT at the right. The panel stays a bounded column of the
+   fixed one-page console and the FACE owns the pan (overflow both axes —
+   the row's reach plus any card dragged below it), anchors return to
+   compact stacked blocks with their meters beneath, the drawn chevrons
+   point right, sections take their content width in a row list. */
 .canvas-panel.flow-horizontal .canvas {
   flex-direction: row;
-  overflow-y: visible;
-  overflow-x: auto;
+  overflow: auto;
 }
 
 .canvas-panel.flow-horizontal .chain-list {
@@ -3477,10 +3586,79 @@ input.preset-name-input:focus-visible {
   margin-top: 0.35rem;
 }
 
+/* CONDENSED SECTION (2026-08-31 horizontal-default round, tightened by
+   the dead-space round the same day). In the horizontal reading each
+   section is a condensed MODULE: the rail collapses into a compact
+   header band (grip · code · label · badge · fold/eject right) over the
+   encoder field, which wraps below. The card's WIDTH is the JS-applied
+   per-card width (layout entry `w`, written by the corner resize grip)
+   defaulting to one uniform condensed width — every module the same size
+   until the operator widens one. Height HUGS CONTENT (the user's dead
+   -space direction): no forced min-height — multi-param modules land
+   naturally taller than wide, one-knob modules stay slim, and TIDY
+   aligns the row's tops. */
 .canvas-panel.flow-horizontal .node-card {
+  width: 15rem;
+  min-width: 11rem;
+  max-width: 24rem;
+  padding: 0.35rem 0.45rem 0.4rem;
+  /* One column: header band over the encoder field. */
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+}
+
+.canvas-panel.flow-horizontal .node-card.collapsed {
+  padding: 0.3rem 0.45rem 0.35rem;
+}
+
+/* The header band: the rail's content laid out horizontally, the
+   machined division moved from its right edge to its bottom (the band
+   now divides TOP from BODY, not print from field). The whole band is
+   the card's MOVE grip (src/canvas.js arms the seat drag from it);
+   the buttons and controls inside it stay interactive. */
+.canvas-panel.flow-horizontal .section-rail {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  border-right: none;
+  border-bottom: 1px solid var(--pm-groove-cut);
+  padding: 0 0.25rem 0.35rem 0.3rem;
+}
+
+.canvas-panel.flow-horizontal .section-foot {
+  margin-top: 0;
+  margin-left: auto;
+  padding-top: 0;
+}
+
+.canvas-panel.flow-horizontal .node-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The body: short fields center vertically in whatever room the module
+   has (with no forced min-height that is simply content height). */
+.canvas-panel.flow-horizontal .section-main {
+  justify-content: center;
+}
+
+.canvas-panel.flow-horizontal .node-params-inner {
+  gap: 0.25rem 0.5rem;
+}
+
+/* Trims stretch to the body width (the fixed 10rem throw belongs to the
+   full-width vertical row); pad groups fold within the module. */
+.canvas-panel.flow-horizontal .trim-row {
   width: auto;
-  min-width: 21rem;
-  max-width: 30rem;
+  max-width: 100%;
+}
+
+.canvas-panel.flow-horizontal .trim-unit {
+  width: 100%;
+}
+
+.canvas-panel.flow-horizontal .pad-group {
+  max-width: 100%;
 }
 
 .canvas-panel.flow-horizontal .safe-output-note {

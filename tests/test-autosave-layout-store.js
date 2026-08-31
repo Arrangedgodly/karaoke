@@ -178,17 +178,36 @@ function main() {
     );
 
     // Defaults normalize: missing scale -> 1, missing/illegal flow ->
-    // 'vertical' — stored normalized, reloaded normalized.
+    // 'horizontal' (the board's default reading since the 2026-08-31
+    // horizontal-default round) — stored normalized, reloaded normalized.
+    // The same pass exercises the per-card width field `w`: a finite
+    // number clamps into the condensed range (176..384 px); anything else
+    // drops the field (the card takes the uniform CSS default).
     sandbox.Persistence.saveCurrentChain(chainA(), {
       a1: { x: 0, y: 0 },
-      a2: { x: 5, y: 5, scale: 2, flow: 'DIAGONAL' }
+      a2: { x: 5, y: 5, scale: 2, flow: 'DIAGONAL' },
+      a3: { x: 9, y: 9, w: 5000 }
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        a1: { x: 0, y: 0, scale: 1, flow: 'vertical' },
-        a2: { x: 5, y: 5, scale: 2, flow: 'vertical' }
+        a1: { x: 0, y: 0, scale: 1, flow: 'horizontal' },
+        a2: { x: 5, y: 5, scale: 2, flow: 'horizontal' },
+        a3: { x: 9, y: 9, w: 384, scale: 1, flow: 'horizontal' }
       }),
-      'A3: omitted scale defaults to 1 and an illegal flow defaults to vertical (normalized on save)'
+      'A3: omitted scale defaults to 1, illegal flow defaults to horizontal (the default reading), and a width clamps into the condensed range (normalized on save)'
+    );
+
+    // Width bounds + garbage: below-min clamps up, non-finite drops.
+    sandbox.Persistence.saveCurrentChain(chainA(), {
+      a1: { x: 0, y: 0, w: 10 },
+      a2: { x: 5, y: 5, w: 'wide' }
+    });
+    check(
+      deepEqual(sandbox.Persistence.loadInitialLayout(), {
+        a1: { x: 0, y: 0, w: 176, scale: 1, flow: 'horizontal' },
+        a2: { x: 5, y: 5, scale: 1, flow: 'horizontal' }
+      }),
+      'A3b: a sub-minimum width clamps to 176px and a non-numeric width drops (CSS default)'
     );
 
     // Prune on save: entries for ids the model does not contain never

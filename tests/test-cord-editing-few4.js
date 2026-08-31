@@ -249,7 +249,17 @@ var sandbox = {
   }
 };
 sandbox.window = sandbox;
-sandbox.window.localStorage = undefined;
+// Horizontal-default round (2026-08-31): the board's DEFAULT reading is
+// now horizontal. These harnesses pin the VERTICAL geometry contracts,
+// so they stub an EXPLICIT stored vertical preference (the user has
+// clicked the toggle) — readFlowPreference honors it and the vertical
+// pins hold verbatim. The horizontal default gets its own coverage
+// below / in test-board-positioning-few2.js.
+sandbox.window.localStorage = {
+  getItem: function (k) { return k === 'karaoke-flow-orientation-v1' ? 'vertical' : null; },
+  setItem: function () {},
+  removeItem: function () {}
+};
 sandbox.__lastBuilt = null;
 vm.createContext(sandbox);
 

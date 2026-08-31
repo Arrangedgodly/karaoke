@@ -80,9 +80,13 @@
   //     error, default-chain fallback, never a misread.
   //   - Layout entries: `x`/`y` finite numbers (px, canvas-panel
   //     coordinates), `scale` finite number (default 1), `flow`
-  //     'vertical'|'horizontal' (default 'vertical'). sanitizeLayout()
-  //     normalizes every entry to exactly that shape, PRUNES entries for
-  //     node ids the accompanying chain does not contain (node removed —
+  //     'vertical'|'horizontal' (default 'horizontal' — the board's
+  //     default reading since the 2026-08-31 horizontal-default round),
+  //     and `w` an optional finite number (the card's own condensed
+  //     width, clamped 176..384 px; absent = the uniform CSS default).
+  //     sanitizeLayout() normalizes every entry to exactly that shape,
+  //     PRUNES entries for node ids the accompanying chain does not
+  //     contain (node removed —
   //     pruning happens on both save and load), and drops hostile
   //     entries (non-object, non-finite x/y) rather than throwing: a
   //     corrupt layout must never take down an otherwise-valid chain.
@@ -128,11 +132,22 @@
         clean[nodeId] = {
           x: entry.x,
           y: entry.y,
+          // Per-card WIDTH (2026-08-31 round): a finite number clamped
+          // into the condensed range (11rem..24rem, mirroring main.css's
+          // horizontal-mode bounds and canvas.js's constants); anything
+          // else drops the field — the card takes the uniform CSS
+          // default. Additive field: older payloads simply load default.
+          w:
+            typeof entry.w === 'number' && isFinite(entry.w)
+              ? Math.min(384, Math.max(176, entry.w))
+              : undefined,
           scale:
             typeof entry.scale === 'number' && isFinite(entry.scale)
               ? entry.scale
               : 1,
-          flow: entry.flow === 'horizontal' ? 'horizontal' : 'vertical'
+          // Horizontal-default round: an omitted/illegal flow defaults to
+          // the board's new default reading — horizontal.
+          flow: entry.flow === 'vertical' ? 'vertical' : 'horizontal'
         };
       });
     } catch (err) {
