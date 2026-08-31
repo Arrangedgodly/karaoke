@@ -140,6 +140,15 @@ Explicitly undecided product facts (recorded, not invented):
 The product name is **VOXCHAIN** (displayed uppercase in the silkscreen
 identity register). Prior working title "Karaoke Chain Builder" retired.
 Deliberately unchanged: localStorage keys (`karaoke-*-v1` — renaming
-would orphan saved chains/presets), the GitHub repo + Pages domain
-(karaoke.arrangedgodly.com — infra rename is the owner's call), and the
-genre word "karaoke" in prose.
+would orphan saved chains/presets) and the genre word "karaoke" in
+prose.
+
+## Deployment (owner decision, 2026-08-31)
+
+The repo is renamed **voxchain** and the deployment moves to a
+**Cloudflare Worker** as the main serving path. GitHub Pages is retired:
+the Pages site was deleted from the repo (it had been building from
+`main` to `arrangedgodly.com/voxchain/` after the rename, custom domain
+detached) and the `CNAME` artifact is removed. The prior live URL
+(karaoke.arrangedgodly.com) is expected to move to the Worker with the
+domain's DNS — update this record if the final URL differs.
