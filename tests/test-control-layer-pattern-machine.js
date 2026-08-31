@@ -435,15 +435,12 @@ windowStub.ChainCanvas.loadModel([
 ]);
 // Structural refresh of the state line happens in STATE mode (before any
 // touch): 1 module, then 2 after a second load.
-var stateAfterFirstLoad = registerSpan('register-module').textContent;
 windowStub.ChainCanvas.loadModel([
   { id: 'g1', type: 'gain', params: { gainDb: 0 } },
   { id: 'd1', type: 'delay', params: { timeMs: 300, feedback: 25, mix: 25 } }
 ]);
-// Captured BEFORE any control event: at rest (nothing touched yet) the
-// register carries the ENGINE STATE line — asserted in section C.
-var stateModuleAtRest = registerSpan('register-module').textContent;
-var stateValueAtRest = registerSpan('register-value').textContent;
+// (The ENGINE-state rest line is retired — 2026-08-31, user direction:
+// the register speaks only when a control is touched.)
 
 var gainCard = cards().filter(function (c) {
   return c.attrs['data-node-id'] === 'g1';
@@ -672,20 +669,6 @@ var regHelp = registerSpan('register-help');
 check(
   !!regModule && !!regParam && !!regValue && !!regHelp,
   'the register carries the module/param/value/help slots'
-);
-
-// State line at rest — captured back in section A, before ANY control
-// event: the register boots in state mode (this harness's engine stub
-// runs started, so the line is the live count), and a structural change
-// while still in state mode refreshes the count.
-check(
-  /ENGINE \u00B7 LIVE \u00B7 1 MODULE$/.test(stateAfterFirstLoad),
-  'state mode after the first load reads "ENGINE · LIVE · 1 MODULE"'
-);
-check(
-  /ENGINE \u00B7 LIVE \u00B7 2 MODULES$/.test(stateModuleAtRest) &&
-    stateValueAtRest === '',
-  'a structural change refreshed the state count to 2 MODULES (captured before any touch)'
 );
 
 // A control event switches it to MODULE · PARAM · VALUE + the help line.

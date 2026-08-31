@@ -1534,6 +1534,9 @@ select.control {
 .display-register {
   flex: none;
   position: relative;
+  /* The MIC IN header unit is absolutely pinned into this strip's left
+     end (see .display-register .anchor below), so the text block clears
+     it. */
   /* FIXED geometry: two register lines, height pinned — the register
      answers every control event without ever pumping layout (values and
      help lines clip, never reflow). */
@@ -1637,6 +1640,50 @@ select.control {
       background: transparent;
     }
   }
+}
+
+
+/* THE MIC IN HEADER UNIT (2026-08-31, user direction): the input print
+   row lives ON the register strip — the fixed top header of the chain
+   face — in the same vocabulary as the base plate's OUT corner at the
+   bottom-right (jack ring + silkscreen legend + the 96x26 lamp bar +
+   mono dB readout, one row). Absolutely pinned: it never scrolls with
+   the board. The register's 3px accent mark leads it. */
+.display-register .anchor {
+  position: absolute;
+  left: 1.4rem;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0 0;
+  margin: 0;
+  border-right: 1px solid var(--pm-groove-cut);
+  white-space: nowrap;
+}
+
+/* Compact meter in the strip: the readout rides BESIDE the bar (the
+   3rem strip cannot stack them). */
+.display-register .anchor .meter-unit {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+}
+
+/* The register's text (touched-control readouts — the state line is
+   retired) clears the pinned unit. */
+.display-register .register-main,
+.display-register .register-help {
+  padding-left: 15rem;
+}
+
+/* The leading flow chevron retired with the in-face MIC anchor: the
+   board's flow now starts at the header unit, not at a print row. */
+.canvas-panel .canvas > .arrow:first-of-type {
+  display: none;
 }
 
 /* --- The face (scrolling flow) ---------------------------------------- */
@@ -3573,7 +3620,14 @@ input.preset-name-input:focus-visible {
 }
 
 .canvas-panel.flow-horizontal .node-params-inner {
-  gap: 0.25rem 0.5rem;
+  gap: 0.25rem 0.45rem;
+}
+
+/* The 6ch value slot exists for the centered stacked units; inside the
+   side-label module rows it is right-hand dead space — values hug their
+   text. */
+.canvas-panel.flow-horizontal .param-value {
+  min-width: 0;
 }
 
 /* Trims stretch to the body width (the fixed 10rem throw belongs to the

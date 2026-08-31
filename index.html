@@ -184,7 +184,9 @@
     Machine block of styles/main.css build it).
 
     The .canvas markup below is the FLOW SEQUENCE (unchanged DOM): MIC IN
-    anchor → arrow → #chain-list → #empty-hint → arrow → OUT anchor. The
+    arrow → #chain-list → #empty-hint → arrow → OUT anchor (the MIC IN
+    anchor starts here in markup but is RELOCATED onto the display-register
+    strip at runtime — its fixed header home, 2026-08-31). The
     chrome around it is JS-built panel furniture: the DISPLAY REGISTER
     (src/canvas.js, panel's first child — the accent-marked top-edge
     line) and the pinned OUT footer mirror + VU corner (src/meters.js,

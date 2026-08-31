@@ -252,8 +252,8 @@ check(
 );
 
 check(
-  CC.CARD_W_DEFAULT_PX === 128 && CC.CARD_W_MIN_PX === 128 && CC.CARD_W_MAX_PX === 384,
-  'H1b: the condensed-width contract exports (default = the 128 floor, clamp 128..384 — modules open as a flush single stack)'
+  CC.CARD_W_DEFAULT_PX === 128 && CC.CARD_W_MIN_PX === 96 && CC.CARD_W_MAX_PX === 384,
+  'H1b: the width contract exports (fallback default 128 for layout-less hosts, resize floor 96, ceiling 384 — real browsers hug each card\'s measured content)'
 );
 check(
   queryAll(canvasPanelEl, '.flow-toggle').length === 0,

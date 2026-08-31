@@ -204,10 +204,10 @@ function main() {
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        a1: { x: 0, y: 0, w: 128, scale: 1, flow: 'horizontal' },
+        a1: { x: 0, y: 0, w: 96, scale: 1, flow: 'horizontal' },
         a2: { x: 5, y: 5, scale: 1, flow: 'horizontal' }
       }),
-      'A3b: a sub-minimum width clamps to 128px and a non-numeric width drops (CSS default)'
+      'A3b: a sub-minimum width clamps to 96px and a non-numeric width drops (CSS default)'
     );
 
     // Prune on save: entries for ids the model does not contain never

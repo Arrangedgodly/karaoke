@@ -372,9 +372,9 @@ check(
   'A2: the layer is #chain-canvas\'s LAST child — never a first child (no firstChild index shifts)'
 );
 check(
-  canvasFaceEl.children[0] === micAnchorEl &&
-    canvasFaceEl.children[5] === outAnchorEl,
-  'A3: the face\'s pinned children are untouched (first child still MIC IN, OUT anchor in place)'
+  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register') &&
+    canvasFaceEl.children[canvasFaceEl.children.length - 2] === outAnchorEl,
+  'A3: MIC IN lives on the register strip (2026-08-31); the OUT anchor still closes the face'
 );
 check(
   !!layer && layer.attrs['aria-hidden'] === 'true',
@@ -484,9 +484,9 @@ check(
   'G2: #chain-list still carries ONLY sections (empty here) — the layer lives in the face'
 );
 check(
-  canvasFaceEl.children[0] === micAnchorEl &&
+  micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register') &&
     canvasFaceEl.children[canvasFaceEl.children.length - 1] === cordLayer(),
-  'G3: after every operation the face\'s first child is still MIC IN and the layer is still last'
+  'G3: after every operation MIC IN stays on the register strip and the layer stays the face\'s last child'
 );
 check(
   emptyHintEl.style.display === '' || emptyHintEl.style.display === 'none',

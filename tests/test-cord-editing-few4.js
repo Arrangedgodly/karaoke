@@ -597,9 +597,14 @@ check(domOrder().join('|') === 'n2|n1|n3', 'J5: the committed order survived the
 // ----------------------------------------------------------------------
 console.log('K. final DOM contracts + the empty board');
 check(
-  canvasFaceEl.children[0] === micAnchorEl &&
+  // 2026-08-31: the MIC IN print row MOVED onto the display-register
+  // strip (its fixed header home), so the face's first child is the
+  // leading arrow — wait, the leading arrow is hidden by CSS but still
+  // first in DOM order.
+  canvasFaceEl.children[0] !== micAnchorEl &&
+    micAnchorEl.parentNode && micAnchorEl.parentNode.classList.contains('display-register') &&
     canvasFaceEl.children[canvasFaceEl.children.length - 1] === cordLayer(),
-  'K1: the face\'s first child is still MIC IN; the layer is still last'
+  'K1: MIC IN lives on the register strip (not in the face); the layer is still the face\'s last child'
 );
 CC.loadModel([]);
 check(cordPaths().length === 1 && jackEls().length === 2,

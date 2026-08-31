@@ -108,13 +108,16 @@
   // x/y/scale/flow; an absent w means the CSS default (the uniform
   // condensed width every card shares until resized). The clamp bounds
   // mirror main.css's horizontal-mode min/max-width (8rem..24rem).
-  // 128px (8rem) is the DEFAULT width AND the floor: at 128 the widest
-  // control row (40px dial + gap + the longest silkscreen label) fills
-  // the module edge to edge — the right-hand dead space is gone;
-  // widening re-wraps to fill.
+  // Width floors (2026-08-31 dead-space rounds): every card HUGS its own
+  // content — JS measures the widest KNOB row after render (trims/pads
+  // stretch to fill whatever width exists, so they never leave dead
+  // space) and that measurement is the card's default width. 96px is the
+  // resize FLOOR; 128px is the layout-less fallback default (stripped
+  // harnesses measure nothing); 384px the ceiling.
   var CARD_W_DEFAULT_PX = 128;
-  var CARD_W_MIN_PX = 128; // 8rem
+  var CARD_W_MIN_PX = 96; // 6rem
   var CARD_W_MAX_PX = 384; // 24rem
+  var cardHugW = {}; // id -> measured content width (real browsers only)
   var positions = {}; // id -> {x, y, w?, scale, flow} (scale/flow carried, FEW-5/6 wire them)
   var zCounter = 0; // bring-to-front counter (pointerdown order)
   var positionDrag = null; // the live grip drag, if any
@@ -140,11 +143,43 @@
   }
 
   /** A card's effective width in px: its saved `w` clamped into the
-   *  condensed range, or the uniform CSS default when none was saved.
-   *  Single source for the board-extent math and the width resize. */
+   *  condensed range; else its MEASURED content hug (plus the card's own
+   *  side padding and border); else the layout-less default. Single
+   *  source for the board-extent math and the width resize. */
   function cardWidth(id) {
     var pos = positions[id];
-    return clampCardW(pos && typeof pos.w === 'number' ? pos.w : undefined);
+    if (pos && typeof pos.w === 'number') {
+      return clampCardW(pos.w);
+    }
+    if (typeof cardHugW[id] === 'number') {
+      return clampCardW(cardHugW[id] + 15); // + 2x0.4rem padding + 2px border
+    }
+    return clampCardW(undefined);
+  }
+
+  /** Measure one card's widest KNOB row (the content hug). Trim and pad
+   *  rows stretch to the available width by construction, so they are
+   *  skipped — only intrinsic rows define the hug. Stripped harnesses
+   *  report no widths and simply keep the default. */
+  function measureCardHug(id, paramsInner) {
+    try {
+      var hug = 0;
+      Array.prototype.forEach.call(paramsInner.children, function (row) {
+        if (!row.classList || row.classList.contains('trim-row') ||
+            row.classList.contains('pad-row')) {
+          return;
+        }
+        var w = row.offsetWidth;
+        if (w > hug) {
+          hug = w;
+        }
+      });
+      if (hug > 0) {
+        cardHugW[id] = hug;
+      }
+    } catch (err) {
+      /* measurement is a real-browser nicety only */
+    }
   }
 
   /** Paint one layout entry onto its card: the seat (transform) and the
@@ -475,34 +510,56 @@
     };
   }
 
-  /** A panel anchor element (the MIC IN / OUT print rows inside the
-   *  canvas face, matched by class in DOM order — never by text, which is
-   *  src/meters.js's own contract). */
+  /** A panel anchor element (the OUT print row in the canvas face and the
+   *  MIC IN unit on the register strip, matched by class in document
+   *  order — never by text, which is src/meters.js's own contract). The
+   *  register precedes the face, so anchors[0] is still MIC IN and the
+   *  last is OUT. */
   function panelAnchorEl(which) {
-    var face = document.getElementById('chain-canvas');
-    if (!face || !face.children) {
-      return null;
-    }
+    var panel = document.querySelector('.canvas-panel');
     var anchors = [];
-    Array.prototype.forEach.call(face.children, function (child) {
-      if (child.classList && child.classList.contains('anchor')) {
-        anchors.push(child);
+    (function walk(node) {
+      if (!node || !node.children) {
+        return;
       }
-    });
+      Array.prototype.forEach.call(node.children, function (child) {
+        if (child.classList && child.classList.contains('anchor')) {
+          anchors.push(child);
+        }
+        walk(child);
+      });
+    })(panel);
     if (anchors.length === 0) {
       return null;
     }
     return which === 'out' ? anchors[anchors.length - 1] : anchors[0];
   }
 
-  /** MIC IN's OUT jack — the source's board-facing edge, the MIDDLE of
-   *  its RIGHT border (the same across-from rule the cards follow). */
+  /** MIC IN's OUT jack — the right edge of the fixed header unit on the
+   *  register strip (the same across-from rule the cards follow). Real
+   *  browsers convert viewport rects into the list's board space; the
+   *  offset path serves layout-full hosts, the constant the stripped
+   *  harnesses. */
   function micOutPoint() {
     var el = panelAnchorEl('mic');
-    var size = measuredSize(el);
     var origin = boardOrigin();
-    if (size.w && size.h) {
-      return { x: el.offsetLeft + size.w, y: el.offsetTop + size.h / 2 };
+    if (el) {
+      try {
+        if (typeof el.getBoundingClientRect === 'function' &&
+            typeof chainListEl.getBoundingClientRect === 'function') {
+          var er = el.getBoundingClientRect();
+          var lr = chainListEl.getBoundingClientRect();
+          if (er && lr && er.width && er.height) {
+            return { x: er.right - lr.left, y: er.top + er.height / 2 - lr.top };
+          }
+        }
+      } catch (err) {
+        /* stripped harness — offsets/fallback below */
+      }
+      var size = measuredSize(el);
+      if (size.w && size.h) {
+        return { x: el.offsetLeft + size.w, y: el.offsetTop + size.h / 2 };
+      }
     }
     return { x: origin.x + TIDY_X, y: origin.y + PANEL_MIC_DY };
   }
@@ -1057,7 +1114,6 @@
   var registerParamEl = null;
   var registerValueEl = null;
   var registerHelpEl = null;
-  var registerMode = 'state';
 
   function buildDisplayRegister() {
     if (typeof document.querySelector !== 'function' ||
@@ -1096,7 +1152,30 @@
     registerEl.appendChild(registerHelpEl);
     panel.insertBefore(registerEl, panel.firstChild);
 
-    showRegisterState('ENGINE \u00B7 STOPPED', 'Press Start to power on');
+    // 2026-08-31 (user direction): the register strip is also the fixed
+    // home of the MIC IN meter unit. The print row MOVES out of the
+    // scrolling face onto the panel's top header (mirroring the base
+    // plate's OUT corner at the bottom-right): src/meters.js mounts the
+    // input meter inside the anchor wherever it lives, and the cord layer
+    // reads the unit's right edge as MIC OUT (see micOutPoint).
+    var micPrint = firstAnchorIn(document.getElementById('chain-canvas'));
+    if (micPrint && registerEl.insertBefore) {
+      registerEl.insertBefore(micPrint, registerEl.firstChild);
+    }
+  }
+
+  /** The first .anchor inside a subtree (document-order), or null. */
+  function firstAnchorIn(root) {
+    if (!root || !root.children) {
+      return null;
+    }
+    for (var i = 0; i < root.children.length; i++) {
+      var child = root.children[i];
+      if (child.classList && child.classList.contains('anchor')) {
+        return child;
+      }
+    }
+    return null;
   }
 
   function setRegisterText(module, param, value, help) {
@@ -1109,13 +1188,7 @@
     registerHelpEl.textContent = help;
   }
 
-  function showRegisterState(line, help) {
-    registerMode = 'state';
-    setRegisterText(line, '', '', help);
-  }
-
   function showRegisterParam(module, param, value, help) {
-    registerMode = 'param';
     setRegisterText(module, param, value, help);
     // ONE blink marks the live control (the direction contract's palette
     // economy): retrigger the value segment's blink by dropping and
@@ -1130,24 +1203,6 @@
       registerValueEl.classList.add('register-blink');
     } catch (err) {
       /* animation-only */
-    }
-  }
-
-  /** Refresh the state line's module count after a structural change —
-   *  only while the register is still in state mode (a touched control's
-   *  value line is sticky by design). */
-  function refreshRegisterState() {
-    if (!registerEl || registerMode !== 'state') {
-      return;
-    }
-    if (window.AudioEngine && window.AudioEngine.isStarted) {
-      var n = chainModel.length;
-      showRegisterState(
-        'ENGINE \u00B7 LIVE \u00B7 ' + n + ' MODULE' + (n === 1 ? '' : 'S'),
-        'Signal path: MIC IN \u2192 chain \u2192 OUT'
-      );
-    } else {
-      showRegisterState('ENGINE \u00B7 STOPPED', 'Press Start to power on');
     }
   }
 
@@ -1561,7 +1616,6 @@
   function commitStructuralChange() {
     recomputeModelFromDom();
     updateEmptyHint();
-    refreshRegisterState();
     rebuildGraph();
     renderCords(); // FEW-3: an add (or any order change) re-routes the cords
     // PS-2: persist the chain after every structural add/remove/reorder.
@@ -1800,6 +1854,9 @@
       paramsInner.appendChild(row);
     });
     paramsContainer.appendChild(paramsInner);
+    // The content-hug measurement (the card's default width) — after the
+    // wrap, before any seat is applied.
+    measureCardHug(id, paramsInner);
 
     // Chevron toggle. Flips the card's .collapsed class (CSS folds the
     // encoder field away and lays the rail out as the slim groove row)
@@ -1828,8 +1885,7 @@
       delete nodesById[id];
       recomputeModelFromDom();
       updateEmptyHint();
-      refreshRegisterState();
-      // Structural change (Part D) — recompute then rebuild, exactly once,
+        // Structural change (Part D) — recompute then rebuild, exactly once,
       // immediately (not deferred to some other event).
       rebuildGraph();
       // PS-2: persist the chain after this structural change too. Pass
@@ -1855,6 +1911,7 @@
       // would prune it on save anyway; keeping the live map exact means
       // currentLayout() is always garbage-free).
       delete positions[id];
+      delete cardHugW[id];
       renderCords(); // FEW-3: the chain closes over the removed seat
     });
 
@@ -2049,7 +2106,6 @@
     // ENGINE LIVE with the live module count (mode returns to 'state';
     // by construction no control has been touched yet at this moment,
     // since the whole panel was pointer-locked and chip-disabled before).
-    refreshRegisterState();
   }
 
   /**
@@ -2159,7 +2215,6 @@
     renderCords(); // FEW-3: re-route onto the freshly-loaded board
 
     updateEmptyHint();
-    refreshRegisterState();
     rebuildGraph();
 
     // PS-3: persist the newly-loaded state as the new autosave baseline.
@@ -2439,7 +2494,6 @@
   // loads before canvas.js and must not need the canvas namespace to
   // render (a bare param-controls harness works with no register at all).
   window.CanvasRegister = {
-    showParam: showRegisterParam,
-    showState: showRegisterState,
+    showParam: showRegisterParam
   };
 })();

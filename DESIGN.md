@@ -267,10 +267,14 @@ the instrument IS the page — one viewport-height chassis (`html/body`
 overflow hidden, `.instrument` a 100vh flex column), no page scroll
 anywhere; every zone scrolls INSIDE. The voice deck takes the remaining
 height; the palette and presets flanks scroll their own content; the
-chain face (Single Face Chassis: display register on the top edge; the
-FACE — MIC IN jack print → the board → OUT jack print — scrolling
-inside; base plate carrying the pinned OUT footer mirror / VU corner,
-bottom-right, always visible, never dimmed) owns the pan in BOTH axes. Below 901px the zones stack and the page keeps its
+chain face (Single Face Chassis: display register on the top edge — which is also
+the FIXED home of the MIC IN meter unit (jack ring + legend + the 96×26
+lamp bar + mono dB readout in one row, the base plate's OUT corner
+mirrored top-left; the register speaks only when a control is touched —
+the engine-state rest line is retired); the FACE (the board → OUT jack
+print) scrolling inside; base plate carrying the pinned OUT footer
+mirror / VU corner, bottom-right, always visible, never dimmed) owns
+the pan in BOTH axes. Below 901px the zones stack and the page keeps its
 scroll. VERTICAL FLOW IS RETIRED (same day, user direction): the board
 has exactly ONE reading — horizontal, condensed modules in a
 left-to-right row; the FLOW toggle, its preference key, and the vertical
@@ -282,11 +286,13 @@ section is an absolutely positioned slab translated to its board seat by
 JS (`transform: translate(x,y)`, snap-quantized to the 16px grid). Each
 section is a CONDENSED MODULE — the rail collapses into a compact header
 band (grip · code · label · fold/eject right) over the wrapping encoder
-field. Width defaults to the RESIZER'S FLOOR (128px/8rem, clamped
-128–384px): at the floor the widest control row (dial + gap + the
-longest silkscreen label) fills the module EDGE TO EDGE, so a module
-opens as a SINGLE STACK of controls with no right-hand dead space;
-widening re-wraps the field to fill. Height hugs content.
+field. Every module HUGS ITS OWN CONTENT: JS measures the widest
+intrinsic control row after render (knob rows only — trims and pads
+stretch to fill by construction) and that is the module's default width
+(clamped 96–384px, resize floor 96; the layout-less fallback default is
+128px). Values hug their text inside the module (no 6ch slot), so a
+module opens as a single stack with no right-hand dead space; widening
+re-wraps the field to fill. Height hugs content.
 Position AND width are STYLE ONLY — DOM order always equals chain order
 (PD-4), so bring-to-front z-order is paint, never sequence. The header
 band and grip drag move a section's seat; the corner resize grip (a
