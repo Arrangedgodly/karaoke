@@ -177,10 +177,19 @@ From the approved [town-hall.md](town-hall.md) (2026-08-30). Executor:
   keyboard parity; overlap bring-to-front.
 - Acceptance: gates wired into tests/run.js discovery.
 
-**QA-4 — Regression + acceptance docs** · small · pending (after all FEW)
+**QA-4 — Regression + acceptance docs** · small · awaiting-approval
 - Full suite; docs/ACCEPTANCE.md updated with cord/resize manual
   checks; ready for user QA.
 - Acceptance: checklist reviewed; suite green.
+- Wrap-up note (2026-08-30): suite re-run clean — 30/30 files /
+  2292 checks, exit 0. docs/ACCEPTANCE.md gains section 9 (cycle-4
+  board + cord editing) with every interaction marked suite-gated
+  (test-cord-editing-few4 / test-board-positioning-few2 /
+  test-autosave-layout-store / test-order-focus-a11y1) vs the one
+  human-ears line (a chain built and reordered by cord on the test
+  vocal); resize checks deliberately absent (FEW-5 deferred).
+  README's stale "Drag to reorder" line replaced with move-by-grip +
+  reorder-by-cord. Deferrals recorded in production-log's QA-4 entry.
 
 **QA-5 — User acceptance (live)** · user-judged · pending (after QA-4)
 - Build/reorder/resize by pointer on the test vocal; feel verdict.

@@ -602,3 +602,67 @@ monotonic within-card re-raise F7, final DOM=tab=chain F8).
   loadModel; 8 jacks tabindex-less; cord layer aria-hidden +
   pointer-events none/all) all carry concrete assertions in the file.
 - Verdict: T-A11Y-1 PASS — tests/test-order-focus-a11y1.js
+
+## QA-4 — Regression + acceptance docs (2026-08-30, production-overlord worker)
+
+### Regression pass
+- `node tests/run.js` → **30/30 files, 2292 checks ok, exit 0** (matches
+  the A11Y-1 wrap-up baseline exactly; no drift).
+
+### Acceptance docs
+- docs/ACCEPTANCE.md gains **section 9 (cycle-4 board + cord editing)**
+  before the scope reminder: cord relink (audio changes only on
+  completed link), drop-nowhere revert, free positioning + TIDY,
+  reload-restores-layout, preset-load auto-layouts, keyboard add
+  unchanged, agent `set_param` queues during a cord drag. Each line is
+  marked *Suite-gated* with its named gate (test-cord-editing-few4,
+  test-board-positioning-few2, test-autosave-layout-store,
+  test-order-focus-a11y1); exactly one HUMAN-EARS line: a chain built
+  and reordered entirely by cord on the test vocal / live mic. A scope
+  note states the deferred cycle-4 parts (no resize handle; canvas
+  FLOW button still live until FEW-6) so operators don't hunt for
+  affordances that aren't there.
+
+### README touch-up
+- ONE invalidated claim fixed: "**Drag to reorder** — grab a card by its
+  `⋮⋮` handle and drop it where you want" replaced with two lines —
+  move-by-grip (never changes sound, arrangement autosaved, TIDY) and
+  reorder-by-cord (sound changes only on completed link; drop-nowhere
+  reverts). Audited and left alone: the FLOW-button sentence (FEW-6
+  deferred, button still ships), palette drag-to-add (palette Sortable
+  kept per PD-1), "drag a node" in the demo shot list (still true as a
+  position move), and every agent-contract claim (order-based tools
+  unchanged).
+
+### Deferrals for the completion report (from the ledger, not re-litigated)
+- **FEW-5** continuous resize + stepped text — worker stopped at its
+  10:00 budget mid-edit; partials reverted to 0d911fa; five named gaps
+  (B7/B8/D3/D4/E9/E10/G3) are the re-dispatch spec.
+- **FEW-6** per-card flow glyph — never dispatched this cycle; canvas
+  FLOW toggle intentionally still live meanwhile.
+- **FEW-7 (drag part)** — click/keyboard auto-place landed with FEW-2;
+  palette chip drag-drop placement still reverts (disclosed seam, owned
+  by FEW-7).
+- **FEW-8** collapse interplay on the board — never dispatched.
+- **VIS-1** in-world placeholders — task pending; FEW-3 shipped
+  grid-derived placeholder jack geometry inside --pm-* tokens, real
+  visual pass is the redesign run's element round (OQ-9).
+- **QA-3** board suite — pending; board coverage partially subsumed by
+  test-board-positioning-few2 + test-autosave-layout-store + A11Y-1's
+  bring-to-front; the resize/flow clamp proofs ride FEW-5/6.
+- **Redesign item 3** (chrome taste round) — shed at the overlord
+  sitting, deferred first.
+- **Redesign item 4 (extract)** — token/component consolidation,
+  protected and queued for the redesign run, not this cycle.
+- **Redesign items 5–7** (agent-side P3s: polish display seam, distill
+  get_capabilities, clarify autotune Key help-line) — shed at the
+  sitting; redesign.md notes they may be skipped entirely.
+- Also carried (not deferrals, disclosed): offline run-qa2 render NOT
+  re-run this cycle (qa2-report.txt stale 2026-08-29); DAT-1
+  zero-regression evidence is suite byte-stability + empty git diff.
+  QA-5 (live user acceptance) is next by design, gated on this task.
+
+### Validation
+- `node tests/run.js` → 30/30 files / 2292 checks / exit 0 (run first,
+  before any doc edit).
+- Status: `awaiting-approval` (plan.md updated). Next: QA-5.

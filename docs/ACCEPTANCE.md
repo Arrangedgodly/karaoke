@@ -279,6 +279,66 @@ The deployed build must be the same app the local checks ran against.
       `README.md` and the Devpost submission.
 - [ ] Date / operator / result / video URL: ____________________________
 
+## 9. Cycle-4 board + cord editing (order by cord, free positioning)
+
+Cycle 4 made the chain a free board: cards sit anywhere on the canvas
+(positions persist in the autosave), a card's `⋮⋮` grip MOVES it (never
+reorders), and chain ORDER changes only by dragging a cord from one jack
+point to another — one duck/rebuild when the link completes, an honest
+revert when it doesn't. The mechanics of every interaction below are
+machine-proven in the suite (the gates are named per line); what a human
+owes this section is the EARS on a chain that was built and reordered by
+cord — the one thing no stub can replace. Sections 1–2 still walk the DSP
+itself as before.
+
+- [ ] **Cord relink** — drag from a jack point on one card to a
+      compatible jack point on another; the audio changes ONLY when the
+      link completes (one gate duck + one rebuild, one autosave).
+      *Suite-gated:* `tests/test-cord-editing-few4.js` (deliberate-drag
+      threshold no-op, all four order-math types each with exactly ONE
+      `buildGraph` + ONE autosave, agent-queue flag discipline,
+      back-to-back relinks).
+- [ ] **Drop-nowhere revert** — release a cord drag over empty board:
+      the cord snaps back with ZERO audio change (no duck, no rebuild,
+      no autosave; Escape/pointercancel behave the same).
+      *Suite-gated:* same file (every revert path byte-stable).
+- [ ] **HUMAN EARS — a chain built and reordered entirely by cord**, on
+      the test vocal (`assets/test-vocal.mp3`) or the live mic: the
+      heard order matches the cord route (e.g. swapping Distortion and
+      EQ is clearly audible in the right direction), and a committed
+      relink during live audio is one clean duck — no click, no pop, no
+      dropped audio. **This line is the one automation cannot prove.**
+- [ ] **Free positioning + TIDY** — grip-drag moves a card with grid
+      snap (no order change); **TIDY** in the canvas chrome restores the
+      tidy stack while preserving each card's scale/flow.
+      *Suite-gated:* `tests/test-board-positioning-few2.js` (graph +
+      model byte-stable under moves) and
+      `tests/test-autosave-layout-store.js` (TIDY rewrites only x/y).
+- [ ] **Reload restores the layout; preset load auto-layouts** — card
+      positions survive a reload (legacy autosaves migrate to the tidy
+      stack); loading any preset stacks the board tidy (presets stay
+      chain-only). *Suite-gated:* `tests/test-autosave-layout-store.js`
+      (v2 round-trip, idempotent legacy migration, hostile layouts fail
+      soft).
+- [ ] **Keyboard add unchanged** — palette click / Tab+Enter still adds
+      just before the limiter; DOM/tab/screen-reader order equals chain
+      order however the cards are scattered, and focusing an overlapped
+      card brings it to front. *Suite-gated:*
+      `tests/test-order-focus-a11y1.js`.
+- [ ] **Agent edit during a cord drag** — a `set_param` from the agent
+      mid-drag queues behind the in-progress gesture and lands after the
+      commit; nothing interleaves with the rebuild.
+      *Suite-gated:* `tests/test-cord-editing-few4.js` (mid-drag queue
+      discipline).
+- [ ] Date / operator / result: ____________
+
+Scope note for this pass: card resize (FEW-5), the per-card flow glyph
+(FEW-6), palette drag-drop placement (FEW-7's drag part), and fold
+interplay on the board (FEW-8) are deferred — there is no corner resize
+handle and the canvas-level **FLOW** button still works until FEW-6
+lands. The chain's drag-to-reorder is retired on purpose: ordering is
+cords-only.
+
 ---
 
 **Reminder on scope**: if a change touches `src/audio-graph.js`,

@@ -118,7 +118,8 @@ Across the top, the status strip shows whether the engine is **Stopped** or **Li
 
 - The left panel has your effects — the originals (Gain, Compressor, EQ, Delay, Reverb, Limiter) plus four newer ones (Noise Gate, Distortion, Chorus, Autotune — see the next section). **Drag one into the middle column** to add it to the chain — or just click it (Tab to it and press Enter works too; new effects are added just before the limiter so it stays last). The chain flows top to bottom by default, mic in at the top and sound out at the bottom. Prefer the old left-to-right view? The **FLOW** button under the chain flips it back, and it remembers your choice.
 - The meters on the **MIC IN** and **OUT** bars show your incoming and outgoing levels at a glance, and the small **OUT** readout pinned at the bottom of the chain area shows your output level even when the chain is too long to fit on screen.
-- **Drag to reorder** — grab a card by its `⋮⋮` handle and drop it where you want.
+- **Move a card** — grab it by its `⋮⋮` handle and drag it anywhere on the canvas. Moving a card never changes your sound, and the arrangement is saved automatically (the **TIDY** button under the chain stacks everything back neatly).
+- **Reorder by cord** — drag from a jack point on one card to a jack point on another. The sound changes only when the link completes; drop the cord on empty space and it snaps back with nothing changed.
 - Click the **×** on a card to remove it.
 - Use the sliders under each effect to tune it (Autotune's **Key** and **Scale** are dropdowns instead of sliders). Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
 

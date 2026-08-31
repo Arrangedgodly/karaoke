@@ -776,3 +776,26 @@ QA-4 (per plan critical path A11Y-1 → QA-4 → QA-5).
 
 ### DAT-1 dispatched 2026-08-30 (production-overlord wrap-up; prior worker budget-stopped)
 **Active task: DAT-1 — status `awaiting-approval`** (migration + zero-regression gate, no new code — prior DAT-1 worker stopped at its 5-minute budget mid-analysis, gate closed from shipped evidence: `node tests/run.js autosave-layout` PASS 74 checks exit 0 — v2 round-trip, legacy→tidy migration idempotent + hostile-legacy fallback, preset-tidy chain-only, hostile layouts/envelopes fail soft, key karaoke-autosave-v1 preserved; `git diff 1d36d61 -- src/preset-schema.js src/preset-store.js src/audio-graph.js src/audio-engine.js` EMPTY; offline render NOT re-run this cycle (tests/qa-out/qa2-report.txt stale 2026-08-29) — zero-regression evidence = suite byte-stability assertions (test-board-positioning-few2.js C8, test-cord-editing-few4.js C3/G1) + the empty diff above; full suite re-run at wrap-up: 29/29 files / 2251 checks, exit 0; evidence in [production-log.md](production-log.md)). Fresh run-qa2 render available to approver on request. Next: M1 acceptance (FEW-1 + DAT-1) → user approval.
+
+### QA-4 dispatched 2026-08-30 (production-overlord worker)
+**Active task: QA-4 — status `awaiting-approval`** (regression + acceptance
+docs. Suite re-run FIRST: 30/30 files / 2292 checks, exit 0 — matches the
+A11Y-1 baseline. docs/ACCEPTANCE.md gains section 9 (cycle-4 board + cord
+editing): every interaction marked *Suite-gated* with its named gate
+(test-cord-editing-few4 / test-board-positioning-few2 /
+test-autosave-layout-store / test-order-focus-a11y1) vs the ONE human-ears
+line — a chain built and reordered entirely by cord on the test vocal.
+README's invalidated "Drag to reorder" line replaced with move-by-grip +
+reorder-by-cord (FLOW-button and palette-drag claims audited and left —
+still true). Deferrals for the completion report recorded in
+[production-log.md](production-log.md)'s QA-4 entry: FEW-5 (over budget,
+reverted), FEW-6 (never dispatched), FEW-7 drag part (palette drop-point),
+FEW-8 (never dispatched), VIS-1 (OQ-9 redesign pass), QA-3 (rides
+FEW-5/6), redesign items 3/5–7 (shed at the sitting) + item 4 extract
+(protected, redesign run).) Next: QA-5 (user acceptance, live) after
+approval.
+
+**QA-4 auto-approved (ultron-overlord)** — evidence: production-log QA-4
++ coordinator mechanical check (docs-only diff README+ACCEPTANCE, zero
+src/ changes, suite 30/2292 exit 0). QA-5 (user ears/eyes) = the final
+acceptance gate, user-owned at completion.
