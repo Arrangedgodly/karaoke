@@ -438,53 +438,6 @@ function installChainCanvasStub(sandbox, records) {
         // Display-only in the real canvas too — never fails the write.
       }
       return true;
-    },
-    // Compatibility methods remain in the stub only so older assertions
-    // can distinguish them; the production WebMCP path must not call them.
-    loadModel: function (model) {
-      records.loadModelCalls += 1;
-      records.loadModelModels.push(copyModel(model));
-      canvasModel = copyModel(model);
-      if (sandbox.AudioEngine && sandbox.AudioEngine.isStarted) {
-        sandbox.AudioGraph.buildGraph(
-          canvasModel.map(function (entry) {
-            return { id: entry.id, type: entry.type, params: entry.params };
-          })
-        );
-      }
-    },
-    updateNodeParam: function (nodeId, paramId, value) {
-      var entry = null;
-      for (var i = 0; i < canvasModel.length; i++) {
-        if (canvasModel[i].id === nodeId) {
-          entry = canvasModel[i];
-          break;
-        }
-      }
-      if (!entry) {
-        return false;
-      }
-      entry.params[paramId] = value;
-      records.updateNodeParamCalls.push({ nodeId: nodeId, paramId: paramId, value: value });
-      // The real canvas delegates the visible-control move to the REAL
-      // ParamControls.updateControl (slider + mono span in place, no card
-      // re-render); mirror that delegation so the component is exercised
-      // through the same chain of calls the app makes.
-      try {
-        if (sandbox.ParamControls && typeof sandbox.ParamControls.updateControl === 'function') {
-          sandbox.ParamControls.updateControl(nodeId, paramId, value);
-        }
-      } catch (err) {
-        // Display-only in the real canvas too — never fails the write.
-      }
-      if (sandbox.Persistence) {
-        records.persistenceCalls.push(copyModel(canvasModel));
-        sandbox.Persistence.saveCurrentChain(canvasModel);
-      }
-      if (sandbox.PresetsUI) {
-        sandbox.PresetsUI.markModified();
-      }
-      return true;
     }
   };
 }

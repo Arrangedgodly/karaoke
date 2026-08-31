@@ -438,7 +438,21 @@ async function main() {
       mutationSources.indexOf('applyCandidateViaUi') === -1 &&
       mutationSources.indexOf('applyParamOnlyViaUi') === -1 &&
       mutationSources.indexOf('assertLegacyMutationHarness') === -1,
-    'H2: production and test callers have no legacy mutation bypass around ChainEditing'
+    'H2: production callers have no legacy mutation bypass around ChainEditing'
+  );
+
+  var fixtureSources = fs.readdirSync(path.join(ROOT, 'tests'))
+    .filter(function (name) {
+      return /^test-.*\.js$/.test(name) && name !== 'test-chain-editing.js';
+    })
+    .map(function (name) {
+      return fs.readFileSync(path.join(ROOT, 'tests', name), 'utf8');
+    })
+    .join('\n');
+  check(
+    !/\bloadModel:\s*function/.test(fixtureSources) &&
+      !/\bupdateNodeParam:\s*function/.test(fixtureSources),
+    'H3: test fixtures contain no retired direct-mutation adapter implementations'
   );
 
   if (failures > 0) {

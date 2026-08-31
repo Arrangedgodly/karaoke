@@ -439,9 +439,6 @@ function createEnv(options) {
     },
     isDragActive: function () {
       return false;
-    },
-    loadModel: function (model) {
-      env.installModel(model);
     }
   };
 
