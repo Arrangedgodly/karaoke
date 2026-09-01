@@ -1,26 +1,31 @@
-// Test for cycle-4 FEW-1 — layout store seam + schema migration.
+// Test for the layout store seam + schema migration.
 //
 // Scope under test (src/persistence.js ONLY — the STORE + MIGRATION, not
-// the canvas consumer, which is FEW-2's):
-//   - The autosave slot becomes this module's own versioned ENVELOPE
-//     {autosaveVersion: 2, chain: <PresetSchema wire form>, layout:
-//     {<nodeId>: {x, y, scale, flow}}} — same localStorage key
-//     ('karaoke-autosave-v1', key discipline: keys are kept for data
-//     preservation), PresetSchema/PresetStore byte-untouched.
+// the canvas consumer):
+//   - The autosave slot is this module's own versioned ENVELOPE
+//     {autosaveVersion: 3, chain: <PresetSchema wire form>, layout:
+//     {<nodeId>: {w?}}} — same localStorage key ('karaoke-autosave-v1',
+//     key discipline: keys are kept for data preservation),
+//     PresetSchema/PresetStore byte-untouched. Version 3 (board
+//     redesign, 2026-09-01): the free board's x/y/scale/flow fields are
+//     gone — chain order is now the model's own array order (DOM order
+//     IS chain order), so a layout entry carries only `w`, a card's
+//     manually-resized width.
 //   - saveCurrentChain(model, layout): layout object = stored (pruned
-//     against the model's node ids, normalized to the 4-field shape);
-//     undefined = CARRY FORWARD the stored layout (pruned); null =
-//     explicit clear to {}.
-//   - Legacy payloads (bare preset shape, no envelope) migrate to the
-//     tidy-stack fallback: chain loads exactly, layout is {} (absence of
-//     an entry IS the incumbent tidy vertical stack — no coordinates are
-//     synthesized). Migration is idempotent.
+//     against the model's node ids, normalized to {w?}); undefined =
+//     CARRY FORWARD the stored layout (pruned); null = explicit clear to
+//     {}.
+//   - Legacy payloads (bare preset shape, no envelope, OR a pre-redesign
+//     v2 envelope) migrate to the tidy-stack fallback: chain loads
+//     exactly, layout is {} (absence of an entry IS the incumbent
+//     content-hug/default width — no width is synthesized). Migration is
+//     idempotent.
 //   - Hostile layouts fail soft: the chain still loads exactly, the
 //     layout degrades to {} / drops the hostile entries; a hostile
 //     layout NEVER rejects an otherwise-valid chain.
 //   - Preset load leaves layout tidy/absent: presets stay chain-only
 //     (PresetStore round-trip carries no layout), and replacing the
-//     chain via a layout-less save prunes the stale ids' positions.
+//     chain via a layout-less save prunes the stale ids' widths.
 //
 // Same committed zero-dependency convention as the other suites: plain
 // `node`, browser globals stubbed, the REAL src files run in a vm
@@ -149,9 +154,9 @@ function seedRaw(env, value) {
 
 function main() {
   var LAYOUT_FULL = {
-    a1: { x: 12, y: 40, scale: 1.25, flow: 'horizontal' },
-    a2: { x: 12, y: 260, scale: 1, flow: 'horizontal' },
-    a3: { x: 96, y: 520, scale: 0.75, flow: 'horizontal' }
+    a1: { w: 260 },
+    a2: { w: 208 },
+    a3: { w: 320 }
   };
 
   // Issue #20: autosave is part of ChainEditing's result, so this adapter
@@ -179,7 +184,7 @@ function main() {
 
     sandbox.Persistence.saveCurrentChain(chainA(), LAYOUT_FULL);
     var stored = env.storage.__read(AUTOSAVE_KEY);
-    check(stored.autosaveVersion === 2, 'A1: the slot is the v2 envelope (autosaveVersion 2)');
+    check(stored.autosaveVersion === 3, 'A1: the slot is the v3 envelope (autosaveVersion 3 — board redesign, 2026-09-01)');
     check(
       stored.chain &&
         stored.chain.schemaVersion === 1 &&
@@ -187,7 +192,7 @@ function main() {
         stored.chain.nodes.length === 3,
       'A1: the chain half is the UNCHANGED PresetSchema wire form'
     );
-    check(deepEqual(stored.layout, LAYOUT_FULL), 'A1: the layout map is stored verbatim (all 4 fields)');
+    check(deepEqual(stored.layout, LAYOUT_FULL), 'A1: the layout map is stored verbatim (w only)');
 
     var reloaded = sandbox.Persistence.loadInitialModel();
     var relayout = sandbox.Persistence.loadInitialLayout();
@@ -198,50 +203,45 @@ function main() {
       'A2: the healthy round-trip logs ZERO console.error'
     );
 
-    // Defaults normalize: missing scale -> 1, missing/illegal flow ->
-    // 'horizontal' (the board's default reading since the 2026-08-31
-    // horizontal-default round) — stored normalized, reloaded normalized.
-    // The same pass exercises the per-card width field `w`: a finite
-    // number clamps into the condensed range (176..384 px); anything else
-    // drops the field (the card takes the uniform CSS default).
+    // An entry with no `w` at all (or a non-numeric one) carries nothing
+    // worth storing — it drops entirely rather than persisting an empty
+    // object, since "no entry" IS the normal shape for a card that has
+    // never been manually resized.
     sandbox.Persistence.saveCurrentChain(chainA(), {
-      a1: { x: 0, y: 0 },
-      a2: { x: 5, y: 5, scale: 2, flow: 'DIAGONAL' },
-      a3: { x: 9, y: 9, w: 5000 }
+      a1: {},
+      a2: { w: 'nope' },
+      a3: { w: 5000 }
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        a1: { x: 0, y: 0, scale: 1, flow: 'horizontal' },
-        a2: { x: 5, y: 5, scale: 2, flow: 'horizontal' },
-        a3: { x: 9, y: 9, w: 384, scale: 1, flow: 'horizontal' }
+        a3: { w: 384 }
       }),
-      'A3: omitted scale defaults to 1, illegal flow defaults to horizontal (the default reading), and a width clamps into the condensed range (normalized on save)'
+      'A3: an entry with no `w` (or a non-numeric one) drops entirely — only a valid, clamped w survives (normalized on save)'
     );
 
-    // Width bounds + garbage: below-min clamps up, non-finite drops.
+    // Width bounds + garbage: below-min clamps up, non-finite drops the
+    // whole entry.
     sandbox.Persistence.saveCurrentChain(chainA(), {
-      a1: { x: 0, y: 0, w: 10 },
-      a2: { x: 5, y: 5, w: 'wide' }
+      a1: { w: 10 },
+      a2: { w: 'wide' }
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        a1: { x: 0, y: 0, w: 96, scale: 1, flow: 'horizontal' },
-        a2: { x: 5, y: 5, scale: 1, flow: 'horizontal' }
+        a1: { w: 208 }
       }),
-      'A3b: a sub-minimum width clamps to 96px and a non-numeric width drops (CSS default)'
+      'A3b: a sub-minimum width clamps to 208px and a non-numeric width drops the entry entirely'
     );
 
     // Prune on save: entries for ids the model does not contain never
     // reach the slot.
     sandbox.Persistence.saveCurrentChain(chainB(), {
-      b1: { x: 10, y: 10, scale: 1, flow: 'vertical' },
-      a1: { x: 12, y: 40, scale: 1.25, flow: 'horizontal' },
-      ghost: { x: 1, y: 1, scale: 1, flow: 'vertical' }
+      b1: { w: 260 },
+      a1: { w: 300 },
+      ghost: { w: 100 }
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        // flow normalizes to 'horizontal' on save (vertical retired)
-        b1: { x: 10, y: 10, scale: 1, flow: 'horizontal' }
+        b1: { w: 260 }
       }),
       'A4: unknown node ids in a saved layout are PRUNED (removed node, stale ghost)'
     );
@@ -266,7 +266,7 @@ function main() {
     check(deepEqual(first, chainA()), 'B1: the legacy CHAIN loads EXACTLY as before');
     check(
       firstLayout !== null && typeof firstLayout === 'object' && Object.keys(firstLayout).length === 0,
-      'B1: the legacy payload migrates to layout {} (absent entry = the tidy stack)'
+      'B1: the legacy payload migrates to layout {} (absent entry = the default/content-hug width)'
     );
     check(env.consoleErrors.length === 0, 'B1: legacy migration is not an error (zero console.error)');
 
@@ -278,12 +278,12 @@ function main() {
     );
 
     // The first save after the migration rewrites the slot as a steady-
-    // state v2 envelope with layout {} — which then loads the same.
+    // state v3 envelope with layout {} — which then loads the same.
     sandbox.Persistence.saveCurrentChain(chainA()); // today's caller form: no layout arg
     var stored = env.storage.__read(AUTOSAVE_KEY);
     check(
-      stored.autosaveVersion === 2 && deepEqual(stored.layout, {}),
-      'B3: the first post-migration save rewrites the slot as v2 with layout {}'
+      stored.autosaveVersion === 3 && deepEqual(stored.layout, {}),
+      'B3: the first post-migration save rewrites the slot as v3 with layout {}'
     );
     check(
       deepEqual(sandbox.Persistence.loadInitialModel(), chainA()) &&
@@ -309,6 +309,24 @@ function main() {
       env.consoleErrors.length === 2,
       'B4: one console.error per read that recovers (model + layout re-reads)'
     );
+
+    // A pre-redesign v2 envelope (x/y/scale/flow shape) is ALSO a legacy
+    // shape now — the version bump means it degrades through the same
+    // "unknown version -> default-chain fallback" path a v2 build never
+    // needed for the CHAIN half, but the layout's stray x/y/scale/flow
+    // keys were never meaningful to v3 anyway, so this is exactly the
+    // envelope-hostility path (see section E below), not a special case.
+    seedRaw(env, {
+      autosaveVersion: 2,
+      chain: { schemaVersion: 1, name: '__autosave__', nodes: chainA() },
+      layout: { a1: { x: 12, y: 40, scale: 1, flow: 'horizontal' } }
+    });
+    env.consoleErrors.length = 0;
+    check(
+      deepEqual(sandbox.Persistence.loadInitialModel(), sandbox.DEFAULT_PRESET.nodes) &&
+        Object.keys(sandbox.Persistence.loadInitialLayout()).length === 0,
+      'B5: a pre-redesign v2 envelope is an unknown version now — default-chain fallback, layout {} (a one-time reset, not a misread)'
+    );
   }
 
   // ----------------------------------------------------------------
@@ -320,17 +338,17 @@ function main() {
 
     // Save with layout, then a layout-LESS save of the SAME chain (a
     // param tweak / agent rebuild — today's only caller form): the
-    // stored positions must survive, not be wiped.
+    // stored widths must survive, not be wiped.
     sandbox.Persistence.saveCurrentChain(chainA(), LAYOUT_FULL);
     sandbox.Persistence.saveCurrentChain(chainA());
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), LAYOUT_FULL),
-      'C1: a layout-less save of the same chain CARRIES FORWARD the stored positions'
+      'C1: a layout-less save of the same chain CARRIES FORWARD the stored widths'
     );
 
     // The preset-load shape: PresetStore stays chain-only; loading a
     // preset replaces the chain (fresh ids) and the autosave that
-    // follows prunes the old positions — the board is tidy again.
+    // follows prunes the old widths — the board is tidy again.
     var saved = sandbox.PresetStore.save('Board Preset', chainB());
     check(!!saved && saved.ok === true, 'C2 setup: PresetStore.save works (store untouched)');
     var storedPreset = env.storage.__read(PRESET_STORE_KEY)['Board Preset'];
@@ -350,11 +368,11 @@ function main() {
     sandbox.Persistence.saveCurrentChain(chainB());
     check(
       Object.keys(sandbox.Persistence.loadInitialLayout()).length === 0,
-      'C3: preset load -> autosave prunes the replaced chain\'s positions (layout tidy/absent)'
+      'C3: preset load -> autosave prunes the replaced chain\'s widths (layout tidy/absent)'
     );
 
     // Explicit null clears: the TIDY-reset seam.
-    sandbox.Persistence.saveCurrentChain(chainB(), { b1: { x: 9, y: 9, scale: 1, flow: 'vertical' } });
+    sandbox.Persistence.saveCurrentChain(chainB(), { b1: { w: 260 } });
     sandbox.Persistence.saveCurrentChain(chainB(), null);
     check(
       Object.keys(sandbox.Persistence.loadInitialLayout()).length === 0,
@@ -367,20 +385,20 @@ function main() {
   // ----------------------------------------------------------------
   {
     var cases = [
-      { label: 'layout is an array', layout: [{ x: 1, y: 1 }] },
+      { label: 'layout is an array', layout: [{ w: 260 }] },
       { label: 'layout is a string', layout: 'everywhere' },
       { label: 'layout is a number', layout: 42 },
-      { label: 'entry is a string', layout: { a1: 'top-left' } },
+      { label: 'entry is a string', layout: { a1: 'wide' } },
       { label: 'entry is null', layout: { a1: null } },
-      { label: 'x is NaN', layout: { a1: { x: NaN, y: 10, scale: 1, flow: 'vertical' } } },
-      { label: 'y is Infinity', layout: { a1: { x: 10, y: Infinity, scale: 1, flow: 'vertical' } } },
-      { label: 'x is a string', layout: { a1: { x: '10', y: 10, scale: 1, flow: 'vertical' } } }
+      { label: 'w is NaN', layout: { a1: { w: NaN } } },
+      { label: 'w is Infinity', layout: { a1: { w: Infinity } } },
+      { label: 'w is a string', layout: { a1: { w: '260' } } }
     ];
     cases.forEach(function (hostile) {
       var env = createEnv();
       var sandbox = env.sandbox;
       seedRaw(env, {
-        autosaveVersion: 2,
+        autosaveVersion: 3,
         chain: { schemaVersion: 1, name: '__autosave__', nodes: chainA() },
         layout: hostile.layout
       });
@@ -414,16 +432,16 @@ function main() {
       var env = createEnv();
       var sandbox = env.sandbox;
       seedRaw(env, {
-        autosaveVersion: 2,
+        autosaveVersion: 3,
         chain: { schemaVersion: 1, name: '__autosave__', nodes: chainA() },
         layout: {
-          a1: { x: 12, y: 40, scale: 1.25, flow: 'horizontal' },
-          a2: { x: NaN, y: 5 },
+          a1: { w: 260 },
+          a2: { w: NaN },
           a3: 'floating'
         }
       });
       check(
-        deepEqual(sandbox.Persistence.loadInitialLayout(), { a1: LAYOUT_FULL.a1 }),
+        deepEqual(sandbox.Persistence.loadInitialLayout(), { a1: { w: 260 } }),
         'D: a mixed layout keeps the valid entry and drops only the hostile ones'
       );
     }
@@ -436,7 +454,7 @@ function main() {
       var env = createEnv();
       var sandbox = env.sandbox;
       var trap = {
-        a1: { x: 12, y: 40, scale: 1.25, flow: 'horizontal' }
+        a1: { w: 260 }
       };
       Object.defineProperty(trap, 'a2', {
         enumerable: true,
@@ -452,7 +470,7 @@ function main() {
       }
       check(!threw, 'D: a throwing getter in the SAVED layout never escapes saveCurrentChain');
       check(
-        deepEqual(sandbox.Persistence.loadInitialLayout(), { a1: LAYOUT_FULL.a1 }),
+        deepEqual(sandbox.Persistence.loadInitialLayout(), { a1: { w: 260 } }),
         'D: the throwing-getter save fails soft to the entries that were readable'
       );
     }
@@ -461,9 +479,9 @@ function main() {
     // missing/invalid chain reject through the DEFAULT-CHAIN fallback
     // (never a misread), exactly like an unsupported PresetSchema version.
     [
-      { label: 'unsupported future autosaveVersion', payload: { autosaveVersion: 3, chain: { schemaVersion: 1, name: '__autosave__', nodes: chainA() }, layout: {} } },
-      { label: 'envelope without a chain', payload: { autosaveVersion: 2, layout: { a1: { x: 1, y: 1 } } } },
-      { label: 'envelope chain fails schema', payload: { autosaveVersion: 2, chain: { schemaVersion: 9, name: '__autosave__', nodes: chainA() }, layout: {} } },
+      { label: 'unsupported future autosaveVersion', payload: { autosaveVersion: 4, chain: { schemaVersion: 1, name: '__autosave__', nodes: chainA() }, layout: {} } },
+      { label: 'envelope without a chain', payload: { autosaveVersion: 3, layout: { a1: { w: 260 } } } },
+      { label: 'envelope chain fails schema', payload: { autosaveVersion: 3, chain: { schemaVersion: 9, name: '__autosave__', nodes: chainA() }, layout: {} } },
       { label: 'unparsable slot', payload: 'not json {{{' }
     ].forEach(function (hostile) {
       var env = createEnv();
@@ -503,7 +521,7 @@ function main() {
     check(
       env.storage.__box.hasOwnProperty(AUTOSAVE_KEY) &&
         Object.keys(env.storage.__box).length === 1,
-      'F1: the v2 envelope still lives under the ONE key karaoke-autosave-v1 (data preserved across the upgrade)'
+      'F1: the v3 envelope still lives under the ONE key karaoke-autosave-v1 (data preserved across the upgrade)'
     );
   }
 

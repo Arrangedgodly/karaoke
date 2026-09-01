@@ -210,12 +210,14 @@ function buildPanel() {
       'current-preset-name': current,
       'unsaved-indicator': dot,
       // Compact-browsing round: presets-ui.js's init guard now requires
-      // #preset-list + #build-panel-presets instead of the old
-      // #preset-select/#load-preset-btn/#delete-preset-btn trio — this
-      // stub DOM exists only so that guard doesn't bail and break the
-      // unrelated get_preset/load_preset tools this file actually tests.
+      // #preset-list + #presets-panel-content (split-panel round: renamed
+      // from #build-panel-presets, when Presets was one tab of a shared
+      // panel) instead of the old #preset-select/#load-preset-btn/
+      // #delete-preset-btn trio — this stub DOM exists only so that guard
+      // doesn't bail and break the unrelated get_preset/load_preset tools
+      // this file actually tests.
       'preset-list': makeElement('div'),
-      'build-panel-presets': container,
+      'presets-panel-content': container,
       'palette-list': makeElement('ul'),
       'chain-list': makeElement('ul'),
       'empty-hint': makeElement('p'),

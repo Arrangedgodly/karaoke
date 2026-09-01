@@ -144,6 +144,18 @@ check(
     catalog.getDefault('mode', 'mode') === 'Soft',
   'A8: default discovery works per type and per parameter'
 );
+check(
+  catalog.getLatencySeconds('level') === 0 && catalog.getLatencySeconds('mode') === 0,
+  'A9: getLatencySeconds() defaults to 0 for a definition that declares none'
+);
+
+var latencyCalls = { create: [], apply: [], dispose: [] };
+var latencyCatalog = loadCatalog();
+var latencyInput = numericDefinition('Delay-ish', latencyCalls, false);
+latencyInput.latencySeconds = 0.02;
+latencyCatalog.register('delayish', latencyInput);
+check(latencyCatalog.getLatencySeconds('delayish') === 0.02, 'A10: getLatencySeconds() reads a declared value');
+check(latencyCatalog.getLatencySeconds('missing') === 0, 'A11: getLatencySeconds() is 0 for an unregistered type');
 
 console.log('B. defensive discovery');
 
@@ -219,6 +231,16 @@ check(errorMatches(function () {
   definition.paramSpec.push({ id: 'mix', label: 'Again', min: 0, max: 1, default: 0, step: 1 });
   catalog.register('duplicate-params', definition);
 }, /duplicate param/i), 'C10: duplicate parameter ids are rejected');
+check(errorMatches(function () {
+  var definition = numericDefinition('Negative latency', calls);
+  definition.latencySeconds = -0.001;
+  catalog.register('negative-latency', definition);
+}, /latencySeconds.*non-negative finite number/i), 'C11: negative latencySeconds is rejected');
+check(errorMatches(function () {
+  var definition = numericDefinition('NaN latency', calls);
+  definition.latencySeconds = NaN;
+  catalog.register('nan-latency', definition);
+}, /latencySeconds.*non-negative finite number/i), 'C12: non-finite latencySeconds is rejected');
 
 console.log('D. defaults, validation, creation, live writes, and disposal');
 
@@ -389,6 +411,19 @@ check(
 check(
   production.NodeTypes === undefined && production.AudioGraph === undefined,
   'F2: effect registration needs no legacy registry global'
+);
+
+var expectedLatencySeconds = {
+  gain: 0, compressor: 0.006, eq: 0, delay: 0, reverb: 0, limiter: 0.006,
+  distortion: 0, chorus: 0, gate: 0.005, autotune: 0.020,
+  pitchshift: 0.1, tremolo: 0, bitcrusher: 0, phaser: 0
+};
+check(
+  expectedProductionTypes.every(function (type) {
+    return production.EffectCatalog.getLatencySeconds(type) === expectedLatencySeconds[type];
+  }),
+  'F2a: every production effect declares its disclosed added latency (gate 5ms, autotune 20ms, ' +
+    'compressor/limiter 6ms, pitchshift 100ms; everything else 0)'
 );
 
 var productionSources = [

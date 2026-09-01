@@ -29,6 +29,9 @@
 
   var paletteListEl = document.getElementById('palette-list');
   var chainListEl = document.getElementById('chain-list');
+  // The scrolling board region AROUND the row — the palette drag's drop
+  // zone (a chip released outside it is not an add; see armPaletteDrag).
+  var boardEl = document.getElementById('chain-canvas');
   var emptyHintEl = document.getElementById('empty-hint');
   var layoutEl = document.getElementById('chain-layout');
   var signalOrderEl = document.getElementById('signal-order-panel');
@@ -71,43 +74,53 @@
   var dragActive = false;
 
   // ---------------------------------------------------------------------
-  // FEW-2 (cycle 4): FREE POSITIONING. Sections are absolutely
-  // positioned inside the bounded canvas panel (the panel keeps internal
-  // scrolling via .canvas). The coordinate space is the CHAIN LIST's
-  // content box (top-left of .chain-list = {0, 0}); each card is a
-  // full-width row translated by `transform: translate(x, y)`, so x/y are
-  // STYLE ONLY — the DOM order always equals the chain order (PD-4), and
-  // a move can never reorder anything. All logical positions live in the
-  // `positions` map below (never read back out of the style), snap-
-  // quantized to GRID_PITCH on every write.
+  // Board redesign (2026-09-01, user direction): the free 2D board (x/y
+  // seats, patch cords, jack anchors) is RETIRED — "an okay experiment
+  // but ultimately not great." The chain is now a plain ordered ROW:
+  // cards lay out in normal CSS flex flow (styles/main.css's
+  // .chain-list), so DOM ORDER ALONE decides visual position — the same
+  // PD-4 invariant the free board already kept (DOM order = chain order),
+  // just with nothing left to keep it in sync WITH anymore. A card's only
+  // remaining per-id layout fact is its manually-resized WIDTH
+  // (cardWidths below); reordering is a drag gesture over the row itself
+  // (see the REORDER block further down), not a cord edit.
   //
-  // Persistence rides FEW-1's store seam: saved on MOVE-END (never per
-  // pointermove) via saveCurrentChain(chainModel, positions); the store's
-  // prune/normalize rules keep the slot garbage-free on removes. (The
-  // TIDY key was retired 2026-08-31 — the board is a free canvas.)
+  // Persistence rides the same FEW-1 store seam as before: saved on
+  // resize-END (never per pointermove) via
+  // saveCurrentChain(chainModel, currentLayout()) — currentLayout() now
+  // returns {id: {w}} instead of {id: {x,y,w,scale,flow}}; the store's
+  // prune/normalize rules still keep the slot garbage-free on removes.
   // ---------------------------------------------------------------------
-  var GRID_PITCH = 16; // the snap quantum (px) — one shared constant
-  var TIDY_X = GRID_PITCH; // the row's top edge (grid-aligned)
-  var TIDY_ROW_PITCH = GRID_PITCH * 10; // 160px — the layout-less extent fallback (real cards use measured heights)
-  // Per-card WIDTH (2026-08-31 round): a condensed section's own width in
-  // px, snap-quantized and clamped. `w` rides the layout entry beside
-  // x/y/scale/flow; an absent w means the CSS default (the uniform
-  // condensed width every card shares until resized). The clamp bounds
-  // mirror main.css's horizontal-mode min/max-width (8rem..24rem).
-  // Width floors (2026-08-31 dead-space rounds): every card HUGS its own
-  // content — JS measures the widest KNOB row after render (trims/pads
-  // stretch to fill whatever width exists, so they never leave dead
-  // space) and that measurement is the card's default width. 96px is the
-  // resize FLOOR; 128px is the layout-less fallback default (stripped
-  // harnesses measure nothing); 384px the ceiling.
-  var CARD_W_DEFAULT_PX = 128;
-  var CARD_W_MIN_PX = 96; // 6rem
+  var GRID_PITCH = 16; // the snap quantum (px) for width-resize only now
+  // Per-card WIDTH: a condensed section's own width in px, snap-quantized
+  // and clamped. The clamp bounds mirror main.css's horizontal-mode
+  // min/max-width (13rem..24rem).
+  //
+  // Width floors: every card HUGS its own content — JS measures the
+  // widest KNOB row after render (trims/pads stretch to fill whatever
+  // width exists, so they never leave dead space) and that measurement is
+  // the card's default width. 128px is the layout-less fallback default
+  // (stripped harnesses measure nothing); 384px the ceiling.
+  //
+  // 208px is the resize FLOOR (2026-09-01, raised from 112px alongside
+  // the new per-card BYPASS button — a third button now shares the rail's
+  // foot with fold/remove, and the hug measurement only ever reads the
+  // BODY's widest knob row, never the header band's own content). Worst
+  // case measured live: Autotune's rail (3-letter code + its
+  // "Experimental" badge) needed 184px once the badge switched to its
+  // already-compact palette-chip form ("EXP" — see createExperimentalBadge
+  // below, a real bugfix, not a width carve-out); the floor carries one
+  // grid tick of headroom above that. CARD_W_DEFAULT_PX matches the floor
+  // exactly — clampCardW's no-value branch must never resolve BELOW its
+  // own minimum.
+  var CARD_W_DEFAULT_PX = 208;
+  var CARD_W_MIN_PX = 208; // 13rem
   var CARD_W_MAX_PX = 384; // 24rem
   var cardHugW = {}; // id -> measured content width (real browsers only)
-  var positions = {}; // id -> {x, y, w?, scale, flow} (scale/flow carried, FEW-5/6 wire them)
-  var zCounter = 0; // bring-to-front counter (pointerdown order)
-  var positionDrag = null; // the live grip drag, if any
+  var cardWidths = {}; // id -> manually-resized width (px); absent = hug/default
   var resizeDrag = null; // the live width-resize drag, if any
+  var reorderDrag = null; // the live drag-to-reorder gesture, if any
+  var paletteDrag = null; // the live drag-an-effect-in-from-the-palette gesture
 
   function requireChainEditing() {
     if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
@@ -135,14 +148,13 @@
     return w;
   }
 
-  /** A card's effective width in px: its saved `w` clamped into the
-   *  condensed range; else its MEASURED content hug (plus the card's own
-   *  side padding and border); else the layout-less default. Single
-   *  source for the board-extent math and the width resize. */
+  /** A card's effective width in px: its manually-resized width clamped
+   *  into the condensed range; else its MEASURED content hug (plus the
+   *  card's own side padding and border); else the layout-less default.
+   *  Single source for the width-resize gesture and every repaint. */
   function cardWidth(id) {
-    var pos = positions[id];
-    if (pos && typeof pos.w === 'number') {
-      return clampCardW(pos.w);
+    if (typeof cardWidths[id] === 'number') {
+      return clampCardW(cardWidths[id]);
     }
     if (typeof cardHugW[id] === 'number') {
       return clampCardW(cardHugW[id] + 15); // + 2x0.4rem padding + 2px border
@@ -185,153 +197,39 @@
     }
   }
 
-  /** Paint one layout entry onto its card: the seat (transform) and the
-   *  card's own condensed width. Since the vertical reading was retired
-   *  (2026-08-31) every card is a width-defined module on the horizontal
-   *  board. */
-  function applyPositionToCard(card, x, y, id) {
-    card.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
-    if (id) {
-      ensureCardHug(id, card); // first paint after render — the card is live
-      card.style.width = cardWidth(id) + 'px';
+  /** Paint one card's own width (the only per-id layout fact left — see
+   *  the board-redesign comment above). Position is now free: normal
+   *  flex flow places the card, nothing here ever touches transform. */
+  function applyCardWidth(card, id) {
+    if (!id) {
+      return;
     }
+    ensureCardHug(id, card); // first paint after render — the card is live
+    card.style.width = cardWidth(id) + 'px';
   }
 
-  function bringCardToFront(card) {
-    zCounter += 1;
-    card.style.zIndex = String(zCounter);
-  }
-
-  /** One card's contribution to the board's vertical rhythm: its MEASURED
-   *  height snapped up to the grid plus one grid unit of breathing room
-   *  (the console rhythm's own pitch — not an arbitrary gap). A
-   *  layout-less host falls back to the fixed 160px pitch. Used by the
-   *  extent math. */
-  function tidyRowHeight(id) {
-    var size = measuredSize(cardElById(id));
-    if (size.h) {
-      return Math.ceil(size.h / GRID_PITCH) * GRID_PITCH + GRID_PITCH;
-    }
-    return TIDY_ROW_PITCH;
-  }
-
-  /** The horizontal twin: one card's contribution along the row axis —
-   *  its effective width snapped up to the grid plus one grid unit of
-   *  breathing room. A layout-less host has no measured width, so the
-   *  entry's `w` (or the uniform default) carries the math. */
-  function tidyRowWidth(id) {
-    var size = measuredSize(cardElById(id));
-    var w = size.w ? Math.max(size.w, cardWidth(id)) : cardWidth(id);
-    return Math.ceil(w / GRID_PITCH) * GRID_PITCH + GRID_PITCH;
-  }
-
-  /** First free grid slot along the row: right of the rightmost card's
-   *  right edge (new modules join the row's end). */
-  function firstFreeSlotX() {
-    var maxX = 0;
-    Object.keys(positions).forEach(function (id) {
-      var right = positions[id].x + tidyRowWidth(id);
-      if (right > maxX) {
-        maxX = right;
-      }
-    });
-    return snapToGrid(maxX);
-  }
-
-  function placeNewNode(id) {
-    positions[id] = { x: firstFreeSlotX(), y: TIDY_X, scale: 1, flow: 'horizontal' };
-    return positions[id];
-  }
-
-  /** The live layout map (passed to the store; the store prunes unknown ids). */
-  function currentLayout() {
-    return positions;
-  }
-
-  /** Keep the list reachable in the panel's internal scroll (absolute
-   *  cards do not size their container). Vertical mode maintains the Y
-   *  extent (each seat's measured BOTTOM); horizontal mode additionally
-   *  maintains the X extent — the row's right edge — so the condensed
-   *  sections stay reachable in the face's horizontal scroll. OQ-9: the
-   *  extent covers measured edges, never a fixed row pitch. */
-  function refreshBoardExtent() {
-    var maxY = 0;
-    var maxX = 0;
-    Object.keys(positions).forEach(function (id) {
-      var bottom = positions[id].y + tidyRowHeight(id);
-      if (bottom > maxY) {
-        maxY = bottom;
-      }
-      var right = positions[id].x + tidyRowWidth(id);
-      if (right > maxX) {
-        maxX = right;
-      }
-    });
-    chainListEl.style.minHeight = maxY + 'px';
-    chainListEl.style.minWidth = maxX + 'px';
-  }
-
-  function applyPositionsToCards() {
+  /** Repaint every card's width from the current cardWidths/cardHugW
+   *  state — used after a full model render (renderModel below). */
+  function applyCardWidths() {
     var cardEls = chainListEl.querySelectorAll('.node-card');
     Array.prototype.forEach.call(cardEls, function (card) {
-      var pos = positions[card.getAttribute('data-node-id')];
-      if (pos) {
-        applyPositionToCard(card, pos.x, pos.y, card.getAttribute('data-node-id'));
-      }
+      applyCardWidth(card, card.getAttribute('data-node-id'));
     });
-    refreshBoardExtent();
   }
 
-  // The grip pointer-drag: MOVES POSITION (snap-quantized), never an
-  // order. move/up listeners live on document (active only mid-drag) so a
-  // drag never dies when the pointer leaves the handle.
-  function onPositionPointerMove(event) {
-    if (!positionDrag) {
-      return;
-    }
-    var x = snapToGrid(positionDrag.originX + ((event && event.clientX ? event.clientX : 0) - positionDrag.startX));
-    var y = snapToGrid(positionDrag.originY + ((event && event.clientY ? event.clientY : 0) - positionDrag.startY));
-    // The board has no negative region — a drag past the origin wall
-    // clamps at 0 instead of parking a live card off the reachable board.
-    if (x < 0) {
-      x = 0;
-    }
-    if (y < 0) {
-      y = 0;
-    }
-    var pos = positions[positionDrag.id];
-    if (pos && (pos.x !== x || pos.y !== y)) {
-      pos.x = x;
-      pos.y = y;
-      applyPositionToCard(positionDrag.card, x, y, positionDrag.id);
-      positionDrag.moved = true;
-      refreshBoardExtent();
-      renderCords(); // FEW-3: live re-route while the seat moves
-    }
+  /** The live layout map (passed to the store; the store prunes unknown
+   *  ids) — {id: {w}} now that x/y/scale/flow have nothing left to mean. */
+  function currentLayout() {
+    var out = {};
+    Object.keys(cardWidths).forEach(function (id) {
+      out[id] = { w: cardWidths[id] };
+    });
+    return out;
   }
 
-  function onPositionPointerEnd() {
-    if (!positionDrag) {
-      return;
-    }
-    var drag = positionDrag;
-    positionDrag = null;
-    dragActive = false;
-    // Persist on MOVE-END only — never per pointermove.
-    if (drag.moved) {
-      if (window.ChainEditing && typeof window.ChainEditing.syncLayout === 'function') {
-        window.ChainEditing.syncLayout(currentLayout());
-      }
-      if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel, positions);
-      }
-    }
-  }
-
-  // The width-resize pointer-drag (2026-08-31 round): adjusts ONE card's
-  // `w` (snap-quantized, clamped to the condensed range), repaints the
-  // width, re-routes the cords (jack geometry reads the live card box),
-  // and refreshes the board extent. Never an order, never a sound.
+  // The width-resize pointer-drag: adjusts ONE card's width
+  // (snap-quantized, clamped to the condensed range) and repaints it.
+  // Never an order, never a sound.
   function onResizePointerMove(event) {
     if (!resizeDrag) {
       return;
@@ -344,13 +242,10 @@
     if (w > CARD_W_MAX_PX) {
       w = CARD_W_MAX_PX;
     }
-    var pos = positions[resizeDrag.id];
-    if (pos && pos.w !== w) {
-      pos.w = w;
-      applyPositionToCard(resizeDrag.card, pos.x, pos.y, resizeDrag.id);
+    if (cardWidths[resizeDrag.id] !== w) {
+      cardWidths[resizeDrag.id] = w;
+      resizeDrag.card.style.width = w + 'px';
       resizeDrag.moved = true;
-      refreshBoardExtent();
-      renderCords(); // jacks sit on the border — the border just moved
     }
   }
 
@@ -361,439 +256,64 @@
     var drag = resizeDrag;
     resizeDrag = null;
     dragActive = false;
-    // Same discipline as a seat move: persist on END only.
+    // Persist on END only — never per pointermove.
     if (drag.moved) {
       if (window.ChainEditing && typeof window.ChainEditing.syncLayout === 'function') {
         window.ChainEditing.syncLayout(currentLayout());
       }
       if (window.Persistence) {
-        window.Persistence.saveCurrentChain(chainModel, positions);
+        window.Persistence.saveCurrentChain(chainModel, currentLayout());
       }
     }
-  }
-
-  function initPositionDragWiring() {
-    if (typeof document.addEventListener !== 'function' ||
-        document.__chainCanvasPointerWired) {
-      return;
-    }
-    document.__chainCanvasPointerWired = true;
-    document.addEventListener('pointermove', onPositionPointerMove);
-    document.addEventListener('pointerup', onPositionPointerEnd);
-    document.addEventListener('pointercancel', onPositionPointerEnd);
-    document.addEventListener('pointermove', onResizePointerMove);
-    document.addEventListener('pointerup', onResizePointerEnd);
-    document.addEventListener('pointercancel', onResizePointerEnd);
-    // FEW-4: the cord-edit gesture rides the same document-level wiring
-    // (each handler no-ops unless ITS drag is armed). Escape reverts an
-    // in-progress cord edit (the keyboard twin of drop-nowhere).
-    document.addEventListener('pointermove', onCordPointerMove);
-    document.addEventListener('pointerup', onCordPointerEnd);
-    document.addEventListener('pointercancel', cancelCordDrag);
-    document.addEventListener('keydown', onCordKeyDown);
-  }
-
-  initPositionDragWiring();
-
-  // ---------------------------------------------------------------------
-  // FEW-3 (cycle 4): the CORD LAYER — read-only signal cords painted from
-  // model order over the board. MIC OUT -> each section in DOM order
-  // (== chain order, PD-4) -> OUT IN, one bezier per hop, drawn in a
-  // single SVG inside the canvas FACE (#chain-canvas, NEVER inside
-  // #chain-list — the list's children ARE the chain, and its child count
-  // feeds updateEmptyHint; both are DOM contracts other tests pin).
-  //
-  // Discipline (postmortem of the reverted first attempt):
-  //   - INSERTION: the SVG is APPENDED as #chain-canvas's LAST child.
-  //     Never a first child (firstChild indexes are pinned elsewhere),
-  //     never inside .chain-list (serialized + counted by other tests).
-  //     z-order is CSS-only: the layer sits at z-index 0, the absolutely
-  //     positioned sections at z-index >= 1 (styles/main.css).
-  //   - COORDINATES: every jack point DERIVES from the positions map +
-  //     the section list element (offsetLeft/offsetTop when the host
-  //     reports them; 0 in a stripped vm harness). No parallel
-  //     bookkeeping ever — renderCords() READS the same `positions` map
-  //     every position write maintains, and is called from each of the
-  //     existing write paths (pointer move, TIDY, loadModel, structural
-  //     add/remove). Rebuilding the paths from scratch on every call is
-  //     the point: the map is the only state.
-  //   - READ-ONLY this task: pointer-events none, aria-hidden decorative.
-  //     Cord EDITING (drag-to-relink) is FEW-4's scope.
-  //   - OQ-9 (QA-5 element round): jack geometry is the user's exact
-  //     across-from spec (see the constants block below) — ON the border,
-  //     derived from live card measurements + each card's layout flow
-  //     field, with placeholder fallbacks only for a layout-less host.
-  // ---------------------------------------------------------------------
-  var SVG_NS = 'http://www.w3.org/2000/svg';
-  // OQ-9 (QA-5 element round) — JACK GEOMETRY, per the user's exact spec:
-  // a card's two jacks sit ON its border, DIRECTLY ACROSS each other.
-  //   VERTICAL flow   -> IN at the TOP-CENTER of the border, OUT at the
-  //                      BOTTOM-CENTER (the column reads mic -> down
-  //                      through the cards -> out);
-  //   HORIZONTAL flow -> IN at the MIDDLE of the LEFT border, OUT at the
-  //                      MIDDLE of the RIGHT border.
-  // Orientation derives from each card's OWN layout flow field (FEW-1's
-  // per-entry `flow`) — today that field is uniform, written by the canvas
-  // FLOW toggle (see applyFlow); FEW-6's per-card glyph can flip one card
-  // and its jacks follow with zero changes here. Panel anchors rhyme with
-  // the same across-from logic: MIC IN is the SOURCE (its out-jack on the
-  // board-facing edge of its print row), the OUT anchor RECEIVES (its
-  // in-jack on the board-facing edge).
-  //
-  // Fallbacks for a LAYOUT-LESS host (the committed vm harnesses report no
-  // offsets): the placeholder card box keeps the historical constants
-  // (160px wide, 48px tall) so the pinned tests stay positions-map
-  // verbatim; every real browser measures the live card instead.
-  var CARD_W_FALLBACK = GRID_PITCH * 10; // 160 — placeholder card width
-  var CARD_H_FALLBACK = GRID_PITCH * 3; // 48 — placeholder card height
-  var cordSvgEl = null;
-  // FEW-4: jack-point geometry + edit-gesture constants. JACK_R is the
-  // HIT disc (pointer-events:all makes the whole disc live); the DRAWN
-  // ring is smaller and sits half-buried ON the card's border line (the
-  // socket reads as machined into the slab's edge). CORD_HIT_SLOP is the
-  // geometric drop slop the JS hit-test uses; CORD_DETACH_THRESHOLD is
-  // the deliberate-drag guard.
-  var JACK_R = 12;
-  var JACK_RING_R = 7.5; // 15px outer — the same size as the anchor print rings
-  var JACK_SOCKET_R = 2.5; // the dark socket dot inside the ring
-  var CORD_HIT_SLOP = 24;
-  var CORD_DETACH_THRESHOLD = 6;
-  var jackEls = []; // the live jack elements ({el, jack}), rebuilt by renderCords
-  var cordDrag = null; // the live cord edit, if any (FEW-4 block below)
-  // VERTICAL FLOW IS RETIRED (2026-08-31, user direction): the board has
-  // exactly ONE reading — horizontal, condensed modules left-to-right.
-  // The FLOW toggle, its preference key, and the vertical geometry
-  // branches are deleted; .flow-horizontal is a permanent panel class
-  // (the CSS scoping stays so the rules read as the board's own).
-
-  function createSvgEl(tag) {
-    if (typeof document.createElementNS === 'function') {
-      return document.createElementNS(SVG_NS, tag);
-    }
-    return document.createElement(tag);
-  }
-
-  function buildCordLayer() {
-    if (typeof document.createElement !== 'function') {
-      return;
-    }
-    var canvasFace = document.getElementById('chain-canvas');
-    if (!canvasFace || typeof canvasFace.appendChild !== 'function') {
-      return; // no canvas face (e.g. a stripped harness) — cords simply don't paint
-    }
-    cordSvgEl = createSvgEl('svg');
-    // SVGElement.className is a read-only SVGAnimatedString in real
-    // browsers (the vm harness's stub allowed a plain assignment, which
-    // is how this shipped) — class goes through setAttribute.
-    cordSvgEl.setAttribute('class', 'cord-layer');
-    cordSvgEl.setAttribute('aria-hidden', 'true');
-    canvasFace.appendChild(cordSvgEl); // LAST child — see insertion note above
-    renderCords();
-  }
-
-  /** The board origin (chain-list content-box top-left) in the SVG's
-   *  coordinate space. Both share .canvas as their positioning context
-   *  (made position:relative for the cord layer, styles/main.css), so the
-   *  list's live offsets map 1:1; a vm harness without layout reports
-   *  none and gets {0, 0} — the positions map alone then defines the
-   *  cords, which is exactly the test contract. */
-  function boardOrigin() {
-    var ox = typeof chainListEl.offsetLeft === 'number' && isFinite(chainListEl.offsetLeft) ? chainListEl.offsetLeft : 0;
-    var oy = typeof chainListEl.offsetTop === 'number' && isFinite(chainListEl.offsetTop) ? chainListEl.offsetTop : 0;
-    return { x: ox, y: oy };
-  }
-
-  /** Measured box of a live element, or {0,0} where the host reports no
-   *  layout (the committed vm harnesses) — the caller decides the
-   *  fallback. Same defensive register as boardOrigin(). */
-  function measuredSize(el) {
-    var w = el && typeof el.offsetWidth === 'number' && el.offsetWidth > 0 ? el.offsetWidth : 0;
-    var h = el && typeof el.offsetHeight === 'number' && el.offsetHeight > 0 ? el.offsetHeight : 0;
-    return { w: w, h: h };
-  }
-
-  /** The section's jack pair — ON the border, directly across each other
-   *  (the OQ-9 geometry block above). Reads the card's OWN flow field;
-   *  measures the live element, placeholder box in a layout-less host. */
-  function sectionJackPts(id) {
-    var pos = positions[id];
-    var origin = boardOrigin();
-    var size = measuredSize(cardElById(id));
-    var w = size.w || CARD_W_FALLBACK;
-    var h = size.h || CARD_H_FALLBACK;
-    var x0 = origin.x + pos.x;
-    var y0 = origin.y + pos.y;
-    // Vertical flow retired: every card's jacks sit at the middles of its
-    // LEFT and RIGHT borders (the across-from rule).
-    return {
-      inPt: { x: x0, y: y0 + h / 2 },
-      outPt: { x: x0 + w, y: y0 + h / 2 }
-    };
-  }
-
-  /** A rail anchor element (the real MIC IN / OUT jacks, one per
-   *  .io-rail, matched by class in document order — never by text, which
-   *  is src/meters.js's own contract). The in-rail precedes the board
-   *  precedes the out-rail in markup, so anchors[0] is always MIC IN and
-   *  the last is always OUT. */
-  function panelAnchorEl(which) {
-    var panel = document.querySelector('.canvas-panel');
-    var anchors = [];
-    (function walk(node) {
-      if (!node || !node.children) {
-        return;
-      }
-      Array.prototype.forEach.call(node.children, function (child) {
-        if (child.classList && child.classList.contains('anchor')) {
-          anchors.push(child);
-        }
-        walk(child);
-      });
-    })(panel);
-    if (anchors.length === 0) {
-      return null;
-    }
-    return which === 'out' ? anchors[anchors.length - 1] : anchors[0];
-  }
-
-  /** A rail jack's point in the SVG's coordinate space (Guided Patchbay
-   *  round: fixed Voice In / Voice Out rails flank the board, each
-   *  hosting a real .anchor — see index.html's .board-frame). Both
-   *  endpoints now read the same way: the anchor's own live rendered
-   *  center, converted from viewport space into the chain-list's content
-   *  space (+ scroll compensation so the point stays put as the board
-   *  pans — the technique this file already used for MIC alone before
-   *  the OUT anchor was restored). Y comes from the anchor's own
-   *  vertical center, so a rail's `justify-content: center` CSS is what
-   *  keeps the drawn cord centered — no separate board-height math
-   *  needed. Stripped harnesses (no live layout) fall back to a
-   *  deterministic, distinct constant per side. */
-  function railJackPoint(which) {
-    var origin = boardOrigin();
-    var el = panelAnchorEl(which);
-    if (el) {
-      try {
-        if (typeof el.getBoundingClientRect === 'function' &&
-            typeof chainListEl.getBoundingClientRect === 'function') {
-          var er = el.getBoundingClientRect();
-          var lr = chainListEl.getBoundingClientRect();
-          if (er && lr && er.width && er.height) {
-            var x = er.left + er.width / 2 - lr.left + (chainListEl.scrollLeft || 0);
-            var y = er.top + er.height / 2 - lr.top + (chainListEl.scrollTop || 0);
-            if (which === 'mic' && x < GRID_PITCH) {
-              x = GRID_PITCH;
-            }
-            return { x: origin.x + x, y: origin.y + y };
-          }
-        }
-      } catch (err) {
-        /* stripped harness — fallback below */
-      }
-    }
-    // No live layout: mic and out get distinct, stable placeholder
-    // points (the historical TIDY_X / CARD_H_FALLBACK-derived constants)
-    // so a layout-less host still produces two different endpoints.
-    return which === 'mic'
-      ? { x: origin.x + TIDY_X, y: origin.y + CARD_H_FALLBACK / 2 }
-      : { x: origin.x + TIDY_X + CARD_W_FALLBACK, y: origin.y + CARD_H_FALLBACK / 2 };
-  }
-
-  /** MIC IN's OUT jack — the cable's start point, read live off the
-   *  Voice In rail's anchor (see railJackPoint). */
-  function micOutPoint() {
-    return railJackPoint('mic');
-  }
-
-  /** The chain's OUT jack — the cable's end point, read live off the
-   *  Voice Out rail's anchor (see railJackPoint). Both rails are real,
-   *  always-present elements now, so this needs no board-extent math of
-   *  its own (contrast the pre-rail geometry, which derived this purely
-   *  from the rightmost card's position). */
-  function outInPoint() {
-    return railJackPoint('out');
-  }
-
-  /** The read-only route: MIC OUT -> each section in DOM order -> OUT IN.
-   *  One segment per hop, so the segment count is always nodes + 1 (an
-   *  empty chain still shows the direct MIC -> OUT bypass cord). */
-  function cordSegments() {
-    var ids = domCardIds();
-    var segments = [];
-    var prevId = 'mic';
-    var prevPt = micOutPoint();
-    var outPt = outInPoint();
-
-    ids.forEach(function (id) {
-      var pos = positions[id];
-      if (!pos) {
-        return; // seatless sections never exist on a painted board
-      }
-      var jacks = sectionJackPts(id);
-      segments.push({ from: prevId, to: id, a: prevPt, b: jacks.inPt });
-      prevId = id;
-      prevPt = jacks.outPt;
-    });
-    segments.push({ from: prevId, to: 'out', a: prevPt, b: outPt });
-    return segments;
-  }
-
-  /** Horizontal cubic bezier between two jack points — the classic patch
-   *  cord sag, deterministic in x only (tests pin endpoints, not sag). */
-  function cordPathD(a, b) {
-    var dx = Math.max(GRID_PITCH, Math.min(Math.abs(b.x - a.x) / 2, GRID_PITCH * 4));
-    return 'M' + a.x + ' ' + a.y +
-      ' C' + (a.x + dx) + ' ' + a.y +
-      ', ' + (b.x - dx) + ' ' + b.y +
-      ', ' + b.x + ' ' + b.y;
-  }
-
-  /** The link POINTS the cord segments terminate at — one per segment
-   *  endpoint, DERIVED from the same segments (zero parallel geometry):
-   *  mic-out (the first segment's source), each section's IN (a segment's
-   *  target) and OUT (a segment's source), and the out anchor's IN (the
-   *  last segment's target). FEW-4's editable hit targets. */
-  function jackPoints() {
-    var pts = [];
-    cordSegments().forEach(function (seg) {
-      if (seg.from === 'mic') {
-        pts.push({ kind: 'mic-out', x: seg.a.x, y: seg.a.y });
-      } else {
-        pts.push({ kind: 'section-out', nodeId: seg.from, x: seg.a.x, y: seg.a.y });
-      }
-      if (seg.to === 'out') {
-        pts.push({ kind: 'out-in', x: seg.b.x, y: seg.b.y });
-      } else {
-        pts.push({ kind: 'section-in', nodeId: seg.to, x: seg.b.x, y: seg.b.y });
-      }
-    });
-    return pts;
-  }
-
-  /** THE one re-render entry point — rebuilds the cord paths AND the
-   *  jack points from the current positions map + DOM order. Called from
-   *  each existing position/order write path; never maintains state of
-   *  its own beyond the live jack-element registry FEW-4's grabs ride
-   *  on (fresh listeners on fresh elements — a rebuild mid-gesture is
-   *  therefore always safe). */
-  function renderCords() {
-    if (!cordSvgEl) {
-      return;
-    }
-    // Array.prototype.slice.call — real DOM children is a live
-    // HTMLCollection without array methods (the vm harness's Array
-    // children masked this; second hotfix of the same shipping class).
-    Array.prototype.slice.call(cordSvgEl.children).forEach(function (child) {
-      child.remove();
-    });
-    cordSegments().forEach(function (seg) {
-      var path = createSvgEl('path');
-      path.setAttribute('class', 'cord');
-      path.setAttribute('d', cordPathD(seg.a, seg.b));
-      path.setAttribute('data-from', seg.from);
-      path.setAttribute('data-to', seg.to);
-      cordSvgEl.appendChild(path);
-    });
-    // FEW-4 + OQ-9: the JACK POINTS — the layer's ONLY pointer-live
-    // children (CSS turns pointer-events on for .cord-jack alone; the
-    // paths stay decorative until grabbed). One GROUP per link point:
-    // a transparent hit disc (the whole circle grabs, not just the
-    // painted stroke), the drawn RING, and the dark SOCKET dot inside it
-    // — ring + socket is the same drawn anatomy the anchor prints use,
-    // so every jack on the board is one size and one shape, sitting ON
-    // the border line it belongs to (half-buried in the slab edge).
-    jackEls = [];
-    jackPoints().forEach(function (jp) {
-      var g = createSvgEl('g');
-      g.setAttribute('class', 'cord-jack');
-      g.setAttribute('data-jack-kind', jp.kind);
-      if (jp.nodeId) {
-        g.setAttribute('data-node-id', jp.nodeId);
-      }
-      g.setAttribute('transform', 'translate(' + jp.x + ', ' + jp.y + ')');
-      var hit = createSvgEl('circle');
-      hit.setAttribute('class', 'jack-hit');
-      hit.setAttribute('r', JACK_R);
-      g.appendChild(hit);
-      var ring = createSvgEl('circle');
-      ring.setAttribute('class', 'jack-ring');
-      ring.setAttribute('r', JACK_RING_R);
-      g.appendChild(ring);
-      var socket = createSvgEl('circle');
-      socket.setAttribute('class', 'jack-socket');
-      socket.setAttribute('r', JACK_SOCKET_R);
-      g.appendChild(socket);
-      g.addEventListener('pointerdown', function (event) {
-        armCordDrag(jp, event);
-      });
-      cordSvgEl.appendChild(g);
-      jackEls.push({ el: g, jack: jp });
-    });
-  }
-
-  buildCordLayer();
-  renderSignalOrderStrip(); // initial "Mic in -> Safe out" before any load
-
-  // OQ-9: jack points derive from LIVE card geometry (border centers), so
-  // a viewport resize re-derives them — the cords stay plugged when the
-  // panel's column width changes. Guarded like every panel-level wiring.
-  if (typeof window.addEventListener === 'function' &&
-      !window.__chainCanvasResizeWired) {
-    window.__chainCanvasResizeWired = true;
-    window.addEventListener('resize', function () {
-      renderCords();
-    });
   }
 
   // ---------------------------------------------------------------------
-  // FEW-4 (cycle 4): CORD EDITING — order-by-cord, never gating audio.
-  //
-  // Fixed semantics (town-hall Q4, unchangeable):
-  //   - CORDS EDIT ORDER, NEVER GATE AUDIO. Grabbing a jack starts an
-  //     EDIT; audio changes ONLY on a completed relink — a drop on a
-  //     compatible point — submitted as ONE candidate through the
-  //     existing commitStructuralChange() -> ChainEditing chokepoint.
-  //     Unplugging can never remove audio: mid-drag the model,
-  //     the DOM, and the painted cords are byte-unchanged, and drop
-  //     nowhere (or Escape, or pointercancel) reverts the edit with
-  //     ZERO rebuilds. Per-node bypass stays DECLINED elsewhere; a cord
-  //     edit never touches bypass state at all.
-  //   - ORDER MATH (the four link-point types):
-  //       mic-out point            -> the dragged node becomes the
-  //                                   FIRST node (its IN takes the mic
-  //                                   feed);
-  //       a section's OUT end on
-  //       section-B's IN jack      -> insert the dragged section
-  //                                   BEFORE B;
-  //       a section's IN end on
-  //       section-B's OUT jack     -> insert the dragged section
-  //                                   AFTER B;
-  //       the out-anchor IN point  -> the dragged node becomes the LAST
-  //                                   node (its OUT feeds the panel).
-  //     So an IN end targets mic-out + section OUT jacks; an OUT end
-  //     targets section IN jacks + the out anchor. Anything else —
-  //     including the dragged node's OWN jacks (a self-link) — is
-  //     incompatible and reverts. A computed order identical to the
-  //     current one is a NO-OP: revert, zero rebuilds (the retired
-  //     SortableJS likewise never fired onSort for a drop that moved
-  //     nothing).
+  // DRAG-TO-REORDER (board redesign, 2026-09-01 user direction — "like
+  // Ableton's workflow"): replaces the retired cord-edit gesture as the
+  // chain's one reorder mechanism. Fixed semantics carried over verbatim
+  // from the cord gesture it replaces (town-hall Q4, unchangeable):
+  //   - THE DRAG EDITS ORDER, NEVER GATES AUDIO. Grabbing a section
+  //     starts an edit; audio changes ONLY on a completed drop, submitted
+  //     as ONE candidate through the existing commitStructuralChange() ->
+  //     ChainEditing chokepoint. Mid-drag the live model, the graph, the
+  //     accepted render AND the real cards' DOM order are all
+  //     byte-unchanged; a canceled drag (Escape, pointercancel, or
+  //     onEngineStopped mid-gesture) commits nothing and has nothing to
+  //     put back.
+  //   - GRAB SURFACE: the whole section is the grip, minus the controls
+  //     that own their own press (NO_DRAG_SELECTOR below) — knobs, pads,
+  //     trims, the bypass/fold/eject keys, the resize corner. The rail
+  //     and its machined grip dots remain the ADVERTISED grip (cursor,
+  //     tooltip, tab stop); they are no longer the only one, because a
+  //     6.5rem rail is a smaller target than the gesture deserves.
   //   - DELIBERATE-DRAG GUARD: the pointer must travel at least
-  //     CORD_DETACH_THRESHOLD px before the end detaches — a click on a
-  //     jack is not an unplug, and a sub-threshold release leaves no
-  //     committed state at all. dragActive (MC-4) goes true at pointer ARM
-  //     and false at gesture end, so agent mutations QUEUE behind the edit
-  //     exactly as they queue behind a palette or grip drag (mcp-tools
-  //     already polls isDragActive() — no new seam).
-  //   - The commit reorders the DOM (.insertBefore, DOM ORDER = CHAIN
-  //     ORDER, PD-4) and then runs the existing downstream machinery
-  //     exactly once. The ghost is a lightweight path re-drawn per
-  //     pointermove from the cord's still-plugged anchor to the
-  //     pointer; the static cords stay untouched until the commit
-  //     re-routes them (mid-drag byte-stability is what the revert
-  //     path proves).
-  //   - The panel anchors (mic-out, out-in) are FIXED HARDWARE: drop
-  //     targets only, never drag sources. Only a section's own in/out
-  //     jacks can be grabbed.
+  //     REORDER_DRAG_THRESHOLD px before the gesture DETACHES — a click
+  //     on a section is not a drag, and a sub-threshold release commits
+  //     nothing (the same guard the cord gesture used).
+  //   - GHOST PREVIEW: past the threshold the held card LIFTS out of flow
+  //     and a dashed ghost slot (see THE GHOST below) reserves the row
+  //     position it would land in; every later pointermove just moves the
+  //     ghost. The operator sees the destination before committing to it,
+  //     and the real cards never move under the cursor.
+  //   - A drop that lands back at the arm-time order is a NO-OP: retire
+  //     the ghost, zero rebuilds (the retired SortableJS, and the cord
+  //     gesture after it, both held this same "moved nothing -> commits
+  //     nothing" rule).
   // ---------------------------------------------------------------------
+  // 4px, not the cord gesture's 6: a section is a big, heavy target that
+  // an operator expects to answer the moment it is pulled, and there is
+  // no longer a competing click verb on the grab surface for a low
+  // threshold to steal from (the section's real controls are excluded
+  // from arming outright rather than disambiguated by distance).
+  var REORDER_DRAG_THRESHOLD = 4;
+
+  // Anything matching this owns its own press and can never START a drag.
+  // Everything ELSE on a section is grab surface: the rail, the header
+  // band, the printed labels, the encoder field's whitespace.
+  var NO_DRAG_SELECTOR = 'button, input, select, textarea, label, a, ' +
+    '.param-row, .node-resize, [role="slider"], [role="radio"], [role="radiogroup"]';
+
+  /** All node-card ids in current DOM order (== chain order, PD-4). */
   function domCardIds() {
     var cardEls = chainListEl.querySelectorAll('.node-card');
     return Array.prototype.map.call(cardEls, function (el) {
@@ -814,138 +334,13 @@
     return found;
   }
 
-  function findJack(kind, nodeId) {
-    var found = null;
-    jackPoints().some(function (jp) {
-      if (jp.kind === kind && (!nodeId || jp.nodeId === nodeId)) {
-        found = jp;
-        return true;
-      }
-      return false;
-    });
-    return found;
-  }
-
-  function jackKey(jp) {
-    return jp ? jp.kind + '|' + (jp.nodeId || '') : '';
-  }
-
-  /** Pointer (client space) -> layer space. In a real host the SVG's
-   *  own bounding rect does the mapping; a stripped vm harness has no
-   *  rects and client coords ARE layer coords — the same identity the
-   *  FEW-3 harness pins for board origin {0, 0}. */
-  function pointerToLayer(event) {
-    var cx = event && typeof event.clientX === 'number' ? event.clientX : 0;
-    var cy = event && typeof event.clientY === 'number' ? event.clientY : 0;
-    var rect = null;
-    if (cordSvgEl && typeof cordSvgEl.getBoundingClientRect === 'function') {
-      try {
-        rect = cordSvgEl.getBoundingClientRect();
-      } catch (err) {
-        rect = null;
-      }
-    }
-    if (rect && typeof rect.left === 'number' && isFinite(rect.left) &&
-        typeof rect.top === 'number' && isFinite(rect.top)) {
-      return { x: cx - rect.left, y: cy - rect.top };
-    }
-    return { x: cx, y: cy };
-  }
-
-  /** Is this link point a legal target for the dragged end? (The order
-   *  math's compatibility table — see the block comment above.) */
-  function compatibleJack(dragEnd, jack) {
-    if (!jack || !cordDrag || jack.nodeId === cordDrag.id) {
-      return false; // never a self-link
-    }
-    if (jack.kind === 'section-in') {
-      return dragEnd === 'out'; // an OUT end before B
-    }
-    if (jack.kind === 'section-out') {
-      return dragEnd === 'in'; // an IN end after B
-    }
-    if (jack.kind === 'mic-out') {
-      return dragEnd === 'in'; // the dragged node's IN takes the mic feed
-    }
-    if (jack.kind === 'out-in') {
-      return dragEnd === 'out'; // the dragged node's OUT feeds the panel
-    }
-    return false;
-  }
-
-  /** The nearest COMPATIBLE link point within CORD_HIT_SLOP of a layer
-   *  point (geometric hit-test — the drawn ring stays small, the drop
-   *  slop is generous patch-cord feel). */
-  function resolveTargetJack(pt) {
-    if (!pt || !cordDrag) {
-      return null;
-    }
-    var best = null;
-    var bestD = CORD_HIT_SLOP;
-    jackPoints().forEach(function (jp) {
-      if (!compatibleJack(cordDrag.endKind, jp)) {
-        return;
-      }
-      var dx = pt.x - jp.x;
-      var dy = pt.y - jp.y;
-      var d = Math.sqrt(dx * dx + dy * dy);
-      if (d <= bestD) {
-        best = jp;
-        bestD = d;
-      }
-    });
-    return best;
-  }
-
-  /** The still-plugged anchor the ghost dangles from: dragging X's IN
-   *  end unplugs the cord that FED X (its source is the predecessor's
-   *  OUT jack, or the mic panel); dragging X's OUT end leaves the cord
-   *  plugged into X's own IN jack. */
-  function anchorPointFor(dragId, endKind) {
-    if (endKind === 'out') {
-      return findJack('section-in', dragId) || findJack('mic-out');
-    }
-    var ids = domCardIds();
-    var idx = ids.indexOf(dragId);
-    if (idx <= 0) {
-      return findJack('mic-out');
-    }
-    return findJack('section-out', ids[idx - 1]);
-  }
-
-  /** THE order math: the new linear order a completed relink commits.
-   *  Pure — reads DOM order, computes the target order, never mutates. */
-  function relinkOrder(dragId, target) {
-    var rest = domCardIds().filter(function (id) {
-      return id !== dragId;
-    });
-    if (target.kind === 'mic-out') {
-      return [dragId].concat(rest); // FIRST node
-    }
-    if (target.kind === 'out-in') {
-      return rest.concat([dragId]); // LAST node
-    }
-    var out = [];
-    rest.forEach(function (id) {
-      if (target.kind === 'section-in' && id === target.nodeId) {
-        out.push(dragId); // an OUT end on B's IN: BEFORE B
-      }
-      out.push(id);
-      if (target.kind === 'section-out' && id === target.nodeId) {
-        out.push(dragId); // an IN end on B's OUT: AFTER B
-      }
-    });
-    return out;
-  }
-
-  /** Commit the new order to the DOM with .insertBefore ONLY (exactly
-   *  how the retired SortableJS onSort reorder did it — SortableJS too
-   *  pulled the element out before placing it). The cards are detached
-   *  first, then inserted walking the target order right-to-left, each
-   *  before the already-placed card that must follow it, so the insert
-   *  references are never shifted by a concurrent removal. DOM ORDER =
-   *  CHAIN ORDER (PD-4); everything downstream is the existing
-   *  machinery. Listeners survive — elements are moved, never rebuilt. */
+  /** Commit an id order to the DOM with .insertBefore ONLY (exactly how
+   *  the retired SortableJS onSort reorder — and the cord gesture after
+   *  it — did it: pull every named card out, then reinsert walking the
+   *  target order right-to-left, each before the already-placed card that
+   *  must follow it, so insert references are never shifted by a
+   *  concurrent removal). DOM ORDER = CHAIN ORDER (PD-4). Listeners
+   *  survive — elements are moved, never rebuilt. */
   function applyDomOrder(ids) {
     var els = [];
     ids.forEach(function (id) {
@@ -964,19 +359,213 @@
     }
   }
 
-  /** Arm (not start) a cord edit from a jack press. The edit only
-   *  DETACHES once the deliberate-drag threshold is crossed; nothing is
-   *  mutated here. Panel anchors are fixed hardware — drop targets
-   *  only. */
-  function armCordDrag(jp, event) {
-    if (cordDrag || positionDrag) {
-      return; // one gesture at a time
+  /** A drag-time SNAPSHOT of where every slot sits: [{ id, mid }], mid
+   *  null when the harness exposes no geometry. The gesture reads this
+   *  ONCE, at detach, and never re-measures — the drop slot has to be a
+   *  STABLE function of the pointer's x. The pre-ghost build recomputed
+   *  it from LIVE midpoints AFTER reordering the real cards on every
+   *  pointermove, so choosing a slot moved the very midpoints that chose
+   *  it: cards thrashed under the cursor and every boundary oscillated.
+   *  That feedback loop was the drag's "sensitivity". Taking the ghost's
+   *  box from the card it stands in for keeps the row's layout
+   *  byte-identical across the detach, so a snapshot measured here stays
+   *  true for the whole gesture.
+   *
+   *  @param {string[]} ids - card ids in chain order
+   *  @param {string} [excludeId] - the held card, left out of the slots
+   *  @returns {Array<{id: string, mid: (number|null)}>}
+   */
+  function slotMidpoints(ids, excludeId) {
+    return ids.filter(function (id) {
+      return id !== excludeId;
+    }).map(function (id) {
+      var el = cardElById(id);
+      var rect = el && typeof el.getBoundingClientRect === 'function' ?
+        el.getBoundingClientRect() : null;
+      return { id: id, mid: rect ? rect.left + rect.width / 2 : null };
+    });
+  }
+
+  /** Which slot does pointerX name? The index of the first snapshot entry
+   *  whose midpoint sits to the RIGHT of the pointer (drop BEFORE it);
+   *  past every midpoint, the end. Pure. An unmeasurable entry is never a
+   *  boundary, so a geometry-less harness always resolves to the end. */
+  function slotIndexAt(mids, pointerX) {
+    for (var i = 0; i < mids.length; i++) {
+      if (mids[i].mid !== null && pointerX < mids[i].mid) {
+        return i;
+      }
     }
-    if (jp.kind !== 'section-in' && jp.kind !== 'section-out') {
-      return; // mic-out / out-in never drag
+    return mids.length;
+  }
+
+  /** The safe-output clamp, shared by both drop gestures: a limiter
+   *  sitting LAST stays last (the same invariant addNodeType() already
+   *  holds for the click add), so no drop may name the slot behind it.
+   *
+   *  @param {Array<{id: string}>} mids - the slot snapshot
+   *  @param {number} index
+   *  @returns {number}
+   */
+  function clampBehindTerminalLimiter(mids, index) {
+    if (mids.length === 0 || index < mids.length) {
+      return index;
     }
-    if (!jp.nodeId) {
+    var last = nodesById[mids[mids.length - 1].id];
+    return last && last.type === 'limiter' ? mids.length - 1 : index;
+  }
+
+  /** The full new order: draggedId spliced into the OTHER cards' current
+   *  order at targetIndex. Pure. */
+  function reorderedIds(ids, draggedId, targetIndex) {
+    var others = ids.filter(function (id) {
+      return id !== draggedId;
+    });
+    others.splice(targetIndex, 0, draggedId);
+    return others;
+  }
+
+  // ---------------------------------------------------------------------
+  // THE GHOST — DESIGN.md's Sections drag spec, verbatim: "the ghost is a
+  // dashed print slot — a groove reservation, not a section". It is built
+  // to the exact box of whatever it stands in for, so putting it in the
+  // row costs ZERO layout, and MOVING it is the entire drop preview.
+  // Nothing else previews: the model, the graph, the accepted render —
+  // and, unlike the build this replaces, even the real cards' DOM order —
+  // stay byte-unchanged until the drop commits.
+  // ---------------------------------------------------------------------
+
+  /** @param {number} width @param {number} height @param {string} label */
+  function makeGhost(width, height, label) {
+    var ghost = document.createElement('div');
+    ghost.className = 'node-card-placeholder';
+    ghost.setAttribute('aria-hidden', 'true');
+    if (label) {
+      ghost.setAttribute('data-ghost-label', label);
+    }
+    if (ghost.style) {
+      if (width) {
+        ghost.style.width = width + 'px';
+      }
+      if (height) {
+        ghost.style.minHeight = height + 'px';
+      }
+    }
+    return ghost;
+  }
+
+  /** Move a gesture's ghost to `index` among the slots its snapshot named
+   *  (past them = the end of the row). Idempotent: naming the slot the
+   *  ghost already holds re-renders nothing. */
+  function moveGhostTo(drag, index) {
+    if (!drag.ghost || drag.slotIndex === index ||
+        typeof chainListEl.insertBefore !== 'function') {
       return;
+    }
+    drag.slotIndex = index;
+    var ref = index < drag.mids.length ? cardElById(drag.mids[index].id) : null;
+    if (ref) {
+      chainListEl.insertBefore(drag.ghost, ref);
+    } else {
+      chainListEl.appendChild(drag.ghost);
+    }
+    renderChainArrows();
+  }
+
+  function removeGhost(drag) {
+    if (drag.ghost && typeof drag.ghost.remove === 'function') {
+      drag.ghost.remove();
+    }
+    drag.ghost = null;
+    drag.slotIndex = -1;
+  }
+
+  /** Pointer capture keeps the gesture alive when the pointer rides off
+   *  the row (or off the window) — the document-level handlers still see
+   *  every move and, crucially, the terminating pointerup. Guarded: a
+   *  stripped harness has neither method. */
+  function capturePointer(el, pointerId) {
+    if (pointerId === null || pointerId === undefined || !el ||
+        typeof el.setPointerCapture !== 'function') {
+      return;
+    }
+    try {
+      el.setPointerCapture(pointerId);
+    } catch (err) {
+      /* capture is an optimization, never load-bearing */
+    }
+  }
+
+  function releasePointer(el, pointerId) {
+    if (pointerId === null || pointerId === undefined || !el ||
+        typeof el.releasePointerCapture !== 'function') {
+      return;
+    }
+    try {
+      el.releasePointerCapture(pointerId);
+    } catch (err) {
+      /* already released with the pointer */
+    }
+  }
+
+  /** One body-level flag for BOTH drop gestures: kills text selection and
+   *  puts the grabbing cursor on everything for the gesture's duration
+   *  (styles/main.css). Without it a drag that crosses a printed label
+   *  paints a selection highlight across the chassis. */
+  function setBodyDragging(on) {
+    var body = document.body;
+    if (!body || !body.classList) {
+      return;
+    }
+    if (on) {
+      body.classList.add('chain-dragging');
+    } else {
+      body.classList.remove('chain-dragging');
+    }
+  }
+
+  /** Take the held card OUT OF FLOW so the row can close around its
+   *  ghost: fixed to the exact box it occupied, then translated by the
+   *  pointer delta on every move. DESIGN.md's Elevation section names the
+   *  drag lift the one real shadow in this world — the held card is the
+   *  one thing on the chassis allowed to look picked up. */
+  function liftCard(drag) {
+    var card = drag.card;
+    if (!drag.rect || !card || !card.style) {
+      return;
+    }
+    card.style.position = 'fixed';
+    card.style.left = drag.rect.left + 'px';
+    card.style.top = drag.rect.top + 'px';
+    card.style.width = drag.rect.width + 'px';
+    card.style.height = drag.rect.height + 'px';
+    card.style.margin = '0';
+  }
+
+  /** Put the lifted card back into flow. The WIDTH is restored to its own
+   *  persisted layout value rather than cleared — it is a real card
+   *  property (cardWidths), not part of the lift, and clearing it would
+   *  silently drop the operator's resize on every drop. */
+  function dropCardBackIntoFlow(drag) {
+    var card = drag.card;
+    if (!card || !card.style) {
+      return;
+    }
+    card.style.position = '';
+    card.style.left = '';
+    card.style.top = '';
+    card.style.height = '';
+    card.style.margin = '';
+    card.style.transform = '';
+    card.style.width = cardWidth(drag.id) + 'px';
+  }
+
+  /** Arm (not start) a reorder from a press on a section — mirrors the
+   *  retired cord gesture's armCordDrag: nothing lifts, nothing detaches,
+   *  and no ghost exists until the deliberate-drag threshold is crossed. */
+  function armReorderDrag(card, id, event) {
+    if (reorderDrag || resizeDrag || paletteDrag) {
+      return; // one gesture at a time
     }
     if (event && typeof event.button === 'number' && event.button !== 0) {
       return; // primary pointer only
@@ -984,136 +573,287 @@
     if (event && typeof event.preventDefault === 'function') {
       event.preventDefault();
     }
-    // dragActive from ARM, not from detach-threshold (the #16 race
-    // finding): the agent-mutation queue polls this flag, and arming it
-    // only after the deliberate-drag threshold left a window where a
-    // structural agent edit could replace the board while a cord press
-    // was already armed against it. One gesture at a time still holds;
-    // every resolution path (drop, revert, cancel, loadModel
-    // invalidation) clears it.
     dragActive = true;
-    cordDrag = {
-      id: jp.nodeId,
-      endKind: jp.kind === 'section-in' ? 'in' : 'out',
+    reorderDrag = {
+      card: card,
+      id: id,
       startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
       startY: event && typeof event.clientY === 'number' ? event.clientY : 0,
+      pointerId: event && event.pointerId !== undefined ? event.pointerId : null,
       detached: false,
-      anchorPt: null,
-      ghostEl: null,
-      hotKey: '',
-      hotEl: null
+      armOrder: domCardIds(),
+      mids: [],
+      ghost: null,
+      slotIndex: -1,
+      rect: null
     };
   }
 
-  /** The ghost path (created on demand — a renderCords() call mid-gesture
-   *  rebuilds the layer, so the ghost must be able to re-attach). */
-  function ensureGhost() {
-    if (!cordDrag.ghostEl || cordDrag.ghostEl.parentNode !== cordSvgEl) {
-      cordDrag.ghostEl = createSvgEl('path');
-      cordDrag.ghostEl.setAttribute('class', 'cord-ghost');
-      cordDrag.ghostEl.setAttribute('data-drag-node', cordDrag.id);
-      cordDrag.ghostEl.setAttribute('data-drag-end', cordDrag.endKind);
-      cordSvgEl.appendChild(cordDrag.ghostEl);
+  /** Cross the threshold: measure, reserve the ghost slot the card is
+   *  leaving, and lift the card. Every measurement happens BEFORE
+   *  anything moves. */
+  function detachReorderDrag(drag) {
+    drag.detached = true;
+    var card = drag.card;
+    drag.rect = card && typeof card.getBoundingClientRect === 'function' ?
+      card.getBoundingClientRect() : null;
+    drag.mids = slotMidpoints(drag.armOrder, drag.id);
+    var node = nodesById[drag.id];
+    drag.ghost = makeGhost(
+      drag.rect ? drag.rect.width : 0,
+      drag.rect ? drag.rect.height : 0,
+      node ? effectLabel(node.type) : ''
+    );
+    if (typeof chainListEl.insertBefore === 'function') {
+      chainListEl.insertBefore(drag.ghost, card);
     }
-    return cordDrag.ghostEl;
+    // The ghost opens exactly where the card sat: among the OTHER cards,
+    // that is the card's own arm-time index.
+    drag.slotIndex = drag.armOrder.indexOf(drag.id);
+    liftCard(drag);
+    if (card && card.classList) {
+      card.classList.add('reorder-chosen');
+    }
+    capturePointer(chainListEl, drag.pointerId);
+    setBodyDragging(true);
+    renderChainArrows();
   }
 
-  /** Highlight the compatible target under the pointer (paint only). */
-  function setHotJack(jp) {
-    var key = jackKey(jp);
-    if (cordDrag.hotKey === key) {
+  function onReorderPointerMove(event) {
+    if (!reorderDrag) {
       return;
     }
-    if (cordDrag.hotEl) {
-      cordDrag.hotEl.classList.remove('cord-jack-hot');
-    }
-    cordDrag.hotKey = key;
-    cordDrag.hotEl = null;
-    if (!jp) {
-      return;
-    }
-    jackEls.some(function (entry) {
-      if (jackKey(entry.jack) === key) {
-        cordDrag.hotEl = entry.el;
-        return true;
+    var drag = reorderDrag;
+    var cx = event && typeof event.clientX === 'number' ? event.clientX : drag.startX;
+    var cy = event && typeof event.clientY === 'number' ? event.clientY : drag.startY;
+    if (!drag.detached) {
+      var dx0 = cx - drag.startX;
+      var dy0 = cy - drag.startY;
+      if (Math.sqrt(dx0 * dx0 + dy0 * dy0) < REORDER_DRAG_THRESHOLD) {
+        return; // deliberate-drag guard: a press on a section is not a drag
       }
-      return false;
-    });
-    if (cordDrag.hotEl) {
-      cordDrag.hotEl.classList.add('cord-jack-hot');
+      detachReorderDrag(drag);
     }
+    if (drag.card && drag.card.style) {
+      drag.card.style.transform =
+        'translate(' + (cx - drag.startX) + 'px, ' + (cy - drag.startY) + 'px)';
+    }
+    moveGhostTo(drag, clampBehindTerminalLimiter(drag.mids, slotIndexAt(drag.mids, cx)));
   }
 
-  function onCordPointerMove(event) {
-    if (!cordDrag) {
+  /** Undo the visual half of a reorder — shared by the drop and the
+   *  cancel, which differ only in what they do with the ghost's slot. */
+  function endReorderVisuals(drag) {
+    dropCardBackIntoFlow(drag);
+    if (drag.card && drag.card.classList) {
+      drag.card.classList.remove('reorder-chosen');
+    }
+    releasePointer(chainListEl, drag.pointerId);
+    setBodyDragging(false);
+  }
+
+  function onReorderPointerEnd() {
+    if (!reorderDrag) {
       return;
     }
-    var cx = event && typeof event.clientX === 'number' ? event.clientX : cordDrag.startX;
-    var cy = event && typeof event.clientY === 'number' ? event.clientY : cordDrag.startY;
-    if (!cordDrag.detached) {
-      var dx = cx - cordDrag.startX;
-      var dy = cy - cordDrag.startY;
-      if (Math.sqrt(dx * dx + dy * dy) < CORD_DETACH_THRESHOLD) {
-        return; // deliberate-drag guard: not yet an unplug
-      }
-      cordDrag.detached = true;
-      cordDrag.anchorPt = anchorPointFor(cordDrag.id, cordDrag.endKind);
-    }
-    var pt = pointerToLayer({ clientX: cx, clientY: cy });
-    var ghost = ensureGhost();
-    ghost.setAttribute('d', cordPathD(cordDrag.anchorPt || pt, pt));
-    setHotJack(resolveTargetJack(pt));
-  }
-
-  function onCordPointerEnd(event) {
-    if (!cordDrag) {
-      return;
-    }
-    var target = null;
-    if (cordDrag.detached && event &&
-        typeof event.clientX === 'number' && typeof event.clientY === 'number') {
-      target = resolveTargetJack(pointerToLayer(event));
-    }
-    finishCordDrag(target);
-  }
-
-  function onCordKeyDown(event) {
-    if (cordDrag && event && event.key === 'Escape') {
-      cancelCordDrag();
-    }
-  }
-
-  function cancelCordDrag() {
-    finishCordDrag(null); // pointercancel / Escape: the revert path
-  }
-
-  /** THE one resolution: teardown the gesture's paint, then either
-   *  revert (no target / moved nothing — model, DOM, and cords stay
-   *  byte-unchanged, ZERO rebuilds) or commit the relink through the
-   *  existing structural chokepoint exactly ONCE. */
-  function finishCordDrag(target) {
-    var drag = cordDrag;
-    if (!drag) {
-      return;
-    }
-    cordDrag = null;
+    var drag = reorderDrag;
+    reorderDrag = null;
     dragActive = false;
-    if (drag.ghostEl && drag.ghostEl.parentNode) {
-      drag.ghostEl.remove();
+    if (!drag.detached) {
+      return; // sub-threshold press-release: not a drag, nothing to commit
     }
-    if (drag.hotEl) {
-      drag.hotEl.classList.remove('cord-jack-hot');
+    endReorderVisuals(drag);
+    // The ghost NAMES the drop slot: seat the held card exactly where it
+    // stands, then retire it. This is the first and only moment in the
+    // whole gesture that the real cards' DOM order changes.
+    if (drag.ghost && drag.ghost.parentNode &&
+        typeof chainListEl.insertBefore === 'function') {
+      chainListEl.insertBefore(drag.card, drag.ghost);
     }
-    if (!drag.detached || !target) {
-      return; // revert: an unplug is an EDIT, never an audio change
+    removeGhost(drag);
+    renderChainArrows();
+    if (domCardIds().join('|') === drag.armOrder.join('|')) {
+      return; // dropped back where it started: no-op, zero rebuilds
     }
-    var order = relinkOrder(drag.id, target);
-    if (order.join('|') === domCardIds().join('|')) {
-      return; // a drop that moves nothing commits nothing (no-op)
-    }
-    applyDomOrder(order);
     commitStructuralChange(); // DOM order -> one ChainEditing transaction
   }
+
+  /** Escape / pointercancel / a chain replacement mid-gesture: retire the
+   *  ghost and set the held card back down. The card never left its
+   *  arm-time DOM slot (only the ghost moved), so a cancel has nothing to
+   *  put back and can never commit. */
+  function cancelReorderDrag() {
+    if (!reorderDrag) {
+      return;
+    }
+    var drag = reorderDrag;
+    reorderDrag = null;
+    dragActive = false;
+    if (!drag.detached) {
+      return;
+    }
+    endReorderVisuals(drag);
+    removeGhost(drag);
+    renderChainArrows();
+  }
+
+  function onReorderKeyDown(event) {
+    if (!event || event.key !== 'Escape') {
+      return;
+    }
+    // Escape abandons whichever drop gesture is live — both revert to
+    // "nothing happened", neither commits.
+    cancelReorderDrag();
+    cancelPaletteDrag();
+  }
+
+  /** Keyboard equivalent (2026-09-01, accessibility commitment — see
+   *  PRODUCT.md's non-negotiable keyboard-flow gate): with a card's drag
+   *  handle focused, Alt+ArrowLeft/Right moves it one slot toward the
+   *  front/back of the chain, clamped at the ends (no wraparound). Each
+   *  press is an atomic, immediately-committed move through the SAME
+   *  reorderedIds -> applyDomOrder -> commitStructuralChange pipeline the
+   *  mouse gesture uses — there is no pending/uncommitted state for
+   *  Escape to cancel here, unlike the mouse drag. Focus follows the
+   *  moved card so repeated presses walk it down the row. */
+  function onReorderKeyboardMove(event) {
+    if (!event || !event.altKey) {
+      return;
+    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return;
+    }
+    var target = event.target;
+    var handle = target && typeof target.closest === 'function' ?
+      target.closest('.node-drag-handle') : null;
+    if (!handle) {
+      return;
+    }
+    var card = handle.closest('.node-card');
+    var id = card && card.getAttribute('data-node-id');
+    if (!id) {
+      return;
+    }
+    var ids = domCardIds();
+    var idx = ids.indexOf(id);
+    if (idx === -1) {
+      return;
+    }
+    var newIdx = event.key === 'ArrowLeft' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= ids.length) {
+      return; // clamp at the ends — no wraparound
+    }
+    event.preventDefault();
+    applyDomOrder(reorderedIds(ids, id, newIdx));
+    renderChainArrows();
+    // commitStructuralChange() synchronously restores the last-accepted
+    // render BEFORE the new candidate is even submitted (its own
+    // documented "put the accepted render back before graph staging"
+    // step), then ASYNCHRONOUSLY re-renders again once ChainEditing
+    // accepts the candidate — two rebuilds, not one, so the
+    // `card`/`handle` references captured above are detached after the
+    // FIRST and refocusFor(id) below runs again after the SECOND. Re-find
+    // by id against the live DOM every time, never a captured element.
+    function refocusFor(nodeId) {
+      var movedCard = cardElById(nodeId);
+      var movedHandle = movedCard && movedCard.querySelector &&
+        movedCard.querySelector('.node-drag-handle');
+      if (movedHandle && typeof movedHandle.focus === 'function') {
+        try {
+          movedHandle.focus();
+        } catch (err) {
+          /* stripped harness */
+        }
+      }
+    }
+    var accepted = commitStructuralChange();
+    refocusFor(id); // immediate: survives until acceptance resolves
+    if (accepted && typeof accepted.then === 'function') {
+      accepted.then(function () {
+        refocusFor(id); // re-affirm once the accepted render replaces the DOM again
+      });
+    }
+  }
+
+  function initBoardDragWiring() {
+    if (typeof document.addEventListener !== 'function' ||
+        document.__chainCanvasPointerWired) {
+      return;
+    }
+    document.__chainCanvasPointerWired = true;
+    document.addEventListener('pointermove', onResizePointerMove);
+    document.addEventListener('pointerup', onResizePointerEnd);
+    document.addEventListener('pointercancel', onResizePointerEnd);
+    document.addEventListener('pointermove', onReorderPointerMove);
+    document.addEventListener('pointerup', onReorderPointerEnd);
+    document.addEventListener('pointercancel', cancelReorderDrag);
+    document.addEventListener('pointermove', onPalettePointerMove);
+    document.addEventListener('pointerup', onPalettePointerEnd);
+    document.addEventListener('pointercancel', cancelPaletteDrag);
+    document.addEventListener('keydown', onReorderKeyDown);
+    document.addEventListener('keydown', onReorderKeyboardMove);
+  }
+
+  initBoardDragWiring();
+
+  /** The drawn signal-flow connectors between adjacent cards (board
+   *  redesign, 2026-09-01): a small CSS-drawn chevron in the gap between
+   *  each pair of cards, replacing the retired patch-cord line — order
+   *  alone carries the signal path now, this is only a legibility aid.
+   *  Same drawn-mark discipline as the fold chevron (.chevron-mark) and
+   *  every other on-board glyph in this file: never a Unicode arrow.
+   *  Rebuilds ALL connectors from scratch on every call — cheap (N-1 tiny
+   *  spans) and guarantees they can never drift out of sync with DOM
+   *  order, the same "the map is the only state" philosophy the retired
+   *  renderCords() documented for the cord layer it replaces. Called from
+   *  every DOM-order write path (commitStructuralChange, renderModel). */
+  function renderChainArrows() {
+    // Paint-only — a stripped harness's minimal DOM stub may carry
+    // querySelectorAll/appendChild (enough for renderModel's own card
+    // insertion) without insertBefore/remove; this must degrade to a
+    // no-op there rather than throw out of a render path other tests
+    // exercise for unrelated reasons (same discipline every other
+    // real-browser-only paint in this file already follows).
+    if (typeof chainListEl.querySelectorAll !== 'function' ||
+        typeof chainListEl.insertBefore !== 'function') {
+      return;
+    }
+    Array.prototype.slice.call(chainListEl.querySelectorAll('.chain-arrow')).forEach(function (el) {
+      if (typeof el.remove === 'function') {
+        el.remove();
+      }
+    });
+    // The connectors follow the ROW AS LAID OUT, which during a drag is
+    // not the same list as "every .node-card": a ghost slot is a position
+    // in the row and earns its arrows, while the held card is lifted out
+    // of flow and must not. Read children (not a selector) so both
+    // element kinds come back in one pass, in document order.
+    var slotEls = Array.prototype.slice.call(chainListEl.children || []).filter(function (el) {
+      if (!el.classList) {
+        return false;
+      }
+      if (el.classList.contains('node-card-placeholder')) {
+        return true;
+      }
+      return el.classList.contains('node-card') && !el.classList.contains('reorder-chosen');
+    });
+    slotEls.forEach(function (card, i) {
+      if (i === 0) {
+        return; // no arrow before the first slot
+      }
+      var arrow = document.createElement('span');
+      arrow.className = 'chain-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      var mark = document.createElement('span');
+      mark.className = 'chain-arrow-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      arrow.appendChild(mark);
+      chainListEl.insertBefore(arrow, card);
+    });
+  }
+
+  renderChainArrows();
+  renderSignalOrderStrip(); // initial "Mic in -> Safe out" before any load
 
   // ---------------------------------------------------------------------
   // DISPLAY REGISTER (redesign item 1, Single Face Chassis) — the
@@ -1199,13 +939,20 @@
   }
 
   function showRegisterParam(module, param, value, help) {
-    // A real control touch always wins over a passive hover preview —
-    // see showRegisterPreview/hideRegisterPreview below. Clearing the
-    // snapshot here (rather than in hideRegisterPreview) means a touch
-    // that happens WHILE a card title is being hovered persists after the
-    // hover ends, instead of a later mouseleave restoring the now-stale
-    // pre-hover snapshot over it.
-    registerPeekSnapshot = null;
+    // A touch WINS THE DISPLAY but does not OWN it (2026-09-01 user
+    // direction: "we only favor hovers and don't retain the tooltip on
+    // click"). Earlier this emptied the preview stack outright, so a
+    // clicked knob's value stayed on the register after the pointer left
+    // the card and sat over nothing — a tooltip pinned by a click, which
+    // is exactly the behavior being removed. Leaving the stack intact
+    // means the value shows while the pointer is still on the control
+    // that produced it, and every mouseleave on the way out unwinds back
+    // to what the register held before the hover began.
+    //
+    // A touch with NO hover under it (keyboard focus, an agent write)
+    // finds an empty stack and simply stands until something else writes
+    // — those paths have no pointer to leave, so nothing would ever
+    // restore them.
     setRegisterText(module, param, value, help);
     // ONE blink marks the live control (the direction contract's palette
     // economy): retrigger the value segment's blink by dropping and
@@ -1223,136 +970,142 @@
     }
   }
 
-  // Hover-preview round (2026-08-31 user direction): hovering a node
-  // card's family-code badge (createNodeCard's `code` element, below)
-  // shows the SAME module-name + plain-language blurb the Effects tab's
-  // .chip-preview already shows on hover, in the register — a transient
-  // preview, not a touch: it must revert to whatever the register showed
-  // before the hover the moment the mouse leaves, and must never disturb
-  // showRegisterParam's own "keeps the last touched control's value"
-  // memory. registerPeekSnapshot holds that "before" state while a
-  // preview is showing; null means no preview is active.
-  var registerPeekSnapshot = null;
+  // Hover-preview round (2026-08-31 user direction, refined 2026-09-01):
+  // hovering a node card shows a transient preview in the register — never
+  // a committed touch, so it must revert to whatever the register showed
+  // the instant before the hover, and must never disturb showRegisterParam's
+  // own "keeps the last touched control's value" memory.
+  //
+  // Two nesting depths now exist on the SAME card: hovering anywhere on the
+  // card that is NOT a param row (the rail, the drag handle, the fold/
+  // remove buttons, plain card whitespace) shows the module's general
+  // info; hovering a param row (the knob/pad/trim OR its label/value —
+  // src/param-controls.js's own .param-row, entered via the CanvasRegister
+  // bridge below) shows THAT control's current value instead, while the
+  // pointer is over it. Because .param-row lives inside the card, both
+  // handlers can be hovering at once — a single snapshot can only unwind
+  // one level, so this is a STACK: each showRegisterPreview call pushes
+  // whatever the register displayed a moment ago, each hideRegisterPreview
+  // pops back to it. Leaving a knob while still over its card therefore
+  // restores the card's OWN general-info preview, not the pre-hover state
+  // two levels up — and leaving the card afterward pops that.
+  //
+  // HOVER OWNS THE REGISTER (2026-09-01 user direction). A touch
+  // (showRegisterParam) writes over whatever the register currently
+  // shows, but it does NOT take the stack away from the hover that is
+  // still in progress — so leaving the control unwinds past the touched
+  // value, and leaving the card unwinds back to rest. Nothing a pointer
+  // can reach stays on the register once the pointer is over nothing.
+  var registerPreviewStack = [];
 
-  function showRegisterPreview(module, help) {
+  function showRegisterPreview(module, param, value, help) {
     if (!registerEl) {
       return;
     }
-    if (registerPeekSnapshot === null) {
-      registerPeekSnapshot = {
-        module: registerModuleEl.textContent,
-        param: registerParamEl.textContent,
-        value: registerValueEl.textContent,
-        help: registerHelpEl.textContent
-      };
-    }
+    registerPreviewStack.push({
+      module: registerModuleEl.textContent,
+      param: registerParamEl.textContent,
+      value: registerValueEl.textContent,
+      help: registerHelpEl.textContent
+    });
     // Never showRegisterParam() here — this is a passive preview, not a
-    // committed value; it must not blink or clear a FUTURE preview's own
-    // snapshot capture.
-    setRegisterText(module, '', '', help);
+    // committed value; it must not blink.
+    setRegisterText(module, param, value, help);
+  }
+
+  /** Unwind the WHOLE stack at once, back to whatever the register held
+   *  before the outermost hover began. For the one case a mouseleave
+   *  cannot cover: an element destroyed while the pointer is still over
+   *  it (renderModel replaces every card) never fires its own leave, so
+   *  its pushed preview would sit on the register forever. */
+  function resetRegisterPreviews() {
+    if (registerPreviewStack.length === 0) {
+      return;
+    }
+    var base = registerPreviewStack[0];
+    registerPreviewStack.length = 0;
+    setRegisterText(base.module, base.param, base.value, base.help);
   }
 
   function hideRegisterPreview() {
-    if (registerPeekSnapshot === null) {
-      // A real touch happened while this hover was active (showRegisterParam
-      // already cleared the snapshot and is now the truthful display) —
-      // nothing to restore, and restoring would stomp that newer value.
+    if (registerPreviewStack.length === 0) {
+      // Either no preview was ever pushed here, or a real touch happened
+      // while it was active (showRegisterParam already emptied the stack
+      // and is now the truthful display) — nothing to restore, and
+      // restoring would stomp that newer value.
       return;
     }
-    var snap = registerPeekSnapshot;
-    registerPeekSnapshot = null;
+    var snap = registerPreviewStack.pop();
     setRegisterText(snap.module, snap.param, snap.value, snap.help);
   }
 
   buildDisplayRegister();
 
-  /** Guided Patchbay's Effects/Presets tab switch — plain show/hide, no
-   *  audio or model implication either way (both tabs' content already
-   *  exists in the DOM; switching never rebuilds anything). Left-sidebar
-   *  round: a tab click also expands the panel if it was collapsed (see
-   *  setBuildCollapsed below) — picking a tab is picking something to
-   *  look at, so it should never leave you staring at a collapsed rail.
-   *  Guarded like every other panel-level init: a harness with no
-   *  .build-tabs simply has nothing to wire. */
-  function initBuildTabs() {
-    if (typeof document.querySelectorAll !== 'function') {
-      return;
-    }
-    var tabs = document.querySelectorAll('[data-build-tab]');
-    if (!tabs || !tabs.length) {
-      return;
-    }
-    Array.prototype.forEach.call(tabs, function (tab) {
-      tab.addEventListener('click', function () {
-        Array.prototype.forEach.call(tabs, function (other) {
-          other.setAttribute('aria-selected', String(other === tab));
-        });
-        var panels = document.querySelectorAll('[data-build-panel]');
-        Array.prototype.forEach.call(panels, function (panel) {
-          panel.hidden = panel.getAttribute('data-build-panel') !== tab.getAttribute('data-build-tab');
-        });
-        setBuildCollapsed(false);
-      });
-    });
-  }
-  initBuildTabs();
-
-  /** Left-sidebar round (2026-08-31 user direction): the collapse toggle
-   *  shrinks .build to a narrow icon-free rail (styles/main.css's
-   *  .build.collapsed, desktop-only — see its own @media block) so the
-   *  panel can be tucked away without losing the board's width. Purely
-   *  visual — CSS-only (.build.collapsed .build-tab-panel{display:none})
-   *  layered on top of initBuildTabs()'s own hidden-attribute bookkeeping,
-   *  which stays untouched and must stay that way: this function NEVER
-   *  writes to a panel's `hidden` attribute, only the wrapping `.build`'s
-   *  class, so the "exactly one tab panel visible, one hidden" invariant
-   *  above keeps holding underneath the collapse regardless of state.
+  /** Split-panel round (2026-09-01 user direction): Presets (left,
+   *  width-axis) and Effects (under the board, height-axis) are two
+   *  SEPARATE, independently collapsible panels now — the Guided
+   *  Patchbay-era shared Effects/Presets tab bar is retired along with it
+   *  (nothing switches visibility between them anymore, so there is
+   *  nothing left for role="tab"/role="tabpanel" to describe honestly;
+   *  each panel's disclosure toggle uses the same aria-expanded +
+   *  aria-controls pattern .node-collapse already uses for a per-card
+   *  fold). Collapsing is purely visual — CSS-only
+   *  (.presets-panel.collapsed .presets-panel-content{display:none}, the
+   *  .effects-panel twin — see styles/main.css's own @media block) — this
+   *  function never touches any other element's `hidden` attribute.
    *
+   *  @param {HTMLElement} panelEl
+   *  @param {HTMLElement} toggleEl
    *  @param {boolean} collapsed
+   *  @param {string} expandedLabel
+   *  @param {string} collapsedLabel
    */
-  function setBuildCollapsed(collapsed) {
-    var buildEl = document.getElementById('build-panel');
-    var toggleEl = document.getElementById('build-collapse-toggle');
-    if (!buildEl || !toggleEl) {
-      return;
-    }
-    if (buildEl.classList.contains('collapsed') === collapsed) {
+  function setPanelCollapsed(panelEl, toggleEl, collapsed, expandedLabel, collapsedLabel) {
+    if (panelEl.classList.contains('collapsed') === collapsed) {
       return; // already in the requested state — no-op, no focus churn
     }
     if (collapsed) {
-      // Collapsing hides the tab panels via CSS; a focused control inside
-      // one would otherwise silently drop focus to <body> (browsers do
-      // not auto-recover focus from a display:none ancestor) — rescue it
-      // onto the toggle, which stays visible and interactive either way.
+      // Collapsing hides the panel's content via CSS; a focused control
+      // inside it would otherwise silently drop focus to <body> (browsers
+      // do not auto-recover focus from a display:none ancestor) — rescue
+      // it onto the toggle, which stays visible and interactive either way.
       var active = document.activeElement;
-      if (active && buildEl.contains(active) && active !== toggleEl &&
+      if (active && panelEl.contains(active) && active !== toggleEl &&
           typeof toggleEl.focus === 'function') {
         toggleEl.focus();
       }
-      buildEl.classList.add('collapsed');
+      panelEl.classList.add('collapsed');
     } else {
-      buildEl.classList.remove('collapsed');
+      panelEl.classList.remove('collapsed');
     }
     toggleEl.setAttribute('aria-expanded', String(!collapsed));
-    toggleEl.setAttribute('aria-label', collapsed ? 'Expand build panel' : 'Collapse build panel');
+    toggleEl.setAttribute('aria-label', collapsed ? collapsedLabel : expandedLabel);
   }
 
-  /** Wires the toggle button itself. Pre-Start, .build (toggle included)
-   *  is already fully inert via the shared engine-not-started gate
-   *  (pointer-events: none + the hatch overlay) — same precedent as the
-   *  tabs themselves being unusable before Start, not a new
-   *  inconsistency, so no extra guard is needed here. */
-  function initBuildCollapse() {
-    var toggleEl = document.getElementById('build-collapse-toggle');
-    var buildEl = document.getElementById('build-panel');
-    if (!toggleEl || !buildEl) {
+  /** Wires one panel's own toggle button. Pre-Start, both panels
+   *  (toggles included) are already fully inert via the shared
+   *  engine-not-started gate (pointer-events: none + the hatch overlay),
+   *  so no extra guard is needed here. Guarded like every other
+   *  panel-level init: a harness missing either element simply has
+   *  nothing to wire.
+   *
+   *  @param {string} panelId
+   *  @param {string} toggleId
+   *  @param {string} expandedLabel
+   *  @param {string} collapsedLabel
+   */
+  function initPanelCollapse(panelId, toggleId, expandedLabel, collapsedLabel) {
+    var panelEl = document.getElementById(panelId);
+    var toggleEl = document.getElementById(toggleId);
+    if (!panelEl || !toggleEl) {
       return;
     }
     toggleEl.addEventListener('click', function () {
-      setBuildCollapsed(!buildEl.classList.contains('collapsed'));
+      setPanelCollapsed(panelEl, toggleEl, !panelEl.classList.contains('collapsed'), expandedLabel, collapsedLabel);
     });
   }
-  initBuildCollapse();
+  initPanelCollapse('presets-panel', 'presets-collapse-toggle', 'Collapse Presets panel', 'Expand Presets panel');
+  initPanelCollapse('effects-panel', 'effects-collapse-toggle', 'Collapse Effects panel', 'Expand Effects panel');
 
 
   function nextNodeId() {
@@ -1390,14 +1143,14 @@
     emptyHintEl.style.display = hasNodes ? 'none' : '';
   }
 
-  /** Guided Patchbay's signal-order strip: one readable line, "Mic in ->
-   *  each section in DOM order -> Safe out", with a terminal limiter
-   *  marked locked. Purely presentational (aria-hidden — every semantic
-   *  already lives on the board's own cards/cords); reads chainModel via
-   *  domCardIds()/nodesById so it can never drift from what's actually on
-   *  screen. Called from renderModel() alongside renderCords() — the one
-   *  place ChainEditing repaints an accepted model, so the strip updates
-   *  on every source (human/agent/preset/startup/undo), not just a human
+  /** The signal-order strip: one readable line, "Mic in -> each section
+   *  in DOM order -> Safe out", with a terminal limiter marked locked.
+   *  Purely presentational (aria-hidden — every semantic already lives on
+   *  the board's own cards); reads chainModel via domCardIds()/nodesById
+   *  so it can never drift from what's actually on screen. Called from
+   *  renderModel() alongside renderChainArrows() — the one place
+   *  ChainEditing repaints an accepted model, so the strip updates on
+   *  every source (human/agent/preset/startup/undo), not just a human
    *  commit. */
   function effectLabel(type) {
     return window.EffectCatalog.getLabel(type) || type;
@@ -1433,7 +1186,8 @@
       var type = node && node.type;
       var label = effectLabel(type);
       var isTerminalLimiter = type === 'limiter' && index === ids.length - 1;
-      addStep(isTerminalLimiter ? label + ' · locked last' : label,
+      var stateLabel = label + (node && node.bypassed ? ' · bypassed' : '');
+      addStep(isTerminalLimiter ? stateLabel + ' · locked last' : stateLabel,
         isTerminalLimiter ? 'signal-order-lock' : null);
     });
     addArrow();
@@ -1526,25 +1280,41 @@
 
   // ---------------------------------------------------------------------
   // PALETTE GROUPS (refinement entry 3, critique P2-3: the palette went
-  // 6 → 10 flat chips with no chunking at the add-a-node decision point).
+  // 6 → 10 flat chips with no chunking at the add-a-node decision point;
+  // re-categorized 2026-09-01, user direction, once the catalog grew to
+  // 14 with the Tone.js effects — see the group-count note below).
   // Presentation seam ONLY — the catalog stays the single source of what
   // renders (renderPalette still iterates getAllTypes()); these lookups
   // only decide which silkscreen group header a chip rides under, in
   // operator (non-engineer) language derived from README.md's own
-  // framing: "shape" = what the voice itself sounds like (tone, grit,
-  // width, pitch), "polish" = level/evenness/space, "safe" = the two
-  // automatic guards. Chips stay DIRECT children of #palette-list (flat
-  // DOM order preserved: R2-2 button semantics, tab order, and the
-  // SortableJS drag items are untouched); the headers are non-interactive
-  // <h3> legends interleaved between groups, never containers.
+  // framing. Chips stay DIRECT children of #palette-list (flat DOM order
+  // preserved: R2-2 button semantics, tab order, and the SortableJS drag
+  // items are untouched); the headers are non-interactive <h3> legends
+  // interleaved between groups, never containers.
   //
-  // Lookup discipline mirrors FAMILY_INITIALS above: an as-yet-unmapped
-  // future type falls back to a trailing catch-all group ("More
-  // effects") rather than disappearing or being mis-filed — the group
-  // map can never silently drop a registered type.
+  // 2026-09-01 re-categorization: the original three groups (shape/
+  // polish/safe) held 10 types comfortably at 4/4/2, but the four Tone.js
+  // additions (pitch shift, tremolo, bitcrusher, phaser) had no group
+  // mapping at all and fell through to the trailing "More effects"
+  // catch-all — exactly the undifferentiated dead-end the fallback group
+  // exists to make VISIBLE rather than silently mis-file, per the
+  // discipline below. Folding all four into "shape" would have made it
+  // an 8-chip wall while the other groups stayed small — worse
+  // scannability than the flat-10 problem this grouping originally
+  // fixed. Splitting shape's own character-effects premise in two reads
+  // better AND matches a real, pre-existing distinction: "shape" is now
+  // strictly TONE/TIMBRE (EQ, Distortion, Bitcrusher — what the voice is
+  // made of), a new "movement" group is MODULATION (Chorus, Tremolo,
+  // Phaser — literally the standard "modulation" pedal/plugin category:
+  // an LFO wobbling pitch, amplitude, or a filter sweep), and a new
+  // "pitch" group is the PITCH domain specifically (Autotune, Pitch
+  // Shift — correcting vs. transposing). Five groups of 2-4 chips each,
+  // none of them a dumping ground.
   // ---------------------------------------------------------------------
   var PALETTE_GROUPS = [
     { id: 'shape', label: 'Shape your voice' },
+    { id: 'movement', label: 'Add movement' },
+    { id: 'pitch', label: 'Change your pitch' },
     { id: 'polish', label: 'Polish your sound' },
     { id: 'safe', label: 'Keep it safe' }
   ];
@@ -1552,13 +1322,27 @@
   var PALETTE_FALLBACK_GROUP = { id: 'more', label: 'More effects' };
 
   var PALETTE_TYPE_GROUP = {
-    // Shape your voice — the voice's own character (README: distortion
-    // "adds grit and edge", chorus "thickens and widens the voice",
-    // autotune "pulls each note toward the key"; EQ shapes tone).
+    // Shape your voice — the voice's own TONE/TIMBRE (README: distortion
+    // "adds grit and edge", bitcrusher is lo-fi digital grunge; EQ shapes
+    // tone directly). What the voice is made of, not how it moves.
     eq: 'shape',
     distortion: 'shape',
-    chorus: 'shape',
-    autotune: 'shape',
+    bitcrusher: 'shape',
+    // Add movement — modulation effects: an LFO wobbling pitch (chorus:
+    // "thickens and widens the voice with two drifting copies"),
+    // amplitude (tremolo: "volume wobble"), or a filter sweep (phaser:
+    // "a sweeping, spacey filter sweep"). The standard modulation
+    // grouping any pedalboard or DAW uses, not an invented one.
+    chorus: 'movement',
+    tremolo: 'movement',
+    phaser: 'movement',
+    // Change your pitch — the pitch domain specifically: correcting
+    // (autotune: "pulls each note toward a key and scale you pick") vs.
+    // transposing (pitch shift: "moves the whole voice up or down in
+    // semitones"). Split out of "shape" — pitch tools answer a different
+    // question than tone tools do.
+    autotune: 'pitch',
+    pitchshift: 'pitch',
     // Polish your sound — level, evenness, and space.
     gain: 'polish',
     compressor: 'polish',
@@ -1787,9 +1571,26 @@
         chip.disabled = true;
         chip.addEventListener('click', function () {
           // A disabled <button> never fires click, so this handler is only
-          // ever reachable post-Start — the same guarantee the SortableJS
-          // pointer path gets from the pointer-events:none panel gate.
+          // ever reachable post-Start — the same guarantee the pointer
+          // path gets from the pointer-events:none panel gate.
+          if (suppressChipClick) {
+            // This "click" is the tail of a completed chip DRAG that
+            // happened to release back over its own chip; the drop
+            // already placed (or deliberately did not place) the module.
+            suppressChipClick = false;
+            return;
+          }
           addNodeType(type);
+        });
+        // ...and the same chip is the handle for the placement-aware DRAG
+        // add (see the PALETTE DRAG block above). Arming only: the
+        // gesture resolves on the document-level handlers, and a
+        // sub-threshold press-release falls through to the click above
+        // with nothing armed. Deliberately does NOT preventDefault — the
+        // chip is a real <button> and must still take focus on press;
+        // text selection is handled by body.chain-dragging instead.
+        chip.addEventListener('pointerdown', function (event) {
+          armPaletteDrag(chip, type, event);
         });
         paletteListEl.appendChild(chip);
       });
@@ -1825,36 +1626,268 @@
    *   data-node-type, itself from the catalog-driven palette loop).
    */
   function addNodeType(type) {
-    var card = createNodeCard(type, defaultParamsForType(type));
     var cards = chainListEl.querySelectorAll('.node-card');
     var lastCard = cards.length > 0 ? cards[cards.length - 1] : null;
-    if (lastCard &&
-        lastCard.getAttribute('data-family') === 'limiter') {
-      // Keep the terminal limiter terminal: insert just before it.
-      chainListEl.insertBefore(card, lastCard);
+    // Keep the terminal limiter terminal: seat just before it, else
+    // append. The same rule the DRAG add reaches through
+    // clampBehindTerminalLimiter(), so the two verbs cannot disagree
+    // about where the end of the chain is.
+    var ref = lastCard && lastCard.getAttribute('data-family') === 'limiter' ?
+      lastCard : null;
+    seatNewNode(type, ref);
+    commitStructuralChange();
+  }
+
+  /** Build a card for `type` at its catalog defaults and seat it in the
+   *  row immediately before `refEl` (append when null), painting its own
+   *  width. Shared by the palette CLICK add and the palette DRAG add so
+   *  the two verbs cannot drift. Does NOT commit — the caller owns the
+   *  single commitStructuralChange() its gesture is allowed.
+   *
+   *  @param {string} type
+   *  @param {HTMLElement|null} refEl
+   *  @returns {HTMLElement}
+   */
+  function seatNewNode(type, refEl) {
+    var card = createNodeCard(type, defaultParamsForType(type));
+    if (refEl && typeof chainListEl.insertBefore === 'function') {
+      chainListEl.insertBefore(card, refEl);
     } else {
       chainListEl.appendChild(card);
     }
-    // FEW-2: with the chain Sortable retired (PD-1) this click/keyboard
-    // path IS the palette add verb — the new section lands at the FIRST
-    // FREE GRID SLOT (palette drag-drops may degrade to the same slot
-    // until FEW-7 wires drop-point placement).
-    var pos = placeNewNode(card.getAttribute('data-node-id'));
-    applyPositionToCard(card, pos.x, pos.y);
-    refreshBoardExtent();
+    applyCardWidth(card, card.getAttribute('data-node-id'));
+    return card;
+  }
+
+  // ---------------------------------------------------------------------
+  // DRAG AN EFFECT IN FROM THE PALETTE (2026-09-01 user direction: "I
+  // expect to be able to drag and drop a plugin to a specific position in
+  // the chain, or if you click to add it it will snap at the end before
+  // the limiter"). The CLICK verb is addNodeType() above, unchanged and
+  // still the keyboard-equivalent add; this is its placement-aware twin.
+  //
+  // It reuses the reorder gesture's ENTIRE vocabulary rather than
+  // inventing a second one: the same ghost, the same slot snapshot, the
+  // same safe-output clamp, the same body flag, the same "audio changes
+  // only on a completed drop, through commitStructuralChange()" rule. The
+  // only thing it adds is a DROP ZONE. A chip dragged anywhere off the
+  // board is not an add: the ghost opens only while the pointer is over
+  // #chain-canvas, and a release with no ghost showing commits nothing —
+  // so a chip pulled sideways inside the Effects panel, or dropped on the
+  // presets rail, quietly does nothing instead of silently appending a
+  // module the operator never aimed at the chain.
+  // ---------------------------------------------------------------------
+
+  // Firmer than a section's 4px: unlike the board, a chip keeps a real
+  // CLICK verb on the very same pixels, so the pull has to be unambiguous
+  // before it stops being a click.
+  var PALETTE_DRAG_THRESHOLD = 6;
+
+  // A completed chip drag ends with a pointerup that, when it lands back
+  // on the chip it started from, would ALSO fire that chip's click — and
+  // add the module a second time. Set on detach, spent by the next click.
+  var suppressChipClick = false;
+
+  function pointerOverBoard(cx, cy) {
+    if (!boardEl || typeof boardEl.getBoundingClientRect !== 'function') {
+      return false;
+    }
+    var r = boardEl.getBoundingClientRect();
+    return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
+  }
+
+  /** The ghost's box for an effect that has no card yet: the default card
+   *  width, and the height of the row it is joining (the tallest card, so
+   *  the reservation reads as a real slot rather than a sliver). */
+  function incomingGhostBox() {
+    var h = 0;
+    Array.prototype.forEach.call(
+      chainListEl.querySelectorAll('.node-card'),
+      function (el) {
+        if (typeof el.getBoundingClientRect === 'function') {
+          h = Math.max(h, el.getBoundingClientRect().height);
+        }
+      }
+    );
+    return { w: CARD_W_DEFAULT_PX, h: h };
+  }
+
+  /** The dragged chip's own image, following the pointer — the palette's
+   *  equivalent of the reorder gesture's lifted card. Purely decorative
+   *  (aria-hidden, pointer-inert, disabled): the real chip stays in the
+   *  panel, dimmed, so the palette never develops a hole mid-drag. */
+  function makeChipTrail(chip, rect) {
+    if (!chip || typeof chip.cloneNode !== 'function' || !rect ||
+        !document.body || typeof document.body.appendChild !== 'function') {
+      return null;
+    }
+    var trail = chip.cloneNode(true);
+    trail.disabled = true;
+    trail.setAttribute('aria-hidden', 'true');
+    trail.setAttribute('tabindex', '-1');
+    if (trail.classList) {
+      trail.classList.add('chip-trail');
+    }
+    if (trail.style) {
+      trail.style.position = 'fixed';
+      trail.style.left = rect.left + 'px';
+      trail.style.top = rect.top + 'px';
+      trail.style.width = rect.width + 'px';
+      trail.style.margin = '0';
+    }
+    document.body.appendChild(trail);
+    return trail;
+  }
+
+  function armPaletteDrag(chip, type, event) {
+    if (reorderDrag || resizeDrag || paletteDrag) {
+      return; // one gesture at a time
+    }
+    if (chip && chip.disabled) {
+      return; // pre-Start: the chip has no add verb to drag either
+    }
+    if (event && typeof event.button === 'number' && event.button !== 0) {
+      return; // primary pointer only
+    }
+    suppressChipClick = false;
+    dragActive = true;
+    paletteDrag = {
+      chip: chip,
+      type: type,
+      startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
+      startY: event && typeof event.clientY === 'number' ? event.clientY : 0,
+      pointerId: event && event.pointerId !== undefined ? event.pointerId : null,
+      detached: false,
+      mids: [],
+      ghost: null,
+      slotIndex: -1,
+      rect: null,
+      trail: null
+    };
+  }
+
+  function detachPaletteDrag(drag) {
+    drag.detached = true;
+    // A chip drag can never be a chip click as well.
+    suppressChipClick = true;
+    var chip = drag.chip;
+    drag.rect = chip && typeof chip.getBoundingClientRect === 'function' ?
+      chip.getBoundingClientRect() : null;
+    // No card is leaving the row, so every card is a slot boundary.
+    drag.mids = slotMidpoints(domCardIds());
+    drag.trail = makeChipTrail(chip, drag.rect);
+    if (chip && chip.classList) {
+      chip.classList.add('chip-dragging');
+    }
+    capturePointer(paletteListEl, drag.pointerId);
+    setBodyDragging(true);
+  }
+
+  function onPalettePointerMove(event) {
+    if (!paletteDrag) {
+      return;
+    }
+    var drag = paletteDrag;
+    var cx = event && typeof event.clientX === 'number' ? event.clientX : drag.startX;
+    var cy = event && typeof event.clientY === 'number' ? event.clientY : drag.startY;
+    if (!drag.detached) {
+      var dx0 = cx - drag.startX;
+      var dy0 = cy - drag.startY;
+      if (Math.sqrt(dx0 * dx0 + dy0 * dy0) < PALETTE_DRAG_THRESHOLD) {
+        return; // still a click, not yet a drag
+      }
+      detachPaletteDrag(drag);
+    }
+    if (drag.trail && drag.trail.style) {
+      drag.trail.style.transform =
+        'translate(' + (cx - drag.startX) + 'px, ' + (cy - drag.startY) + 'px)';
+    }
+    if (!pointerOverBoard(cx, cy)) {
+      // Off the board: withdraw the reservation. The gesture stays live
+      // (the operator can still swing back onto the row) but a release
+      // from here adds nothing.
+      if (drag.ghost) {
+        removeGhost(drag);
+        renderChainArrows();
+      }
+      return;
+    }
+    if (!drag.ghost) {
+      var box = incomingGhostBox();
+      drag.ghost = makeGhost(box.w, box.h, effectLabel(drag.type));
+      drag.slotIndex = -1;
+    }
+    moveGhostTo(drag, clampBehindTerminalLimiter(drag.mids, slotIndexAt(drag.mids, cx)));
+  }
+
+  function endPaletteVisuals(drag) {
+    if (drag.trail && typeof drag.trail.remove === 'function') {
+      drag.trail.remove();
+    }
+    drag.trail = null;
+    if (drag.chip && drag.chip.classList) {
+      drag.chip.classList.remove('chip-dragging');
+    }
+    releasePointer(paletteListEl, drag.pointerId);
+    setBodyDragging(false);
+  }
+
+  function onPalettePointerEnd() {
+    if (!paletteDrag) {
+      return;
+    }
+    var drag = paletteDrag;
+    paletteDrag = null;
+    dragActive = false;
+    if (!drag.detached) {
+      return; // sub-threshold: this was a click, and the click add owns it
+    }
+    endPaletteVisuals(drag);
+    var ghost = drag.ghost;
+    // The ghost NAMES the drop slot: seat the new module exactly where it
+    // stands (before it, then retire it — the same handoff the reorder
+    // drop uses), and only then commit.
+    var seated = ghost && ghost.parentNode ? seatNewNode(drag.type, ghost) : null;
+    removeGhost(drag);
+    renderChainArrows();
+    if (!seated) {
+      return; // released off the board: no reservation, no add
+    }
     commitStructuralChange();
+  }
+
+  function cancelPaletteDrag() {
+    if (!paletteDrag) {
+      return;
+    }
+    var drag = paletteDrag;
+    paletteDrag = null;
+    dragActive = false;
+    if (!drag.detached) {
+      return;
+    }
+    endPaletteVisuals(drag);
+    removeGhost(drag);
+    renderChainArrows();
   }
 
   /**
    * R2-2 factoring: the SINGLE human structural adapter. It translates the
    * provisional DOM gesture into a candidate, restores the accepted render,
-   * and submits the candidate to ChainEditing. Keyboard add, cord reorder,
+   * and submits the candidate to ChainEditing. Keyboard add, drag reorder,
    * and removal are therefore indistinguishable downstream.
    */
   function commitStructuralChange() {
     recomputeModelFromDom();
     updateEmptyHint();
-    renderCords(); // FEW-3: an add (or any order change) re-routes the cords
+    renderChainArrows(); // an add (or any order change) redraws the connectors
+    // NOTE: this function's own line below synchronously renders the DOM
+    // BACK to the last-accepted state before submitting the new
+    // candidate — a caller that needs to act on the eventual ACCEPTED
+    // render (e.g. onReorderKeyboardMove's focus restoration) must chain
+    // onto the returned promise, never read the DOM synchronously right
+    // after calling this function: the DOM at that point is still the
+    // OLD state, one render away from the new one.
     // Issue #20: in the production page, the gesture stops here. The
     // ChainEditing module decides whether the candidate is accepted and
     // owns graph commit, persistence, preset dirtiness, and the one human
@@ -1872,7 +1905,7 @@
       editing.getModel(),
       typeof editing.getLayout === 'function' ? editing.getLayout() : null
     );
-    editing.apply({
+    return editing.apply({
       source: 'human',
       candidate: candidateModel,
       layout: candidateLayout,
@@ -1911,7 +1944,8 @@
   //         .node-drag-icon      <- CSS-drawn grip dots (aria-hidden).
   //       .section-code          <- the 2-letter family silkscreen code
   //                               (title = the full module name).
-  //       .section-foot          <- collapse chevron + remove × (real
+  //       .section-foot          <- per-effect bypass, collapse chevron,
+  //                                 and remove × (real
   //                                 buttons, the section's header-zone
   //                                 parts; siblings of the handle, never
   //                                 nested in it).
@@ -1936,11 +1970,16 @@
   //   of minting a new one via nextNodeId(). Used by loadModel() (below) to
   //   restore a saved/preset model's ORIGINAL ids verbatim, rather than
   //   silently reassigning fresh ones on every reload.
+  // @param {boolean} [initiallyBypassed] - true keeps the section in the
+  //   chain while routing audio around its effect instance.
   // @returns {HTMLElement}
   // ---------------------------------------------------------------------
-  function createNodeCard(type, initialParams, explicitId) {
+  function createNodeCard(type, initialParams, explicitId, initiallyBypassed) {
     var id = explicitId || nextNodeId();
     var nodeState = { id: id, type: type, params: Object.assign({}, initialParams || {}) };
+    if (initiallyBypassed === true) {
+      nodeState.bypassed = true;
+    }
     nodesById[id] = nodeState;
 
     var card = document.createElement('div');
@@ -1954,6 +1993,10 @@
     // drift.
     card.setAttribute('data-family', type);
     card.setAttribute('data-initials', familyInitials(type));
+    if (nodeState.bypassed === true) {
+      card.classList.add('node-bypassed');
+    }
+    card.setAttribute('data-bypassed', nodeState.bypassed === true ? 'true' : 'false');
 
     // --- The family print block (left rail). ---------------------------
     var rail = document.createElement('div');
@@ -1961,7 +2004,15 @@
 
     var handle = document.createElement('span');
     handle.className = 'node-drag-handle';
-    handle.title = 'Drag to move';
+    handle.title = 'Drag to reorder';
+    // Keyboard equivalent (board redesign, 2026-09-01 — see
+    // onReorderKeyboardMove): tabindex makes the grip reachable, and the
+    // label states the mechanism directly since there is no simpler
+    // standard role for "focus this, then hold a modifier+arrow to move
+    // it" — a plain "button" role would promise a single-press activation
+    // this control does not have.
+    handle.setAttribute('tabindex', '0');
+    handle.setAttribute('aria-label', 'Move ' + effectLabel(type) + ' — Alt+Left or Alt+Right reorders it in the chain');
 
     var gripIcon = document.createElement('span');
     gripIcon.className = 'node-drag-icon';
@@ -1980,21 +2031,6 @@
     // tooltip. The section's accessible naming lives on its controls
     // (the collapse/remove buttons' aria-labels carry the module name).
     code.title = effectLabel(type);
-    // Hover-preview round (2026-08-31 user direction): hovering the code
-    // ALSO pushes the same module name + plain-language blurb the
-    // Effects tab's chip hover shows into the display register — a
-    // transient preview (showRegisterPreview/hideRegisterPreview above),
-    // never a committed touch. Mouse-only: `code` is aria-hidden and not
-    // focusable (same as its native title tooltip today), so there is no
-    // keyboard-equivalent path to invent here. Naturally gated pre-Start:
-    // .canvas is pointer-events:none until the engine runs, so these
-    // never fire before then.
-    code.addEventListener('mouseenter', function () {
-      showRegisterPreview(effectLabel(type), paletteTypePreview(type));
-    });
-    code.addEventListener('mouseleave', function () {
-      hideRegisterPreview();
-    });
 
     handle.appendChild(gripIcon);
     rail.appendChild(handle);
@@ -2004,8 +2040,16 @@
     // every catalog-declared experimental type (autotune only, cycle-3 scope) —
     // a silkscreen tag in the rail under the module label. SR-visible by
     // content (see createExperimentalBadge); title carries the why.
+    // Compact form (2026-09-01, width-floor fix): the rail badge used the
+    // spelled-out 'Experimental' while the palette chip's own badge
+    // already used the compact 'EXP' abbreviation — an inconsistency
+    // between the two badge call sites, not a deliberate width choice.
+    // The condensed header band has to fit this badge alongside the
+    // family code and the rail's three footer buttons; the compact form
+    // is the one that already matched the chip, so this is the fix, not
+    // the width math.
     if (isExperimentalType(type)) {
-      rail.appendChild(createExperimentalBadge(type, false));
+      rail.appendChild(createExperimentalBadge(type, true));
     }
 
     // The header-zone controls at the rail's foot: the collapse chevron
@@ -2017,6 +2061,20 @@
     // end.
     var foot = document.createElement('div');
     foot.className = 'section-foot';
+
+    // Per-effect bypass is a real audio-state toggle. The node remains in
+    // order, keeps its parameters and live instance, and is persisted with
+    // the chain. The short IN/BYP labels match the hardware register and
+    // stay distinct from the red emergency Bypass control.
+    var bypassBtn = document.createElement('button');
+    bypassBtn.type = 'button';
+    bypassBtn.className = 'node-bypass';
+    bypassBtn.textContent = nodeState.bypassed === true ? 'BYP' : 'IN';
+    bypassBtn.setAttribute('aria-label', 'Bypass ' + effectLabel(type) + ' effect');
+    bypassBtn.setAttribute('aria-pressed', nodeState.bypassed === true ? 'true' : 'false');
+    bypassBtn.title = nodeState.bypassed === true
+      ? 'Return ' + effectLabel(type) + ' to the signal path'
+      : 'Route around ' + effectLabel(type) + ' without removing it';
 
     // The collapse chevron — drawn in CSS (a rotated square's edge), no
     // text glyph; aria-expanded is the toggle's OWN state mirror, the
@@ -2043,6 +2101,7 @@
     removeMark.setAttribute('aria-hidden', 'true');
     removeBtn.appendChild(removeMark);
 
+    foot.appendChild(bypassBtn);
     foot.appendChild(collapseBtn);
     foot.appendChild(removeBtn);
     rail.appendChild(foot);
@@ -2116,12 +2175,46 @@
       // some minimal DOM stubs return undefined from toggle().
       var collapsed = card.classList.contains('collapsed');
       collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      // Folding re-boxes the section (the rail becomes the slim row), so
-      // the jack points MOVE with it — the cords must re-derive now, not
-      // at the next unrelated paint (the stale-cord #16 finding). Same
-      // for the board extent, which reads live card geometry.
-      renderCords();
-      refreshBoardExtent();
+      // Folding re-boxes the section (the rail becomes the slim row) —
+      // normal flex reflow handles this for free now that cards sit in
+      // ordinary DOM flow instead of absolute position; nothing here
+      // needs to re-derive anything.
+    });
+
+    bypassBtn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      var editing = requireChainEditing();
+      var candidate = editing.getModel();
+      var found = false;
+      var shouldBypass = nodeState.bypassed !== true;
+      candidate.forEach(function (entry) {
+        if (entry.id !== id) {
+          return;
+        }
+        found = true;
+        if (shouldBypass) {
+          entry.bypassed = true;
+        } else {
+          delete entry.bypassed;
+        }
+      });
+      if (!found) {
+        return;
+      }
+      // Avoid queuing two clicks against the same accepted state while the
+      // graph is fading and rewiring. The accepted render replaces this
+      // button on success; a rejection re-enables the existing control.
+      bypassBtn.disabled = true;
+      editing.apply({
+        source: 'human',
+        candidate: candidate,
+        forceStructural: true
+      }).then(function () {
+        bypassBtn.disabled = false;
+      }, function (err) {
+        bypassBtn.disabled = false;
+        console.error('ChainCanvas: effect bypass change was not accepted', err);
+      });
     });
 
     removeBtn.addEventListener('click', function (event) {
@@ -2131,105 +2224,76 @@
       event.stopPropagation();
       card.remove();
       delete nodesById[id];
-      // FEW-2: drop the removed node's board position too (the store
-      // would prune it on save anyway; keeping the live map exact means
-      // currentLayout() is always garbage-free).
-      delete positions[id];
+      // Drop the removed node's own width too (the store would prune it
+      // on save anyway; keeping the live map exact means currentLayout()
+      // is always garbage-free).
+      delete cardWidths[id];
       delete cardHugW[id];
-      // Same one structural gesture adapter used by add and cord reorder.
+      // Same one structural gesture adapter used by add and drag reorder.
       commitStructuralChange();
     });
 
-    // FEW-2: pointerdown anywhere on the section brings it to FRONT
-    // (z-order only — DOM order still equals chain order, PD-4).
-    card.addEventListener('pointerdown', function () {
-      bringCardToFront(card);
+    // Hover-preview round (2026-08-31, refined 2026-09-01 user direction):
+    // hovering anywhere on the card shows the module's general info
+    // (name + plain-language blurb — the same line the Effects tab's chip
+    // hover shows) in the display register. A param row inside the card
+    // (src/param-controls.js's own listener, reached through the
+    // CanvasRegister bridge) pushes a MORE specific preview — that
+    // control's current value — while the pointer sits over it, and pops
+    // back to this card-level preview on leaving the row without needing
+    // to know it exists; see the registerPreviewStack comment above.
+    // Mouse-only, same as the retired code-badge tooltip it replaces: no
+    // keyboard-equivalent path to invent (the card itself carries no
+    // accessible name of its own — its controls remain the announced
+    // truth). Naturally gated pre-Start: .canvas is pointer-events:none
+    // until the engine runs, so these never fire before then.
+    card.addEventListener('mouseenter', function () {
+      showRegisterPreview(effectLabel(type), '', '', paletteTypePreview(type));
+    });
+    card.addEventListener('mouseleave', function () {
+      hideRegisterPreview();
     });
 
-    // A11Y-1: a control RECEIVING focus raises its section the same way
-    // (bubbling focusin — 'focus' itself does not bubble). Z-order only:
-    // no focus() call, no DOM move; the ring can never paint beneath a
-    // previously fronted overlapping neighbor.
-    card.addEventListener('focusin', function () {
-      bringCardToFront(card);
-    });
-
-    // FEW-2: the GRIP now MOVES POSITION (snap-quantized to GRID_PITCH),
-    // never an order. The drag itself resolves on the document-level
-    // pointermove/up handlers (initPositionDragWiring); this listener
-    // only ARMS it. dragActive goes true for the whole gesture so agent
-    // mutations queue behind it (MC-4 discipline, unchanged consumer).
+    // The GRIP arms a DRAG-TO-REORDER (board redesign, 2026-09-01 — see
+    // the REORDER block above): the drag itself resolves on the
+    // document-level pointermove/up handlers (initBoardDragWiring); this
+    // listener only ARMS it. dragActive goes true for the whole gesture
+    // so agent mutations queue behind it (MC-4 discipline, unchanged
+    // consumer).
     handle.addEventListener('pointerdown', function (event) {
-      if (positionDrag || cordDrag || resizeDrag) {
-        return; // one gesture at a time (a cord edit owns the pointer too)
-      }
-      if (event && typeof event.button === 'number' && event.button !== 0) {
-        return; // primary pointer only
-      }
-      if (event && typeof event.preventDefault === 'function') {
-        event.preventDefault();
-      }
-      var pos = positions[id] || placeNewNode(id);
-      bringCardToFront(card);
-      dragActive = true;
-      positionDrag = {
-        card: card,
-        id: id,
-        startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
-        startY: event && typeof event.clientY === 'number' ? event.clientY : 0,
-        originX: pos.x,
-        originY: pos.y,
-        moved: false
-      };
+      armReorderDrag(card, id, event);
     });
 
-    // The header band is the card's MOVE grip (2026-08-31 dead-space
-    // round, user direction "cards aren't moveable"): pointerdown
-    // anywhere on the rail arms the same seat drag the machined grip
-    // icon arms — EXCLUDING the real controls that live in the band
-    // (collapse, eject) so pressing them never starts a move. The grip
-    // icon keeps its own listener for its visual affordance; the guard
-    // `if (positionDrag ...) return` makes double-arming impossible.
-    rail.addEventListener('pointerdown', function (event) {
-      if (positionDrag || cordDrag || resizeDrag) {
-        return;
-      }
+    // ...and so is the SECTION ITSELF (2026-09-01 user direction: "cards
+    // don't want to drag as easily as they should"). The rail alone was
+    // a 6.5rem strip on a 208px card — the advertised grip, but far too
+    // small to be the only one. Pressing anywhere on the section arms the
+    // same gesture, EXCLUDING every control that owns its own press
+    // (NO_DRAG_SELECTOR: knobs, pads, trims, the bypass/fold/eject keys,
+    // the resize corner). The grip icon keeps its own listener for its
+    // affordance; armReorderDrag's own
+    // `if (reorderDrag || resizeDrag || paletteDrag) return` guard makes
+    // double-arming impossible either way.
+    card.addEventListener('pointerdown', function (event) {
       var target = event && event.target;
       if (target && typeof target.closest === 'function' &&
-          target.closest('button, input, label, .node-resize')) {
-        return; // a control in the band owns this press
+          target.closest(NO_DRAG_SELECTOR)) {
+        return; // a real control owns this press
       }
-      if (event && typeof event.button === 'number' && event.button !== 0) {
-        return; // primary pointer only
-      }
-      if (event && typeof event.preventDefault === 'function') {
-        event.preventDefault();
-      }
-      var pos = positions[id] || placeNewNode(id);
-      bringCardToFront(card);
-      dragActive = true;
-      positionDrag = {
-        card: card,
-        id: id,
-        startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
-        startY: event && typeof event.clientY === 'number' ? event.clientY : 0,
-        originX: pos.x,
-        originY: pos.y,
-        moved: false
-      };
+      armReorderDrag(card, id, event);
     });
 
-    // The width-resize grip (2026-08-31 round): a machined corner mark
-    // (CSS-drawn dot field, .node-resize) at the card's bottom-right.
-    // Pointer-only, like the position grip — the resize is a STYLE edit
-    // (w joins x/y in the layout entry), never an order or a sound. The
-    // drag resolves on the document-level onResizePointerMove/End pair.
+    // The width-resize grip: a machined corner mark (CSS-drawn dot field,
+    // .node-resize) at the card's bottom-right. Pointer-only, like the
+    // reorder grip — the resize is a STYLE edit (width), never an order
+    // or a sound. The drag resolves on the document-level
+    // onResizePointerMove/End pair.
     var resizeGrip = document.createElement('div');
     resizeGrip.className = 'node-resize';
     resizeGrip.setAttribute('aria-hidden', 'true');
     resizeGrip.title = 'Drag to resize';
     resizeGrip.addEventListener('pointerdown', function (event) {
-      if (positionDrag || cordDrag || resizeDrag) {
+      if (reorderDrag || resizeDrag) {
         return; // one gesture at a time
       }
       if (event && typeof event.button === 'number' && event.button !== 0) {
@@ -2238,16 +2302,14 @@
       if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
       }
-      var pos = positions[id] || placeNewNode(id);
-      bringCardToFront(card);
       dragActive = true;
       resizeDrag = {
         card: card,
         id: id,
         startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
         originW: cardWidth(id),
-        hadStoredWidth: Object.prototype.hasOwnProperty.call(pos, 'w'),
-        originStoredW: pos.w,
+        hadStoredWidth: Object.prototype.hasOwnProperty.call(cardWidths, id),
+        originStoredW: cardWidths[id],
         moved: false
       };
     });
@@ -2259,13 +2321,13 @@
   // ---------------------------------------------------------------------
   // SortableJS wiring (Part E) — RETIRED ENTIRELY (2026-08-31 honesty
   // round, the #16 dead-affordance finding). The chain-side instance was
-  // retired by FEW-2/PD-1 (order moves live in cord editing; the grip
-  // moves position); the PALETTE instance is now retired too: it dragged
-  // a clone with no receiver on the free board, so the gesture could
-  // never add anything — a documented verb that cannot work. The
-  // committed add verbs are the chip CLICK and keyboard activation (both
-  // addNodeType, first-free-slot placement). vendor/sortable.min.js is
-  // no longer loaded; SortableJS leaves THIRD_PARTY_NOTICES with it.
+  // retired by FEW-2/PD-1 (order moves eventually landed on the board
+  // redesign's own drag-to-reorder above); the PALETTE instance is
+  // retired too: it dragged a clone with no receiver on the board, so the
+  // gesture could never add anything — a documented verb that cannot
+  // work. The committed add verbs are the chip CLICK and keyboard
+  // activation (both addNodeType). vendor/sortable.min.js is no longer
+  // loaded; SortableJS leaves THIRD_PARTY_NOTICES with it.
   // ---------------------------------------------------------------------
 
   /**
@@ -2300,7 +2362,8 @@
     // toggles display, so the live copy persists across every later
     // empty/populated state (e.g. removing the last node re-shows it).
     if (emptyHintEl) {
-      emptyHintEl.textContent = 'Click an effect to add it to the chain';
+      emptyHintEl.textContent =
+        'Click an effect to add it at the end — or drag one here to place it';
     }
     // The display register's state line flips at the same transition —
     // ENGINE LIVE with the live module count (mode returns to 'state';
@@ -2315,50 +2378,22 @@
    * entry point until main.js reports a successful Start again.
    */
   function onEngineStopped() {
-    if (cordDrag) {
-      cancelCordDrag();
+    if (reorderDrag) {
+      cancelReorderDrag();
     }
-    var layoutRestored = false;
-    if (positionDrag) {
-      var movedPos = positions[positionDrag.id];
-      if (movedPos) {
-        movedPos.x = positionDrag.originX;
-        movedPos.y = positionDrag.originY;
-        applyPositionToCard(
-          positionDrag.card,
-          positionDrag.originX,
-          positionDrag.originY,
-          positionDrag.id
-        );
-        layoutRestored = true;
-      }
-      positionDrag = null;
+    if (paletteDrag) {
+      cancelPaletteDrag();
     }
     if (resizeDrag) {
-      var resizedPos = positions[resizeDrag.id];
-      if (resizedPos) {
-        if (resizeDrag.hadStoredWidth) {
-          resizedPos.w = resizeDrag.originStoredW;
-        } else {
-          delete resizedPos.w;
-        }
-        applyPositionToCard(
-          resizeDrag.card,
-          resizedPos.x,
-          resizedPos.y,
-          resizeDrag.id
-        );
-        layoutRestored = true;
+      if (resizeDrag.hadStoredWidth) {
+        cardWidths[resizeDrag.id] = resizeDrag.originStoredW;
+      } else {
+        delete cardWidths[resizeDrag.id];
       }
+      resizeDrag.card.style.width = cardWidth(resizeDrag.id) + 'px';
       resizeDrag = null;
     }
-    if (layoutRestored) {
-      refreshBoardExtent();
-      renderCords();
-    }
-    if (!cordDrag) {
-      dragActive = false;
-    }
+    dragActive = false;
     if (layoutEl) {
       layoutEl.classList.add('engine-not-started');
       // Native inert removes every descendant control from focus and event
@@ -2413,38 +2448,47 @@
    * anyway, since the two prefixes are different strings.
    *
    * @param {Array<{id: string, type: string, params: Object}>} model
-   * @param {Object<string, {x: number, y: number, scale?: number, flow?: string}>} [layout]
-   *   FEW-2: the saved layout (FEW-1's store form). When provided, each
-   *   entry is applied EXACTLY (snapped to the grid); nodes WITHOUT an
-   *   entry are carried forward if they already sit on the board (an
-   *   agent rebuild keeps surviving nodes where the operator left them),
-   *   else auto-placed at the first free grid slot. When omitted the same
-   *   rules run against an empty saved map.
+   * @param {Object<string, {w?: number}>} [layout]
+   *   the saved layout (FEW-1's store form, board-redesign shape). When
+   *   an entry carries a `w`, that width is applied EXACTLY (clamped);
+   *   nodes without one are carried forward at their current width if
+   *   already on the board (an agent rebuild keeps a human's manual
+   *   resize), else default to the content hug. When omitted the same
+   *   rules run against an empty saved map. Order is no longer a layout
+   *   concern — the array's own order IS the chain order.
    * @param {{freshSeats?: boolean}} [options]
-   *   freshSeats (2026-08-31, #16 stale-seats finding): skip the
-   *   carry-forward branch entirely — every entry takes the first-free
+   *   freshSeats (#16 stale-seats finding): skip the carry-forward
+   *   branch entirely — every entry takes its saved/default width.
    *   stack. Preset loads (src/presets-ui.js) set it: a preset REPLACES
    *   the board, so matching node ids must not inherit their current
-   *   seats (the documented tidy layout). Agent rebuilds and startup
-   *   restores leave it unset and keep the carry-forward rule.
+   *   manual resize (the documented tidy default). Agent rebuilds and
+   *   startup restores leave it unset and keep the carry-forward rule.
    */
   function renderModel(model, layout, options) {
     // Chain replacement invalidates every in-flight board gesture (the
-    // #16 race finding): a cord edit / seat move / width resize armed
-    // against the OLD chain must never commit against the replacement
-    // board. finishCordDrag(null) is the REVERT path (no target = no
-    // commit), and the seat/resize drags are dropped wholesale — loadModel
-    // re-derives every position below, so their pending writes are
-    // meaningless. This runs FIRST, before the DOM swap clears the
-    // elements those gestures hold.
-    if (cordDrag) {
-      cancelCordDrag();
+    // #16 race finding): a reorder drag / width resize armed against the
+    // OLD chain must never commit against the replacement board.
+    // cancelReorderDrag() is the REVERT path (no commit), and the resize
+    // drag is dropped wholesale — the width resolution below re-derives
+    // every card's width anyway, so its pending write is meaningless.
+    // This runs FIRST, before the DOM swap clears the elements those
+    // gestures hold.
+    if (reorderDrag) {
+      cancelReorderDrag();
     }
-    if (positionDrag || resizeDrag) {
-      positionDrag = null;
+    if (paletteDrag) {
+      cancelPaletteDrag();
+    }
+    if (resizeDrag) {
       resizeDrag = null;
       dragActive = false;
     }
+    // Every card about to be destroyed may be sitting UNDER the pointer,
+    // and a destroyed element never fires its mouseleave — so the hover
+    // previews those cards pushed would otherwise stay on the register
+    // forever. Unwind them here, at the one place the whole row is
+    // replaced (see the registerPreviewStack comment).
+    resetRegisterPreviews();
     chainListEl.innerHTML = '';
     nodesById = {};
 
@@ -2453,7 +2497,12 @@
       // seeds, which recomputeModelFromDom() and the autosave read) gets
       // the canonical STRING for any `values` param, never a raw numeric
       // enum that the visible pad could not display.
-      var card = createNodeCard(entry.type, canonicalParams(entry.type, entry.params), entry.id);
+      var card = createNodeCard(
+        entry.type,
+        canonicalParams(entry.type, entry.params),
+        entry.id,
+        entry.bypassed === true
+      );
       chainListEl.appendChild(card);
     });
 
@@ -2475,46 +2524,30 @@
 
     recomputeModelFromDom();
 
-    // FEW-2: resolve the board's positions for the freshly-loaded chain
-    // (saved entry > carried-forward seat > first free slot), then paint.
-    // The store already sanitized whatever it handed us; the isFinite
-    // guards here keep a hostile DIRECT caller from poisoning the map.
-    var previous = positions;
-    // options.freshSeats (#16 stale-seats finding): a PRESET LOAD replaces
-    // the whole board, so matching node ids do NOT inherit their old seats
-    // — every section takes a first-free slot (the documented tidy stack).
-    // The default (agent rebuilds, startup restore) keeps the
-    // carry-forward rule: surviving sections stay where the operator
-    // left them.
+    // Resolve each card's WIDTH for the freshly-loaded chain (saved entry
+    // > carried-forward manual resize > content hug/default), then paint.
+    // Order needs no resolution at all — model.forEach above already
+    // appended every card in the model's own order, and DOM order IS
+    // chain order (PD-4).
+    var previousWidths = cardWidths;
+    // options.freshSeats (#16 stale-seats finding, name carried forward
+    // from the free-board era): a PRESET LOAD replaces the whole board,
+    // so a matching node id does NOT inherit its old manual resize —
+    // every card takes its saved width or the content hug (the
+    // documented tidy default). Agent rebuilds and startup restores leave
+    // it unset and keep the carry-forward rule.
     var freshSeats = !!(options && options.freshSeats);
-    positions = {};
+    cardWidths = {};
     chainModel.forEach(function (entry) {
       var saved = layout ? layout[entry.id] : null;
-      if (saved && typeof saved.x === 'number' && isFinite(saved.x) &&
-          typeof saved.y === 'number' && isFinite(saved.y)) {
-        positions[entry.id] = {
-          // Math.max(0, ...) — the board has no negative region: a hostile
-          // or hand-edited payload with negative seats would otherwise
-          // park live cards outside the reachable board (the #16 finding).
-          x: Math.max(0, snapToGrid(saved.x)),
-          y: Math.max(0, snapToGrid(saved.y)),
-          // A saved width rides along clamped (the condensed range is the
-          // board's own geometry contract); absent -> the CSS default.
-          w: typeof saved.w === 'number' && isFinite(saved.w) ? clampCardW(saved.w) : undefined,
-          scale: typeof saved.scale === 'number' && isFinite(saved.scale) ? saved.scale : 1,
-          // Vertical flow is retired: whatever a legacy payload says, the
-          // entry loads horizontal (the field survives for store-shape
-          // compatibility; the store normalizes it on save).
-          flow: 'horizontal',
-        };
-      } else if (!freshSeats && previous[entry.id]) {
-        positions[entry.id] = previous[entry.id];
-      } else {
-        placeNewNode(entry.id);
+      if (saved && typeof saved.w === 'number' && isFinite(saved.w)) {
+        cardWidths[entry.id] = clampCardW(saved.w);
+      } else if (!freshSeats && typeof previousWidths[entry.id] === 'number') {
+        cardWidths[entry.id] = previousWidths[entry.id];
       }
     });
-    applyPositionsToCards();
-    renderCords(); // FEW-3: re-route onto the freshly-loaded board
+    applyCardWidths();
+    renderChainArrows(); // re-draw the connectors onto the freshly-loaded row
     renderSignalOrderStrip();
 
     updateEmptyHint();
@@ -2621,7 +2654,11 @@
    */
   function getCurrentModel() {
     return chainModel.map(function (entry) {
-      return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+      var copy = { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+      if (entry.bypassed === true) {
+        copy.bypassed = true;
+      }
+      return copy;
     });
   }
 
@@ -2754,15 +2791,13 @@
     isDragActive: isDragActive,
     // Public mutation wrapper; accepted rendering stays in renderNodeParam.
     updateNodeParam: updateNodeParam,
-    // FEW-2 seams: the grid constants (tests + FEW-5/6/7 consumers), the
-    // live layout map (read-only by convention — callers must not mutate),
-    // TIDY, and the palette click/keyboard add verb (the drag-add twin
-    // with the chain Sortable retired per PD-1).
+    // The grid constant (tests + the width-resize consumer), the live
+    // layout map (read-only by convention — callers must not mutate), and
+    // the palette click/keyboard add verb (the drag-add twin with the
+    // chain Sortable retired per PD-1).
     GRID_PITCH: GRID_PITCH,
-    TIDY_ROW_PITCH: TIDY_ROW_PITCH,
-    TIDY_X: TIDY_X,
-    // The condensed-width contract (2026-08-31 round) — same role as the
-    // grid constants: tests + future consumers read the one source.
+    // The condensed-width contract — same role as the grid constant:
+    // tests + future consumers read the one source.
     CARD_W_DEFAULT_PX: CARD_W_DEFAULT_PX,
     CARD_W_MIN_PX: CARD_W_MIN_PX,
     CARD_W_MAX_PX: CARD_W_MAX_PX,
@@ -2781,11 +2816,18 @@
 
   // The display-register feed consumed by src/param-controls.js (guarded
   // there): showParam for the touched/externally-written control, the
-  // internal state line for this file's own engine/structural moments.
-  // Exported SEPARATELY from ChainCanvas on purpose — param-controls.js
-  // loads before canvas.js and must not need the canvas namespace to
-  // render (a bare param-controls harness works with no register at all).
+  // internal state line for this file's own engine/structural moments,
+  // and showPreview/hidePreview so a param row's OWN hover can push/pop
+  // the same nested preview stack a card-level hover pushes onto (see the
+  // registerPreviewStack comment above) — the row is the more specific,
+  // inner hover, so it always renders on top of the card's general one
+  // and falls back to it on mouseleave. Exported SEPARATELY from
+  // ChainCanvas on purpose — param-controls.js loads before canvas.js and
+  // must not need the canvas namespace to render (a bare param-controls
+  // harness works with no register at all).
   window.CanvasRegister = {
-    showParam: showRegisterParam
+    showParam: showRegisterParam,
+    showPreview: showRegisterPreview,
+    hidePreview: hideRegisterPreview
   };
 })();

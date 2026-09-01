@@ -21,7 +21,7 @@
 //      (buildGraph + autosave + markModified + noteHumanEdit), and the
 //      keyboard-add placement policy keeps a terminal limiter terminal.
 //   E. CARDS: per new type — family edge hooks, header anatomy (grip
-//      aria-hidden, label, collapse + remove aria-labels), params
+//      aria-hidden, label, bypass + collapse + remove aria-labels), params
 //      wrapped for the VIS-7 collapse (one row per paramSpec entry,
 //      autotune's Key/Scale as UI-1 <select>s with 12/3 options), and
 //      the inherited collapse toggle flipping .collapsed + aria-expanded.
@@ -476,8 +476,8 @@ check(
   'palette renders one chip per registered type (10)'
 );
 check(
-  paletteListEl.children.length === 13,
-  'flat palette list carries 10 chips + 3 group headers as direct children'
+  paletteListEl.children.length === 15,
+  'flat palette list carries 10 chips + 5 group headers as direct children'
 );
 check(
   windowStub.Sortable.instances.length === 0,
@@ -567,8 +567,8 @@ check(
 );
 check(
   emptyHintEl.textContent ===
-    'Click an effect to add it to the chain',
-  'empty-hint copy flips at the Start transition (the working add verbs — palette drag is retired)'
+    'Click an effect to add it at the end — or drag one here to place it',
+  'empty-hint copy flips at the Start transition, naming BOTH add verbs (click = end of chain, drag = a chosen slot)'
 );
 windowStub.ChainCanvas.onEngineStopped();
 check(
@@ -660,8 +660,17 @@ NEW_TYPES.forEach(function (t) {
 
   var foot = sectionFoot(card);
   var footButtons = foot.children;
-  var collapseBtn = footButtons[0];
-  var removeBtn = footButtons[1];
+  var bypassBtn = footButtons[0];
+  var collapseBtn = footButtons[1];
+  var removeBtn = footButtons[2];
+  check(
+    bypassBtn.tagName === 'BUTTON' &&
+      bypassBtn.className === 'node-bypass' &&
+      bypassBtn.textContent === 'IN' &&
+      bypassBtn.attrs['aria-pressed'] === 'false' &&
+      bypassBtn.attrs['aria-label'] === 'Bypass ' + t.label + ' effect',
+    t.type + ' bypass button starts in the signal path with an accessible toggle state'
+  );
   check(
     collapseBtn.tagName === 'BUTTON' &&
       collapseBtn.className === 'node-collapse' &&
@@ -752,6 +761,38 @@ NEW_TYPES.forEach(function (t) {
   );
 });
 
+function firstCardForType(type) {
+  return cards().filter(function (card) {
+    return card.attrs['data-family'] === type;
+  })[0];
+}
+
+var bypassTarget = firstCardForType('distortion');
+var bypassRequestCount = seamRequests.length;
+sectionFoot(bypassTarget).children[0].fire('click');
+var bypassedDistortion = firstCardForType('distortion');
+var bypassedButton = sectionFoot(bypassedDistortion).children[0];
+check(
+  seamRequests.length === bypassRequestCount + 1 &&
+    seamRequests[seamRequests.length - 1].forceStructural === true &&
+    windowStub.ChainCanvas.getCurrentModel()[0].bypassed === true,
+  'distortion bypass commits one structural candidate while retaining the node'
+);
+check(
+  bypassedDistortion.classList.contains('node-bypassed') &&
+    bypassedDistortion.attrs['data-bypassed'] === 'true' &&
+    bypassedButton.textContent === 'BYP' &&
+    bypassedButton.attrs['aria-pressed'] === 'true',
+  'accepted bypass renders the card and toggle in the BYP state'
+);
+bypassedButton.fire('click');
+check(
+  !Object.prototype.hasOwnProperty.call(windowStub.ChainCanvas.getCurrentModel()[0], 'bypassed') &&
+    !firstCardForType('distortion').classList.contains('node-bypassed') &&
+    sectionFoot(firstCardForType('distortion')).children[0].textContent === 'IN',
+  're-enable returns the same node to IN and removes the optional bypass flag'
+);
+
 // Autotune specifics: Key/Scale rows are the UI-1 discrete pad groups
 // with the full 12-key / 3-scale sets, at registered defaults.
 var autotuneCard = builtCards.filter(function (c) {
@@ -788,8 +829,8 @@ check(
   'autotune card carries the .node-experimental-badge component'
 );
 check(
-  autotuneBadge && autotuneBadge.textContent === 'Experimental',
-  'card badge text is "Experimental" (SR-visible by content, not title-only)'
+  autotuneBadge && autotuneBadge.textContent === 'EXP',
+  'card badge text is "EXP" (2026-09-01 width-floor fix: matches the palette chip\'s own compact form; SR-visible by content, not title-only)'
 );
 check(
   autotuneBadge && /Autotune is experimental/.test(autotuneBadge.title),
@@ -1136,11 +1177,17 @@ check(
 );
 
 // ----------------------------------------------------------------------
-// J. Grouping (finishing entry 3, critique P2-3) — the ten chips chunk
-// under three operator-language silkscreen headers, INTERLEAVED in the
-// flat palette list. Everything the critique demanded is guarded here:
-// group structure + membership (registry-driven within groups), the
-// legend register of the header rule (the optgroup precedent), chips
+// J. Grouping (finishing entry 3, critique P2-3; re-categorized
+// 2026-09-01 once the Tone.js effects pushed the catalog to 14 types —
+// see canvas.js's PALETTE_TYPE_GROUP comment for the full rationale).
+// This harness only registers the original ten (NEW_TYPES above adds
+// cycle-3's four; the Tone.js four are a separate suite,
+// test-tone-effects.js), so of the five groups the re-categorization
+// introduced, "movement" and "pitch" render here with exactly one member
+// each (chorus, autotune) — still real, still-rendering groups, not an
+// artifact of this harness. Everything the critique demanded is guarded
+// here: group structure + membership (registry-driven within groups),
+// the legend register of the header rule (the optgroup precedent), chips
 // staying direct-children buttons in DOM order (R2-2 keyboard/SR flow
 // unchanged, no new interactive layer), every chip still operative
 // through the shared commit chokepoint, the limiter chip preserved
@@ -1148,21 +1195,23 @@ check(
 // its drag items to '.node-chip' so headers are inert to the pointer.
 // This doubles as a grouping-completeness gate: a future type without a
 // group mapping falls into the 'more' fallback and FAILS the
-// exactly-3-headers check, forcing a deliberate grouping decision the
+// exactly-5-headers check, forcing a deliberate grouping decision the
 // same way section H forces a help-lines decision.
 // ----------------------------------------------------------------------
-console.log('J. palette grouping (finishing entry 3)');
+console.log('J. palette grouping (finishing entry 3, re-categorized 2026-09-01)');
 
 var GROUP_HEADERS = [
-  { id: 'shape', label: 'Shape your voice', members: ['eq', 'distortion', 'chorus', 'autotune'] },
+  { id: 'shape', label: 'Shape your voice', members: ['eq', 'distortion'] },
+  { id: 'movement', label: 'Add movement', members: ['chorus'] },
+  { id: 'pitch', label: 'Change your pitch', members: ['autotune'] },
   { id: 'polish', label: 'Polish your sound', members: ['gain', 'compressor', 'delay', 'reverb'] },
   { id: 'safe', label: 'Keep it safe', members: ['limiter', 'gate'] }
 ];
 
 var headerEls = paletteListEl.querySelectorAll('.palette-group-label');
 check(
-  headerEls.length === 3,
-  'exactly three group headers render (no fallback group — every type mapped)'
+  headerEls.length === 5,
+  'exactly five group headers render (no fallback group — every type mapped)'
 );
 check(
   headerEls.every(function (h) { return h.tagName === 'H3'; }),
@@ -1171,7 +1220,7 @@ check(
 check(
   headerEls.map(function (h) { return h.attrs['data-group']; }).join(',') ===
     GROUP_HEADERS.map(function (g) { return g.id; }).join(','),
-  'group order is shape → polish → safe'
+  'group order is shape → movement → pitch → polish → safe'
 );
 GROUP_HEADERS.forEach(function (g, gi) {
   var h = headerEls[gi];

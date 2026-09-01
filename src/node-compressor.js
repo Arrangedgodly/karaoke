@@ -77,6 +77,11 @@
   window.EffectCatalog.register('compressor', {
     label: 'Compressor',
     experimental: false,
+    // Native DynamicsCompressorNode's fixed internal look-ahead — ~6 ms
+    // regardless of the exposed attack/release settings (disclosed
+    // already in mcp-tools.js's compressor-node-count rule). Read by
+    // src/status-readouts.js's LATENCY readout.
+    latencySeconds: 0.006,
     paramSpec: [
       { id: 'threshold', label: 'Threshold', min: -60, max: 0, default: -24, step: 1, unit: 'dB' },
       { id: 'ratio', label: 'Ratio', min: 1, max: 20, default: 4, step: 0.5, unit: ':1' },

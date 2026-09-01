@@ -52,6 +52,12 @@
 // The call is guarded (a bare test harness without the register simply
 // skips it), and the PLAIN_LANGUAGE_HELP map below stays the single
 // source of the help copy — the register reuses it, never duplicates it.
+// Hover-preview round (2026-09-01 user direction): every row also pushes
+// this SAME param/value/help onto the register through
+// window.CanvasRegister.showPreview on mouseenter and pops it on
+// mouseleave — a transient, non-committing preview (never a blink, never
+// a working-copy write) layered on top of the general module-info preview
+// src/canvas.js's card-level hover shows; see registerPreviewStack there.
 //
 // Refinement entry 2 ($impeccable clarify, 2026-08-28) — the
 // plain-language help layer survives verbatim: the PLAIN_LANGUAGE_HELP
@@ -435,6 +441,35 @@
         registerShow(moduleLabel, spec.label, valueText, helpText || '');
       }
 
+      // Hover-preview round (2026-09-01 user direction): hovering this
+      // row — the knob/pad/trim itself OR its label/value text, anywhere
+      // in the row — pushes THIS param's current value onto the canvas's
+      // nested preview stack, more specific than (and layered on top of)
+      // the general module info the card itself shows on hover. Reads the
+      // control's LIVE state at hover time (never the value captured at
+      // render), so a hover after a drag or an agent write always answers
+      // truthfully. Guarded exactly like registerShow — a bare harness or
+      // a card rendered before canvas.js's bridge exists simply no-ops.
+      function previewRegister(valueText) {
+        try {
+          if (window.CanvasRegister && typeof window.CanvasRegister.showPreview === 'function') {
+            window.CanvasRegister.showPreview(moduleLabel, spec.label, valueText, helpText || '');
+          }
+        } catch (err) {
+          /* display-only */
+        }
+      }
+
+      function hidePreviewRegister() {
+        try {
+          if (window.CanvasRegister && typeof window.CanvasRegister.hidePreview === 'function') {
+            window.CanvasRegister.hidePreview();
+          }
+        } catch (err) {
+          /* display-only */
+        }
+      }
+
       var restoreAcceptedVisual = function () {};
 
       // -----------------------------------------------------------------
@@ -612,6 +647,13 @@
             feedRegister(String(spec.values[selectedIndex]));
           }
         };
+
+        row.addEventListener('mouseenter', function () {
+          previewRegister(selectedIndex < 0 ? '' : String(spec.values[selectedIndex]));
+        });
+        row.addEventListener('mouseleave', function () {
+          hidePreviewRegister();
+        });
 
         row.appendChild(padLabel);
         row.appendChild(padGroup);
@@ -842,6 +884,13 @@
 
         row.appendChild(trimUnit);
       }
+
+      row.addEventListener('mouseenter', function () {
+        previewRegister(formatValue(parseFloat(input.value), spec.unit, spec.displayScale));
+      });
+      row.addEventListener('mouseleave', function () {
+        hidePreviewRegister();
+      });
 
       if (helpText) {
         input.title = helpText;

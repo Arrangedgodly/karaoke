@@ -119,8 +119,13 @@ function FakeElement(tag) {
     return child;
   };
   this.insertBefore = function (child, ref) {
-    var idx = self.children.indexOf(ref);
+    // Detach FIRST, then locate the reference — the order the real DOM
+    // uses. Reading the index before the detach is stale whenever the
+    // moved child already sits BEFORE ref in this same parent (removing
+    // it shifts ref down one), which is exactly the case a drag ghost
+    // walking rightwards through the row hits on every move.
     if (child.parentNode) { child.parentNode.removeChild(child); }
+    var idx = self.children.indexOf(ref);
     child.parentNode = self;
     if (idx === -1) { self.children.push(child); } else { self.children.splice(idx, 0, child); }
     return child;
@@ -166,6 +171,17 @@ function FakeElement(tag) {
   };
   this.querySelectorAll = function (selector) { return queryAll(self, selector); };
   this.querySelector = function (selector) { return queryAll(self, selector)[0] || null; };
+  // Minimal .closest — only what the board redesign's keyboard-reorder
+  // handler needs: a single class selector, walking self then ancestors.
+  this.closest = function (selector) {
+    var cls = selector.charAt(0) === '.' ? selector.slice(1) : selector;
+    var node = self;
+    while (node) {
+      if (node.classList && node.classList.contains(cls)) { return node; }
+      node = node.parentNode;
+    }
+    return null;
+  };
   this.__classes = classes;
 }
 
@@ -482,6 +498,66 @@ function grabJack(kind, id) {
 function move(pt) { documentStub.__fire('pointermove', { clientX: pt.x, clientY: pt.y }); }
 function drop(pt) { documentStub.__fire('pointerup', { clientX: pt.x, clientY: pt.y }); }
 
+// --- Measurable geometry for the drop gestures -------------------------
+// The base harness stubs no getBoundingClientRect, which is a real code
+// path (canvas.js must degrade to "the end slot" without geometry) but a
+// useless one for testing WHICH slot a pointer names. These helpers paint
+// a synthetic row onto the live cards AFTER a render: card i occupies
+// [i*ROW_W, (i+1)*ROW_W) at height ROW_H, so its midpoint is a round
+// number and every assertion below can name an exact pointer x.
+//
+// Re-apply after EVERY render — commitStructuralChange() rebuilds each
+// card element, and a rebuilt card has no rect again.
+var ROW_W = 100;
+var ROW_H = 60;
+
+function rectFn(left, width) {
+  return function () {
+    return {
+      left: left, right: left + width, width: width,
+      top: 0, bottom: ROW_H, height: ROW_H
+    };
+  };
+}
+
+function layoutRow() {
+  cards().forEach(function (card, i) {
+    card.getBoundingClientRect = rectFn(i * ROW_W, ROW_W);
+  });
+  canvasFaceEl.getBoundingClientRect = rectFn(0, ROW_W * 12);
+}
+
+/** Every laid-out slot in the row, in DOM order: a card reads as its id,
+ *  the ghost reads as 'GHOST'. This is the drop preview the operator
+ *  actually sees — cards do NOT move during a drag any more, the ghost
+ *  does. */
+function slotOrder() {
+  return (chainListEl.children || []).filter(function (el) {
+    if (!el.classList) { return false; }
+    if (el.classList.contains('node-card-placeholder')) { return true; }
+    // The HELD card is lifted out of flow (position:fixed) for the whole
+    // gesture — it is still in the DOM but it no longer occupies a row
+    // slot, so it must not read as one here either.
+    return el.classList.contains('node-card') &&
+      !el.classList.contains('reorder-chosen');
+  }).map(function (el) {
+    return el.classList.contains('node-card-placeholder') ?
+      'GHOST' : el.attrs['data-node-id'];
+  });
+}
+
+function ghostEl() {
+  return (chainListEl.children || []).filter(function (el) {
+    return el.classList && el.classList.contains('node-card-placeholder');
+  })[0] || null;
+}
+
+function chipEl(type) {
+  return paletteListEl.querySelectorAll('.node-chip').filter(function (chip) {
+    return chip.attrs['data-node-type'] === type;
+  })[0] || null;
+}
+
 /** Drive one complete cord relink: grab a section's jack end, cross the
  *  detach threshold, drop exactly on the target jack point. */
 function relink(grabKind, grabId, targetKind, targetId) {
@@ -504,6 +580,26 @@ function resetBoard() {
   CC.renderModel(model3());
   focusLog.length = 0;
   documentStub.activeElement = null;
+}
+
+/** model3 ends in a LIMITER, which the safe-output clamp locks to the
+ *  last slot — useful for testing that clamp, useless for testing plain
+ *  slot geometry. This is the same three-card row with the terminal
+ *  limiter swapped for a third gain, plus the synthetic rects the drop
+ *  gestures measure against. */
+function modelOpen3() {
+  return [
+    { id: 'n1', type: 'gain', params: { level: 1 } },
+    { id: 'n2', type: 'gain', params: { level: 2 } },
+    { id: 'n3', type: 'gain', params: { level: 3 } }
+  ];
+}
+
+function resetOpen() {
+  CC.renderModel(modelOpen3());
+  focusLog.length = 0;
+  documentStub.activeElement = null;
+  layoutRow();
 }
 
 // --- CSS block extraction (the z-floor rules live in styles/main.css).
@@ -551,50 +647,162 @@ check(
   'A2: the tab order through the board equals the DOM card order (chain order)'
 );
 check(
-  tabCardOrder().length === 6,
-  'A3: every section contributes its controls to the tab flow (3 sections x collapse + remove)'
+  tabCardOrder().length === 12,
+  'A3: every section contributes its controls to the tab flow (3 sections x handle + bypass + collapse + remove — the drag handle joined the tab flow with the board redesign\'s keyboard-reorder equivalent)'
 );
 
 // ----------------------------------------------------------------------
-console.log('B. cord relinks (FEW-4 machinery) keep DOM = tab = chain');
-relink('section-in', 'n3', 'section-out', 'n1'); // n3's IN on n1's OUT: AFTER n1
+console.log('B. drag-to-reorder + its keyboard equivalent keep DOM = tab = chain');
+// The gesture previews with a GHOST — a dashed slot reserving the row
+// position the held card would land in — NOT by reordering the real
+// cards: mid-drag the model, the graph, the accepted render AND the
+// cards' own DOM order are all byte-unchanged. Geometry is painted on by
+// layoutRow() so every assertion can name an exact pointer x: card i
+// spans [100i, 100i+100), midpoint 100i+50.
+//
+// These cases run on an OPEN row (three gains, no terminal limiter) so
+// the slot each pointer names is plain geometry; the safe-output clamp
+// gets its own case at the end of the section.
+resetOpen();
+handleOf('n1').__fire('pointerdown', { clientX: 0, clientY: 30, button: 0 });
+check(CC.isDragActive() === true, 'B1: the reorder gesture arms the drag gate (agent mutations queue behind it)');
+documentStub.__fire('pointermove', { clientX: 280, clientY: 30 }); // past every midpoint -> the end
 check(
-  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n3', 'n2']),
-  'B1: IN-end relink on a section OUT jack: DOM order is the new chain order (n1, n3, n2)'
+  JSON.stringify(slotOrder()) === JSON.stringify(['n2', 'n3', 'GHOST']),
+  'B2: past the threshold a GHOST reserves the drop slot — here the end of the row'
 );
-check(
-  JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
-  'B2: the recomputed model equals the DOM order (relink changed order, nothing else)'
-);
-check(tabOrderEqualsDomOrder(), 'B3: the tab order followed the relink');
-
-resetBoard();
-relink('section-out', 'n1', 'out-in'); // n1's OUT on the out anchor: LAST
-check(
-  JSON.stringify(domOrder()) === JSON.stringify(['n2', 'n3', 'n1']),
-  'B4: OUT-end relink on the OUT corner-exit point: the dragged section is LAST in DOM order'
-);
-check(tabOrderEqualsDomOrder(), 'B5: the tab order followed (n2, n3, n1)');
-
-resetBoard();
-relink('section-in', 'n2', 'mic-out'); // n2's IN on the mic panel: FIRST
-check(
-  JSON.stringify(domOrder()) === JSON.stringify(['n2', 'n1', 'n3']),
-  'B6: IN-end relink on the mic-out point: the dragged section is FIRST in DOM order'
-);
-check(tabOrderEqualsDomOrder(), 'B7: the tab order followed (n2, n1, n3)');
-
-resetBoard();
-relink('section-out', 'n2', 'section-in', 'n3'); // n2's OUT on n3's IN: BEFORE n3
 check(
   JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']) &&
-    JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
-  'B8: OUT-end relink onto its own successor\'s IN jack computes the SAME order — a no-op (moves nothing, commits nothing), DOM = model still holds'
+    JSON.stringify(modelIds()) === JSON.stringify(['n1', 'n2', 'n3']),
+  'B2b: ...and the real cards have NOT moved — only the ghost previews (no thrash under the cursor, no commit)'
 );
+documentStub.__fire('pointermove', { clientX: 120, clientY: 30 }); // left of n2's midpoint (150)
 check(
-  jackEls().length === 8 &&
-    jackEls().every(function (el) { return !isTabStop(el); }),
-  'B9: after relinks the jack points are still 8 and still NEVER tab stops'
+  JSON.stringify(slotOrder()) === JSON.stringify(['GHOST', 'n2', 'n3']) &&
+    JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']),
+  'B2c: sliding left of the first slot midpoint moves the GHOST, and still only the ghost'
+);
+documentStub.__fire('pointermove', { clientX: 280, clientY: 30 });
+documentStub.__fire('pointerup', {});
+check(
+  CC.isDragActive() === false &&
+    JSON.stringify(domOrder()) === JSON.stringify(['n2', 'n3', 'n1']) &&
+    JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
+  'B3: dropping seats the card where the ghost stood and commits it — DOM = model, drag gate released'
+);
+check(ghostEl() === null, 'B3b: the ghost is retired by the drop');
+check(tabOrderEqualsDomOrder(), 'B4: the tab order followed the drag');
+
+// Mid-row placement, not just the ends: hold n3 and drop it between n1
+// and n2 (pointer past n1's midpoint at 50, short of n2's at 150).
+resetOpen();
+handleOf('n3').__fire('pointerdown', { clientX: 250, clientY: 30, button: 0 });
+documentStub.__fire('pointermove', { clientX: 120, clientY: 30 });
+check(
+  JSON.stringify(slotOrder()) === JSON.stringify(['n1', 'GHOST', 'n2']),
+  'B4b: the ghost lands in the exact mid-row slot the pointer names'
+);
+documentStub.__fire('pointerup', {});
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n3', 'n2']) &&
+    JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
+  'B4c: ...and the drop commits exactly that order'
+);
+
+// A drag that never crosses a midpoint is a no-op — the ghost stays in
+// the held card's own slot and the drop commits nothing.
+resetOpen();
+handleOf('n2').__fire('pointerdown', { clientX: 150, clientY: 30, button: 0 });
+documentStub.__fire('pointermove', { clientX: 160, clientY: 30 });
+check(
+  JSON.stringify(slotOrder()) === JSON.stringify(['n1', 'GHOST', 'n3']),
+  'B4d: a drag that crosses no midpoint keeps the ghost in the held card\'s own slot'
+);
+documentStub.__fire('pointerup', {});
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']) &&
+    JSON.stringify(modelIds()) === JSON.stringify(['n1', 'n2', 'n3']),
+  'B4e: ...and dropping there commits nothing (moved nothing -> commits nothing)'
+);
+
+resetOpen();
+handleOf('n1').__fire('pointerdown', { clientX: 0, clientY: 30, button: 0 });
+documentStub.__fire('pointermove', { clientX: 2, clientY: 30 }); // inside the 4px guard
+check(
+  ghostEl() === null,
+  'B5a: a move inside the deliberate-drag threshold opens no ghost at all'
+);
+documentStub.__fire('pointerup', {});
+check(
+  CC.isDragActive() === false &&
+    JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']),
+  'B5: a sub-threshold press-release commits nothing (a press on a section is not a drag)'
+);
+
+resetOpen();
+handleOf('n2').__fire('pointerdown', { clientX: 150, clientY: 30, button: 0 });
+documentStub.__fire('pointermove', { clientX: 40, clientY: 30 });
+documentStub.__fire('keydown', { key: 'Escape' });
+check(
+  CC.isDragActive() === false &&
+    ghostEl() === null &&
+    JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']),
+  'B6: Escape mid-drag retires the ghost and commits nothing'
+);
+
+// The grab surface is the whole section now, not just the rail grip
+// (2026-09-01: "cards don't want to drag as easily as they should").
+resetOpen();
+var bodyCard = cardById('n1');
+bodyCard.__fire('pointerdown', { clientX: 0, clientY: 30, button: 0, target: bodyCard });
+documentStub.__fire('pointermove', { clientX: 280, clientY: 30 });
+check(
+  JSON.stringify(slotOrder()) === JSON.stringify(['n2', 'n3', 'GHOST']),
+  'B6b: a press on the SECTION BODY (not just the rail grip) arms the same drag'
+);
+documentStub.__fire('keydown', { key: 'Escape' });
+check(ghostEl() === null, 'B6c: ...and Escape cleans it up the same way');
+
+// The safe-output clamp: with a limiter sitting LAST (the default
+// preset's invariant, and what addNodeType's click add already honors),
+// no drop may name the slot behind it. The operator SEES this in the
+// ghost before releasing — it simply refuses to open past the limiter.
+resetBoard(); // n3 is a limiter, and it is last
+layoutRow();
+handleOf('n1').__fire('pointerdown', { clientX: 0, clientY: 30, button: 0 });
+documentStub.__fire('pointermove', { clientX: 400, clientY: 30 }); // way past the end
+check(
+  JSON.stringify(slotOrder()) === JSON.stringify(['n2', 'GHOST', 'n3']),
+  'B6d: a terminal limiter is locked last — the ghost stops in front of it however far right the pointer goes'
+);
+documentStub.__fire('pointerup', {});
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(['n2', 'n1', 'n3']) &&
+    JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
+  'B6e: ...and the drop commits what the ghost showed, limiter still terminal'
+);
+
+resetBoard();
+var n2Handle = handleOf('n2');
+documentStub.__fire('keydown', {
+  key: 'ArrowRight', altKey: true, target: n2Handle, preventDefault: function () {}
+});
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n3', 'n2']) &&
+    JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
+  'B7: Alt+ArrowRight on a focused handle moves that card one slot toward the end and commits immediately'
+);
+check(tabOrderEqualsDomOrder(), 'B8: the tab order followed the keyboard move');
+check(
+  documentStub.activeElement === handleOf('n2'),
+  'B9: focus follows the moved card\'s (re-rendered) handle'
+);
+documentStub.__fire('keydown', {
+  key: 'ArrowRight', altKey: true, target: handleOf('n2'), preventDefault: function () {}
+});
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n3', 'n2']),
+  'B10: Alt+ArrowRight at the row\'s end clamps — no wraparound, no-op'
 );
 
 // ----------------------------------------------------------------------
@@ -638,136 +846,115 @@ check(
 check(tabOrderEqualsDomOrder(), 'C8: the tab order equals the agent-loaded chain order');
 
 // ----------------------------------------------------------------------
-console.log('D. cord layer + jack points: aria-hidden, pointer-inert to AT, pointer-live for cords');
-resetBoard();
-var layer = cordLayer();
+console.log('D. the palette\'s two add verbs: click adds at the end, a drag places it');
+// The chip keeps its click add (append, or just before a terminal
+// limiter) AND gains a placement-aware drag that reuses the reorder
+// gesture's whole vocabulary — same ghost, same slot snapshot, same
+// safe-output clamp, same "commits only on the drop" rule. The only
+// thing the drag adds is a DROP ZONE: released off the board, it adds
+// nothing at all.
+//
+// This harness's catalog stub registers two types (gain, limiter), so
+// the added module is identified by WHERE it landed among the seeded
+// ids, not by a family the row does not otherwise carry.
+CC.onEngineStarted(); // chips ship disabled; this is the transition that arms them
+
+function familyOrder() {
+  return cards().map(function (c) { return c.attrs['data-family']; });
+}
+
+/** The seeded ids in row order, with any card this section just added
+ *  reading as 'NEW' — the shape assertion each add is checked against. */
+function addedShape(seeded) {
+  return domOrder().map(function (id) {
+    return seeded.indexOf(id) === -1 ? 'NEW' : id;
+  });
+}
+
+resetBoard(); // n3 is a limiter, and it is last
+layoutRow();
+chipEl('gain').__fire('click', {});
 check(
-  !!layer && layer.attrs['aria-hidden'] === 'true',
-  'D1: the cord SVG layer is aria-hidden decorative (AT never reads cords or jacks)'
-);
-check(
-  jackEls().every(function (el) { return el.getAttribute('tabindex') === null; }),
-  'D2: every jack point carries NO tabindex — the SVG circles FEW-4 built are outside the tab flow as-built'
-);
-check(
-  jackEls().every(function (el) {
-    return (el.listeners.pointerdown || []).length >= 1;
-  }),
-  'D3: every jack point carries its pointerdown grab listener (pointer-interactive for cords)'
-);
-check(
-  tabStops(layer).length === 0,
-  'D4: the ENTIRE cord layer contributes zero tab stops'
-);
-check(
-  cssDecl(cssBlock('.cord-layer'), 'pointer-events') === 'none',
-  'D5: CSS .cord-layer is pointer-events:none — the layer is pointer-inert'
-);
-check(
-  cssDecl(cssBlock('.cord-jack'), 'pointer-events') === 'all',
-  'D6: CSS .cord-jack turns pointer-events back ON — jacks alone are grabbable'
+  JSON.stringify(addedShape(['n1', 'n2', 'n3'])) ===
+    JSON.stringify(['n1', 'n2', 'NEW', 'n3']) &&
+    JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
+  'D1: a chip CLICK appends at the end of the chain, in front of the terminal limiter'
 );
 
-// ----------------------------------------------------------------------
-console.log('E. bring-to-front on pointerdown: z-order only, focus + order untouched');
-resetBoard();
-var n1Remove = removeBtnOf('n1');
-n1Remove.focus(); // a control inside n1 currently holds focus
-focusLog.length = 0; // only gesture-driven focus moves count from here
-var n2Card = cardById('n2');
-n2Card.__fire('pointerdown', { button: 0 });
+resetOpen();
+chipEl('gain').__fire('pointerdown', { clientX: 500, clientY: 400, button: 0 });
+documentStub.__fire('pointermove', { clientX: 300, clientY: 200 }); // detached, still off the board
 check(
-  focusLog.length === 0,
-  'E1: a card-body pointerdown makes NO focus()/blur() call (bring-to-front never steals focus)'
+  ghostEl() === null,
+  'D2: a chip pulled off the board opens no ghost — there is no slot to reserve out there'
 );
+documentStub.__fire('pointermove', { clientX: 120, clientY: 30 }); // onto the row, before n2
 check(
-  documentStub.activeElement === n1Remove,
-  'E2: activeElement is unchanged — focus stays where it was (n1\'s remove button)'
+  JSON.stringify(slotOrder()) === JSON.stringify(['n1', 'GHOST', 'n2', 'n3']),
+  'D3: dragged onto the board, the ghost reserves the exact slot the pointer names'
 );
 check(
   JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']),
-  'E3: the DOM order is untouched (bring-to-front reorders PAINT, never the chain)'
+  'D3b: ...and nothing has been added yet — the ghost is the whole preview'
 );
-check(
-  parseInt(n2Card.style.zIndex, 10) > parseInt(cardById('n1').style.zIndex || '0', 10),
-  'E4: the pressed section is raised above its neighbors (the z-order lift happened)'
-);
-
-var n3YBefore = CC.currentLayout().n3.y;
-var n3Handle = handleOf('n3');
-n3Handle.__fire('pointerdown', { clientX: 100, clientY: 100, button: 0 });
-documentStub.__fire('pointermove', { clientX: 132, clientY: 148 });
 documentStub.__fire('pointerup', {});
 check(
-  focusLog.length === 0 && documentStub.activeElement === n1Remove,
-  'E5: a full grip position-drag never touches focus (focus stays on n1\'s control)'
+  JSON.stringify(addedShape(['n1', 'n2', 'n3'])) ===
+    JSON.stringify(['n1', 'NEW', 'n2', 'n3']) &&
+    JSON.stringify(modelIds()) === JSON.stringify(domOrder()),
+  'D4: dropping seats the new module in the ghost\'s slot and commits it — DOM = model'
 );
 check(
-  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']) &&
-    CC.currentLayout().n3.y === n3YBefore + CC.snapToGrid(148 - 100),
-  'E6: the grip drag moved the SEAT only (snap-quantized dy, GRID_PITCH) — order byte-stable'
+  ghostEl() === null && CC.isDragActive() === false,
+  'D4b: the ghost is retired and the drag gate released'
+);
+// The pointerup that ends the drag can land back on the chip and fire
+// its click; that click must NOT add a second copy.
+chipEl('gain').__fire('click', {});
+check(
+  cards().length === 4,
+  'D5: the click that trails a completed chip drag is swallowed — one gesture, one module'
 );
 
-grabJack('section-in', 'n2');
-documentStub.__fire('pointerup', {}); // sub-threshold release: complete no-op
-check(
-  focusLog.length === 0 && documentStub.activeElement === n1Remove,
-  'E7: a jack grab never touches focus (armCordDrag preventDefaults — the grab cannot move focus)'
-);
-
-// ----------------------------------------------------------------------
-console.log('F. the focus-ring z-floor: floor rule + bring-to-front on focus');
-var cardBlock = cssBlock('.node-card');
-check(
-  zIndexBlockInt(cardBlock) !== null && zIndexBlockInt(cardBlock) >= 1,
-  'F1: CSS .node-card carries a z-index FLOOR >= 1 (every section paints above the cord layer)'
-);
-check(
-  zIndexBlockInt(cssBlock('.cord-layer')) === 0,
-  'F2: CSS .cord-layer sits at z-index 0 — below every section (the floor\'s other edge)'
-);
-check(
-  cssBlock('.node-card:focus-within') !== null,
-  'F3: CSS .node-card:focus-within exists (the focus LIFT is styled on the touched section)'
-);
-
-// n2 was fronted by the E-section pointerdown (inline zIndex); n1 sits
-// UNDER it. Focus now lands in n1 — n1 must rise above n2 or its focus
-// ring paints beneath n2's overlap (bring-to-front on focus, A11Y-1).
-var n1Card = cardById('n1');
-var n2ZBefore = n2Card.style.zIndex;
-removeBtnOf('n1').focus(); // dispatches the bubbling focusin n1's card hears
-check(
-  parseInt(n1Card.style.zIndex, 10) > parseInt(n2ZBefore || '0', 10),
-  'F4: a control RECEIVING focus raises its section above the previously fronted card (the ring can never be occluded)'
-);
+// Released off the board: no reservation was standing, so nothing is added.
+resetOpen();
+chipEl('gain').__fire('pointerdown', { clientX: 500, clientY: 400, button: 0 });
+documentStub.__fire('pointermove', { clientX: 120, clientY: 30 }); // over the row
+documentStub.__fire('pointermove', { clientX: 120, clientY: 400 }); // back off it
+check(ghostEl() === null, 'D6: leaving the board withdraws the reservation');
+documentStub.__fire('pointerup', {});
 check(
   JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']),
-  'F5: the focus raise is z-order only — the DOM order (chain order) is untouched'
+  'D6b: ...and releasing out there adds nothing'
 );
-check(tabOrderEqualsDomOrder(), 'F6: the tab order is still exactly the chain order');
 
-// Focusing deeper inside the same FRONT card just re-raises it — no
-// neighbor is lowered below the floor and nothing reorders.
-var n1Collapse = null;
-(function walk(el) {
-  (el.children || []).some(function (child) {
-    if (child.classList.contains('node-collapse')) { n1Collapse = child; return true; }
-    walk(child);
-    return false;
-  });
-})(n1Card);
-var n1ZBefore = n1Card.style.zIndex;
-n1Collapse.focus();
+// Escape abandons a chip drag exactly as it abandons a reorder.
+resetOpen();
+chipEl('gain').__fire('pointerdown', { clientX: 500, clientY: 400, button: 0 });
+documentStub.__fire('pointermove', { clientX: 120, clientY: 30 });
+documentStub.__fire('keydown', { key: 'Escape' });
 check(
-  parseInt(n1Card.style.zIndex, 10) >= parseInt(n1ZBefore || '0', 10) &&
-    parseInt(n1Card.style.zIndex, 10) > parseInt(n2Card.style.zIndex, 10),
-  'F7: focus moving WITHIN the front section keeps it on top (re-raise is monotonic, no lowering)'
+  ghostEl() === null &&
+    CC.isDragActive() === false &&
+    JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']),
+  'D7: Escape mid chip-drag retires the ghost and adds nothing'
 );
+
+// The safe-output clamp is ONE rule shared by both drop gestures.
+resetBoard(); // n3 is a limiter, and it is last
+layoutRow();
+chipEl('gain').__fire('pointerdown', { clientX: 500, clientY: 400, button: 0 });
+documentStub.__fire('pointermove', { clientX: 400, clientY: 30 }); // way past the end of the row
 check(
-  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']) &&
-    tabOrderEqualsDomOrder(),
-  'F8: final state — DOM order = tab order = chain order, focus raised, nothing reordered'
+  JSON.stringify(slotOrder()) === JSON.stringify(['n1', 'n2', 'GHOST', 'n3']),
+  'D8: a chip dropped past the end stops in front of a terminal limiter, same clamp the reorder drag uses'
+);
+documentStub.__fire('pointerup', {});
+check(
+  JSON.stringify(addedShape(['n1', 'n2', 'n3'])) ===
+    JSON.stringify(['n1', 'n2', 'NEW', 'n3']) &&
+    familyOrder()[3] === 'limiter',
+  'D8b: ...and the committed chain keeps the limiter terminal'
 );
 
 if (failures.length === 0) {

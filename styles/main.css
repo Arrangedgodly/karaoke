@@ -74,6 +74,30 @@
   --family-chorus: #9E9ED1;
   --family-gate: #9AD5B2;
   --family-autotune: #D19ED1;
+  /* Color pass (2026-09-01, user direction) — the four Tone.js effects
+     (pitch shift, tremolo, bitcrusher, phaser) shipped after the cycle-3
+     family set above and never got their own identity color: every use
+     of --knob-arc/--chip-family/--card-family for these types fell
+     through to the NEUTRAL fallback (--pm-print-hi / --pm-ring-track /
+     --pm-print-dim — see the var(..., fallback) call sites), so the
+     palette chips and node cards for these four rendered gray instead of
+     family-colored, contradicting "family identity is always code +
+     label + arc/legend-square together" (DESIGN.md). Same methodology as
+     the cycle-3 block above (hues centered on the widest remaining gaps
+     in the existing family wheel, verified with a small script rather
+     than by eye — nearest neighbor 14.6-17.6deg away; with 14 colors now
+     sharing the one non-orange 285deg arc, sub-25deg neighbor gaps are
+     unavoidable by hue alone, same math the cycle-3 comment's own 25deg
+     bar ran into at 10 colors). This generation buys extra separation on
+     a SECOND axis instead: S58/L74, back toward cycle-2's original vivid
+     S54-58 band rather than cycle-3's muted S36 — alternating vivid/muted
+     generations reads as "unmistakably a different color" up close even
+     at a tight hue delta. Contrast on chassis 7.96-12.50 (existing set's
+     own range: 6.93-11.07) — verified, not eyeballed. */
+  --family-phaser: #96E3CC;
+  --family-tremolo: #96CAE3;
+  --family-pitchshift: #CB96E3;
+  --family-bitcrusher: #E396CF;
 
   /* Status + meter stops */
   --status-live: #7BD389;
@@ -193,6 +217,13 @@
   --pm-family-chorus: #afafca;
   --pm-family-gate: #aecbbd;
   --pm-family-autotune: #cfb4cf;
+  /* The color-pass generation's desaturated silkscreen inks (2026-09-01)
+     — same derivation as the ten above: same hue as the matching
+     --family-* arc, S24/L73, verified contrast 8.70-10.62 on chassis. */
+  --pm-family-phaser: #aacbc1;
+  --pm-family-tremolo: #aac0cb;
+  --pm-family-pitchshift: #c0aacb;
+  --pm-family-bitcrusher: #cbaac2;
 
   /* VU lamp paint: desaturated matte lamps — green stays green, the mid
      zone IS the display amber (one lamp language with the register), clip
@@ -309,11 +340,10 @@ body {
   .layout.voice-deck {
     flex: 1 1 auto;
     min-height: 0;
-    /* Left-sidebar round (2026-08-31 user direction): a bottom placement
-       for .build was tried and reverted — .layout runs as a ROW at this
-       breakpoint (.build | .voice-deck-face), reverting to a plain
-       stacked COLUMN below 901px (the base rule, unscoped) where
-       side-by-side positioning was never meant to apply anyway. */
+    /* .layout runs as a ROW at this breakpoint (.presets-panel |
+       .voice-deck-face), reverting to a plain stacked COLUMN below 901px
+       (the base rule, unscoped) where side-by-side positioning was never
+       meant to apply anyway. */
     flex-direction: row;
   }
 
@@ -327,7 +357,8 @@ body {
   .layout .canvas-panel,
   .layout .signal-order,
   .layout .voice-deck-face,
-  .layout .build {
+  .layout .presets-panel,
+  .layout .effects-panel {
     min-height: 0;
   }
 
@@ -335,15 +366,16 @@ body {
     min-width: 0;
   }
 
-  /* Row layout: .build is a fixed-width sidebar (collapsible to a rail,
-     see .build.collapsed below); .voice-deck-face — the board + the
-     signal-order strip, wrapped together so .build sits beside that
-     PAIR, not just the board — takes the remaining width and owns its
-     own column layout explicitly (rather than incidentally relying on
-     .canvas-panel's own self-contained max-height clamp to stay bounded,
-     which is the same "own your own contract" discipline the
-     grid-blowout guard above already documents). */
-  .layout .build {
+  /* Row layout: .presets-panel is a fixed-width sidebar (collapsible to
+     a rail, see .presets-panel.collapsed below); .voice-deck-face — the
+     board + the signal-order strip + the Effects panel, wrapped together
+     so Presets sits beside that WHOLE column, not just the board — takes
+     the remaining width and owns its own column layout explicitly
+     (rather than incidentally relying on .canvas-panel's own
+     self-contained max-height clamp to stay bounded, which is the same
+     "own your own contract" discipline the grid-blowout guard above
+     already documents). */
+  .layout .presets-panel {
     flex: 0 0 260px;
   }
 
@@ -354,13 +386,23 @@ body {
     flex-direction: column;
   }
 
-  /* The collapsed rail: a narrow strip showing just the toggle + the two
-     tab labels (rotated — see .build-tabs button below), no tab content.
-     CSS-only — this NEVER touches the `hidden` attribute
-     initBuildTabs()/src/canvas.js manages on .build-tab-panel (its
-     "exactly one panel visible, one hidden" invariant stays true
-     underneath); collapse is a purely visual override layered on top. */
-  .build.collapsed {
+  /* Split-panel round: the board FILLS whatever height Effects (below)
+     leaves it — the only flex-grow item in .voice-deck-face's column, so
+     ordinary flex distribution does the resize with no JS: full height
+     when Effects is collapsed, less when it's open, growing back the
+     instant it collapses again. .signal-order (natural content height)
+     and .effects-panel (a fixed flex-basis, see below) never grow or
+     shrink; .canvas-panel's own max-height clamp (unscoped, further
+     down this file) still caps the ceiling either way. */
+  .layout .canvas-panel {
+    flex: 1 1 auto;
+  }
+
+  /* The collapsed sidebar rail: a narrow strip showing just the head
+     (toggle + rotated label — see .presets-panel.collapsed .panel-label
+     below), no content. CSS-only — this NEVER touches any `hidden`
+     attribute; collapse is a purely visual override layered on top. */
+  .presets-panel.collapsed {
     flex-basis: 48px;
     /* .panel's shared 0.85rem/0.9rem padding is sized for a 260px
        sidebar — at 48px collapsed it would BE most of the rail. */
@@ -368,20 +410,54 @@ body {
     padding-right: 0.3rem;
   }
 
-  .build.collapsed .build-tab-panel {
+  .presets-panel.collapsed .presets-panel-content {
     display: none;
   }
 
-  .build.collapsed .build-tabs {
+  .presets-panel.collapsed .panel-head {
     flex-direction: column;
   }
 
-  .build.collapsed .build-tabs button {
+  .presets-panel.collapsed .panel-label {
     writing-mode: vertical-rl;
-    padding: 0.6rem 0.3rem;
   }
 
-  .layout .build-tab-panel {
+  .layout .presets-panel-content {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* The Effects panel: the SAME disclosure pattern as Presets, but on
+     the HEIGHT axis (it docks under the board, not beside it), shrinking
+     to a thin horizontal strip collapsed. Unlike the sidebar rail, the
+     label stays horizontal when collapsed: a wide, short strip has room
+     for normal text, so there is no narrow-rail rotation trick needed
+     here. Expanded, it is CONTENT-SIZED (flex-basis: auto, flex-shrink:
+     0) rather than a fixed height — a fixed 260px clipped the 4-category
+     grid into its own scrollbar at anything narrower than a very wide
+     board (measured: content needs ~238px, but 260px minus the panel
+     head/padding overhead only left ~187px of it usable), against the
+     user's explicit ask to see and choose every effect with no
+     scrolling. max-height is a generous SAFETY cap only (content still
+     grows the panel freely up to it) — .effects-panel-content's own
+     overflow-y:auto is the fallback if a much larger future effect
+     library ever actually exceeds it, not a scrollbar this content
+     should ever reach today. */
+  .effects-panel {
+    flex: 0 0 auto;
+    max-height: 60vh;
+  }
+
+  .effects-panel.collapsed {
+    flex-basis: 40px;
+    max-height: 40px;
+  }
+
+  .effects-panel.collapsed .effects-panel-content {
+    display: none;
+  }
+
+  .layout .effects-panel-content {
     min-height: 0;
     overflow-y: auto;
   }
@@ -1305,11 +1381,14 @@ select.control {
    bounded). Guided Patchbay's multi-column build panel is exactly the
    content that blows this: .palette-list's forced per-group column
    breaks (styles above) give it a multi-column min-content width, which
-   without this pushed .build wider than a narrow phone instead of
-   wrapping its columns down to fit. */
+   without this pushed the panel wider than a narrow phone instead of
+   wrapping its columns down to fit — split-panel round: still true for
+   both .presets-panel (.preset-list's rows, though those don't force
+   columns) and .effects-panel (.palette-list itself, which does). */
 .layout .canvas-panel,
 .layout .signal-order,
-.layout .build {
+.layout .presets-panel,
+.layout .effects-panel {
   min-width: 0;
 }
 
@@ -1319,8 +1398,9 @@ select.control {
    src/canvas.js's onSort/remove handlers ALSO guard on
    window.AudioEngine.isStarted directly, so this is a visual/UX affordance
    on top of a real functional guard, not the only thing preventing a
-   pre-Start drop from throwing. Includes .build (Guided Patchbay) too.
-   All three zones share the ONE Pattern Machine disabled grammar (hatch
+   pre-Start drop from throwing. Split-panel round: .presets-panel and
+   .effects-panel (Guided Patchbay's old shared .build) both included.
+   Every gated zone shares the ONE Pattern Machine disabled grammar (hatch
    + recede — see the disabled-texture block). */
 
 .panel {
@@ -1524,6 +1604,24 @@ select.control {
   --chip-family: var(--family-autotune);
 }
 
+/* Color pass (2026-09-01): the four Tone.js effects, same one-line
+   mapping as the ten above. */
+.node-chip[data-family='phaser'] {
+  --chip-family: var(--family-phaser);
+}
+
+.node-chip[data-family='tremolo'] {
+  --chip-family: var(--family-tremolo);
+}
+
+.node-chip[data-family='pitchshift'] {
+  --chip-family: var(--family-pitchshift);
+}
+
+.node-chip[data-family='bitcrusher'] {
+  --chip-family: var(--family-bitcrusher);
+}
+
 /* Hover: the module answers — bezel to full print, label to bright, a
    1px lift, and the family color appears as a 2px top EDGE (inset
    shadow: no layout shift, no glow — edge marking, not edge light). */
@@ -1545,26 +1643,10 @@ select.control {
    drag): signal-orange bezel — the module is being pulled into the
    signal path. The 2px family top edge rides along; the label stays
    bright. */
-.node-chip:active,
-.node-chip.sortable-chosen {
+.node-chip:active {
   border-color: var(--pm-accent);
   color: var(--pm-print-hi);
-  box-shadow: inset 0 2px 0 var(--chip-family, var(--pm-accent));
-  cursor: grabbing;
-}
-
-/* SortableJS drag states (forceFallback), mirroring the node-card
-   treatment below: the live clone lifts; the dashed translucent ghost
-   marks the insertion slot in the chain list. */
-.node-chip.sortable-drag {
-  opacity: 0.85;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-}
-
-.node-chip.sortable-ghost {
-  opacity: 0.35;
-  border-style: dashed;
-  transform: none;
+  box-shadow: inset 0 2px 0 var(--chip-family, var(--pm-print));
 }
 
 /* Guided Patchbay round: the Effects tab's hover/focus preview line —
@@ -1644,9 +1726,14 @@ select.control {
      Two-Deck Stack's chrome: body padding (2rem) + the 4rem system deck
      + the 4px deck seam + slack. Unscoped (applies at every width, same
      as before Guided Patchbay) — the board stays internally scrollable
-     regardless of viewport; only .build's own scroll is width-gated (see
-     .layout's @media (min-width: 901px) block) to match "below 901px the
-     zones stack and the page keeps its scroll". */
+     regardless of viewport; only .presets-panel's/.effects-panel's own
+     scroll is width-gated (see .layout's @media (min-width: 901px)
+     block) to match "below 901px the zones stack and the page keeps its
+     scroll". Split-panel round: this max-height is still the hard
+     ceiling, but within it the board now also carries flex: 1 1 auto
+     (that same @media block) so it actively FILLS whatever height
+     Effects (a fixed-size sibling, docked below) leaves free, rather
+     than just capping how tall its own content could grow. */
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 6.75rem);
@@ -1779,55 +1866,14 @@ select.control {
 }
 
 
-/* --- The board frame: fixed Voice In/Out rails + the scrolling face ---
-   Guided Patchbay round: the MIC IN header unit and the OUT footer
-   mirror are RETIRED — both meters now live in real, always-present
-   rails flanking the board, as flex SIBLINGS of .canvas (not children of
-   the scrolling region — the board genuinely scrolls, so an absolutely-
-   positioned rail inside it would scroll away with the content). Flex
-   row, stretched to the panel's remaining height; .canvas takes the
-   remaining width between the two fixed-width rails. */
-.board-frame {
-  display: flex;
-  align-items: stretch;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.io-rail {
-  flex: none;
-  width: 6.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  padding: 0.75rem 0.4rem;
-  background: var(--pm-system-deck);
-}
-
-.io-rail-in {
-  border-right: 1px solid var(--pm-groove-cut);
-  box-shadow: inset -1px 0 0 var(--pm-groove-lip);
-}
-
-.io-rail-out {
-  border-left: 1px solid var(--pm-groove-cut);
-  box-shadow: inset 1px 0 0 var(--pm-groove-lip);
-}
-
-.io-rail-label {
-  margin: 0;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--pm-print);
-  text-align: center;
-}
-
-/* --- The face (scrolling flow) ---------------------------------------- */
-
+/* --- The face (scrolling flow) ----------------------------------------
+   Board redesign (2026-09-01): the fixed Voice In/Out rails are RETIRED
+   along with the free board they flanked — both meters now mount as
+   their own panel-level strips (src/meters.js's buildFooterUnit, styled
+   in the ".canvas-footer" block further down), one above this element,
+   one below, as .canvas-panel's OWN flex children — never inside
+   .canvas, so neither of them scrolls or clips with the board. .canvas
+   is simply the panel's scrolling region now. */
 .canvas {
   display: flex;
   flex-direction: column;
@@ -1837,185 +1883,159 @@ select.control {
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-  /* FEW-3: the positioning context for the cord layer — the SVG and the
-     .chain-list then share ONE coordinate space (the list's live
-     offsetLeft/offsetTop map 1:1 onto the layer's origin), and the
-     layer scrolls WITH the board instead of floating over the panel. */
-  position: relative;
-}
-
-/* Rail anchors (MIC IN / OUT) — silkscreen JACK PRINT, not cards: the
-   drawn jack ring + the label in print, the VIS-5 meter unit beneath.
-   No border-radius island, no dashed target. Stacked vertically (rather
-   than the old horizontal print-row reading) to fit the narrow rail —
-   the .anchor base rule below is the shared jack anatomy; this is the
-   rail's own layout. */
-.anchor {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.15rem;
-  background: transparent;
-  border: none;
-  color: var(--pm-print);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-
-/* The drawn jack: a threaded ring with a dark socket — authored SVG-free
-   geometry (border ring + radial socket), never a text glyph. */
-.anchor::before {
-  content: '';
-  flex: none;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 2px solid var(--pm-print);
-  background: radial-gradient(circle, var(--pm-register-bg) 0 2.5px, transparent 2.5px);
-}
-
-.anchor .meter-unit {
-  margin: 0;
 }
 
 .chain-list {
   display: flex;
-  flex-direction: column;
-  /* The grooves between sections are part of each section's top edge
-     (see .node-card below), so the list itself carries no gap. */
-  gap: 0;
+  /* flex-direction: row + align-items: flex-start ride the permanent
+     .flow-horizontal override just below (the only reading left) rather
+     than duplicating them here. */
+  /* Board redesign: cards are plain flex-flow siblings now (no more
+     absolute seats), so this gap is the row's own breathing room between
+     modules — the free board simulated it by baking a grid unit into
+     every card's x-coordinate; there is no coordinate system left to
+     bake it into, so it lives here instead. */
+  gap: 1rem;
   /* flex-shrink MUST stay 0: the list may never shrink below its
      sections on the canvas's main axis (the round-1 occlusion defect —
      the .canvas owns the scrolling). */
   flex: 1 0 auto;
-  /* Keeps a droppable slot between the arrows while the chain is empty
-     (SortableJS drops land on the list element itself; the visible
-     taught target next to it is the empty-hint below). */
   min-height: 1.5rem;
   position: relative; /* anchor for the bypassed-state hatch overlay */
 }
 
 /* Occlusion guard (unchanged invariant): the flow's fixed
-   instrumentation (both anchors with their meters, the MC-4 safe-output
-   note, the FEW-3 watchdog alert) always paints above section paint. */
-.anchor,
+   instrumentation (the MC-4 safe-output note, the FEW-3 watchdog alert)
+   always paints above section paint. */
 .safe-output-note,
 .watchdog-alert {
   position: relative;
   z-index: 1;
 }
 
-/* --- FEW-3 + OQ-9: the cord layer ---------------------------------------
-   Read-only signal cords (MIC OUT -> sections in chain order -> OUT IN),
-   painted by src/canvas.js's renderCords() from the positions map. The
-   layer is APPENDED as the canvas face's LAST child (never a first
-   child, never inside .chain-list — those DOM contracts are pinned by
-   other tests) and paints BEHIND the sections purely by z-index.
-   OQ-9 delivered the in-world vocabulary: cords run jack-to-jack in the
-   panel's own tokens (--pm-* only), and each jack is a drawn RING +
-   dark SOCKET pair sitting ON the border line it serves — the same
-   anatomy and 15px size as the anchor print rings, one vocabulary for
-   every jack on the board. Section jacks sit half-buried on the slab's
-   edge (the ring reads as a socket machined into the border); the
-   visible half is the grab affordance. Cord editing is FEW-4's scope —
-   only the jacks are pointer-live. */
-.cord-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0; /* behind every section (z-index >= 1) and all fixed
-                 instrumentation (the occlusion guard above) */
-  pointer-events: none; /* read-only: a cord is never a hit target */
-  overflow: visible; /* cords may leave the face's box at the board's
-                        foot while scrolling (FEW-5 re-homes this) */
+/* --- Board redesign (2026-09-01): the chain-arrow connector ------------
+   Replaces the retired cord layer's read-only signal line: a small drawn
+   chevron in the gap between each pair of adjacent cards (never a
+   Unicode arrow — the same drawn-mark discipline as .chevron-mark below
+   and every other on-board glyph in this file), rebuilt from scratch on
+   every DOM-order change by src/canvas.js#renderChainArrows(). Purely a
+   legibility aid now that order alone carries the signal path — sized a
+   touch larger than the fold chevron's 5px for on-board visibility at a
+   glance, resting dim like the grip dots (ambient wayfinding, not a
+   control) since it is aria-hidden and carries no interaction of its
+   own. */
+.chain-arrow {
+  display: flex;
+  flex: none;
+  align-self: center;
 }
 
-.cord {
-  fill: none;
-  stroke: var(--pm-print-dim);
-  stroke-width: 2;
-  stroke-linecap: round;
+.chain-arrow-mark {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--pm-print-dim);
+  border-bottom: 2px solid var(--pm-print-dim);
+  transform: rotate(-45deg); /* points right */
 }
 
-/* FEW-4 + OQ-9 — the JACK POINTS: the cord layer's ONLY pointer-live
-   children. The layer keeps pointer-events:none; each jack group turns
-   them back on for itself alone (pointer-events inherits to the hit
-   disc, ring, and socket — the whole group grabs). The RING is the
-   drawn jack (15px, the anchor print size); the SOCKET dot inside it is
-   the dark bore; the transparent HIT disc is wider for the hand. A hot
-   ring (a compatible drop target under the dragged end) and the dashed
-   ghost cord use the accent ink; hover quietly lifts the ring to full
-   print before any of that — the affordance teaches itself at rest. */
-.cord-jack {
-  pointer-events: all;
+/* ---------------------------------------------------------------------
+   DRAG-AND-DROP — the held thing, the ghost slot it would land in, and
+   the body flag both drop gestures raise (src/canvas.js's armReorderDrag
+   / armPaletteDrag families).
+
+   The Rest-Flat Rule stands: nothing here paints at rest. These rules
+   apply only while a pointer is actually holding something, which is the
+   ONE lift the Elevation section admits ("the only real shadow in the
+   world is the drag LIFT").
+   --------------------------------------------------------------------- */
+
+/* The HELD section: lifted out of flow by JS (position:fixed to its own
+   box, then translated), so it needs the accent machined lip it always
+   had PLUS the drag shadow that says it left the faceplate. Pointer-inert
+   so it never hit-tests over the row it is being dragged across. */
+.node-card.reorder-chosen {
+  z-index: 12;
+  pointer-events: none;
+  cursor: grabbing;
+  box-shadow:
+    inset 0 1px 0 var(--pm-accent),
+    0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* The GHOST — a dashed print slot reserving the row position the held
+   thing would drop into (DESIGN.md, Sections: "the ghost is a dashed
+   print slot — a groove reservation, not a section"). Recessed register
+   ground + hairline dashed accent boundary: the same vocabulary the
+   empty-socket hint already uses for "a drop target earns a visible
+   boundary, in the print register". JS sets its width/min-height to the
+   exact box it stands in for, so opening it costs zero layout. */
+.node-card-placeholder {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed var(--pm-accent);
+  border-radius: 0;
+  background: var(--pm-register-bg);
+  min-width: 0;
+}
+
+/* The slot names what would land in it — the module's own label, in the
+   accent the boundary is drawn in. */
+.node-card-placeholder::after {
+  content: attr(data-ghost-label);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pm-accent);
+}
+
+/* The chip's drag image, following the pointer while its origin chip
+   stays in the palette (src/canvas.js's makeChipTrail). Same lift as the
+   held section, and pointer-inert for the same reason. */
+.chip-trail {
+  z-index: 12;
+  pointer-events: none;
+  cursor: grabbing;
+  opacity: 0.92;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* The origin chip while its trail is in flight: recedes, so the palette
+   reads as "this one is out on the board" without developing a hole. */
+.node-chip.chip-dragging {
+  opacity: 0.4;
+}
+
+/* Raised on <body> for the whole of either drop gesture: without it a
+   drag that crosses a printed label paints a text selection across the
+   chassis, and the cursor reverts to a text caret the moment it leaves
+   the thing being held. */
+body.chain-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+body.chain-dragging .node-card,
+body.chain-dragging .node-chip,
+body.chain-dragging .section-rail,
+body.chain-dragging .node-drag-handle {
+  cursor: grabbing;
+}
+
+/* The ADVERTISED grip is still the rail — the machined grip dots plus
+   the whole family print block now carry the grab cursor together (the
+   card BODY arms the same drag but is deliberately left cursorless: a
+   grab cursor over an encoder field would promise the wrong thing about
+   the knob under it). Scoped to the rail rather than the whole section
+   for a mechanical reason too: `.node-card` and `.knob` are the same
+   specificity, and .knob is declared EARLIER in this file, so a bare
+   .node-card cursor would silently win over every knob's ns-resize. */
+.section-rail {
   cursor: grab;
-}
-
-.cord-jack .jack-hit {
-  fill: transparent;
-}
-
-.cord-jack .jack-ring {
-  fill: none;
-  stroke: var(--pm-print);
-  stroke-width: 2;
-}
-
-.cord-jack .jack-socket {
-  fill: var(--pm-register-bg);
-}
-
-.cord-jack:hover .jack-ring {
-  stroke: var(--pm-print-hi);
-}
-
-.cord-jack-hot .jack-ring {
-  stroke: var(--pm-accent);
-}
-
-.cord-jack-hot .jack-socket {
-  fill: var(--pm-accent);
-}
-
-/* mic-out / out-in jacks: the REAL, labeled jack ring already lives in
-   the rail (.anchor::before, under "MIC IN"/"OUT") — painting a second
-   ring+socket here at rest reads as an unlabeled second jack floating
-   next to the real one, since the rail sits outside #chain-canvas's
-   scroll clip and the cord layer can never actually reach it. Keep the
-   invisible .jack-hit (dragging a relink still grabs from here) but only
-   paint the ring/socket as live feedback on hover or an active drag —
-   at rest there is exactly one visible jack per end, matching reality. */
-.cord-jack[data-jack-kind="mic-out"] .jack-ring,
-.cord-jack[data-jack-kind="mic-out"] .jack-socket,
-.cord-jack[data-jack-kind="out-in"] .jack-ring,
-.cord-jack[data-jack-kind="out-in"] .jack-socket {
-  opacity: 0;
-}
-
-.cord-jack[data-jack-kind="mic-out"]:hover .jack-ring,
-.cord-jack[data-jack-kind="mic-out"]:hover .jack-socket,
-.cord-jack[data-jack-kind="out-in"]:hover .jack-ring,
-.cord-jack[data-jack-kind="out-in"]:hover .jack-socket,
-.cord-jack[data-jack-kind="mic-out"].cord-jack-hot .jack-ring,
-.cord-jack[data-jack-kind="mic-out"].cord-jack-hot .jack-socket,
-.cord-jack[data-jack-kind="out-in"].cord-jack-hot .jack-ring,
-.cord-jack[data-jack-kind="out-in"].cord-jack-hot .jack-socket {
-  opacity: 1;
-}
-
-.cord-ghost {
-  fill: none;
-  stroke: var(--pm-accent);
-  stroke-width: 2;
-  stroke-dasharray: 4 4;
-  stroke-linecap: round;
 }
 
 /* Taught empty state — a printed EMPTY SOCKET on the face: recessed
@@ -2058,21 +2078,12 @@ select.control {
    =========================================================================== */
 
 .node-card {
-  /* FEW-2 free positioning: every section is an absolutely positioned
-     FULL-WIDTH row of the chain list (left:0; right:0; top:0), translated
-     to its board seat by JS (`transform: translate(x, y)` — snap-grid
-     quantized in src/canvas.js). Position is STYLE ONLY: the DOM order
-     always equals the chain order (PD-4), so the bring-to-front z-order
-     (JS zIndex) is paint, never order. The list's scrollable extent is
-     maintained by JS (min-height over the lowest seat's measured
-     bottom). */
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  /* FEW-3: sections always paint above the cord layer (z-index 0);
-     bring-to-front's JS zIndex climbs from this floor. */
-  z-index: 1;
+  /* Board redesign (2026-09-01): a plain flex-flow row item now — DOM
+     order IS visual order (the free board's own PD-4 invariant, with
+     nothing left to keep in sync against). position:relative only (not
+     static) so the corner resize grip below can anchor to ITS card,
+     never the panel. */
+  position: relative;
   flex: none;
   display: grid;
   grid-template-columns: 6.5rem 1fr;
@@ -2084,7 +2095,6 @@ select.control {
   border: 1px solid var(--pm-groove-cut);
   box-shadow: inset 0 1px 0 var(--pm-slab-lip);
   min-width: 0;
-  will-change: transform;
 }
 
 /* The focus LIFT (the honest-risk solve): a touched section's print
@@ -2239,8 +2249,30 @@ select.control {
   --knob-arc: var(--family-autotune);
 }
 
-/* The rail's foot: the section's header-zone controls (fold chevron +
-   eject ×). Expanded they sit at the rail's bottom edge; folded they
+/* Color pass (2026-09-01): the four Tone.js effects — one derivation
+   site, same shape as the ten above. */
+.node-card[data-family='phaser'] {
+  --card-family: var(--pm-family-phaser);
+  --knob-arc: var(--family-phaser);
+}
+
+.node-card[data-family='tremolo'] {
+  --card-family: var(--pm-family-tremolo);
+  --knob-arc: var(--family-tremolo);
+}
+
+.node-card[data-family='pitchshift'] {
+  --card-family: var(--pm-family-pitchshift);
+  --knob-arc: var(--family-pitchshift);
+}
+
+.node-card[data-family='bitcrusher'] {
+  --card-family: var(--pm-family-bitcrusher);
+  --knob-arc: var(--family-bitcrusher);
+}
+
+/* The rail's foot: the section's header-zone controls (effect bypass,
+   fold chevron, eject ×). Expanded they sit at the rail's bottom edge; folded they
    ride the slim row's right end. */
 .section-foot {
   display: flex;
@@ -2361,7 +2393,55 @@ select.control {
   display: none;
 }
 
-/* --- Header-zone controls (fold chevron, eject ×) ---------------------- */
+/* --- Header-zone controls (effect bypass, fold chevron, eject ×) ------- */
+
+/* Per-effect bypass stays visually below the red emergency Bypass key.
+   IN/BYP text carries the state without borrowing the safety color or the
+   global hatch treatment. Parameters remain interactive while bypassed so
+   the operator can tune the effect before returning it to the signal path. */
+.node-bypass {
+  flex: none;
+  position: relative;
+  min-width: 2rem;
+  height: 1rem;
+  padding: 0 0.2rem;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 3px;
+  background: var(--pm-chassis);
+  color: var(--pm-print);
+  font-family: var(--font-readout);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.node-bypass:hover,
+.node-bypass:active {
+  color: var(--pm-print-hi);
+  border-color: var(--pm-print);
+}
+
+.node-bypass[aria-pressed='true'] {
+  background: var(--pm-print-dim);
+  border-color: var(--pm-print);
+  color: var(--pm-chassis);
+}
+
+.node-bypass:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.node-card.node-bypassed .section-main {
+  opacity: 0.42;
+}
+
+.node-card.node-bypassed .section-code {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
 
 /* The chevron: a drawn mark (a square's two edges) rotating to point
    right when folded — the disclosure convention, as geometry. */
@@ -2408,6 +2488,7 @@ select.control {
    24px pointer floor — this invisible ::before restores it (visual box
    1.15rem, hit box ~25px). */
 .node-collapse::before,
+.node-bypass::before,
 .node-remove-btn::before {
   content: '';
   position: absolute;
@@ -2419,8 +2500,13 @@ select.control {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .node-collapse {
+  .node-collapse,
+  .node-bypass {
     transition: border-color 150ms ease, color 150ms ease;
+  }
+
+  .node-card .section-main {
+    transition: opacity 150ms ease;
   }
 }
 
@@ -2524,33 +2610,6 @@ select.control {
    a REAL physical lift, so it earns the world's one offset+blur shadow.
    Ghost (the insertion slot): a dashed print slot — where the section
    WILL land, reading as a groove reservation, not a section. */
-.node-card.sortable-chosen {
-  cursor: grabbing;
-  box-shadow:
-    inset 0 1px 0 var(--pm-accent),
-    inset 0 2px 0 rgba(255, 107, 53, 0.25);
-}
-
-.node-card.sortable-drag {
-  background: var(--pm-slab);
-  opacity: 0.92;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
-}
-
-.node-card.sortable-ghost {
-  opacity: 0.4;
-  border-top: 1px solid var(--pm-groove-cut);
-  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
-}
-
-.node-card.sortable-ghost::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px dashed var(--pm-key-edge);
-  border-radius: 2px;
-}
-
 /* --- Agent mutation pulse ----------------------------------------------
    One accent blink on the section's machined top lip (the slab's lip
    flashes signal orange) — a state blink, not a glow; the animation
@@ -2584,20 +2643,23 @@ select.control {
    gate with the same hatch + recede the canvas face has always used.
    =========================================================================== */
 
-/* Pre-Start gate, the signal-order strip + build panel: pointer lock
-   (the functional gate, unchanged) + the SAME recede + diagonal hatch
-   the canvas face carries below — one grammar, three zones (Guided
-   Patchbay: retargeted from the retired .palette/.presets zones).
-   src/canvas.js also sets native `inert` on the whole layout, which is
-   the keyboard and accessibility-tree half of this functional gate. */
-.layout.engine-not-started .build,
+/* Pre-Start gate, the signal-order strip + the two collapsible panels:
+   pointer lock (the functional gate, unchanged) + the SAME recede +
+   diagonal hatch the canvas face carries below — one grammar, every
+   gated zone (split-panel round: .presets-panel and .effects-panel,
+   Guided Patchbay's old shared .build). src/canvas.js also sets native
+   `inert` on the whole layout, which is the keyboard and
+   accessibility-tree half of this functional gate. */
+.layout.engine-not-started .presets-panel,
+.layout.engine-not-started .effects-panel,
 .layout.engine-not-started .signal-order {
   position: relative;
   opacity: 0.55;
   pointer-events: none;
 }
 
-.layout.engine-not-started .build::before,
+.layout.engine-not-started .presets-panel::before,
+.layout.engine-not-started .effects-panel::before,
 .layout.engine-not-started .signal-order::before {
   content: '';
   position: absolute;
@@ -2700,47 +2762,88 @@ select.control {
 }
 
 /* ===========================================================================
-   BUILD PANEL (Guided Patchbay round, replacing PS-3's Presets zone +
-   the old Palette zone; left-sidebar round, 2026-08-31 user direction,
-   moved it back to a side column after a bottom placement shipped and
-   was reverted) — a two-tab panel, Effects (#palette-list, unchanged)
+   PRESETS PANEL + EFFECTS PANEL (Guided Patchbay round, replacing PS-3's
+   Presets zone + the old Palette zone; left-sidebar round, 2026-08-31,
+   combined them into one shared-tab .build panel and moved it to a side
+   column; split-panel round, 2026-09-01 user direction, retired the
+   shared tab bar — Presets stays the left sidebar, Effects moves back
+   underneath the board as its OWN independently collapsible panel, no
+   longer sharing space with Presets) — Effects (#palette-list, unchanged)
    and Presets (a searchable, categorized row list + the real Save As
-   controls — src/presets-ui.js). At >=901px it is `.layout`'s first,
-   fixed-width child (a real column again, collapsible to a narrow rail
-   — .build.collapsed, styles above in the @media block, and
-   #build-collapse-toggle below); below that it stays the full-width
-   stacked block it already was, unaffected by any of this.
+   controls — src/presets-ui.js) are now two separate `.panel`s, each
+   with the same head (a plain label + a disclosure toggle — see
+   .panel-head/.panel-label below) over a content region. At >=901px
+   .presets-panel is `.layout`'s first, fixed-width child (collapsible to
+   a narrow rail on the WIDTH axis) and .effects-panel docks under the
+   board inside .voice-deck-face (collapsible on the HEIGHT axis instead
+   — see both panels' .collapsed rules in the @media block above); below
+   901px both stay full-width stacked blocks, unaffected by any of this.
    =========================================================================== */
 
-.build {
-  /* Unscoped: just a flex column for the toggle+tabs+panel stack,
-     natural content height below 901px. The fixed sidebar width, the
-     collapse behavior, and the internal scroll budget are all scoped to
-     the @media (min-width: 901px) block above — the board stays bounded
-     at every width via its own self-contained max-height clamp
-     regardless of what .build is doing beside or below it. */
+/* Unscoped: just a flex column for the head+content stack, natural
+   content height below 901px. The fixed size, the collapse behavior, and
+   the internal scroll budget are all scoped to the
+   @media (min-width: 901px) block above — the board stays bounded at
+   every width via its own self-contained max-height clamp regardless of
+   what either panel is doing beside or below it. The groove is VERTICAL
+   here (.presets-panel sits to the LEFT of the board) — cut + lip both
+   live on this one element, the same "one element carries its own
+   complete groove" pattern .io-rail-in/.io-rail-out already use for
+   their own vertical cuts. */
+.presets-panel {
   display: flex;
   flex-direction: column;
   background: transparent;
-  /* The groove — now VERTICAL, on the panel's own right edge (.build
-     sits to the LEFT of the board, not above the signal-order strip) —
-     cut + lip both live here, self-contained on the one element, the
-     same "one element carries its own complete groove" pattern
-     .io-rail-in/.io-rail-out already use for their own vertical cuts. */
   border-right: 1px solid var(--pm-groove-cut);
   box-shadow: inset -1px 0 0 var(--pm-groove-lip);
 }
 
-/* The collapse toggle: sits above the tabs, always visible (collapsed or
-   not) since it's the only way back out of the rail. Drawn chevron mark
-   (below), never emoji/unicode standing in for an icon — the same
-   discipline every other control mark in this file follows. */
-#build-collapse-toggle {
+/* Same shared shape as .presets-panel above, but the groove is
+   HORIZONTAL now (.effects-panel docks BELOW the board), the stacked
+   twin of .canvas-panel's own bottom cut/.signal-order's top lip — same
+   cut-then-lip reading order, one more zone down. */
+.effects-panel {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border-top: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+}
+
+/* The shared head: a plain label (never a tab — neither panel's
+   visibility depends on the other, so role="tab" would describe
+   something that isn't happening) + the disclosure toggle, always
+   visible collapsed or not since it's the only way back out. */
+.panel-head {
   flex: none;
-  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--pm-groove-cut);
+}
+
+.panel-label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pm-print-hi);
+}
+
+/* The toggle: drawn chevron mark, never emoji/unicode standing in for an
+   icon — the same discipline every other control mark in this file
+   follows. Shared chrome for both toggles; each gets its own rotation
+   default below (Presets points left/right — it collapses sideways;
+   Effects points down/up — it collapses into the bottom edge). */
+#presets-collapse-toggle,
+#effects-collapse-toggle {
+  flex: none;
   width: 1.5rem;
   height: 1.5rem;
-  margin-bottom: 0.5rem;
   padding: 0;
   border: 1px solid var(--pm-key-edge);
   border-radius: 3px;
@@ -2749,96 +2852,150 @@ select.control {
   cursor: pointer;
 }
 
-#build-collapse-toggle:hover {
+#presets-collapse-toggle:hover,
+#effects-collapse-toggle:hover {
   color: var(--pm-print-hi);
   border-color: var(--pm-print);
 }
 
-#build-collapse-toggle .chevron-mark {
+#presets-collapse-toggle .chevron-mark,
+#effects-collapse-toggle .chevron-mark {
   display: block;
   width: 6px;
   height: 6px;
   margin: 6px auto;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: rotate(135deg); /* points left: the panel will collapse */
 }
 
-.build.collapsed #build-collapse-toggle {
-  align-self: center;
+#presets-collapse-toggle .chevron-mark {
+  transform: rotate(135deg); /* points left: the panel will collapse that way */
 }
 
-.build.collapsed #build-collapse-toggle .chevron-mark {
+.presets-panel.collapsed #presets-collapse-toggle .chevron-mark {
   transform: rotate(-45deg); /* points right: the panel will expand */
 }
 
+#effects-collapse-toggle .chevron-mark {
+  transform: rotate(45deg); /* points down: the panel will collapse into the bottom edge */
+}
+
+.effects-panel.collapsed #effects-collapse-toggle .chevron-mark {
+  transform: rotate(225deg); /* points up: the panel will expand */
+}
+
+.presets-panel.collapsed .panel-head {
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  #build-collapse-toggle {
+  #presets-collapse-toggle,
+  #effects-collapse-toggle {
     transition: border-color 150ms ease, color 150ms ease;
   }
 }
 
-.build-tabs {
-  flex: none;
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.6rem;
-  border-bottom: 1px solid var(--pm-groove-cut);
-}
-
-.build-tabs button {
-  padding: 0.5rem 0.7rem;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--pm-print);
-  cursor: pointer;
-}
-
-.build-tabs button[aria-selected='true'] {
-  border-bottom-color: var(--pm-accent);
-  color: var(--pm-print-hi);
-}
-
-.build-tab-panel {
+.presets-panel-content,
+.effects-panel-content {
   flex: 1 1 auto;
+  /* The scrollbar (when content overflows) lives INSIDE .panel's own
+     right padding, eating it — content ends up flush against the
+     scrollbar track with none of the breathing room the left edge gets.
+     This extra padding sits beyond that, so scrolled content keeps the
+     SAME gap from the scrollbar that it has from the panel's left edge,
+     instead of being cut off by it. */
+  padding-right: 0.9rem;
+  /* Scrollbar theming round (2026-09-01 user direction): the default
+     platform scrollbar reads as a loud, unstyled rectangle against the
+     Pattern Machine chassis. Firefox reads scrollbar-color/-width
+     directly; WebKit/Blink need the pseudo-elements below — a slim
+     floating pill (background-clip:padding-box insets the thumb from
+     the track by the "border" width, so it never touches the panel's
+     own edge) on a transparent track so the gutter disappears at rest
+     and only the thumb itself prints, brightening on hover/drag. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--pm-key-edge) transparent;
 }
 
-.build-tab-panel[hidden] {
-  display: none;
+.presets-panel-content::-webkit-scrollbar,
+.effects-panel-content::-webkit-scrollbar {
+  width: 10px;
 }
 
-/* Effects tab: #palette-list fills the tab panel exactly as it filled
-   the old .palette zone — no selector changes needed for .node-chip et
-   al. (they target the chip, not its ancestor panel). */
+.presets-panel-content::-webkit-scrollbar-track,
+.effects-panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-/* Presets tab, compact-browsing round: a sticky search box over ONE
+.presets-panel-content::-webkit-scrollbar-thumb,
+.effects-panel-content::-webkit-scrollbar-thumb {
+  background-color: var(--pm-key-edge);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.presets-panel-content::-webkit-scrollbar-thumb:hover,
+.effects-panel-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--pm-print-dim);
+}
+
+/* Effects panel: #palette-list fills the content region exactly as it
+   filled the old .palette zone — no selector changes needed for
+   .node-chip et al. (they target the chip, not its ancestor panel). */
+
+/* Presets panel, compact-browsing round: a sticky search box over ONE
    scrollable, groupable row list (.preset-list below), replacing both the
    old factory-only card grid and the #preset-select dropdown+Load/Delete
    pair — the only prior way user presets could be browsed at all. Sticky
-   against whichever ancestor actually scrolls (.build-tab-panel's own
-   overflow-y:auto at >=901px; the page itself below that — same dual-mode
-   behavior the panel already had), opaque so scrolled rows never show
-   through underneath it. */
+   against whichever ancestor actually scrolls (.presets-panel-content's
+   own overflow-y:auto at >=901px; the page itself below that — same
+   dual-mode behavior the panel already had), opaque so scrolled rows
+   never show through underneath it. */
 .preset-search {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--pm-chassis);
+  /* Search-bar restyle (2026-09-01 user direction): the input carried no
+     rule of its own beyond the sticky mechanics above, so it rendered as
+     the bare platform text field — the one unstyled control on the
+     panel. Same key vocabulary .preset-name-input already uses elsewhere
+     in this zone (key ground, cut-edge bezel) instead of a bespoke
+     search-only look, so the search box and the Save As… naming field
+     read as one family of text input. background is opaque (not the
+     panel's transparent ground) for the same reason the old rule set it
+     explicitly: scrolled rows must never show through the sticky bar.
+     border-bottom carries a touch more contrast than the top/sides — a
+     hairline seam separating the fixed search bar from the row list
+     scrolling underneath it. */
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--pm-key-edge);
+  border-bottom-color: var(--pm-groove-cut);
+  border-radius: 4px;
+  background: var(--pm-key);
+  color: var(--pm-print-hi);
+  font-family: inherit;
+  font-size: 0.8rem;
 }
 
-/* Specificity note: #build-panel-presets > .control (defined further
+.preset-search::placeholder {
+  color: var(--pm-print-dim);
+}
+
+.preset-search:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 1px;
+}
+
+/* Specificity note: #presets-panel-content > .control (defined further
    below) sets every direct-child .control's margin-top to 0.75rem at
    EQUAL specificity to a same-shaped single-class override, so a later
    source-order rule would win regardless of which one reads more
    "specific" to the eye. Matching BOTH classes the input actually carries
    (class="control preset-search") outranks the single-class rule outright
    — sticky at the panel's own top must not carry a gap above it. */
-#build-panel-presets > .control.preset-search {
+#presets-panel-content > .control.preset-search {
   margin-top: 0;
 }
 
@@ -2846,11 +3003,22 @@ select.control {
    .preset-group-label below borrows .palette-group-label's exact register
    minus its multicol break-before, since this list is never side-by-side
    columns) over compact rows. No bounded height/inner scrollbar of its
-   own: it rides the SAME scroll the Effects tab's #palette-list already
-   uses (see .build-tab-panel's overflow-y:auto), so "many more presets"
+   own: it rides the SAME scroll the Effects panel's #palette-list already
+   uses (see .effects-panel-content's overflow-y:auto), so "many more presets"
    scales the same well-tested way instead of a new nested scrollbox. */
+/* Search/list separation (2026-09-01 user direction): "Factory", the
+   list's own first group header, previously butted straight against the
+   sticky search bar above it — .preset-group-label:first-child zeroed
+   its own top margin, and nothing else stood between the two, so
+   "Factory" read as part of the search control rather than the start of
+   its own section. The gap now lives on .preset-list itself (padding,
+   not a child's margin — explicit and un-collapsible) with a hairline
+   groove echoing the search bar's own bottom seam, so the boundary
+   reads the same from either side of it. */
 .preset-list {
   margin-bottom: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--pm-groove-cut);
 }
 
 .preset-group-label {
@@ -3063,7 +3231,7 @@ select.control {
    .preset-search input is ALSO a direct child, but its own rule above
    overrides margin-top: 0 (it's sticky at the panel's own top and must
    not carry a gap above it). */
-#build-panel-presets > .control {
+#presets-panel-content > .control {
   display: block;
   width: 100%;
   margin-top: 0.75rem;
@@ -3874,6 +4042,40 @@ input.preset-name-input:focus-visible {
   color: var(--text-primary);
 }
 
+/* Board redesign (2026-09-01): the panel-level meter strips (src/meters.js
+   buildFooterUnit) replacing the free board's jack-print .anchor units —
+   MIC IN above the scrolling row of cards, OUT below it, same key
+   vocabulary the rest of the panel uses (system-deck ground, groove-cut
+   seam toward the scrolling face) rather than inventing a new one. */
+.canvas-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--pm-system-deck);
+}
+
+.canvas-footer-in {
+  border-bottom: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 -1px 0 var(--pm-groove-lip);
+}
+
+.canvas-footer-out {
+  border-top: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+}
+
+.canvas-footer-legend {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pm-print);
+  white-space: nowrap;
+}
+
 /* ===========================================================================
    BOARD CHROME. Vertical flow is RETIRED (2026-08-31, user direction):
    the board has ONE reading — horizontal, condensed modules
@@ -3920,11 +4122,16 @@ input.preset-name-input:focus-visible {
   /* The CSS numbers are the PRE-JS fallback only — JS paints every
      card's content-hug width as an inline style (real browsers) or the
      128px layout-less default. min-width MUST stay at the resize floor
-     (6rem): a larger CSS floor silently overrides the hug and re-opens
+     (13rem, raised from 7rem 2026-09-01 alongside the new per-card
+     BYPASS button — src/canvas.js's CARD_W_MIN_PX comment has the
+     header-band-overflow story): a smaller CSS floor lets a
+     stripped/pre-hug paint sit narrower than JS will ever allow once it
+     measures, and a LARGER one silently overrides the hug and re-opens
      the right-hand dead space (the defect this block carried through
-     two rounds). */
-  width: 6rem;
-  min-width: 6rem;
+     two earlier rounds) — it must match CARD_W_MIN_PX exactly, not just
+     bound it. */
+  width: 13rem;
+  min-width: 13rem;
   max-width: 24rem;
   padding: 0.35rem 0.4rem 0.4rem;
   /* One column: header band over the encoder field. */
@@ -3964,9 +4171,14 @@ input.preset-name-input:focus-visible {
 
 
 /* The body: short fields center vertically in whatever room the module
-   has (with no forced min-height that is simply content height). */
+   has (with no forced min-height that is simply content height), and
+   (2026-09-01, counterbalancing the wider card floor the new bypass
+   button forced) horizontally too — a card that's wider than its
+   content now reads as content centered in a frame rather than pinned
+   to the rail, instead of stretching every row edge-to-edge. */
 .canvas-panel.flow-horizontal .section-main {
   justify-content: center;
+  align-items: center;
 }
 
 .canvas-panel.flow-horizontal .node-params-inner {
@@ -3989,6 +4201,18 @@ input.preset-name-input:focus-visible {
 
 .canvas-panel.flow-horizontal .trim-unit {
   width: 100%;
+}
+
+/* Autotune fix (2026-09-01, root-caused live, not a control-type
+   redesign): .pad-row (the row itself) carried no width bound, only its
+   .pad-group child did below — so a 12-value pad group (Key) grew to its
+   full unwrapped content width and dragged the ROW past the card's
+   right edge with it; the wrap on .pad-group never had a bounded
+   container to wrap WITHIN. Bounding the row is what makes the group's
+   own wrap actually engage — verified live: Key folds cleanly to 6-per-
+   row x 2 at the card's max width, 2-per-row x 6 at the floor. */
+.canvas-panel.flow-horizontal .pad-row {
+  max-width: 100%;
 }
 
 .canvas-panel.flow-horizontal .pad-group {
@@ -4014,10 +4238,11 @@ input.preset-name-input:focus-visible {
    silkscreen line prints beneath the folded sections.
 
    What must NOT recede (the operator's ground truth while bypassed —
-   the dry path is what the room hears): both .anchor blocks with their
-   meters, the safe-output note, the watchdog alert, the empty-hint, the
-   display register, and the OUT footer. These sit outside .chain-list,
-   so the scoping below leaves them at full strength.
+   the dry path is what the room hears): both meter strips (MIC IN above
+   the board, OUT below — src/meters.js), the safe-output note, the
+   watchdog alert, the empty-hint, and the display register. These sit
+   outside .chain-list, so the scoping below leaves them at full
+   strength.
    =========================================================================== */
 
 .canvas-panel .chain-list {

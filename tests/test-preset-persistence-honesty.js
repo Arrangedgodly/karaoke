@@ -272,8 +272,9 @@ function createStorageStub() {
 // ships: "Unsaved chain" text and a hidden unsaved dot. Compact-browsing
 // round: #preset-select/#load-preset-btn/#delete-preset-btn are gone —
 // every preset is a row inside #preset-list (see renderPresetRow* helpers
-// below), and `container` (registered as 'build-panel-presets') is the
-// real anchor src/presets-ui.js's ensureNamingRow()/showPresetNote() use,
+// below), and `container` (registered as 'presets-panel-content' —
+// split-panel round: renamed from 'build-panel-presets') is the real
+// anchor src/presets-ui.js's ensureNamingRow()/showPresetNote() use,
 // exactly where #preset-select's .parentNode used to serve that role.
 // ----------------------------------------------------------------------
 function buildPanel() {
@@ -287,7 +288,7 @@ function buildPanel() {
     'current-preset-name': current,
     'unsaved-indicator': dot,
     'preset-list': makeElement('div'),
-    'build-panel-presets': container
+    'presets-panel-content': container
   };
   return { container: container, byId: byId };
 }

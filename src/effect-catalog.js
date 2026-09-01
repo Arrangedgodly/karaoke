@@ -41,6 +41,7 @@
       label: definition.label,
       paramSpec: definition.paramSpec.map(cloneParam),
       experimental: definition.experimental,
+      latencySeconds: isFiniteNumber(definition.latencySeconds) ? definition.latencySeconds : 0,
       create: definition.create,
       applyParam: definition.applyParam,
       dispose: definition.dispose
@@ -129,6 +130,10 @@
     if (hasOwn(definition, 'dispose') && definition.dispose !== undefined && typeof definition.dispose !== 'function') {
       throw new Error('EffectCatalog.register: definition.dispose must be a function when supplied.');
     }
+    if (hasOwn(definition, 'latencySeconds') && definition.latencySeconds !== undefined &&
+        (!isFiniteNumber(definition.latencySeconds) || definition.latencySeconds < 0)) {
+      throw new Error('EffectCatalog.register: definition.latencySeconds must be a non-negative finite number when supplied.');
+    }
 
     var seenIds = Object.create(null);
     definition.paramSpec.forEach(function (param) {
@@ -206,6 +211,15 @@
 
   function isExperimental(type) {
     return hasOwn(definitions, type) && definitions[type].experimental;
+  }
+
+  /** Declared added latency for `type`, in seconds — the effect's own
+   *  disclosed processing delay (e.g. a worklet's fixed look-ahead, a
+   *  granular engine's window). 0 for unregistered types and for every
+   *  type that declares none. Used by src/status-readouts.js to fold the
+   *  live chain's total added latency into the LATENCY readout. */
+  function getLatencySeconds(type) {
+    return hasOwn(definitions, type) ? definitions[type].latencySeconds : 0;
   }
 
   function requireDefinition(type, operation) {
@@ -296,6 +310,7 @@
     getParam: getParam,
     getDefault: getDefault,
     getDefaults: getDefaults,
+    getLatencySeconds: getLatencySeconds,
     isExperimental: isExperimental,
     normalizeParams: normalizeParams,
     create: create,

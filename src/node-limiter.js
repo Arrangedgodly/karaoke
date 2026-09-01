@@ -106,6 +106,11 @@
   window.EffectCatalog.register('limiter', {
     label: 'Limiter',
     experimental: false,
+    // Same underlying DynamicsCompressorNode as node-compressor.js, so the
+    // same fixed ~6 ms internal look-ahead applies here too (disclosed in
+    // mcp-tools.js's compressor-node-count rule). Read by
+    // src/status-readouts.js's LATENCY readout.
+    latencySeconds: 0.006,
     paramSpec: [
       { id: 'ceiling', label: 'Ceiling', min: -12, max: 0, default: -1, step: 0.5, unit: 'dB' },
       { id: 'release', label: 'Release', min: 10, max: 500, default: 50, step: 10, unit: 'ms' }

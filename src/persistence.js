@@ -74,31 +74,36 @@
   //   - An `autosaveVersion` this build does not know (a future shape)
   //     rejects exactly like an unsupported PresetSchema version: clear
   //     error, default-chain fallback, never a misread.
-  //   - Layout entries: `x`/`y` finite numbers (px, canvas-panel
-  //     coordinates), `scale` finite number (default 1), `flow` — vestigial
-  //     since vertical flow was retired (2026-08-31): always normalized to
-  //     'horizontal', kept only so legacy payloads round-trip
-  //     shape-compatibly — and `w` an optional finite number (the card's
-  //     own condensed width, clamped 96..384 px; absent = the uniform CSS
+  //   - Layout entries (board redesign, 2026-09-01 — AUTOSAVE_VERSION 3):
+  //     the free board's x/y seats, scale, and flow are gone along with
+  //     the board itself (chain order is now the model's own array order,
+  //     PD-4 — nothing left to store separately). An entry carries just
+  //     `w`, an optional finite number (the card's own manually-resized
+  //     width, clamped 208..384 px; absent = the content-hug/CSS
   //     default). sanitizeLayout() normalizes every entry to exactly that
-  //     shape, PRUNES entries for node ids the accompanying chain does not
-  //     contain (node removed —
-  //     pruning happens on both save and load), and drops hostile
-  //     entries (non-object, non-finite x/y) rather than throwing: a
-  //     corrupt layout must never take down an otherwise-valid chain.
+  //     shape, PRUNES entries for node ids the accompanying chain does
+  //     not contain (node removed — pruning happens on both save and
+  //     load), and drops hostile entries (non-object, a `w` present but
+  //     not a finite number) rather than throwing: a corrupt layout must
+  //     never take down an otherwise-valid chain. A pre-redesign v2
+  //     payload's stray `x`/`y`/`scale`/`flow` keys are simply ignored,
+  //     not migrated — the version bump means a v2 slot degrades once
+  //     through the "unknown version -> default-chain fallback" path
+  //     (layout only; the chain itself is PresetSchema's own wire form,
+  //     untouched by this change) and immediately re-saves as v3.
   // ---------------------------------------------------------------------
-  var AUTOSAVE_VERSION = 2;
+  var AUTOSAVE_VERSION = 3;
 
   /**
-   * FEW-1: normalize/prune a candidate layout map against the node ids
-   * the accompanying chain actually contains. Never throws — every
-   * failure mode degrades to dropping the offending entry (that node
-   * falls back to the tidy stack), and a wholesale-hostile `layout`
+   * Normalize/prune a candidate layout map against the node ids the
+   * accompanying chain actually contains. Never throws — every failure
+   * mode degrades to dropping the offending entry (that node falls back
+   * to its content-hug width), and a wholesale-hostile `layout`
    * (non-object, throwing getters, ...) degrades to `{}`.
    *
    * @param {*} layout - candidate layout map (any hostility).
    * @param {string[]} knownIds - node ids of the chain being saved/loaded.
-   * @returns {Object<string, {x: number, y: number, scale: number, flow: string}>}
+   * @returns {Object<string, {w?: number}>}
    */
   function sanitizeLayout(layout, knownIds) {
     var clean = {};
@@ -117,35 +122,17 @@
           return; // hostile getter on this key — drop just this entry
         }
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-          return; // hostile entry — dropped, node goes tidy
+          return; // hostile entry — dropped, node takes its content hug
         }
-        if (typeof entry.x !== 'number' || !isFinite(entry.x)) {
-          return;
+        // Per-card WIDTH: a finite number clamped into the condensed
+        // range (13rem..24rem, mirroring main.css's bounds and
+        // canvas.js's CARD_W_MIN_PX/CARD_W_MAX_PX); anything else drops
+        // the field entirely rather than storing an empty entry — an
+        // entry with no `w` at all is the normal shape now (the node
+        // simply has no manual resize on record), not a degraded one.
+        if (typeof entry.w === 'number' && isFinite(entry.w)) {
+          clean[nodeId] = { w: Math.min(384, Math.max(208, entry.w)) };
         }
-        if (typeof entry.y !== 'number' || !isFinite(entry.y)) {
-          return;
-        }
-        clean[nodeId] = {
-          x: entry.x,
-          y: entry.y,
-          // Per-card WIDTH (2026-08-31 round): a finite number clamped
-          // into the condensed range (6rem..24rem, mirroring main.css's
-          // bounds and canvas.js's constants); anything else drops the
-          // field — the card takes the uniform CSS default. Additive
-          // field: older payloads simply load default.
-          w:
-            typeof entry.w === 'number' && isFinite(entry.w)
-              ? Math.min(384, Math.max(96, entry.w))
-              : undefined,
-          scale:
-            typeof entry.scale === 'number' && isFinite(entry.scale)
-              ? entry.scale
-              : 1,
-          // Vertical flow is retired (2026-08-31): every entry normalizes
-          // to 'horizontal' on save — legacy vertical payloads load once
-          // and re-save horizontal.
-          flow: 'horizontal'
-        };
       });
     } catch (err) {
       // Throwing getters / prototype mischief — treat as no layout.
@@ -190,7 +177,7 @@
    * FEW-1: the written payload is now the versioned ENVELOPE (see
    * AUTOSAVE_VERSION above) — chain wire form unchanged, plus a pruned,
    * normalized `layout` map. The optional second parameter is the layout
-   * seam FEW-2 will wire (positions/scale/flow per node id):
+   * seam (each node id's manually-resized width, see sanitizeLayout above):
    *   - `undefined` (the only form today's callers use): CARRY FORWARD
    *     whatever layout is already stored, pruned against the model being
    *     saved. Until FEW-2 wires real positions this is a no-op in
@@ -206,7 +193,7 @@
    *   optional. When omitted, falls back to window.AudioGraph.getModel().
    *   Production mutation callers pass the authoritative model explicitly;
    *   the fallback remains for standalone consumers.
-   * @param {Object<string, {x: number, y: number, scale?: number, flow?: string}>|null} [layout]
+   * @param {Object<string, {w?: number}>|null} [layout]
    *
    * Wrapped in try/catch: localStorage.setItem() can throw (e.g. quota
    * exceeded, private-browsing mode in some browsers) and this must never
@@ -342,7 +329,7 @@
    * positions are synthesized).
    *
    * @returns {{nodes: Array<{id: string, type: string, params: Object}>|null,
-   *            layout: Object<string, {x: number, y: number, scale: number, flow: string}>}}
+   *            layout: Object<string, {w?: number}>}}
    *   nodes is null when nothing valid is saved (the caller falls back to
    *   the default chain — whose layout is likewise `{}`). Never throws.
    */
@@ -431,7 +418,7 @@
    * carried positions. Re-reads the slot rather than caching, so a caller
    * that runs it after loadInitialModel() sees the same payload both read.
    *
-   * @returns {Object<string, {x: number, y: number, scale: number, flow: string}>}
+   * @returns {Object<string, {w?: number}>}
    */
   function loadInitialLayout() {
     return readAutosave().layout;

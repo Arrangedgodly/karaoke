@@ -444,6 +444,32 @@ async function main() {
     'B1: reused instance rewired into the chain'
   );
 
+  var bypassResult = await AG.buildGraph([
+    { id: 'n1', type: 'limiter', params: { ceiling: -3, release: 200 }, bypassed: true }
+  ]);
+  check(bypassResult && bypassResult.committed === true,
+    'B2: bypass rebuild commits normally');
+  check(AG.getNodeInstance('n1') === limInst,
+    'B2: bypass keeps the live plugin instance instead of removing it');
+  check(
+    sandbox.AudioEngine.sourceNode.__connectsTo(AG.getChainGate()) &&
+      !sandbox.AudioEngine.sourceNode.__connectsTo(limInst) &&
+      !limInst.__connectsTo(AG.getChainGate()),
+    'B2: bypass routes source straight to the chain gate around the plugin'
+  );
+  check(AG.getModel()[0].bypassed === true,
+    'B2: the retained model reports the bypass state');
+
+  await AG.buildGraph([
+    { id: 'n1', type: 'limiter', params: { ceiling: -3, release: 200 } }
+  ]);
+  check(
+    AG.getNodeInstance('n1') === limInst &&
+      sandbox.AudioEngine.sourceNode.__connectsTo(limInst) &&
+      limInst.__connectsTo(AG.getChainGate()),
+    'B3: re-enable restores the path through the same plugin instance'
+  );
+
   // --------------------------------------------------------------------
   console.log('C. the set_chain reproduction through the real tool (issue payload)');
   // --------------------------------------------------------------------

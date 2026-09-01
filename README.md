@@ -2,7 +2,9 @@
 
 **Live: https://voxchain.arrangedgodly.com/**
 
-A live karaoke vocal chain in your browser: mic in → 14 effects (gain, compression, EQ, delay, reverb, limiter, noise gate, distortion, chorus, autotune, pitch shift, tremolo, bitcrusher, phaser) → PA out. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
+A live vocal chain in your browser for streaming, games, karaoke, and voice experiments: mic in → 14 effects (gain, compression, EQ, delay, reverb, limiter, noise gate, distortion, chorus, autotune, pitch shift, tremolo, bitcrusher, phaser) → your output. Zero install, works fully offline, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
+
+Competition work is governed by the [WebMCP Challenge brief and change gate](docs/WEBMCP-CHALLENGE.md). Physical audio and competition-client checks remain separate in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
 ![VOXCHAIN — the dark instrument console: system deck on top, palette / free cord board / presets on the voice deck below](docs/screenshot.png)
 
@@ -46,7 +48,7 @@ Chrome's flag, DevTools pane, Inspector extension, and this project's `?dev` har
 
 ## Who controls what
 
-**A human can do everything:** build, reorder, tune, save, start/stop the engine, pick the mic, hit Bypass.
+**A human can do everything:** build, reorder, tune, bypass individual effects, save, start/stop the engine, pick the mic, hit emergency Bypass.
 
 **An agent can:**
 - Read the current chain, the presets, and what the app is capable of.
@@ -56,7 +58,7 @@ Chrome's flag, DevTools pane, Inspector extension, and this project's `?dev` har
 Chain mutations are refused with a stable `ENGINE_NOT_STARTED` result until the operator presses Start — the human board is gated before the engine is live, so an agent edit would otherwise change state the operator cannot see. Reads work at any time.
 
 **An agent cannot (human-only):**
-- Touch **Bypass** — it works from the button or the **spacebar**, always.
+- Touch the red emergency **Bypass** — it works from the button or the **spacebar**, always.
 - Start or stop the engine.
 - Pick the microphone device.
 
@@ -134,6 +136,7 @@ Across the top, the status strip shows whether the engine is **Stopped** or **Li
 - **Move a section** — drag it by its header anywhere on the board. Moving (or resizing) a section never changes your sound; the arrangement is saved automatically.
 - **Resize a section** — drag the machined corner mark at its bottom-right to widen it; controls re-wrap to fill the wider card.
 - **Reorder by cord** — drag from a jack point on one card to a jack point on another. The sound changes only when the link completes; drop the cord on empty space and it snaps back with nothing changed.
+- Click **IN** on a card to bypass only that effect. It changes to **BYP** while the card, settings, and plugin stay in the chain; click again to return it to the signal path.
 - Click the **×** on a card to remove it.
 - Tune with the knobs and sliders under each effect — Autotune's **Key** and **Scale** are pressable pads instead of sliders. Click a card's chevron (**▾**) to collapse it — its controls tuck away, but the effect keeps working.
 
@@ -166,7 +169,7 @@ Four more effects (Pitch Shift, Tremolo, Bitcrusher, Phaser) built on the vendor
 
 ### Saving your setup
 
-The right panel is **Presets**, and it ships with a built-in factory library — Classic Karaoke, Warm Ballad, Rock Night, Phone Call Gag, Big Room, and Clean Speech — load-only starting points grouped above your own saved presets, so a fresh install has good sounds before you save anything. Once you've got a sound you like, hit **Save As…**, type a name right there in the panel, and press **Save** — it's stored for next time. Use the dropdown + **Load** to bring one back, or **Delete** to remove one you don't need anymore (click it twice — the first click just asks "DELETE?" and backs off if you change your mind). Your chain also auto-saves as you go, so if you close the app by accident, reopening it picks up right where you left off.
+The right panel is **Presets**, and it ships with a built-in factory library — Classic Karaoke, Warm Ballad, Rock Night, Phone Call Gag, Big Room, and Clean Speech — load-only starting points grouped above your own saved presets, so a fresh install has good sounds before you save anything. Once you've got a sound you like, hit **Save As…**, type a name right there in the panel, and press **Save** — it's stored for next time, including each effect's IN/BYP state. Use the dropdown + **Load** to bring one back, or **Delete** to remove one you don't need anymore (click it twice — the first click just asks "DELETE?" and backs off if you change your mind). Your chain also auto-saves as you go, so if you close the app by accident, reopening it picks up right where you left off.
 
 ### Agent control (optional, experimental)
 

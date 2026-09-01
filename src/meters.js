@@ -19,48 +19,34 @@
 // Meters.init() -> boolean
 //   Idempotent; also self-runs at load inside try/catch (any failure logs
 //   exactly ONE console diagnostic and leaves the module a harmless no-op
-//   — meters can never break the host app). Finds the two canvas anchors
-//   by exact normalized text content ("MIC IN" -> the input meter, "OUT"
-//   -> the output meter; see index.html's .canvas structure) and appends,
-//   INSIDE each anchor element, one meter unit:
+//   — meters can never break the host app).
 //
-//     <div class="meter-unit" data-meter="in|out">
-//       <canvas class="meter-canvas" width=96*dpr height=26*dpr
-//               role="meter" aria-valuemin="-60" aria-valuemax="0"
-//               aria-valuenow aria-valuetext aria-label>  (lamp bar + tick
-//                                                          + clip dot +
-//                                                          dB scale, all
-//                                                          canvas-drawn)
-//       <div class="meter-readout">                        (mono dB text)
-//       <span class="sr-only">Input level|Output level</span>
+// Board redesign (2026-09-01, user direction): the free board's jack-print
+// `.anchor` elements are gone (patch cords retired for an ordered,
+// drag-to-reorder chain — see src/canvas.js), so both meters now build as
+// PANEL-level strips instead of nesting inside an anchor: a "MIC IN" strip
+// immediately ABOVE the scrolling #chain-canvas, a mirrored "OUT" strip
+// immediately BELOW it — never inside #chain-canvas itself, so neither the
+// board's own scroll nor a card drag can move or clip either meter. One
+// shared builder (buildFooterUnit(side)) makes both; each strip is:
+//
+//     <div class="canvas-footer canvas-footer-in|out" data-meter-footer="in|out">
+//       <span class="canvas-footer-legend">MIC IN|OUT</span>
+//       <div class="meter-unit canvas-footer-unit" data-meter="in|out">
+//         <canvas class="meter-canvas" width=96*dpr height=26*dpr
+//                 role="meter" aria-valuemin="-60" aria-valuemax="0"
+//                 aria-valuenow aria-valuetext aria-label>  (lamp bar + tick
+//                                                            + clip dot +
+//                                                            dB scale, all
+//                                                            canvas-drawn)
+//         <div class="meter-readout">                        (mono dB text)
+//         <span class="sr-only">Input level|Output level</span>
+//       </div>
 //     </div>
 //
-//   Placing the unit inside the anchor (rather than as a .canvas sibling)
-//   is deliberate: .canvas is the existing flex row whose children are the
-//   anchor -> arrow -> chain-list rhythm, and a sibling meter would inject
-//   itself INTO that rhythm (and between the OUT anchor and MC-4's
-//   safe-output-note insertion point in src/audio-graph.js). Inside the
-//   anchor, the unit is a plain block stacked under the label — the
-//   "compact stack under the MIC IN / OUT label" the design calls for —
-//   with zero restructuring of any existing DOM.
-//
-//   R2-1 (2026-08-29, pinned OUT readout): the OUT unit ALSO builds a
-//   FOOTER MIRROR — one compact row appended to the canvas PANEL (the
-//   .canvas-panel element, between the scrolling .canvas and the flow
-//   toggle; NOT inside .canvas, so it never enters the anchor → arrow →
-//   chain-list rhythm or any insertion point). The panel is the bounded
-//   flex column whose INNER .canvas owns the scrolling, so the footer
-//   stays visible in the default vertical mode regardless of scroll
-//   position or card collapse — the operator's one-glance OUT ground
-//   truth. It renders the SAME unit state as the anchor meter (one feed,
-//   one ballistics, two views): same 96 x 26 canvas scene + same mono
-//   dB readout under a silkscreen "OUT" legend. Its canvas is
-//   aria-hidden (a decorative duplicate — the anchor meter's role=meter
-//   carries the announcements). Skipped silently when no .canvas-panel
-//   exists (bare-harness safety). In horizontal flow mode the panel
-//   un-bounds and the footer scrolls away WITH the panel — the pinned
-//   guarantee is the vertical default's; it still renders there as part
-//   of the panel.
+//   Skipped silently when .canvas-panel or #chain-canvas cannot be found
+//   (bare-harness safety) or when this side's strip already exists
+//   (idempotence).
 //
 // Meters.feed(side, stats)          <- THE FEW-3 CALL CONTRACT
 //   side:  'in' | 'out'.
@@ -117,10 +103,9 @@
 //   - 96 x 26 CSS px logical canvas (bar strip 96 x 10 + 4 px clip-dot
 //     row above + 9 px scale label row beneath); backing store is
 //     logical x devicePixelRatio (clamped 1..3) for crisp 2x rendering.
-//     ONE logical size serves BOTH views of a unit (the anchor canvas
-//     and the R2-1 footer mirror canvas) — there is no size variant, so
-//     the CSS lockstep contract in styles/main.css (.meter-canvas
-//     width/height) stays a single 96 x 26 pair.
+//     ONE logical size serves both meters, so the CSS lockstep contract
+//     in styles/main.css (.meter-canvas width/height) stays a single
+//     96 x 26 pair.
 //   - 19 lamp segments (4 px segment + 1 px gap): unlit segments in the
 //     unlit-glass token (the visible-at-rest dark scale), lit segments in
 //     the VU stops by zone — green --pm-vu-low (-60..-20), display amber
@@ -200,10 +185,10 @@
   var CLIP_DOT_S = 4;
   var LABEL_BASE_Y = 24;
   var LABELS = [
-    { db: -60, align: 'left', text: '\u221260' },
-    { db: -40, align: 'center', text: '\u221240' },
-    { db: -20, align: 'center', text: '\u221220' },
-    { db: -6, align: 'center', text: '\u22126' },
+    { db: -60, align: 'left', text: '−60' },
+    { db: -40, align: 'center', text: '−40' },
+    { db: -20, align: 'center', text: '−20' },
+    { db: -6, align: 'center', text: '−6' },
     { db: 0, align: 'right', text: '0' },
   ];
 
@@ -242,7 +227,7 @@
   // Module state.
   // ---------------------------------------------------------------------
 
-  var units = {}; // side -> unit state (missing side = anchor not found)
+  var units = {}; // side -> unit state (missing side = strip not built)
   var engineStarted = false; // setEngineState()'s flag (default: dark)
   var initialized = false;
   var loopRunning = false;
@@ -325,9 +310,9 @@
       return 'CLIP';
     }
     if (u.peak > SCALE_MIN + 0.5) {
-      return u.peak === 0 ? '0.0' : '\u2212' + Math.abs(u.peak).toFixed(1);
+      return u.peak === 0 ? '0.0' : '−' + Math.abs(u.peak).toFixed(1);
     }
-    return '\u2212\u221E';
+    return '−∞';
   }
 
   function ariaValueText(u) {
@@ -506,10 +491,9 @@
     }
   }
 
-  /** Paint the unit's scene onto EVERY view — the anchor canvas plus the
-   *  R2-1 footer mirror's canvas (same 96 x 26 scene; one state, two
-   *  views). Views without a 2d context are skipped (state stays
-   *  correct, per the stripped-embed note above). */
+  /** Paint the unit's scene onto its canvas. Views without a 2d context
+   *  are skipped (state stays correct, per the stripped-embed note
+   *  above). */
   function paint(u) {
     u.lastPaint = {
       peak: u.peak,
@@ -522,19 +506,12 @@
     if (u.ctx) {
       drawScene(u.ctx, u);
     }
-    for (var v = 0; v < u.views.length; v++) {
-      if (u.views[v].ctx) {
-        drawScene(u.views[v].ctx, u);
-      }
-    }
   }
 
   /** DOM-facing outputs: the mono readout (updated whenever its text
    *  actually changes; the data-clip flag lets styles/main.css render the
-   *  latched 'CLIP' in the --meter-clip stop) — written to the anchor
-   *  readout AND every mirror view's readout (R2-1 footer) — and the
-   *  ~4 Hz throttled aria attributes (anchor canvas only; the footer's
-   *  canvas is aria-hidden). */
+   *  latched 'CLIP' in the --meter-clip stop) and the ~4 Hz throttled
+   *  aria attributes. */
   function updateOutputs(u, t) {
     var txt = readoutText(u);
     if (txt !== u.readoutText) {
@@ -542,12 +519,6 @@
       if (u.readoutEl) {
         u.readoutEl.textContent = txt;
         u.readoutEl.setAttribute('data-clip', u.clip ? 'true' : 'false');
-      }
-      for (var v = 0; v < u.views.length; v++) {
-        if (u.views[v].readoutEl) {
-          u.views[v].readoutEl.textContent = txt;
-          u.views[v].readoutEl.setAttribute('data-clip', u.clip ? 'true' : 'false');
-        }
       }
     }
     var ariaTxt = ariaValueText(u);
@@ -583,28 +554,72 @@
   // Unit construction.
   // ---------------------------------------------------------------------
 
-  /** "MIC IN" -> 'in', "OUT" -> 'out', anything else -> null. */
-  function sideForAnchor(el) {
-    var text = String(el.textContent || '').replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
-    if (text === 'MIC IN') {
-      return SIDE_IN;
-    }
-    if (text === 'OUT') {
-      return SIDE_OUT;
-    }
-    return null;
-  }
+  // Legend text for each side's footer strip — the ONLY place "MIC IN"
+  // ships as UI copy now that the free-board's jack-print anchors are
+  // gone (board redesign, 2026-09-01 user direction): "OUT" keeps the
+  // established short form, "MIC IN" keeps the established long form —
+  // no reason to shorten a term the rest of the app (README, presets,
+  // the signal-order strip) already uses verbatim.
+  var FOOTER_LEGEND = {};
+  FOOTER_LEGEND[SIDE_IN] = 'MIC IN';
+  FOOTER_LEGEND[SIDE_OUT] = 'OUT';
 
-  function buildUnit(side, anchorEl) {
-    var canvas = document.createElement('canvas');
-    canvas.className = 'meter-canvas';
-    // Fixed logical size, set once; backing store scaled for crisp 2x
-    // rendering (no resize handling — the panel is fixed by design).
+  /**
+   * Board redesign (2026-09-01): both meters live in a full-width PANEL
+   * strip (never inside #chain-canvas, so neither the board's own scroll
+   * nor a card drag can move or clip them) — IN as a strip immediately
+   * ABOVE the scrolling row of cards, OUT as a strip immediately BELOW
+   * it, one shared builder parameterized by side. This replaces the
+   * former pair of mechanisms (a "MIC IN"/"OUT" jack-print `.anchor`
+   * nested inside a narrow `.io-rail` side column, each holding its own
+   * meter, plus a separate OUT-only fallback that only ever existed for
+   * a since-reverted "in-flow OUT anchor retired" round and had
+   * accumulated no CSS of its own, since the live OUT anchor always won
+   * first) — one mechanism, two sides, neither dependent on the free
+   * board's jack anatomy the rest of this refactor removes.
+   * Silently skipped when the panel or #chain-canvas cannot be found
+   * (bare-harness safety) or when this side's strip already exists
+   * (idempotence).
+   * @param {string} side - SIDE_IN or SIDE_OUT.
+   * @returns {boolean} true when the strip was built (or already existed
+   *   with a live unit — see the idempotence guard below).
+   */
+  function buildFooterUnit(side) {
+    if (typeof document.createElement !== 'function' ||
+        typeof document.querySelector !== 'function') {
+      return false;
+    }
+    var panel = document.querySelector('.canvas-panel');
+    var canvasEl = document.getElementById('chain-canvas');
+    // #chain-canvas is .canvas-panel's own direct child (the free
+    // board's .board-frame wrapper that used to sit between them is
+    // retired along with the rest of the free board), so canvasEl is a
+    // valid insertBefore reference node directly.
+    if (!panel || !canvasEl || !panel.insertBefore ||
+        panel.querySelector('.canvas-footer[data-meter-footer="' + side + '"]')) {
+      return false;
+    }
+
     var dpr = clampNum(
       (typeof window !== 'undefined' && isNum(window.devicePixelRatio)) ? window.devicePixelRatio : 1,
       1,
       3
     );
+
+    var footer = document.createElement('div');
+    footer.className = 'canvas-footer canvas-footer-' + side;
+    footer.setAttribute('data-meter-footer', side);
+
+    var legend = document.createElement('span');
+    legend.className = 'canvas-footer-legend';
+    legend.textContent = FOOTER_LEGEND[side];
+
+    var unit = document.createElement('div');
+    unit.className = 'meter-unit canvas-footer-unit';
+    unit.setAttribute('data-meter', side);
+
+    var canvas = document.createElement('canvas');
+    canvas.className = 'meter-canvas';
     canvas.width = CANVAS_W * dpr;
     canvas.height = CANVAS_H * dpr;
     canvas.setAttribute('role', 'meter');
@@ -616,19 +631,27 @@
 
     var readout = document.createElement('div');
     readout.className = 'meter-readout';
-    readout.textContent = '\u2212\u221E';
+    readout.textContent = '−∞';
 
     var srLabel = document.createElement('span');
     srLabel.className = 'sr-only';
     srLabel.textContent = side === SIDE_IN ? 'Input level' : 'Output level';
 
-    var unit = document.createElement('div');
-    unit.className = 'meter-unit';
-    unit.setAttribute('data-meter', side);
     unit.appendChild(canvas);
     unit.appendChild(readout);
     unit.appendChild(srLabel);
-    anchorEl.appendChild(unit);
+    footer.appendChild(legend);
+    footer.appendChild(unit);
+    // A PANEL child, never inside #chain-canvas — IN goes immediately
+    // BEFORE it (a header strip), OUT immediately after (a footer
+    // strip); .canvas-panel is a flex column, so DOM position alone
+    // decides visual position — no scroll or insertion-point impact
+    // either way.
+    if (side === SIDE_IN) {
+      panel.insertBefore(footer, canvasEl);
+    } else {
+      panel.insertBefore(footer, canvasEl.nextSibling);
+    }
 
     var ctx = null;
     try {
@@ -643,7 +666,6 @@
       readoutEl: readout,
       ctx: ctx,
       dpr: dpr,
-      views: [], // mirror views (R2-1: the OUT footer's canvas + readout)
       lastT: null,
       feed: null, // last fed {peakDb, rmsDb, clipRun, at}
       peak: SILENT_DB,
@@ -653,107 +675,9 @@
       clipUntil: 0,
       clip: false,
       lastPaint: null,
-      readoutText: '\u2212\u221E',
+      readoutText: '−∞',
       lastAriaT: 0,
       lastAriaText: 'silence',
-    };
-
-  }
-
-  /**
-   * 2026-08-31 cord round: the in-flow OUT anchor is RETIRED (the chain's
-   * cable exits at the board's bottom-right toward the base plate). The
-   * OUTPUT meter therefore lives ONLY in the pinned footer — this builds
-   * the footer row (legend + the PRIMARY 96x26 canvas + mono readout)
-   * and the unit state that owns it. The canvas carries role=meter (it
-   * is the one output announcer — no anchor duplicate exists anymore).
-   * Silently skipped when the panel or .canvas cannot be found
-   * (bare-harness safety) or when a footer already exists
-   * (idempotence). */
-  function buildOutFooterUnit() {
-    if (typeof document.createElement !== 'function' ||
-        typeof document.querySelector !== 'function') {
-      return false;
-    }
-    var panel = document.querySelector('.canvas-panel');
-    var canvasEl = document.getElementById('chain-canvas');
-    if (!panel || !canvasEl || !panel.insertBefore ||
-        panel.querySelector('.canvas-footer')) {
-      return false;
-    }
-
-    var dpr = clampNum(
-      (typeof window !== 'undefined' && isNum(window.devicePixelRatio)) ? window.devicePixelRatio : 1,
-      1,
-      3
-    );
-
-    var footer = document.createElement('div');
-    footer.className = 'canvas-footer';
-    footer.setAttribute('data-meter-footer', 'out');
-
-    var legend = document.createElement('span');
-    legend.className = 'canvas-footer-legend';
-    legend.textContent = 'OUT';
-
-    var unit = document.createElement('div');
-    unit.className = 'meter-unit canvas-footer-unit';
-    unit.setAttribute('data-meter', 'out');
-
-    var canvas = document.createElement('canvas');
-    canvas.className = 'meter-canvas';
-    canvas.width = CANVAS_W * dpr;
-    canvas.height = CANVAS_H * dpr;
-    canvas.setAttribute('role', 'meter');
-    canvas.setAttribute('aria-valuemin', String(SCALE_MIN));
-    canvas.setAttribute('aria-valuemax', String(SCALE_MAX));
-    canvas.setAttribute('aria-valuenow', String(SCALE_MIN));
-    canvas.setAttribute('aria-valuetext', 'silence');
-    canvas.setAttribute('aria-label', 'Output level');
-
-    var readout = document.createElement('div');
-    readout.className = 'meter-readout';
-    readout.textContent = '\u2212\u221E';
-
-    var srLabel = document.createElement('span');
-    srLabel.className = 'sr-only';
-    srLabel.textContent = 'Output level';
-
-    unit.appendChild(canvas);
-    unit.appendChild(readout);
-    unit.appendChild(srLabel);
-    footer.appendChild(legend);
-    footer.appendChild(unit);
-    // A PANEL child right after the scrolling .canvas — the pinned base
-    // plate (never inside .canvas, so no scroll or insertion impact).
-    panel.insertBefore(footer, canvasEl.nextSibling);
-
-    var ctx = null;
-    try {
-      ctx = canvas.getContext ? canvas.getContext('2d') : null;
-    } catch (err) {
-      ctx = null;
-    }
-
-    units[SIDE_OUT] = {
-      side: SIDE_OUT,
-      canvas: canvas,
-      readoutEl: readout,
-      ctx: ctx,
-      dpr: dpr,
-      views: [],
-      lastT: null,
-      feed: null,
-      peak: SILENT_DB,
-      rms: SILENT_DB,
-      hold: SILENT_DB,
-      holdUntil: 0,
-      clipUntil: 0,
-      clip: false,
-      lastPaint: null,
-      readoutText: '\u2212\u221E',
-      lastAriaT: 0,
-      lastAriaText: 'silence'
     };
     return true;
   }
@@ -811,37 +735,18 @@
   // Public API.
   // ---------------------------------------------------------------------
 
-  /** Build both meter units at their anchors. Idempotent; returns
-   *  whether units exist after the call. Safe with no DOM at all. */
+  /** Build both meter strips. Idempotent; returns whether at least one
+   *  unit exists after the call. Safe with no DOM at all. */
   function init() {
     if (initialized) {
       return true;
     }
-    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') {
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') {
       return false;
     }
-    var anchors;
-    try {
-      anchors = document.querySelectorAll('.anchor');
-    } catch (err) {
-      return false;
-    }
-    if (!anchors || !anchors.length) {
-      return false;
-    }
-    var found = 0;
-    for (var i = 0; i < anchors.length; i++) {
-      var side = sideForAnchor(anchors[i]);
-      if (!side || units[side]) {
-        continue;
-      }
-      buildUnit(side, anchors[i]);
-      found++;
-    }
-    if (!units[SIDE_OUT]) {
-      buildOutFooterUnit();
-    }
-    if (found === 0) {
+    var builtIn = buildFooterUnit(SIDE_IN);
+    var builtOut = buildFooterUnit(SIDE_OUT);
+    if (!builtIn && !builtOut) {
       return false;
     }
     resolveColors();
@@ -869,7 +774,7 @@
     }
     var u = units[side];
     if (!u) {
-      // Not initialized (or this side's anchor never existed) — nothing
+      // Not initialized (or this side's strip failed to build) — nothing
       // to feed; deliberately silent so a no-DOM context stays quiet.
       return;
     }

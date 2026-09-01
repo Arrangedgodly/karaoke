@@ -8,39 +8,46 @@ web
 
 ## Users
 
-Two confirmed users, both known personally (a two-person real-world product,
-not a fabricated audience):
+Two confirmed users are building and testing the product together:
 
-1. **The developer** (product owner) — uses the app as a portfolio /
-   tech-credibility piece demonstrating production-grade vanilla web
-   engineering and, as of cycle 2, agent-controllable web apps (WebMCP).
-2. **The brother** — karaoke-event operator; a non-audio-engineer who runs
-   the app live at events on a laptop with a mic and PA. Does not know (or
-   need to know) signal-engineering vocabulary.
+1. **The developer** (product owner) uses the app as a working audio tool and
+   as proof that a substantial browser app can expose safe, useful WebMCP
+   controls.
+2. **The brother** (collaborator and live-use tester) uses the app for karaoke
+   and evaluates whether a non-audio-engineer can shape a voice without
+   learning signal-processing vocabulary.
+
+The intended audience is broader than the two confirmed users: streamers,
+gamers, karaoke operators, and other creators who want to change or polish a
+live voice. These are target use cases, not claimed third-party adoption.
 
 ## Product Purpose
 
-Turns a laptop into a live vocal effects box for karaoke: mic in → a
-user-composed chain of Web Audio effects (gain, compressor, EQ, delay,
-reverb, limiter) → speakers out, in the browser, fully offline. Success
-means: a show that never breaks because of the app (emergency bypass is
-always one human action away), a sound the operator can shape without
-engineering knowledge (cycle 2: by plain-language prompting through an
-in-browser AI agent), and a piece the developer is proud to show as
-portfolio work.
+VOXCHAIN turns a browser into a live vocal-chain builder. A person can shape
+or transform a microphone for streaming, games, karaoke, or other live voice
+work. They can edit the chain directly or ask a browser agent in plain
+language, such as "make me sound warmer" or "give this a restrained robotic
+effect." The app translates the resulting tool calls into the same visible,
+safe controls the human uses.
+
+Success means a non-technical person can reach a useful sound, understand
+what changed, undo it, and retain immediate human control over Start, the
+microphone, and Bypass. Live audio safety remains the hard limit.
 
 ## Positioning
 
-A zero-install, browser-based live vocal chain builder that (a) runs with
-**zero runtime internet dependency** — a deliberate contrast to every
-cloud/plugin DAW and web-audio toy — and (b) as of cycle 2 exposes its whole
-chain-building surface as **WebMCP tools, so an in-browser agent (Gemini in
-Chrome) can build and edit chains from natural language** while the app
-itself stays LLM-free. Neighboring products could copy one of these truths;
-the combination (offline-safe live tool + agent-controllable) is the claim.
+A zero-install live vocal-chain builder whose audio engine runs locally in the
+browser. The page exposes its chain-building actions as WebMCP tools, so an
+in-browser agent can turn plain-language intent into visible, reversible
+changes while the app itself stays LLM-free. The product claim is concrete:
+one chain, one state, two control paths.
 
 ## Operating Context
 
+- **Live session**: stream, game, karaoke event, or rehearsal using a laptop,
+  microphone, and headphones, interface, stream input, or PA. Chrome remains
+  the tested browser. In a venue, setup happens before doors and Bypass stays
+  one action away.
 - **Event mode**: dark venue, laptop + USB mic + PA, Chrome-only (explicitly
   recommended; other browsers untested by scoped decision). Setup happens in
   the window before doors; during the show nobody touches anything but
@@ -48,21 +55,32 @@ the combination (offline-safe live tool + agent-controllable) is the claim.
   (local `python http.server`, port 8000).
 - **Rituals**: "when in doubt, hit Bypass first"; presets saved per event
   type; chain autosaves to localStorage.
-- **Portfolio mode**: a fresh Chrome profile following the README (cycle 2
-  adds an agent-enable section) on localhost; a dev test harness doubles as
-  the agent-free demo path.
-- **Terminology in-viewport today**: MIC IN / OUT anchors, Palette, chain,
-  presets, Bypass: ON/OFF, Start/Stopped status.
+- **Prompted setup**: the user describes a result in everyday words. The
+  agent reads capabilities and current state, then calls the same guarded
+  edit paths the direct UI uses.
+- **Preset sharing**: after saving a prompted result, the user can download
+  a versioned preset JSON file. Another VoxChain user can import it into the
+  personal preset list without an account or server. Shared files contain
+  chain data only, never audio, microphone identifiers, or local settings.
+- **Judge/demo mode**: a fresh competition-capable browser follows the short
+  README path on the deployed origin. The `?dev` harness is a fallback test
+  surface, not the main WebMCP demonstration.
+- **Terminology in the current production UI**: MIC IN / OUT anchors,
+  Palette, chain, presets, Bypass: ON/OFF, Start/Stopped status. The endpoint
+  anchors and free-cable layout are under active design review. Their current
+  form is not a permanent product requirement.
 
 ## Capabilities and Constraints
 
 Confirmed functionality: 10 node types (gain, compressor, EQ, delay, reverb,
 limiter, plus cycle-3's noise gate, distortion, chorus, autotune — autotune
 flagged experimental in the UI and the agent capabilities readout) registered
-through a type registry; drag-and-drop build/reorder (vendored SortableJS
-1.15.7); per-node param sliders plus dropdown selects for discrete params
+through a type registry; drag-and-drop build/reorder (hand-rolled pointer
+gestures with a dashed ghost slot for the drop preview — no drag library);
+per-node param sliders plus dropdown selects for discrete params
 (autotune's key/scale); named presets + autosave (localStorage); emergency
-bypass (audio path + spacebar); gated disabled-until-started states.
+bypass (audio path + spacebar); per-effect bypass that keeps a plugin in
+the chain and preserves its settings; gated disabled-until-started states.
 
 Cycle-2 additions (approved scope): WebMCP server shim (feature-detected,
 silent no-op when unavailable), 10 tools (`get_capabilities`, `get_chain`,
@@ -74,12 +92,18 @@ status readouts. Cycle 3 extended the same tools to discrete string params
 (key/scale) and added the experimental badge to the capabilities readout —
 no new tools.
 
-Hard constraints (user-approved, cycle 1 & 2): vanilla JS, **no build step**;
+The contest release adds human-controlled personal-preset transfer through
+download and import. It reuses the existing preset schema and safety policy.
+It does not add a WebMCP tool, cloud storage, or public preset directory.
+
+Hard constraints: vanilla JS, **no build step**;
 zero runtime internet dependency; localStorage persistence; no in-app LLM /
-API keys / cloud calls; agent never controls bypass, engine start/stop, or
+API keys / cloud calls; agent never controls the emergency bypass, engine start/stop, or
 mic device selection; no new effect node types this cycle; Chrome-only
-recommendation stands; no layout/IA redesign (3-column arrangement and all
-existing flows persist).
+recommendation stands. Layout and information architecture may now be
+reconsidered, including the free board and MIC IN / OUT anchors, as long as
+the audio, WebMCP, safety, persistence, keyboard, and shared-state contracts
+survive.
 
 Explicitly undecided product facts (recorded, not invented):
 
@@ -103,7 +127,6 @@ Explicitly undecided product facts (recorded, not invented):
   Chrome-only cross-browser decision and its replayable script), research.
 - `assets/ir/plate-vocal.mp3` — real reverb impulse-response asset (license
   provenance recorded in cycle-1 research).
-- `vendor/sortable.min.js` — vendored dependency (MIT).
 - Absences future work must not paper over: no third-party users, no
   analytics/telemetry of any kind, no performance benchmarks beyond cycle-1
   QA measurements.
@@ -119,11 +142,14 @@ Explicitly undecided product facts (recorded, not invented):
    legibility at distance in dark rooms, zero decorative cosplay.
 4. **Zero regression.** New capability layers never touch the core audio
    path's safety properties; absence of agent must equal the shipped app.
-5. **Brother-usable.** Every capability must survive a non-engineer
+5. **Plain-language usable.** Every capability must survive a non-engineer
    operating it alone at setup time, under time pressure.
 6. **One page.** The app is and stays a single page — no routes, no
    sub-pages (the ?dev harness is a gated overlay on the same page).
    Added 2026-08-28 by user direction.
+7. **Sounds should travel.** A useful prompted chain can leave one browser
+   as an inspectable preset file and reproduce the same safe settings in
+   another VoxChain session.
 
 ## Accessibility & Inclusion
 
@@ -134,6 +160,20 @@ Explicitly undecided product facts (recorded, not invented):
   a nicety.
 - Natural-language (agent) control is recognized as an accessibility win
    for non-technical operators (approved framing).
+
+## Competition contract
+
+VOXCHAIN is being submitted to The WebMCP Challenge. The official rules,
+submission requirements, design implications, and per-change release gate are
+recorded in [docs/WEBMCP-CHALLENGE.md](docs/WEBMCP-CHALLENGE.md). That document
+and [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) are required reading before a
+competition-facing UI or behavior change is called ready.
+
+The product case for the competition is specific: non-technical people can
+describe a vocal result in their own words, an agent can build or tune the
+chain through WebMCP, and the human can see, undo, or override the result in
+the same interface. WebMCP is part of the interaction, not a hidden demo
+endpoint.
 
 ## Brand (user decision, 2026-08-30)
 

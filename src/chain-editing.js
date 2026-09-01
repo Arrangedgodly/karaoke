@@ -10,7 +10,7 @@
 // Public interface:
 //   ChainEditing.apply({
 //     source: 'human' | 'agent' | 'preset' | 'startup' | 'undo',
-//     candidate?: [{id, type, params}],
+//     candidate?: [{id, type, params, bypassed?}],
 //     change?: {nodeId, param, value},
 //     layout?: Object,
 //     renderOptions?: {freshSeats?: boolean},
@@ -50,11 +50,15 @@
 
   function cloneModel(model) {
     return (model || []).map(function (entry) {
-      return {
+      var copy = {
         id: entry.id,
         type: entry.type,
         params: Object.assign({}, entry.params || {})
       };
+      if (entry.bypassed === true) {
+        copy.bypassed = true;
+      }
+      return copy;
     });
   }
 
@@ -165,6 +169,9 @@
         if (!entry || typeof entry.id !== 'string' || typeof entry.type !== 'string') {
           throw new TypeError('ChainEditing.apply: each candidate entry needs string id and type.');
         }
+        if (entry.bypassed !== undefined && typeof entry.bypassed !== 'boolean') {
+          throw new TypeError('ChainEditing.apply: candidate bypassed values must be booleans.');
+        }
       });
     } else if (
       !request.change ||
@@ -207,6 +214,9 @@
       var before = previous[i];
       var after = candidate[i];
       if (before.id !== after.id || before.type !== after.type) {
+        return null;
+      }
+      if (!!before.bypassed !== !!after.bypassed) {
         return null;
       }
       var beforeParams = before.params || {};
