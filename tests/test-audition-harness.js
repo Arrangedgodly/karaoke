@@ -170,13 +170,17 @@ function main() {
   check(!!H && typeof H.session === 'object' && typeof H.loadToBoard === 'function',
     'B0: active export carries session + loadToBoard');
 
-  // Exercise the exported session against the shipped pen first (empty),
-  // then re-run the module with a populated pen for the recording rules.
+  // The exported session must MIRROR whatever the pen ships (empty
+  // between batches, populated while one awaits audition — the #31 seed
+  // batch made that state real).
   var session = H.session;
-  check(Array.isArray(session.candidates) && session.candidates.length === 0,
-    'B0: the shipped pen is empty (candidates land via PR per the pipeline)');
-  check(session.current() === null && session.toJSON().length === 0,
-    'B0: an empty pen yields no current candidate and no verdicts');
+  var pen = s.window.AUDITION_CANDIDATES;
+  check(Array.isArray(session.candidates) &&
+    session.candidates.length === (pen ? pen.length : 0),
+    'B0: the session mirrors the shipped pen (' + session.candidates.length + ' candidate(s))');
+  check((session.current() === null) === (session.candidates.length === 0) &&
+    session.toJSON().length === 0,
+    'B0: a fresh session has no current candidate when the pen is empty, and never starts with verdicts');
 
   // The factory itself is not exported (the panel wires it); exercise the
   // recording rules through a session built by re-running the harness
@@ -302,8 +306,18 @@ function main() {
           s3.__domCalls.addEventListener >= 1,
           'E1: with ?audition the panel builds (created ' + s3.__domCalls.createElement +
           ' elements, appended, wired keydown)');
-        check(s3.window.AuditionHarness.session.current() === null,
-          'E1: empty-pen panel renders the no-candidates state without a current candidate');
+        // The no-candidates state needs an explicitly EMPTY pen — the
+        // shipped pen carries a batch whenever one awaits audition.
+        var s3e = createSandbox({ search: '?audition=1' });
+        loadSrc(s3e, 'src/audition-candidates.js');
+        s3e.window.AUDITION_CANDIDATES = [];
+        loadSrc(s3e, 'src/audition-harness.js');
+        check(s3e.__domCalls.bodyAppend >= 1 &&
+          s3e.window.AuditionHarness.session.current() === null,
+          'E1: an empty-pen panel renders the no-candidates state without a current candidate');
+        check(!!s3.window.AuditionHarness.session.current(),
+          'E1: the shipped pen\u2019s panel starts on its first candidate (' +
+          (s3.window.AuditionHarness.session.current() || {}).name + ')');
 
         var s4 = createSandbox({ search: '?audition' });
         loadSrc(s4, 'src/audition-candidates.js');
