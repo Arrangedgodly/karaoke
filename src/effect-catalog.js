@@ -1,11 +1,12 @@
 // One complete, validated definition per installed effect.
 //
-// Loaded as a plain script before the graph, metadata registry, adapters, and
-// effect registrations. The catalog starts empty; effect scripts populate it.
+// Loaded as a plain script before the graph, adapters, and effect registrations.
+// The catalog starts empty; effect scripts populate it.
 
 (function () {
   'use strict';
 
+  var RANGE_EPS = 1e-9;
   var definitions = Object.create(null);
   var registrationOrder = [];
 
@@ -150,6 +151,10 @@
     return registrationOrder.slice();
   }
 
+  function hasType(type) {
+    return hasOwn(definitions, type);
+  }
+
   function getDefinition(type) {
     return hasOwn(definitions, type) ? cloneDefinition(type, definitions[type]) : null;
   }
@@ -212,13 +217,27 @@
 
   function validateValue(type, param, value, operation) {
     if (Array.isArray(param.values)) {
-      if (param.values.indexOf(value) === -1) {
-        throw new Error("EffectCatalog." + operation + ": param '" + param.id + "' for '" + type + "' must be one of its values.");
+      if (param.values.indexOf(value) !== -1) {
+        return value;
       }
-      return value;
+      var stringValuesOnly = param.values.every(function (allowed) {
+        return typeof allowed === 'string';
+      });
+      if (stringValuesOnly && isFiniteNumber(value) && Math.floor(value) === value &&
+          value >= 0 && value < param.values.length) {
+        return param.values[value];
+      }
+      throw new Error("EffectCatalog." + operation + ": param '" + param.id + "' for '" + type + "' must be one of its values.");
     }
-    if (!isFiniteNumber(value) || value < param.min || value > param.max) {
+    if (!isFiniteNumber(value) ||
+        value < param.min - RANGE_EPS || value > param.max + RANGE_EPS) {
       throw new Error("EffectCatalog." + operation + ": param '" + param.id + "' for '" + type + "' must be a finite number in range " + param.min + '..' + param.max + '.');
+    }
+    if (value < param.min) {
+      return param.min;
+    }
+    if (value > param.max) {
+      return param.max;
     }
     return value;
   }
@@ -270,6 +289,7 @@
   window.EffectCatalog = {
     register: register,
     getAllTypes: getAllTypes,
+    hasType: hasType,
     getDefinition: getDefinition,
     getLabel: getLabel,
     getParamSpec: getParamSpec,

@@ -84,8 +84,9 @@ function createStorageStub() {
 // stub, and the REAL src files this seam needs — preset-schema (chain
 // wire form), default-preset (the fallback chain), preset-store (the
 // UNTOUCHED named-preset lane, loaded to prove it carries no layout),
-// and persistence itself. No NodeTypes registry on purpose: the
-// unregistered-type guard's documented lenient bare-harness mode.
+// and persistence itself. A narrow EffectCatalog fixture keeps the
+// production registered-type guards active; parameter-contract behavior
+// remains the dedicated catalog/schema suites' responsibility.
 function createEnv() {
   var storage = createStorageStub();
   var consoleErrors = [];
@@ -96,6 +97,10 @@ function createEnv() {
       error: function () {
         consoleErrors.push(Array.prototype.slice.call(arguments).join(' '));
       }
+    },
+    EffectCatalog: {
+      getAllTypes: function () { return ['gain', 'delay', 'limiter']; },
+      getParamSpec: function () { return []; }
     },
     localStorage: storage
   };

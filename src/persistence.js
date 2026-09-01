@@ -28,7 +28,7 @@
 // PresetSchema.deserialize() validation failure (corrupt/malformed/
 // wrong-schemaVersion data — e.g. hand-edited or from an old, incompatible
 // build — plus PRE-1's per-type param contracts for the cycle-3 node
-// types), or an autosave naming a node type the live registry does not know
+// types), or an autosave naming an effect type the live catalog does not know
 // (PRE-1, cycle 3 — see unregisteredNodeType below) is caught right here,
 // logged via console.error for debuggability, and treated exactly like
 // "nothing saved yet" — falling back to the default preset. Nothing in this
@@ -287,20 +287,20 @@
   }
 
   /**
-   * PRE-1 (cycle 3): does `nodes` name a node type the LIVE registry does
+   * PRE-1 (cycle 3): does `nodes` name an effect type the LIVE catalog does
    * not know? Returns the first offending type name (truthy) or false.
    *
    * deserialize() stays deliberately structural about which types exist
-   * (registry knowledge is not preset-schema's job — see that file's
+   * (catalog knowledge is not preset-schema's job — see that file's
    * header), but WITHOUT this guard a hand-edited autosave naming a bogus
    * type would sail through deserialize and then die inside
-   * AudioGraph.buildGraph()'s synchronous "unknown node type" throw —
+   * AudioGraph.buildGraph()'s synchronous "unknown effect type" throw —
    * mid-loadModel, mid-Start, leaving the canvas half-cleared. Rejecting it
    * HERE routes it through this module's existing recovery (default-chain
-   * fallback) instead. The check consults the LIVE NodeTypes registry (the
-   * same source of truth buildGraph resolves factories from — no second
-   * mirrored type list), and degrades to "all registered" (today's
-   * behavior) whenever the registry is absent or empty — a bare harness
+   * fallback) instead. The check consults the LIVE EffectCatalog (the same
+   * source of truth buildGraph creates effects from), and degrades to "all
+   * registered" (today's behavior) whenever the catalog is absent or empty —
+   * a bare harness
    * loading this file without the node files, where buildGraph's own
    * unknown-type check remains the backstop.
    *
@@ -309,10 +309,10 @@
    */
   function unregisteredNodeType(nodes) {
     try {
-      if (!window.NodeTypes || typeof window.NodeTypes.getAllTypes !== 'function') {
+      if (!window.EffectCatalog || typeof window.EffectCatalog.getAllTypes !== 'function') {
         return false;
       }
-      var known = window.NodeTypes.getAllTypes();
+      var known = window.EffectCatalog.getAllTypes();
       if (!known || known.length === 0) {
         return false;
       }

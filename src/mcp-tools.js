@@ -5,8 +5,8 @@
 // export pattern as the rest of this project. Dependencies, all optional at
 // runtime and every use guarded: window.McpServer (src/mcp-server.js,
 // loaded earlier per index.html) for self-registration;
-// window.NodeTypes + the six src/node-*.js files (loaded earlier) for the
-// live node-type registry; window.PresetSchema (src/preset-schema.js,
+// window.EffectCatalog + the src/node-*.js files (loaded earlier) for the
+// live effect catalog; window.PresetSchema (src/preset-schema.js,
 // loaded earlier) for authoritative chain-shape validation;
 // window.ChainEditing (src/chain-editing.js) for the accepted model and
 // the sole chain-mutation seam; window.ChainCanvas (src/canvas.js) is a
@@ -67,8 +67,8 @@
 // numeric-only and rejected autotune's Key/Scale outright. (2)
 // get_capabilities carries each type's EXPERIMENTAL badge — autotune
 // only — from the ONE source of truth (the registration's
-// `experimental: true`, read via NodeTypes.isExperimental(); static
-// snapshot fallback below). (3) The readout publishes the cycle-3 types'
+// `experimental: true`, read via EffectCatalog.isExperimental()). (3) The
+// readout publishes the cycle-3 types'
 // param contracts (nominal ranges / value lists + agent treatment)
 // instead of the registry-drift placeholder note.
 //
@@ -224,17 +224,11 @@
 //   validator bug-> { error: true, code: 'SCHEMA_LAYER_FAULT', ... }
 //     (a caught internal failure of THIS layer — nothing was applied).
 //
-// Registry fidelity: the static NODE_REGISTRY_SNAPSHOT below mirrors the
-// src/node-*.js paramSpec registrations verbatim (param ids, units,
-// nominal min/max, and — for the cycle-3 discrete params — the UI-1
-// `values` lists) so this file works with zero dependencies (e.g. in
-// Node test harnesses). At runtime the LIVE registry wins whenever it is
-// populated: window.NodeTypes.getAllTypes()/getParamSpec() — the snapshot
-// is only a fallback, and if the two ever drift the node files are the
-// source of truth and the snapshot must be re-mirrored. The experimental
-// status follows the same discipline (MCP-1): the LIVE
-// NodeTypes.isExperimental() — the type's own registration — wins, with
-// EXPERIMENTAL_TYPES_SNAPSHOT as the bare-harness fallback.
+// Registry fidelity: all type metadata comes from window.EffectCatalog.
+// Policy and sound-design prose remain local because they describe what an
+// agent may do, not how an effect is registered. Bare harnesses that omit the
+// catalog therefore expose no effect types instead of relying on a second,
+// drift-prone registry snapshot.
 //
 // Self-init at load: if window.McpServer exists, immediately
 // McpServer.registerTools(McpTools.getDefs()). The shim owns the
@@ -243,96 +237,6 @@
 // =====================================================================
 (function () {
   'use strict';
-
-  // ---------------------------------------------------------------------
-  // Node-type registry snapshot — mirrors src/node-*.js verbatim.
-  //
-  // One entry per param: { id, unit, min, max, default } — the
-  // paramSpec fields validation and get_capabilities' static fallback
-  // need (label/step stay UI-only and are not mirrored; get_capabilities
-  // falls back to TYPE_INFO's labels instead). MCP-1 (cycle 3): params
-  // whose paramSpec declares DISCRETE `values` (UI-1 selects — autotune
-  // key/scale) are mirrored as { id, values, default } with NO min/max:
-  // validation accepts one of the strings (or its 0..values.length-1 raw
-  // enum — src/preset-schema.js's equally-legal enum contract), and the
-  // capabilities readout publishes the value list instead of a range.
-  // Sources, in index.html script order:
-  //   gain       <- src/node-gain.js        (gainDb)
-  //   compressor <- src/node-compressor.js  (threshold, ratio, attack,
-  //                                          release)
-  //   eq         <- src/node-eq.js          (lowGain, midGain, highGain)
-  //   delay      <- src/node-delay.js       (timeMs, feedback, mix)
-  //   reverb     <- src/node-reverb.js      (mix)
-  //   limiter    <- src/node-limiter.js     (ceiling, release)
-  //   distortion <- src/node-distortion.js  (drive, tone, output)
-  //   chorus     <- src/node-chorus.js      (depthMs, rateHz, mix)
-  //   gate       <- src/node-gate.js        (threshold, attack, release,
-  //                                          floor)
-  //   autotune   <- src/node-autotune.js    (key, scale, retune, mix;
-  //                                          key/scale discrete)
-  // Ranges here are the app's OWN nominal slider ranges — NOT RQ-3's
-  // tighter agent ranges (those are AGENT_PARAM_POLICY below and MC-4's
-  // enforcement; e.g. delay feedback's nominal max is 90, RQ-3's agent
-  // cap is 70).
-  // ---------------------------------------------------------------------
-  var NODE_REGISTRY_SNAPSHOT = {
-    gain: [
-      { id: 'gainDb', unit: 'dB', min: -24, max: 24, default: 0 }
-    ],
-    compressor: [
-      { id: 'threshold', unit: 'dB', min: -60, max: 0, default: -24 },
-      { id: 'ratio', unit: ':1', min: 1, max: 20, default: 4 },
-      { id: 'attack', unit: 's', min: 0, max: 1, default: 0.01 },
-      { id: 'release', unit: 's', min: 0, max: 1, default: 0.25 }
-    ],
-    eq: [
-      { id: 'lowGain', unit: 'dB', min: -12, max: 12, default: 0 },
-      { id: 'midGain', unit: 'dB', min: -12, max: 12, default: 0 },
-      { id: 'highGain', unit: 'dB', min: -12, max: 12, default: 0 }
-    ],
-    delay: [
-      { id: 'timeMs', unit: 'ms', min: 10, max: 1000, default: 300 },
-      { id: 'feedback', unit: '%', min: 0, max: 90, default: 25 },
-      { id: 'mix', unit: '%', min: 0, max: 100, default: 25 }
-    ],
-    reverb: [
-      { id: 'mix', unit: '%', min: 0, max: 100, default: 20 }
-    ],
-    limiter: [
-      { id: 'ceiling', unit: 'dB', min: -12, max: 0, default: -1 },
-      { id: 'release', unit: 'ms', min: 10, max: 500, default: 50 }
-    ],
-    distortion: [
-      { id: 'drive', unit: '%', min: 0, max: 1, default: 0.25 },
-      { id: 'tone', unit: '%', min: 0, max: 1, default: 0.7 },
-      { id: 'output', unit: 'dB', min: -24, max: 0, default: -3 }
-    ],
-    chorus: [
-      { id: 'depthMs', unit: 'ms', min: 0, max: 10, default: 3 },
-      { id: 'rateHz', unit: 'Hz', min: 0.1, max: 8, default: 1.5 },
-      { id: 'mix', unit: '%', min: 0, max: 100, default: 30 }
-    ],
-    gate: [
-      { id: 'threshold', unit: 'dB', min: -80, max: 0, default: -50 },
-      { id: 'attack', unit: 's', min: 0.001, max: 0.5, default: 0.005 },
-      { id: 'release', unit: 's', min: 0.01, max: 2, default: 0.15 },
-      { id: 'floor', unit: 'dB', min: -60, max: 0, default: -40 }
-    ],
-    autotune: [
-      {
-        id: 'key', unit: '',
-        values: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
-        default: 'C'
-      },
-      {
-        id: 'scale', unit: '',
-        values: ['Chromatic', 'Major', 'Minor'],
-        default: 'Chromatic'
-      },
-      { id: 'retune', unit: 'ms', min: 0, max: 500, default: 0 },
-      { id: 'mix', unit: '%', min: 0, max: 100, default: 100 }
-    ]
-  };
 
   // ---------------------------------------------------------------------
   // Small shared helpers.
@@ -454,40 +358,38 @@
   }
 
   // ---------------------------------------------------------------------
-  // Registry resolution — live window.NodeTypes wins, snapshot falls back.
+  // Effect metadata resolution — window.EffectCatalog is authoritative.
   // ---------------------------------------------------------------------
 
   /**
-   * @returns {Array<string>} registered node-type names, in registration
-   *   order. window.NodeTypes.getAllTypes() when it is populated; the
-   *   static snapshot otherwise (empty live registry = node files not
-   *   loaded, e.g. a bare test harness).
+   * @returns {Array<string>} registered effect-type names, in registration
+   *   order. Empty when the catalog is unavailable in a bare harness.
    */
   function registryTypes() {
-    if (window.NodeTypes && typeof window.NodeTypes.getAllTypes === 'function') {
-      var live = window.NodeTypes.getAllTypes();
-      if (live && live.length > 0) {
-        return live.slice();
+    try {
+      if (window.EffectCatalog && typeof window.EffectCatalog.getAllTypes === 'function') {
+        return window.EffectCatalog.getAllTypes();
       }
+    } catch (err) {
+      // A damaged optional dependency behaves like an absent catalog.
     }
-    return Object.keys(NODE_REGISTRY_SNAPSHOT);
+    return [];
   }
 
   /**
    * @param {string} type - a node-type name.
-   * @returns {Array<Object>} that type's param specs ({id, unit, min, max
-   *   shaped}; live paramSpec entries carry extra UI fields, unused
-   *   here). Empty array when the type is unknown.
+   * @returns {Array<Object>} that type's catalog param specs. Empty when the
+   *   type is unknown or the catalog is unavailable.
    */
   function paramSpecsFor(type) {
-    if (window.NodeTypes && typeof window.NodeTypes.getParamSpec === 'function') {
-      var live = window.NodeTypes.getParamSpec(type);
-      if (live && live.length > 0) {
-        return live;
+    try {
+      if (window.EffectCatalog && typeof window.EffectCatalog.getParamSpec === 'function') {
+        return window.EffectCatalog.getParamSpec(type);
       }
+    } catch (err) {
+      // A damaged optional dependency behaves like an absent catalog.
     }
-    var snap = NODE_REGISTRY_SNAPSHOT[type];
-    return snap ? snap : [];
+    return [];
   }
 
   /**
@@ -671,7 +573,7 @@
   // ---------------------------------------------------------------------
   // MC-4 statics — the MACHINE-READABLE half of the rq3 policy. Everything
   // the enforcement engine below compares against comes from THIS block
-  // (plus AGENT_PARAM_POLICY above and NODE_REGISTRY_SNAPSHOT): no rq3
+  // (plus AGENT_PARAM_POLICY above and the live EffectCatalog): no rq3
   // numeric literal is ever re-typed in the enforcement code, so the
   // disclosure (CHAIN_RULES prose, get_capabilities) and the enforcement
   // cannot drift apart silently. If a number here must change, change the
@@ -750,70 +652,6 @@
    * live model before use. In-memory only; never persisted.
    */
   var agentNodeIdCounter = 0;
-
-  /**
-   * Per-type display label + live-vocal-oriented description for
-   * get_capabilities. Static fallback for labels when the live registry
-   * is absent; descriptions are always this static text (they carry the
-   * rq3 disclosures, which have no runtime source).
-   */
-  var TYPE_INFO = {
-    gain: {
-      label: 'Gain',
-      description:
-        'Direct-path trim for the whole vocal. Make small moves: every gain node counts toward both the +12 dB total gain budget (including estimated makeup) and the 6-gain-node cap.'
-    },
-    compressor: {
-      label: 'Compressor',
-      description:
-        "Levels the vocal (threshold/ratio/attack/release). Each compressor-type node adds ~6 ms look-ahead latency, applies a built-in makeup gain that counts toward the +12 dB budget (estimate 0.57 * |threshold|), and counts toward the 2-compressor-type-node cap together with the required limiter. Knee is fixed at the Web Audio default (30 dB soft knee) and gain reduction is read-only — neither is an addressable param."
-    },
-    eq: {
-      label: 'EQ',
-      description:
-        'Three fixed bands: low shelf 200 Hz, peaking 1 kHz (Q 1.0), high shelf 5 kHz. Frequencies and Q are fixed internally (all within rq3 clamp ranges) — only the three band gains are params. Prefer cuts; boosts are policy-capped (per-band +9 dB hard reject, boost sum <= +12 dB, at most one band >= +6 dB). One eq node = 3 bands, so the 6-band cap means at most 2 eq nodes.'
-    },
-    delay: {
-      label: 'Delay',
-      description:
-        'Slap-back delay. feedback is the percent of each repeat fed back into the delay (linear gain = feedback/100; rq3 caps it at 0.70 = 70 on this param). mix is an equal-power dry/wet crossfade whose sides never leave [0, 1].'
-    },
-    reverb: {
-      label: 'Reverb',
-      description:
-        'Plate-style ambience from a fixed bundled impulse response; only the wet/dry mix is exposed. The IR buffer and the convolver normalize flag are host-owned — no tool can address them.'
-    },
-    limiter: {
-      label: 'Limiter',
-      description:
-        'SAFETY limiter — required in every chain and always terminal (last node, MIC IN to OUT; only upstream additions are allowed). ceiling is its threshold; only ceiling and release are addressable. Locked host-fixed aspects: ratio 20:1, attack (rq3 locks 1-3 ms; this app fixes 0 ms — the node\'s native minimum, even faster), and a 0 dB hard knee. The host-owned output attenuator sits after it and is not a param.'
-    },
-    // ---- cycle-3 types (MCP-1): rq3's loudness policy does not govern
-    // these — none adds linear gain above unity or a feedback loop — so
-    // the agent range equals the nominal range and out-of-range requests
-    // reject (the structural nominal check). Descriptions state what an
-    // agent needs: the param meanings + any latency/bypass caveat.
-    distortion: {
-      label: 'Distortion',
-      description:
-        'Vocal saturation: fixed tanh soft-clip curve (4x oversampled), Drive as a 1.0x-10x input pre-gain into it, Tone as a lowpass (1.5-12 kHz) over the saturated signal, Output as a post gain TRIM capped at 0 dB (it can only cut — it never adds gain toward the +12 dB budget). Drive 0 is the near-linear subtle end.'
-    },
-    chorus: {
-      label: 'Chorus',
-      description:
-        '2-voice stereo spread chorus (L/R phase-opposed LFO-modulated delays). Depth is the LFO excursion in ms, Rate the LFO frequency in Hz, Mix an equal-power dry/wet crossfade. All native nodes — no latency, no feedback path.'
-    },
-    gate: {
-      label: 'Noise Gate',
-      description:
-        'RMS-based noise gate in an AudioWorklet: Threshold opens/closes the gate, Attack/Release shape the ramps, Floor is the closed-level cut. Internals (6 dB hysteresis, 50 ms hold, 5 ms look-ahead) are fixed and not addressable. Set Threshold below the room noise and above the quietest sung note you want kept.'
-    },
-    autotune: {
-      label: 'Autotune',
-      description:
-        'EXPERIMENTAL pitch correction (YIN detection + TD-PSOLA shifting in one AudioWorklet): key/scale pick the snap grid (discrete strings — see their values lists; raw enums also accepted), Retune Speed 0 ms = hard-tune snap to larger = slow-correction glide, Mix blends corrected/dry. Declared internal delay exactly 20 ms on both legs. New DSP still under audio-quality review — expect to re-check settings by ear.'
-    }
-  };
 
   /**
    * RQ-3 agent ranges translated into app units (see the conversion
@@ -993,6 +831,40 @@
       }
     }
   };
+
+  /**
+   * Verify that a policy table only names installed catalog types and params.
+   * The optional argument exists for focused failure tests; production calls
+   * this with the private AGENT_PARAM_POLICY table during startup.
+   *
+   * @param {Object} [policy]
+   * @returns {{valid: boolean, errors: Array<string>}}
+   */
+  function validateAgentPolicyReferences(policy) {
+    var candidate = policy || AGENT_PARAM_POLICY;
+    var errors = [];
+    var catalog = window.EffectCatalog;
+    if (!catalog || typeof catalog.getAllTypes !== 'function' ||
+        typeof catalog.getParamSpec !== 'function') {
+      return { valid: false, errors: ['EffectCatalog is unavailable.'] };
+    }
+    var installed = catalog.getAllTypes();
+    Object.keys(candidate).forEach(function (type) {
+      if (installed.indexOf(type) === -1) {
+        errors.push("unknown effect type '" + type + "'");
+        return;
+      }
+      var paramIds = catalog.getParamSpec(type).map(function (spec) {
+        return spec.id;
+      });
+      Object.keys(candidate[type]).forEach(function (paramId) {
+        if (paramIds.indexOf(paramId) === -1) {
+          errors.push("unknown param '" + type + '.' + paramId + "'");
+        }
+      });
+    });
+    return { valid: errors.length === 0, errors: errors };
+  }
 
   /**
    * Every rq3 chain rule, stated as get_capabilities publishes it.
@@ -1181,6 +1053,10 @@
     CAPABILITY_FOCUS.SOUND_DESIGN
   ];
 
+  function effectGuideLine(effect, text) {
+    return { effect: effect, text: text };
+  }
+
   var SOUND_DESIGN_GUIDE = {
     // Canonical identity (#15 finding): both capability modes report the
     // same app identity — VOXCHAIN, matching the policy index's own
@@ -1202,15 +1078,48 @@
       strong: 'Use the last listed value, still inside policy.'
     },
     vocabulary: {
-      deeper: ['eq lowGain +2..+4 dB', 'eq highGain -1..-3 dB', 'This shapes timbre; it does not lower pitch.'],
-      light_reverb: ['reverb mix 10..25%'],
-      ghostly: ['reverb mix 25..50%', 'delay timeMs 180..320 ms', 'delay feedback 15..30%', 'delay mix 10..25%', 'chorus mix 10..25% (optional)'],
-      warm: ['eq lowGain +1..+3 dB', 'eq highGain -1..-2 dB', 'reverb mix 15..30%'],
-      bright: ['eq highGain +2..+4 dB', 'eq lowGain -1..-3 dB'],
-      clear: ['eq lowGain -2..-4 dB', 'reverb mix 0..15%'],
-      thick: ['chorus depthMs 2..4 ms', 'chorus rateHz 0.8..1.8 Hz', 'chorus mix 15..35%'],
-      gritty: ['distortion drive 0.15..0.4', 'distortion tone 0.4..0.7', 'distortion output -6..-3 dB'],
-      robotic: ['autotune retune 40..0 ms', 'autotune mix 70..100%', 'autotune scale Chromatic', 'EXPERIMENTAL: verify by ear before a show.'],
+      deeper: [
+        effectGuideLine('eq', 'eq lowGain +2..+4 dB'),
+        effectGuideLine('eq', 'eq highGain -1..-3 dB'),
+        'This shapes timbre; it does not lower pitch.'
+      ],
+      light_reverb: [effectGuideLine('reverb', 'reverb mix 10..25%')],
+      ghostly: [
+        effectGuideLine('reverb', 'reverb mix 25..50%'),
+        effectGuideLine('delay', 'delay timeMs 180..320 ms'),
+        effectGuideLine('delay', 'delay feedback 15..30%'),
+        effectGuideLine('delay', 'delay mix 10..25%'),
+        effectGuideLine('chorus', 'chorus mix 10..25% (optional)')
+      ],
+      warm: [
+        effectGuideLine('eq', 'eq lowGain +1..+3 dB'),
+        effectGuideLine('eq', 'eq highGain -1..-2 dB'),
+        effectGuideLine('reverb', 'reverb mix 15..30%')
+      ],
+      bright: [
+        effectGuideLine('eq', 'eq highGain +2..+4 dB'),
+        effectGuideLine('eq', 'eq lowGain -1..-3 dB')
+      ],
+      clear: [
+        effectGuideLine('eq', 'eq lowGain -2..-4 dB'),
+        effectGuideLine('reverb', 'reverb mix 0..15%')
+      ],
+      thick: [
+        effectGuideLine('chorus', 'chorus depthMs 2..4 ms'),
+        effectGuideLine('chorus', 'chorus rateHz 0.8..1.8 Hz'),
+        effectGuideLine('chorus', 'chorus mix 15..35%')
+      ],
+      gritty: [
+        effectGuideLine('distortion', 'distortion drive 0.15..0.4'),
+        effectGuideLine('distortion', 'distortion tone 0.4..0.7'),
+        effectGuideLine('distortion', 'distortion output -6..-3 dB')
+      ],
+      robotic: [
+        effectGuideLine('autotune', 'autotune retune 40..0 ms'),
+        effectGuideLine('autotune', 'autotune mix 70..100%'),
+        effectGuideLine('autotune', 'autotune scale Chromatic'),
+        'EXPERIMENTAL: verify by ear before a show.'
+      ],
       // cycle 4 additions (Tone-backed types), completed 2026-08-31 per
       // owner direction: every Tone type now has vocabulary. The PR #18
       // 1500-char ceiling moved to 2000 the same day to fund the full set
@@ -1219,24 +1128,33 @@
       // control (see `deeper`'s honesty note); the types left experimental
       // status the same day, so no per-entry EXPERIMENTAL notes ride here.
       transposed: [
-        'pitchshift pitch -4..+4 st',
+        effectGuideLine('pitchshift', 'pitchshift pitch -4..+4 st'),
         'Negative lowers the pitch, positive raises it; keep |shift| <= 7 st for intelligibility.'
       ],
-      spacey: ['phaser rateHz 0.3..1 Hz', 'phaser depth 40..70%'],
-      warble: ['tremolo rateHz 4..7 Hz', 'tremolo depth 30..60%'],
+      spacey: [
+        effectGuideLine('phaser', 'phaser rateHz 0.3..1 Hz'),
+        effectGuideLine('phaser', 'phaser depth 40..70%')
+      ],
+      warble: [
+        effectGuideLine('tremolo', 'tremolo rateHz 4..7 Hz'),
+        effectGuideLine('tremolo', 'tremolo depth 30..60%')
+      ],
       // #15 finding fix: bit depth runs OPPOSITE to the slight-first
       // convention — FEWER bits = MORE crushed. The range is written
       // descending (slight 6 -> strong 3) with the direction spelled out
       // so an intensity-following agent cannot map "stronger lo-fi" to a
       // HIGHER (cleaner) bit depth.
-      lofi: ['bitcrusher bits 6..3 (fewer bits = more crushed)', 'bitcrusher mix 20..45%']
+      lofi: [
+        effectGuideLine('bitcrusher', 'bitcrusher bits 6..3 (fewer bits = more crushed)'),
+        effectGuideLine('bitcrusher', 'bitcrusher mix 20..45%')
+      ]
     },
     boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
   };
 
   /**
-   * The served sound-design vocabulary, filtered against the LIVE
-   * registry (#15 finding): a degraded page (one whose node files
+   * The served sound-design vocabulary, filtered against the live catalog
+   * (#15 finding): a degraded page (one whose effect scripts
    * partially failed to load) must not keep recommending effects the
    * running graph cannot create. Filtering is PER-LINE — an adjective
    * keeps its still-installable recommendations and loses only lines
@@ -1244,8 +1162,7 @@
    * whole goal); an adjective left with nothing survives as nothing and
    * is dropped. Dropped lines are disclosed once via
    * `unavailableEffects` so the agent knows why a favorite move is
-   * absent. In a healthy page (and in the bare-harness tests, where the
-   * static snapshot is the registry) this is a no-op copy.
+   * absent. In a healthy page this is a no-op copy.
    *
    * @returns {Object} the guide copy to serve.
    */
@@ -1253,20 +1170,19 @@
     var guide = freshCopy(SOUND_DESIGN_GUIDE);
     try {
       var registered = registryTypes();
-      var typeWords = [
-        'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter', 'distortion',
-        'chorus', 'gate', 'autotune', 'pitchshift', 'tremolo', 'bitcrusher', 'phaser'
-      ];
       var mentionedMissing = {};
       Object.keys(guide.vocabulary).forEach(function (adjective) {
         var kept = [];
         guide.vocabulary[adjective].forEach(function (line) {
-          // A recommendation line names its effect as the leading word
-          // ('reverb mix 10..25%'). Prose lines name none and always stay.
-          var lead = String(line).split(/\s+/)[0].toLowerCase();
-          if (typeWords.indexOf(lead) !== -1 && registered.indexOf(lead) === -1) {
-            mentionedMissing[lead] = true;
-            return; // this recommendation names an effect this page cannot build
+          // Effect recommendation objects carry an explicit catalog ref;
+          // prose remains a string and always stays.
+          if (line && typeof line === 'object' && typeof line.effect === 'string') {
+            if (registered.indexOf(line.effect) === -1) {
+              mentionedMissing[line.effect] = true;
+              return;
+            }
+            kept.push(line.text);
+            return; // Explicit reference handled; keep public output as text.
           }
           kept.push(line);
         });
@@ -1287,6 +1203,37 @@
       // about policy; serving it beats failing the read.
     }
     return guide;
+  }
+
+  /**
+   * Verify explicit sound-design references against the installed catalog.
+   * Missing references are reported, while buildSoundDesignGuide() remains
+   * responsible for filtering them from a genuinely degraded page.
+   *
+   * @param {Object} [guide]
+   * @returns {{valid: boolean, errors: Array<string>}}
+   */
+  function validateGuideReferences(guide) {
+    var candidate = guide || SOUND_DESIGN_GUIDE;
+    var installed = registryTypes();
+    var errors = [];
+    var vocabulary = candidate && candidate.vocabulary;
+    if (!vocabulary || typeof vocabulary !== 'object') {
+      return { valid: false, errors: ['sound-design vocabulary is unavailable.'] };
+    }
+    Object.keys(vocabulary).forEach(function (adjective) {
+      if (!Array.isArray(vocabulary[adjective])) {
+        errors.push("vocabulary '" + adjective + "' must be an array");
+        return;
+      }
+      vocabulary[adjective].forEach(function (line) {
+        if (line && typeof line === 'object' && typeof line.effect === 'string' &&
+            installed.indexOf(line.effect) === -1) {
+          errors.push("unknown guide effect '" + line.effect + "'");
+        }
+      });
+    });
+    return { valid: errors.length === 0, errors: errors };
   }
 
   // ---------------------------------------------------------------------
@@ -1853,37 +1800,22 @@
   }
 
   /**
-  /**
-   * MCP-1 (cycle 3): the experimental-status lookup for
-   * get_capabilities. ONE source of truth — the type's OWN registration
-   * (`experimental: true` in NodeTypes.register; node-autotune.js,
-   * autotune only per the cycle-3 scope), read through
-   * NodeTypes.isExperimental(), which src/canvas.js's badge surfaces also
-   * read (so the operator-visible badge and the agent-facing readout can
-   * never disagree). The static map below is only the bare-harness
-   * FALLBACK (node files not loaded — same discipline as
-   * NODE_REGISTRY_SNAPSHOT); if the two ever drift the registrations are
-   * the source of truth and this map must be re-mirrored.
+   * Experimental status comes from the same catalog definition used by the
+   * canvas badge and graph factory, so the human and agent surfaces agree.
    *
    * @param {string} type
    * @returns {boolean}
    */
   function isExperimentalType(type) {
     try {
-      if (window.NodeTypes && typeof window.NodeTypes.isExperimental === 'function') {
-        return window.NodeTypes.isExperimental(type);
+      if (window.EffectCatalog && typeof window.EffectCatalog.isExperimental === 'function') {
+        return window.EffectCatalog.isExperimental(type);
       }
     } catch (err) {
-      // Damaged registry object — the static fallback below stands.
+      // A damaged optional dependency behaves like an absent catalog.
     }
-    return Object.prototype.hasOwnProperty.call(EXPERIMENTAL_TYPES_SNAPSHOT, type) &&
-      !!EXPERIMENTAL_TYPES_SNAPSHOT[type];
+    return false;
   }
-
-  /** @type {Object<string, boolean>} mirrors the registrations (above). */
-  var EXPERIMENTAL_TYPES_SNAPSHOT = {
-    autotune: true
-  };
 
   /**
    * A compact index of the agent-facing node policy. Chrome recommends
@@ -1999,6 +1931,35 @@
     return (perType && Object.prototype.hasOwnProperty.call(perType, param))
       ? perType[param]
       : null;
+  }
+
+  /**
+   * Catalog-derived policy for a param with no explicit AGENT_PARAM_POLICY
+   * entry. Numeric ranges clamp, matching get_capabilities; discrete values
+   * retain their reject-by-membership contract.
+   *
+   * @param {string} type
+   * @param {string} param
+   * @returns {Object|null}
+   */
+  function catalogPolicyFor(type, param) {
+    var spec = findSpec(paramSpecsFor(type), param);
+    if (spec && isDiscreteSpec(spec)) {
+      return { values: spec.values, unit: spec.unit || '', treatment: 'reject' };
+    }
+    if (
+      spec &&
+      typeof spec.min === 'number' &&
+      typeof spec.max === 'number'
+    ) {
+      return {
+        min: spec.min,
+        max: spec.max,
+        unit: spec.unit || '',
+        treatment: 'clamp'
+      };
+    }
+    return null;
   }
 
   /**
@@ -2545,8 +2506,11 @@
         var value = provided[key];
         var policy = policyFor(entry.type, key);
         if (!policy) {
-          params[key] = value; // no policy registered (registry drift) — nominal bounds already held structurally
-          continue;
+          policy = catalogPolicyFor(entry.type, key);
+          if (!policy) {
+            params[key] = value;
+            continue;
+          }
         }
         if (policy.values) {
           // MCP-1: discrete param — membership replaces the numeric range
@@ -2826,24 +2790,23 @@
   // ---------------------------------------------------------------------
 
   /**
-   * Human label for a node type: the live registry's label, else the
-   * static TYPE_INFO label, else the type id itself.
+   * Human label for a node type: the live catalog's label, else the type id.
    *
    * @param {string} type
    * @returns {string}
    */
   function typeLabel(type) {
     try {
-      if (window.NodeTypes && typeof window.NodeTypes.getLabel === 'function') {
-        var live = window.NodeTypes.getLabel(type);
+      if (window.EffectCatalog && typeof window.EffectCatalog.getLabel === 'function') {
+        var live = window.EffectCatalog.getLabel(type);
         if (typeof live === 'string' && live.length > 0) {
           return live;
         }
       }
     } catch (err) {
-      // Static fallback stands.
+      // A damaged optional dependency behaves like an absent catalog.
     }
-    return (TYPE_INFO[type] && TYPE_INFO[type].label) || type;
+    return type;
   }
 
   /**
@@ -3293,35 +3256,10 @@
     }
     var clamped = [];
     var finalValue = input.value;
-    var policy = policyFor(entry.type, input.param);
-    if (!policy) {
-      // Registry-range fallback (cycle 4, Tone-backed effects): a param
-      // with no AGENT_PARAM_POLICY entry falls back to its registered
-      // paramSpec range with treatment 'clamp'. Every param of the ten
-      // native types HAS a policy entry (probe-verified 2026-08-31: all
-      // 26 numeric params clamp/reject out-of-range requests), so this
-      // branch is behavior-neutral for them — it exists so a NEWLY
-      // registered type's params get the same honest range enforcement
-      // (and the same clamped[] disclosure) without a policy-table edit
-      // per effect. Discrete params fall back to their spec's value
-      // list (membership — the structural layer already rejected
-      // non-members, this keeps the planner self-consistent).
-      var fallbackSpec = findSpec(paramSpecsFor(entry.type), input.param);
-      if (fallbackSpec && isDiscreteSpec(fallbackSpec)) {
-        policy = { values: fallbackSpec.values, unit: fallbackSpec.unit || '' };
-      } else if (
-        fallbackSpec &&
-        typeof fallbackSpec.min === 'number' &&
-        typeof fallbackSpec.max === 'number'
-      ) {
-        policy = {
-          min: fallbackSpec.min,
-          max: fallbackSpec.max,
-          unit: fallbackSpec.unit || '',
-          treatment: 'clamp'
-        };
-      }
-    }
+    // Catalog fallback keeps newly registered params aligned with the live
+    // capability contract without requiring a policy-table entry per effect.
+    var policy = policyFor(entry.type, input.param) ||
+      catalogPolicyFor(entry.type, input.param);
     if (policy && policy.values) {
       // MCP-1: discrete param — membership, not a numeric range. The
       // structural layer already rejected non-members with the legal
@@ -3491,20 +3429,23 @@
   // rule.)
 
   /**
-   * Structural check of one param value against its spec: finite number
-   * within the app's NOMINAL range (the node file's own min/max), or —
+   * Structural check of one param value against its spec: a finite number,
+   * normally within the app's NOMINAL range (the node file's own min/max), or —
    * MCP-1, cycle 3 — for a DISCRETE spec (UI-1 `values` select, autotune
    * key/scale) one of the declared strings or its raw integer enum
    * (preset-schema's equally-legal forms). This is the loosest tier —
    * RQ-3's tighter agent ranges/reject-clamp policy are MC-4's and
-   * intentionally NOT encoded here.
+   * intentionally NOT encoded here. Catalog-only numeric params may exceed
+   * nominal bounds because their published MC-4 treatment is clamp.
    *
    * @param {Object} spec - {id, unit, min, max} or {id, unit, values}.
    * @param {*} value
    * @param {string} path
    * @param {Array<Object>} problems
+   * @param {boolean} allowCatalogClamp - finite numeric overflow may proceed
+   *   to the catalog-derived clamp policy.
    */
-  function checkSpecValue(spec, value, path, problems) {
+  function checkSpecValue(spec, value, path, problems, allowCatalogClamp) {
     if (isDiscreteSpec(spec)) {
       if (!legalDiscreteValue(spec, value)) {
         problems.push(
@@ -3527,7 +3468,7 @@
       );
       return;
     }
-    if (value < spec.min || value > spec.max) {
+    if (!allowCatalogClamp && (value < spec.min || value > spec.max)) {
       problems.push(
         problem(
           path,
@@ -3541,8 +3482,8 @@
   /**
    * Validate a params object against a node type's real params: keys must
    * be that type's registered param names (unknown key names the allowed
-   * list), values structurally numeric within nominal range. An omitted
-   * params object is fine (type defaults — same leniency as
+   * list), values structurally numeric and, unless catalog clamp owns them,
+   * within nominal range. An omitted params object is fine (type defaults — same leniency as
    * preset-schema.js's deserialize).
    *
    * @param {string} type - the node type the params belong to.
@@ -3582,7 +3523,13 @@
         );
         return;
       }
-      checkSpecValue(spec, params[key], basePath + '.' + key, problems);
+      checkSpecValue(
+        spec,
+        params[key],
+        basePath + '.' + key,
+        problems,
+        !policyFor(type, key)
+      );
     });
   }
 
@@ -3661,11 +3608,50 @@
   }
 
   /**
+   * Build the validation-only chain passed to PresetSchema. Catalog-clamp
+   * numeric overflow is saturated in the copy so PresetSchema can still
+   * check every other field without overriding the agent contract.
+   *
+   * @param {*} chain
+   * @returns {*} a copied chain when normalization applies, else the input.
+   */
+  function authoritativeChainCandidate(chain) {
+    if (!isPlainObject(chain) || !Array.isArray(chain.nodes)) {
+      return chain;
+    }
+    var candidate = Object.assign({}, chain);
+    candidate.nodes = chain.nodes.map(function (entry) {
+      if (!isPlainObject(entry) || !isPlainObject(entry.params)) {
+        return entry;
+      }
+      var copy = Object.assign({}, entry);
+      copy.params = Object.assign({}, entry.params);
+      Object.keys(copy.params).forEach(function (key) {
+        if (policyFor(entry.type, key)) {
+          return;
+        }
+        var fallback = catalogPolicyFor(entry.type, key);
+        var value = copy.params[key];
+        if (
+          fallback &&
+          !fallback.values &&
+          typeof value === 'number' &&
+          isFinite(value) &&
+          (value < fallback.min || value > fallback.max)
+        ) {
+          copy.params[key] = value < fallback.min ? fallback.min : fallback.max;
+        }
+      });
+      return copy;
+    });
+    return candidate;
+  }
+
+  /**
    * Authoritative reuse of src/preset-schema.js when it is loaded: run
-   * deserialize() on the candidate and, if it rejects a chain my mirror
-   * walk above found clean (i.e. the two ever drift), surface its message
-   * so the stricter of the two always wins. deserialize() throws by
-   * design and touches nothing — safe to call on untrusted input.
+   * deserialize() on the validation candidate and, if it rejects a chain my
+   * mirror walk above found clean (i.e. the two ever drift), surface its
+   * message. deserialize() throws by design and touches nothing.
    *
    * @param {Object} chain - a chain that passed (or will be judged by)
    *   validateChainObject.
@@ -3677,7 +3663,10 @@
       return; // Not loaded — the mirror walk above stands on its own.
     }
     try {
-      window.PresetSchema.deserialize(chain);
+      // PresetSchema correctly rejects out-of-nominal stored values. For an
+      // agent request, validate a copy with only catalog-clamp values already
+      // saturated; the planner performs and discloses the real clamp later.
+      window.PresetSchema.deserialize(authoritativeChainCandidate(chain));
     } catch (err) {
       if (problems.length === 0) {
         problems.push(
@@ -4790,13 +4779,24 @@
     ];
   }
 
+  // Validate policy and guide references at startup. The result is exposed
+  // for the production integration gate and focused failure tests. A
+  // genuinely degraded page remains loadable—the capability builders omit
+  // unavailable effects—but cannot pretend its references are complete.
+  var catalogReferenceValidation = {
+    policy: validateAgentPolicyReferences(),
+    guide: validateGuideReferences()
+  };
   // Public registration lifecycle. Consumers such as the dev harness
   // can await this promise instead of sampling the adapter's registry
   // while the browser is still accepting tools one by one.
   var registrationReady = Promise.resolve({ registered: [], failed: [] });
   window.McpTools = {
     getDefs: getDefs,
-    registrationReady: registrationReady
+    registrationReady: registrationReady,
+    validateAgentPolicyReferences: validateAgentPolicyReferences,
+    validateGuideReferences: validateGuideReferences,
+    catalogReferenceValidation: catalogReferenceValidation
   };
 
   // Self-init: hand the defs to the shim the moment this script parses

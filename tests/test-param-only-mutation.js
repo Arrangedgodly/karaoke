@@ -497,8 +497,8 @@ function sawScheduledRamp(param, baseline, target, nowTime, rampS) {
 async function main() {
   var sandbox = createSandbox();
   loadSrc(sandbox, 'src/agent-ui.js');
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-compressor.js');
@@ -940,8 +940,8 @@ async function main() {
   ];
 
   var registeredBranches = [];
-  sandbox.NodeTypes.getAllTypes().forEach(function (type) {
-    sandbox.NodeTypes.getParamSpec(type).forEach(function (spec) {
+  sandbox.EffectCatalog.getAllTypes().forEach(function (type) {
+    sandbox.EffectCatalog.getParamSpec(type).forEach(function (spec) {
       registeredBranches.push(type + '.' + spec.id);
     });
   });

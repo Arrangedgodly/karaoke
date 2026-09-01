@@ -43,15 +43,25 @@ function errorMatches(fn, pattern) {
 }
 
 function loadCatalog() {
+  return loadEnvironment(['src/effect-catalog.js']).EffectCatalog;
+}
+
+function loadEnvironment(relativePaths) {
   var sandbox = { console: console };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  relativePaths.forEach(function (relativePath) {
+    loadScript(sandbox, relativePath);
+  });
+  return sandbox;
+}
+
+function loadScript(sandbox, relativePath) {
   vm.runInContext(
-    fs.readFileSync(path.join(ROOT, 'src/effect-catalog.js'), 'utf8'),
+    fs.readFileSync(path.join(ROOT, relativePath), 'utf8'),
     sandbox,
-    { filename: 'src/effect-catalog.js' }
+    { filename: relativePath }
   );
-  return sandbox.EffectCatalog;
 }
 
 function numericDefinition(label, calls, withDispose) {
@@ -113,6 +123,10 @@ check(
 check(
   catalog.getDefinition('level').type === 'level' && catalog.getDefinition('level').label === 'Level',
   'A3: getDefinition() includes the registered identity and label'
+);
+check(
+  catalog.hasType('level') === true && catalog.hasType('missing') === false,
+  'A3a: hasType() checks catalog membership without exposing a definition'
 );
 check(catalog.getLabel('mode') === 'Mode selector', 'A4: getLabel() reads the registered label');
 check(catalog.isExperimental('level') === false && catalog.isExperimental('mode') === true,
@@ -217,37 +231,91 @@ check(errorMatches(function () { catalog.normalizeParams('level', { typo: 1 }); 
   'D2: unknown params are rejected');
 check(errorMatches(function () { catalog.normalizeParams('level', { mix: 101 }); }, /mix.*range/i),
   'D3: out-of-range numeric values are rejected');
+
+var boundaryCalls = { create: [], apply: [], dispose: [] };
+var boundaryEnvironment = loadEnvironment([
+  'src/effect-catalog.js',
+  'src/preset-schema.js'
+]);
+var boundaryCatalog = boundaryEnvironment.EffectCatalog;
+var boundarySchema = boundaryEnvironment.PresetSchema;
+boundaryCatalog.register('level', numericDefinition('Boundary level', boundaryCalls, false));
+
+function boundaryPreset(value) {
+  return {
+    schemaVersion: boundarySchema.CURRENT_VERSION,
+    name: 'Boundary fuzz',
+    nodes: [{ id: 'level-1', type: 'level', params: { mix: value } }]
+  };
+}
+
+var minFuzz = -0.5e-9;
+var minRestored = boundarySchema.deserialize(boundaryPreset(minFuzz));
+check(
+  minRestored.nodes[0].params.mix === minFuzz &&
+    boundaryCatalog.normalizeParams('level', minRestored.nodes[0].params).mix === 0,
+  'D3a: deserialize accepts minimum fuzz and normalizeParams() clamps it to the minimum'
+);
+
+var maxFuzz = 100 + 0.5e-9;
+var maxRestored = boundarySchema.deserialize(boundaryPreset(maxFuzz));
+var boundaryInstance = boundaryCatalog.create(
+  'level',
+  { marker: 'boundary-context' },
+  maxRestored.nodes[0].params
+);
+check(
+  maxRestored.nodes[0].params.mix === maxFuzz &&
+    boundaryCalls.create[0].params.mix === 100 && boundaryInstance.params.mix === 100,
+  'D3b: deserialize accepts maximum fuzz and create() clamps it to the maximum'
+);
+
+check(
+  errorMatches(function () { boundarySchema.deserialize(boundaryPreset(-2e-9)); }, /mix.*between/i) &&
+    errorMatches(function () { boundaryCatalog.normalizeParams('level', { mix: -2e-9 }); }, /mix.*range/i),
+  'D3c: schema and catalog reject minimum fuzz beyond the shared tolerance'
+);
+check(
+  errorMatches(function () { boundarySchema.deserialize(boundaryPreset(100 + 2e-9)); }, /mix.*between/i) &&
+    errorMatches(function () { boundaryCatalog.create('level', {}, { mix: 100 + 2e-9 }); }, /mix.*range/i),
+  'D3d: schema and catalog reject maximum fuzz beyond the shared tolerance'
+);
+
 check(errorMatches(function () { catalog.normalizeParams('mode', { mode: 'Loud' }); }, /mode.*values/i),
   'D4: unknown discrete values are rejected');
+check(
+  deepEqual(catalog.normalizeParams('mode', { mode: 1 }), { mode: 'Hard' }),
+  'D5: legacy numeric aliases for string-valued enums normalize to the catalog value'
+);
 
 var audioContext = { marker: 'context' };
 var instance = catalog.create('level', audioContext, {});
 check(
   calls.create.length === 1 && calls.create[0].audioContext === audioContext &&
     calls.create[0].params.mix === 40 && instance === calls.create[0].instance,
-  'D5: create() supplies normalized defaults and returns the implementation instance'
+  'D6: create() supplies normalized defaults and returns the implementation instance'
 );
 
 catalog.applyParam('level', instance, 'mix', 65);
 check(
   calls.apply.length === 1 && calls.apply[0].instance === instance &&
     calls.apply[0].paramId === 'mix' && calls.apply[0].value === 65,
-  'D6: applyParam() validates then dispatches a live write'
+  'D7: applyParam() validates then dispatches a live write'
 );
 check(errorMatches(function () { catalog.applyParam('level', instance, 'missing', 1); }, /unknown param.*missing/i),
-  'D7: applyParam() rejects an unknown parameter before dispatch');
-check(calls.apply.length === 1, 'D8: rejected live writes never reach the implementation');
+  'D8: applyParam() rejects an unknown parameter before dispatch');
+check(calls.apply.length === 1, 'D9: rejected live writes never reach the implementation');
 
 catalog.dispose('level', instance);
 check(calls.dispose.length === 1 && calls.dispose[0] === instance,
-  'D9: dispose() dispatches optional cleanup behavior');
+  'D10: dispose() dispatches optional cleanup behavior');
 check(catalog.dispose('mode', { marker: 'no-dispose' }) === undefined,
-  'D10: dispose() is a safe no-op when an effect has no cleanup behavior');
+  'D11: dispose() is a safe no-op when an effect has no cleanup behavior');
 check(
   errorMatches(function () { catalog.create('missing', audioContext, {}); }, /unknown effect type.*missing/i) &&
     errorMatches(function () { catalog.applyParam('missing', {}, 'x', 1); }, /unknown effect type.*missing/i) &&
     errorMatches(function () { catalog.dispose('missing', {}); }, /unknown effect type.*missing/i),
-  'D11: behavioral calls report unknown effect types instead of substituting one'
+  'D12: behavioral calls report unknown effect types instead of substituting one'
 );
 
 console.log('E. parameter ids remain data keys');
@@ -274,6 +342,79 @@ check(
   Object.prototype.hasOwnProperty.call(protoCalls.create[0].params, '__proto__') &&
     protoCalls.create[0].params.__proto__ === 40 && protoInstance === protoCalls.create[0].instance,
   'E3: create() receives the accepted __proto__ parameter and its default'
+);
+
+console.log('F. production registry convergence');
+
+var production = {
+  console: console,
+  fetch: function () {
+    return Promise.resolve({
+      arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(0)); }
+    });
+  }
+};
+production.window = production;
+vm.createContext(production);
+loadScript(production, 'src/effect-catalog.js');
+loadScript(production, 'src/tone-adapter.js');
+[
+  'gain',
+  'compressor',
+  'eq',
+  'delay',
+  'reverb',
+  'limiter',
+  'distortion',
+  'chorus',
+  'gate',
+  'autotune',
+  'pitchshift',
+  'tremolo',
+  'bitcrusher',
+  'phaser'
+].forEach(function (type) {
+  loadScript(production, 'src/node-' + type + '.js');
+});
+
+var expectedProductionTypes = [
+  'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter',
+  'distortion', 'chorus', 'gate', 'autotune',
+  'pitchshift', 'tremolo', 'bitcrusher', 'phaser'
+];
+check(
+  deepEqual(production.EffectCatalog.getAllTypes(), expectedProductionTypes),
+  'F1: every production effect registers once through EffectCatalog in script order'
+);
+check(
+  production.NodeTypes === undefined && production.AudioGraph === undefined,
+  'F2: effect registration needs no legacy registry global'
+);
+
+var productionSources = [
+  'index.html',
+  'src/audio-graph.js',
+  'src/canvas.js',
+  'src/chain-editing.js',
+  'src/mcp-tools.js',
+  'src/param-controls.js',
+  'src/persistence.js',
+  'src/preset-schema.js',
+  'src/preset-store.js',
+  'src/tone-adapter.js'
+].map(function (relativePath) {
+  return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+}).join('\n');
+check(
+  !fs.existsSync(path.join(ROOT, 'src/node-types.js')) &&
+    productionSources.indexOf('NodeTypes') === -1 &&
+    productionSources.indexOf('AudioGraph.registerNodeType') === -1,
+  'F3: production carries no legacy registry module or compatibility references'
+);
+check(
+  productionSources.indexOf('NODE_REGISTRY_SNAPSHOT') === -1 &&
+    productionSources.indexOf('TYPE_PARAM_CONTRACTS') === -1,
+  'F4: MCP and preset validation carry no effect metadata mirrors'
 );
 
 if (failures.length > 0) {

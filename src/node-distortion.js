@@ -3,10 +3,7 @@
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Like src/node-compressor.js and src/node-delay.js,
 // this file exports no `window.X` namespace of its own — its only job is to
-// CALL INTO the two registries that already exist
-// (window.AudioGraph.registerNodeType from src/audio-graph.js, and
-// window.NodeTypes.register from src/node-types.js), once each, at load
-// time.
+// register one complete definition with window.EffectCatalog at load time.
 //
 // DIST-1 scope (cycle 3, docs/ultron/plan.md): the first of the four
 // shelved cycle-3 effects, built exactly per the D3 research decision
@@ -117,11 +114,10 @@
     return Math.min(Math.pow(10, db / 20), 1.0);
   }
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> node.
-  // Called by AudioGraph.buildGraph() (src/audio-graph.js) whenever a model
-  // entry has type "distortion" and no existing node instance is being
+  // Factory called by AudioGraph.buildGraph() (src/audio-graph.js) whenever
+  // a model entry has type "distortion" and no existing node instance is being
   // reused for its id. Returns a COMPOSITE value, same shape as EQ/Delay.
-  window.AudioGraph.registerNodeType('distortion', function (audioContext, params) {
+  function createEffect(audioContext, params) {
     var p = params || {};
 
     var drive = typeof p.drive === 'number' ? p.drive : 0.25;
@@ -162,10 +158,9 @@
       toneFilter: toneFilter,
       outGain: outGain
     };
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec + applyParam,
-  // same shape as every other node-type file. Plain-language labels per
+  // UI-facing metadata plus applyParam. Plain-language labels per
   // the existing param style (Drive / Tone / Output, cycle-3 scope table).
   //
   // Issue #5: live writes are SCHEDULED over ~15 ms via
@@ -173,8 +168,9 @@
   // form the 'host-param-ramps' capability promise describes. Creation-
   // time writes in the factory above stay direct (a new node has no live
   // signal to protect yet), same convention as the compressor.
-  window.NodeTypes.register('distortion', {
+  window.EffectCatalog.register('distortion', {
     label: 'Distortion',
+    experimental: false,
     // Finishing entry 4 ($impeccable polish, critique P3-4): drive/tone
     // carry `displayScale: 100` — a READOUT-ONLY field the generic
     // formatter in src/param-controls.js multiplies into the mono value
@@ -185,13 +181,14 @@
     // 0.25 still means the same sound), and the agent set_param contract
     // (mcp-tools validates against these min/max) are all unchanged. Like
     // label/step, displayScale is UI-only and deliberately NOT mirrored in
-    // mcp-tools.js's NODE_REGISTRY_SNAPSHOT (its capabilities readout
+    // EffectCatalog metadata (its capabilities readout
     // truthfully keeps publishing drive/tone as 0..1).
     paramSpec: [
       { id: 'drive', label: 'Drive', min: 0, max: 1, default: 0.25, step: 0.01, unit: '%', displayScale: 100 },
       { id: 'tone', label: 'Tone', min: 0, max: 1, default: 0.7, step: 0.01, unit: '%', displayScale: 100 },
       { id: 'output', label: 'Output', min: -24, max: 0, default: -3, step: 0.5, unit: 'dB' }
     ],
+    create: createEffect,
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'drive') {
         window.AudioParamRamp.schedule(nodeInstance.driveGain.gain, driveToGain(value));

@@ -180,7 +180,7 @@ var sandbox = {
   document: documentStub,
   setTimeout: function () {},
   Sortable: SortableStub,
-  NodeTypes: {
+  EffectCatalog: {
     getAllTypes: function () { return ['gain', 'limiter']; },
     getLabel: function (t) { return t === 'limiter' ? 'Limiter' : 'Gain'; },
     getParamSpec: function () { return [{ id: 'level', default: 0 }]; },

@@ -10,7 +10,7 @@
 // LFO state) — not just the registered metadata.
 //
 // Covers the node-level CHOR-1 acceptance slice:
-//   - registration in both registries (AudioGraph + NodeTypes)
+//   - registration in EffectCatalog
 //   - paramSpec per D4 (ids/ranges/defaults/labels)
 //   - internal topology (12 native nodes; dry + 2 panned voice paths;
 //     LFO -> sign-flipped depth gains -> both delayTime params)
@@ -145,8 +145,8 @@ function loadSrc(sandbox, relPath) {
 // ----------------------------------------------------------------------
 async function main() {
   var sandbox = createSandbox();
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-chorus.js');
   loadSrc(sandbox, 'src/preset-schema.js');
@@ -155,12 +155,12 @@ async function main() {
 
   // -- Registration ------------------------------------------------------
   check(
-    sandbox.NodeTypes.getAllTypes().indexOf('chorus') !== -1,
-    'chorus registered in NodeTypes (palette chip source)'
+    sandbox.EffectCatalog.getAllTypes().indexOf('chorus') !== -1,
+    'chorus registered in EffectCatalog (palette chip source)'
   );
-  check(sandbox.NodeTypes.getLabel('chorus') === 'Chorus', 'label is "Chorus"');
+  check(sandbox.EffectCatalog.getLabel('chorus') === 'Chorus', 'label is "Chorus"');
 
-  var spec = sandbox.NodeTypes.getParamSpec('chorus');
+  var spec = sandbox.EffectCatalog.getParamSpec('chorus');
   check(spec.length === 3, 'paramSpec has exactly 3 params (Depth/Rate/Mix)');
   var specById = {};
   spec.forEach(function (s) { specById[s.id] = s; });
@@ -253,7 +253,7 @@ async function main() {
 
   // -- applyParam mappings (ramped writes) --------------------------------------
   function apply(paramId, value) {
-    sandbox.NodeTypes.applyParam('chorus', instance, paramId, value);
+    sandbox.EffectCatalog.applyParam('chorus', instance, paramId, value);
   }
 
   apply('rateHz', 0.5);
@@ -269,10 +269,16 @@ async function main() {
   check(approx(instance.depthGainL.gain.value, 0, 1e-9) &&
     approx(instance.depthGainR.gain.value, 0, 1e-9),
     'depthMs 0 -> ±0 (static 25 ms delay, LFO still running but depthless)');
-  apply('depthMs', 99); // out-of-spec (hand-edited preset defense)
-  check(approx(instance.depthGainL.gain.value, 0.01, 1e-9) &&
-    approx(instance.depthGainR.gain.value, -0.01, 1e-9),
-    'out-of-spec depth 99 clamped to ±10 ms (never-reach-zero rule holds unconditionally)');
+  var invalidDepthError = null;
+  try {
+    apply('depthMs', 99);
+  } catch (err) {
+    invalidDepthError = err;
+  }
+  check(invalidDepthError && /range 0\.\.10/.test(invalidDepthError.message) &&
+    approx(instance.depthGainL.gain.value, 0, 1e-9) &&
+    approx(instance.depthGainR.gain.value, 0, 1e-9),
+    'catalog rejects out-of-spec depth 99 without touching the live modulation depth');
 
   apply('mix', 0);
   check(approx(instance.dryGain.gain.value, 1, 1e-9) &&
@@ -286,10 +292,16 @@ async function main() {
   check(approx(instance.dryGain.gain.value, Math.SQRT1_2, 1e-9) &&
     approx(instance.wetGain.gain.value, Math.SQRT1_2, 1e-9),
     'mix 50 -> both ≈ 0.707 (equal-power midpoint, not 0.5/0.5 linear)');
-  apply('mix', 200); // out-of-spec defense
-  check(approx(instance.dryGain.gain.value, 0, 1e-9) &&
-    approx(instance.wetGain.gain.value, 1, 1e-9),
-    'out-of-spec mix 200 clamped to fully wet');
+  var invalidMixError = null;
+  try {
+    apply('mix', 200);
+  } catch (err) {
+    invalidMixError = err;
+  }
+  check(invalidMixError && /range 0\.\.100/.test(invalidMixError.message) &&
+    approx(instance.dryGain.gain.value, Math.SQRT1_2, 1e-9) &&
+    approx(instance.wetGain.gain.value, Math.SQRT1_2, 1e-9),
+    'catalog rejects out-of-spec mix 200 without touching the live equal-power mix');
 
   // -- Preset round-trip (PresetSchema) ------------------------------------------
   var model = [

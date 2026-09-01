@@ -8,7 +8,7 @@
 // stubbed, the REAL src files loaded into vm sandboxes, per-check ok/FAIL
 // prints, exit 0 on pass / 1 on any failure. Two sandboxes:
 //
-//   1. NODE SANDBOX — audio-graph.js / node-types.js / audio-param-ramp.js
+//   1. NODE SANDBOX — effect-catalog.js / audio-graph.js / audio-param-ramp.js
 //      / node-autotune.js / preset-schema.js with an AudioWorkletNode stub:
 //      registration, discrete paramSpec (UI-1's values selects), the
 //      string→enum mapping at every boundary (factory + applyParam), the
@@ -223,8 +223,8 @@ function createNodeSandbox(opts) {
 }
 
 function loadNodeSources(sandbox) {
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-autotune.js');
 }
@@ -243,11 +243,11 @@ async function nodeLevelTests() {
   loadNodeSources(ok);
   loadSrc(ok, 'src/preset-schema.js');
 
-  check(ok.NodeTypes.getAllTypes().indexOf('autotune') !== -1,
-    'autotune registered in NodeTypes (palette chip source)');
-  check(ok.NodeTypes.getLabel('autotune') === 'Autotune', 'label is "Autotune"');
+  check(ok.EffectCatalog.getAllTypes().indexOf('autotune') !== -1,
+    'autotune registered in EffectCatalog (palette chip source)');
+  check(ok.EffectCatalog.getLabel('autotune') === 'Autotune', 'label is "Autotune"');
 
-  var spec = ok.NodeTypes.getParamSpec('autotune');
+  var spec = ok.EffectCatalog.getParamSpec('autotune');
   check(spec.length === 4, 'paramSpec has exactly 4 params (fixed by scope)');
   var byId = {};
   spec.forEach(function (s) { byId[s.id] = s; });
@@ -349,7 +349,7 @@ async function nodeLevelTests() {
   console.log('C. STRING→ENUM MAPPING (applyParam + construction params)');
   // ------------------------------------------------------------------
   function apply(node, paramId, value) {
-    ok.NodeTypes.applyParam('autotune', node, paramId, value);
+    ok.EffectCatalog.applyParam('autotune', node, paramId, value);
   }
 
   apply(a1, 'key', 'F#');
@@ -370,21 +370,34 @@ async function nodeLevelTests() {
   apply(a1, 'scale', 'Major');
   check(a1.worklet.__paramsById.scale.value === 1,
     "applyParam scale 'Major' -> enum 1");
-  apply(a1, 'retune', 9999);
-  check(a1.worklet.__paramsById.retune.value === 500,
-    'out-of-range retune clamps to 500 (param-read defense)');
-  apply(a1, 'mix', -20);
-  check(approx(a1.worklet.__paramsById.mix.value, 0),
-    'out-of-range mix clamps to 0');
-
-  var threw = false;
+  var invalidRetuneError = null;
   try {
-    apply(a1, 'threshold', -30); // not an autotune param
+    apply(a1, 'retune', 9999);
   } catch (err) {
-    threw = true;
+    invalidRetuneError = err;
   }
-  check(!threw && a1.worklet.__paramsById.key.value === 9,
-    'unknown paramId is a no-op (no throw, no param touched)');
+  check(invalidRetuneError && /range 0\.\.500/.test(invalidRetuneError.message) &&
+    a1.worklet.__paramsById.retune.value === 250,
+    'catalog rejects out-of-range retune without touching the live value');
+  var invalidMixError = null;
+  try {
+    apply(a1, 'mix', -20);
+  } catch (err) {
+    invalidMixError = err;
+  }
+  check(invalidMixError && /range 0\.\.100/.test(invalidMixError.message) &&
+    approx(a1.worklet.__paramsById.mix.value, 0.65),
+    'catalog rejects out-of-range mix without touching the live value');
+
+  var unknownParamError = null;
+  try {
+    apply(a1, 'threshold', -30);
+  } catch (err) {
+    unknownParamError = err;
+  }
+  check(unknownParamError && /unknown param/.test(unknownParamError.message) &&
+    a1.worklet.__paramsById.key.value === 9,
+    'catalog rejects an unknown paramId without touching the live node');
 
   // Construction-time STRING params (the preset/agent path) map too.
   vm.runInContext(
@@ -400,32 +413,29 @@ async function nodeLevelTests() {
     approx(a3.worklet.__paramsById.mix.value, 0.5),
     "factory honors string key/scale + retune/mix at construction ('E' Major 120ms 50%)");
 
-  // Raw numeric enums (hand-edited preset / agent writes) pass through.
-  vm.runInContext(
+  await vm.runInContext(
     'window.AudioGraph.buildGraph([{id: "a5", type: "autotune", ' +
     'params: {key: 9, scale: 2}}]);',
     ok
   );
-  await settle();
   var a5 = vm.runInContext('window.AudioGraph.getNodeInstance("a5")', ok);
-  check(a5.worklet.__paramsById.key.value === 9 &&
+  check(a5 && a5.worklet.__paramsById.key.value === 9 &&
     a5.worklet.__paramsById.scale.value === 2,
-    'factory accepts raw numeric enums too (key 9 / scale 2)');
-  check(a5.worklet.__paramsById.retune.value === 0 &&
-    approx(a5.worklet.__paramsById.mix.value, 1),
-    'omitted params keep the hard-tune defaults (retune 0 / mix 1)');
+    'catalog preserves legacy raw numeric enums by normalizing them to registered values');
 
-  // Unknown strings fall back to defaults, never throw.
-  vm.runInContext(
-    'window.AudioGraph.buildGraph([{id: "a6", type: "autotune", ' +
-    "params: {key: 'H', scale: 'Dorian'}}]);",
-    ok
-  );
-  await settle();
-  var a6 = vm.runInContext('window.AudioGraph.getNodeInstance("a6")', ok);
-  check(a6.worklet.__paramsById.key.value === 0 &&
-    a6.worklet.__paramsById.scale.value === 0,
-    "unknown strings fall back to C / Chromatic (no throw on a live build)");
+  var unknownEnumError = null;
+  try {
+    vm.runInContext(
+      'window.AudioGraph.buildGraph([{id: "a6", type: "autotune", ' +
+      "params: {key: 'H', scale: 'Dorian'}}]);",
+      ok
+    );
+  } catch (err) {
+    unknownEnumError = err;
+  }
+  check(unknownEnumError && /must be one of its values/.test(unknownEnumError.message) &&
+    vm.runInContext('window.AudioGraph.getNodeInstance("a5")', ok) === a5,
+    'catalog rejects unknown enum strings before replacing the live graph');
 
   // ------------------------------------------------------------------
   console.log('D. THE ASYNC addModule WINDOW (placeholder -> splice)');
@@ -444,8 +454,8 @@ async function nodeLevelTests() {
   check(df.__createdWorklets.length === 0 && df.__consoleErrors.length === 0,
     'no worklet node and no error while the module is in flight');
 
-  df.NodeTypes.applyParam('autotune', d1, 'key', 'G');
-  df.NodeTypes.applyParam('autotune', d1, 'mix', 40);
+  df.EffectCatalog.applyParam('autotune', d1, 'key', 'G');
+  df.EffectCatalog.applyParam('autotune', d1, 'mix', 40);
   check(d1.worklet === null && d1.pendingParams.key === 7 &&
     approx(d1.pendingParams.mix, 0.4),
     "applyParam during the window is recorded ENUM-MAPPED ('G' -> 7, 40% -> 0.4), not dropped");
@@ -477,7 +487,7 @@ async function nodeLevelTests() {
     'addModule failure: exactly one honest console diagnostic');
   var failApplyThrew = false;
   try {
-    fl.NodeTypes.applyParam('autotune', f1, 'key', 'D');
+    fl.EffectCatalog.applyParam('autotune', f1, 'key', 'D');
   } catch (err) {
     failApplyThrew = true;
   }

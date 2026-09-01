@@ -30,7 +30,7 @@
 //   as real <button> pads in a role="radiogroup" with roving tabindex
 //   (arrows move AND select, Home/End, Space/Enter native), committing
 //   their STRING value verbatim down the same pipeline (UI-1's contract:
-//   NodeTypes.applyParam receives 'A' / 'Minor' as strings).
+//   EffectCatalog.applyParam receives 'A' / 'Minor' as strings).
 //
 //   TRIM (mini-slider) — the few wide linear ranges that demand throw
 //   precision rather than an arc: delay Time (10–1000 ms), autotune
@@ -356,7 +356,7 @@
    * Render the parameter controls for one model entry into `container`,
    * replacing whatever was there before.
    *
-   * Looks up NodeTypes.getParamSpec(modelEntry.type); if that comes back
+   * Looks up EffectCatalog.getParamSpec(modelEntry.type); if that comes back
    * empty (unknown/unregistered type), renders nothing further — this is a
    * deliberately defensive no-op, not a thrown error, since a caller may
    * legitimately render a container before every node type it might show
@@ -384,12 +384,12 @@
   function renderParamControls(container, modelEntry, onParamsChanged) {
     container.innerHTML = '';
 
-    var paramSpec = window.NodeTypes.getParamSpec(modelEntry.type);
+    var paramSpec = window.EffectCatalog.getParamSpec(modelEntry.type);
     if (!paramSpec || paramSpec.length === 0) {
       return;
     }
 
-    var moduleLabel = window.NodeTypes.getLabel(modelEntry.type);
+    var moduleLabel = window.EffectCatalog.getLabel(modelEntry.type);
 
     // Issue #5: fresh row registry for this id (a re-render replaces every
     // row, so the previous render's entries for this id are stale by

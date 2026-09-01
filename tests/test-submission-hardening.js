@@ -104,6 +104,11 @@ function createBaseSandbox() {
     clearInterval: function (id) { return clearInterval(id); },
     Date: Date,
     Promise: Promise,
+    fetch: function () {
+      return Promise.resolve({
+        arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(0)); }
+      });
+    },
     document: {
       getElementById: function () { return null; },
       querySelector: function () { return null; },
@@ -123,6 +128,18 @@ function createBaseSandbox() {
 function loadSrc(sandbox, relPath) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, relPath), 'utf8'), sandbox, {
     filename: relPath
+  });
+}
+
+function loadProductionCatalog(sandbox) {
+  loadSrc(sandbox, 'src/effect-catalog.js');
+  loadSrc(sandbox, 'src/tone-adapter.js');
+  [
+    'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter',
+    'distortion', 'chorus', 'gate', 'autotune',
+    'pitchshift', 'tremolo', 'bitcrusher', 'phaser'
+  ].forEach(function (type) {
+    loadSrc(sandbox, 'src/node-' + type + '.js');
   });
 }
 
@@ -194,6 +211,7 @@ async function main() {
   {
     var sbA = createBaseSandbox();
     sbA.AudioEngine = { isStarted: false };
+    loadProductionCatalog(sbA);
     loadSrc(sbA, 'src/preset-schema.js');
     installChainEditingHarness(sbA, seedChain(), 0);
     loadSrc(sbA, 'src/mcp-tools.js');
@@ -280,6 +298,7 @@ async function main() {
         sourceNode: {},
         audioContext: { state: state }
       };
+      loadProductionCatalog(sbLoss);
       loadSrc(sbLoss, 'src/preset-schema.js');
       installChainEditingHarness(sbLoss, seedChain(), 0);
       loadSrc(sbLoss, 'src/mcp-tools.js');
@@ -304,6 +323,7 @@ async function main() {
     // B1: the apply throws, the restore succeeds -> rollback:'restored'.
     var sbB = createBaseSandbox();
     sbA_engine_setup(sbB);
+    loadProductionCatalog(sbB);
     loadSrc(sbB, 'src/preset-schema.js');
     installChainEditingHarness(sbB, seedChain(), 1); // FIRST render (the apply) throws
     loadSrc(sbB, 'src/mcp-tools.js');
@@ -339,6 +359,7 @@ async function main() {
     // is reported, never hidden behind a clean-looking refusal).
     var sbB2 = createBaseSandbox();
     sbA_engine_setup(sbB2);
+    loadProductionCatalog(sbB2);
     loadSrc(sbB2, 'src/preset-schema.js');
     installChainEditingHarness(sbB2, seedChain(), 2); // apply AND restore render throw
     loadSrc(sbB2, 'src/mcp-tools.js');
@@ -366,22 +387,29 @@ async function main() {
   {
     var sbC = createBaseSandbox();
     installStartedEngine(sbC);
+    loadSrc(sbC, 'src/effect-catalog.js');
     loadSrc(sbC, 'src/audio-graph.js');
 
     // A Tone-shaped type: composite with input/output + dispose() — the
     // adapter contract whose leak the finding described.
     var instances = [];
     var nextTag = 0;
-    sbC.AudioGraph.registerNodeType('toneFake', function (audioContext) {
-      var inst = {
-        tag: ++nextTag,
-        input: audioContext.createGain(),
-        output: audioContext.createGain(),
-        disposed: false,
-        dispose: function () { inst.disposed = true; }
-      };
-      instances.push(inst);
-      return inst;
+    sbC.EffectCatalog.register('toneFake', {
+      label: 'Tone Fake',
+      paramSpec: [{ id: 'level', label: 'Level', min: 0, max: 1, step: 1, default: 0, unit: '' }],
+      experimental: false,
+      create: function (audioContext) {
+        var inst = {
+          tag: ++nextTag,
+          input: audioContext.createGain(),
+          output: audioContext.createGain(),
+          disposed: false
+        };
+        instances.push(inst);
+        return inst;
+      },
+      applyParam: function () {},
+      dispose: function (instance) { instance.disposed = true; }
     });
 
     // Two rapid builds before the ~20ms rewire: the second supersedes the
@@ -403,8 +431,12 @@ async function main() {
 
     // A Phase-1 factory throw mid-map: earlier creations of THAT build are
     // disposed before the synchronous rethrow.
-    sbC.AudioGraph.registerNodeType('toneThrow', function () {
-      throw new Error('factory boom');
+    sbC.EffectCatalog.register('toneThrow', {
+      label: 'Tone Throw',
+      paramSpec: [{ id: 'level', label: 'Level', min: 0, max: 1, step: 1, default: 0, unit: '' }],
+      experimental: false,
+      create: function () { throw new Error('factory boom'); },
+      applyParam: function () {}
     });
     var before = instances.length;
     var threw = false;
@@ -445,6 +477,7 @@ async function main() {
       },
       removeItem: function (k) { delete store[k]; }
     };
+    loadProductionCatalog(sbD);
     loadSrc(sbD, 'src/preset-schema.js');
     loadSrc(sbD, 'src/default-preset.js');
     loadSrc(sbD, 'src/preset-store.js');
@@ -476,24 +509,11 @@ async function main() {
   section('E. sound-design guide: identity, lo-fi direction, degraded registry');
   // ====================================================================
   {
-    // E1/E2/E3: a HEALTHY live registry (all 14 registered types — the
-    // real page's shape) serves the full guide under the canonical
-    // identity. (A sandbox with NO NodeTypes falls back to the static
-    // 10-type snapshot, which legitimately filters the four Tone types —
-    // that is a degraded registry, covered by E4.)
-    var ALL_TYPES = [
-      'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter',
-      'distortion', 'chorus', 'gate', 'autotune',
-      'pitchshift', 'tremolo', 'bitcrusher', 'phaser'
-    ];
+    // E1/E2/E3: the production catalog's 14 registered types serve the
+    // full guide under the canonical identity.
     var sbE = createBaseSandbox();
+    loadProductionCatalog(sbE);
     loadSrc(sbE, 'src/preset-schema.js');
-    sbE.NodeTypes = {
-      getAllTypes: function () { return ALL_TYPES.slice(); },
-      getLabel: function (t) { return t; },
-      getParamSpec: function () { return []; },
-      isExperimental: function () { return false; }
-    };
     loadSrc(sbE, 'src/mcp-tools.js');
     var guideE = await getTool(sbE, 'get_capabilities').execute({ focus: 'sound_design' });
     check(
@@ -510,22 +530,33 @@ async function main() {
         guideE.vocabulary.ghostly && guideE.vocabulary.ghostly.length === 5,
       'E3: a healthy registry serves the guide unfiltered (ghostly keeps all five lines)'
     );
+    check(
+      sbE.McpTools.catalogReferenceValidation.policy.valid === true &&
+        sbE.McpTools.catalogReferenceValidation.guide.valid === true,
+      'E3: production agent-policy and sound-guide references validate against EffectCatalog'
+    );
+    check(
+      sbE.McpTools.validateAgentPolicyReferences({ missingEffect: { mix: {} } }).valid === false &&
+        sbE.McpTools.validateAgentPolicyReferences({ reverb: { missingParam: {} } }).valid === false,
+      'E3: policy validation detects both unknown effect and parameter references'
+    );
+    check(
+      sbE.McpTools.validateGuideReferences({
+        vocabulary: { invented: [{ effect: 'missingEffect', text: 'missingEffect mix 20%' }] }
+      }).valid === false,
+      'E3: guide validation detects an explicit reference to a missing effect'
+    );
 
     // E4: a degraded live registry (chorus + bitcrusher missing) filters
     // per-line and discloses what is gone.
     var sbE2 = createBaseSandbox();
+    loadProductionCatalog(sbE2);
     loadSrc(sbE2, 'src/preset-schema.js');
-    sbE2.NodeTypes = {
-      getAllTypes: function () {
-        // Every type except chorus and bitcrusher.
-        return [
-          'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter',
-          'distortion', 'gate', 'autotune', 'pitchshift', 'tremolo', 'phaser'
-        ];
-      },
-      getLabel: function (t) { return t; },
-      getParamSpec: function () { return []; },
-      isExperimental: function () { return false; }
+    var realTypes = sbE2.EffectCatalog.getAllTypes;
+    sbE2.EffectCatalog.getAllTypes = function () {
+      return realTypes().filter(function (type) {
+        return type !== 'chorus' && type !== 'bitcrusher';
+      });
     };
     loadSrc(sbE2, 'src/mcp-tools.js');
     var guideE2 = await getTool(sbE2, 'get_capabilities').execute({ focus: 'sound_design' });
@@ -557,6 +588,7 @@ async function main() {
     sbF.AudioBypass = { isEngaged: function () { return true; } };
     sbF.MeterTaps = { isTripped: function () { return true; } };
     installChainEditingHarness(sbF, seedChain(), 0);
+    loadProductionCatalog(sbF);
     loadSrc(sbF, 'src/preset-schema.js');
     loadSrc(sbF, 'src/mcp-tools.js');
     var chainF = await getTool(sbF, 'get_chain').execute({});
@@ -569,6 +601,7 @@ async function main() {
 
     var sbF2 = createBaseSandbox();
     installChainEditingHarness(sbF2, seedChain(), 0);
+    loadProductionCatalog(sbF2);
     loadSrc(sbF2, 'src/preset-schema.js');
     loadSrc(sbF2, 'src/mcp-tools.js');
     var chainF2 = await getTool(sbF2, 'get_chain').execute({});
