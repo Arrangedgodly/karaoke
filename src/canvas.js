@@ -1199,6 +1199,13 @@
   }
 
   function showRegisterParam(module, param, value, help) {
+    // A real control touch always wins over a passive hover preview —
+    // see showRegisterPreview/hideRegisterPreview below. Clearing the
+    // snapshot here (rather than in hideRegisterPreview) means a touch
+    // that happens WHILE a card title is being hovered persists after the
+    // hover ends, instead of a later mouseleave restoring the now-stale
+    // pre-hover snapshot over it.
+    registerPeekSnapshot = null;
     setRegisterText(module, param, value, help);
     // ONE blink marks the live control (the direction contract's palette
     // economy): retrigger the value segment's blink by dropping and
@@ -1216,13 +1223,57 @@
     }
   }
 
+  // Hover-preview round (2026-08-31 user direction): hovering a node
+  // card's family-code badge (createNodeCard's `code` element, below)
+  // shows the SAME module-name + plain-language blurb the Effects tab's
+  // .chip-preview already shows on hover, in the register — a transient
+  // preview, not a touch: it must revert to whatever the register showed
+  // before the hover the moment the mouse leaves, and must never disturb
+  // showRegisterParam's own "keeps the last touched control's value"
+  // memory. registerPeekSnapshot holds that "before" state while a
+  // preview is showing; null means no preview is active.
+  var registerPeekSnapshot = null;
+
+  function showRegisterPreview(module, help) {
+    if (!registerEl) {
+      return;
+    }
+    if (registerPeekSnapshot === null) {
+      registerPeekSnapshot = {
+        module: registerModuleEl.textContent,
+        param: registerParamEl.textContent,
+        value: registerValueEl.textContent,
+        help: registerHelpEl.textContent
+      };
+    }
+    // Never showRegisterParam() here — this is a passive preview, not a
+    // committed value; it must not blink or clear a FUTURE preview's own
+    // snapshot capture.
+    setRegisterText(module, '', '', help);
+  }
+
+  function hideRegisterPreview() {
+    if (registerPeekSnapshot === null) {
+      // A real touch happened while this hover was active (showRegisterParam
+      // already cleared the snapshot and is now the truthful display) —
+      // nothing to restore, and restoring would stomp that newer value.
+      return;
+    }
+    var snap = registerPeekSnapshot;
+    registerPeekSnapshot = null;
+    setRegisterText(snap.module, snap.param, snap.value, snap.help);
+  }
+
   buildDisplayRegister();
 
   /** Guided Patchbay's Effects/Presets tab switch — plain show/hide, no
    *  audio or model implication either way (both tabs' content already
-   *  exists in the DOM; switching never rebuilds anything). Guarded like
-   *  every other panel-level init: a harness with no .build-tabs simply
-   *  has nothing to wire. */
+   *  exists in the DOM; switching never rebuilds anything). Left-sidebar
+   *  round: a tab click also expands the panel if it was collapsed (see
+   *  setBuildCollapsed below) — picking a tab is picking something to
+   *  look at, so it should never leave you staring at a collapsed rail.
+   *  Guarded like every other panel-level init: a harness with no
+   *  .build-tabs simply has nothing to wire. */
   function initBuildTabs() {
     if (typeof document.querySelectorAll !== 'function') {
       return;
@@ -1240,10 +1291,68 @@
         Array.prototype.forEach.call(panels, function (panel) {
           panel.hidden = panel.getAttribute('data-build-panel') !== tab.getAttribute('data-build-tab');
         });
+        setBuildCollapsed(false);
       });
     });
   }
   initBuildTabs();
+
+  /** Left-sidebar round (2026-08-31 user direction): the collapse toggle
+   *  shrinks .build to a narrow icon-free rail (styles/main.css's
+   *  .build.collapsed, desktop-only — see its own @media block) so the
+   *  panel can be tucked away without losing the board's width. Purely
+   *  visual — CSS-only (.build.collapsed .build-tab-panel{display:none})
+   *  layered on top of initBuildTabs()'s own hidden-attribute bookkeeping,
+   *  which stays untouched and must stay that way: this function NEVER
+   *  writes to a panel's `hidden` attribute, only the wrapping `.build`'s
+   *  class, so the "exactly one tab panel visible, one hidden" invariant
+   *  above keeps holding underneath the collapse regardless of state.
+   *
+   *  @param {boolean} collapsed
+   */
+  function setBuildCollapsed(collapsed) {
+    var buildEl = document.getElementById('build-panel');
+    var toggleEl = document.getElementById('build-collapse-toggle');
+    if (!buildEl || !toggleEl) {
+      return;
+    }
+    if (buildEl.classList.contains('collapsed') === collapsed) {
+      return; // already in the requested state — no-op, no focus churn
+    }
+    if (collapsed) {
+      // Collapsing hides the tab panels via CSS; a focused control inside
+      // one would otherwise silently drop focus to <body> (browsers do
+      // not auto-recover focus from a display:none ancestor) — rescue it
+      // onto the toggle, which stays visible and interactive either way.
+      var active = document.activeElement;
+      if (active && buildEl.contains(active) && active !== toggleEl &&
+          typeof toggleEl.focus === 'function') {
+        toggleEl.focus();
+      }
+      buildEl.classList.add('collapsed');
+    } else {
+      buildEl.classList.remove('collapsed');
+    }
+    toggleEl.setAttribute('aria-expanded', String(!collapsed));
+    toggleEl.setAttribute('aria-label', collapsed ? 'Expand build panel' : 'Collapse build panel');
+  }
+
+  /** Wires the toggle button itself. Pre-Start, .build (toggle included)
+   *  is already fully inert via the shared engine-not-started gate
+   *  (pointer-events: none + the hatch overlay) — same precedent as the
+   *  tabs themselves being unusable before Start, not a new
+   *  inconsistency, so no extra guard is needed here. */
+  function initBuildCollapse() {
+    var toggleEl = document.getElementById('build-collapse-toggle');
+    var buildEl = document.getElementById('build-panel');
+    if (!toggleEl || !buildEl) {
+      return;
+    }
+    toggleEl.addEventListener('click', function () {
+      setBuildCollapsed(!buildEl.classList.contains('collapsed'));
+    });
+  }
+  initBuildCollapse();
 
 
   function nextNodeId() {
@@ -1871,6 +1980,21 @@
     // tooltip. The section's accessible naming lives on its controls
     // (the collapse/remove buttons' aria-labels carry the module name).
     code.title = effectLabel(type);
+    // Hover-preview round (2026-08-31 user direction): hovering the code
+    // ALSO pushes the same module name + plain-language blurb the
+    // Effects tab's chip hover shows into the display register — a
+    // transient preview (showRegisterPreview/hideRegisterPreview above),
+    // never a committed touch. Mouse-only: `code` is aria-hidden and not
+    // focusable (same as its native title tooltip today), so there is no
+    // keyboard-equivalent path to invent here. Naturally gated pre-Start:
+    // .canvas is pointer-events:none until the engine runs, so these
+    // never fire before then.
+    code.addEventListener('mouseenter', function () {
+      showRegisterPreview(effectLabel(type), paletteTypePreview(type));
+    });
+    code.addEventListener('mouseleave', function () {
+      hideRegisterPreview();
+    });
 
     handle.appendChild(gripIcon);
     rail.appendChild(handle);

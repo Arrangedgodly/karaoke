@@ -995,6 +995,48 @@ function cssDecl(body, prop) {
   return m ? m[1].trim() : null;
 }
 
+// Guided Patchbay mobile fix: the side-by-side palette columns are
+// scoped to @media (min-width: 901px) now (a plain top-level cssRule()
+// lookup can't see inside a media block, and mustn't accidentally match
+// an unrelated same-named rule at another nesting depth). This codebase
+// has MANY separate @media (min-width: 901px) blocks scattered through
+// the file (one per feature area, not one shared block), so this scans
+// every block with that exact condition text and returns the first one
+// that actually carries selector's rule.
+function cssRuleInMedia(mediaCondition, selector) {
+  var marker = '@media (' + mediaCondition + ') {';
+  var searchFrom = 0;
+  while (true) {
+    var atIdx = RAW_CSS.indexOf(marker, searchFrom);
+    if (atIdx === -1) { return null; }
+    var open = RAW_CSS.indexOf('{', atIdx);
+    var depth = 1;
+    var i = open + 1;
+    while (i < RAW_CSS.length && depth > 0) {
+      if (RAW_CSS[i] === '{') { depth += 1; }
+      else if (RAW_CSS[i] === '}') { depth -= 1; }
+      i += 1;
+    }
+    if (depth !== 0) { return null; }
+    var blockBody = RAW_CSS.slice(open + 1, i - 1);
+    var selIdx = blockBody.indexOf('\n  ' + selector + ' {');
+    if (selIdx !== -1) {
+      var selOpen = blockBody.indexOf('{', selIdx);
+      var selDepth = 1;
+      var j = selOpen + 1;
+      while (j < blockBody.length && selDepth > 0) {
+        if (blockBody[j] === '{') { selDepth += 1; }
+        else if (blockBody[j] === '}') { selDepth -= 1; }
+        j += 1;
+      }
+      if (selDepth === 0) {
+        return blockBody.slice(selOpen + 1, j - 1);
+      }
+    }
+    searchFrom = i;
+  }
+}
+
 var REM_ROOT_PX = 16; // root html font-size (unchanged by this entry)
 var badgeRule = cssRule('.node-experimental-badge');
 check(badgeRule !== null, 'styles/main.css carries the .node-experimental-badge rule');
@@ -1235,8 +1277,9 @@ check(
 );
 
 // The header rule follows the optgroup legend register (the in-house
-// grouped-options precedent, #preset-select optgroup): uppercase,
-// tracked, muted, 0.7rem = 11.2px — above the 11px floor.
+// grouped-options precedent — the Presets tab's own .preset-group-label,
+// styles/main.css, carries the same register): uppercase, tracked,
+// muted, 0.7rem = 11.2px — above the 11px floor.
 var groupLabelRule = cssRule('.palette-group-label');
 check(
   groupLabelRule !== null,
@@ -1254,15 +1297,37 @@ check(
     cssDecl(groupLabelRule, 'color') === 'var(--pm-print)',
   'group label register matches the silkscreen legend (700 / uppercase / 0.08em / pm-print — item 1b re-tokened the zone)'
 );
+// Guided Patchbay round, mobile-fixed: groups run side by side as CSS
+// multi-columns (#palette-list) ONLY at 901px+ — forcing every group
+// into its own multicol column and never wrapping unfit columns down
+// (plain CSS multicol behavior) made groups 2+ literally unreachable
+// below one column's width, so the base (mobile-first) rhythm stays the
+// original STACKED reading: generous top margin between groups, no top
+// margin on the first (craft floor), tight bottom to its own chips.
 check(
   groupLabelRule && cssDecl(groupLabelRule, 'margin') === '0.9rem 0 0.35rem',
-  'group label rhythm: generous space above, tight below (craft floor)'
+  'group label rhythm below 901px: generous top (stacked groups), tight bottom to its own chips (craft floor)'
 );
-var firstHeaderRule = cssRule('.palette-group-label:first-child');
+var groupLabelFirstChildRule = cssRule('.palette-group-label:first-child');
 check(
-  firstHeaderRule !== null &&
-    cssDecl(firstHeaderRule, 'margin-top') === '0',
-  'first group header drops its top margin (the panel h2 already separates it)'
+  groupLabelFirstChildRule && cssDecl(groupLabelFirstChildRule, 'margin-top') === '0',
+  'the first group header carries no top margin — nothing stacked above it to separate from'
+);
+var groupLabelWideRule = cssRuleInMedia('min-width: 901px', '.palette-group-label');
+check(
+  groupLabelWideRule && cssDecl(groupLabelWideRule, 'margin-top') === '0' &&
+    cssDecl(groupLabelWideRule, 'break-before') === 'column',
+  'at 901px+ each group header drops its stacked top margin and instead FORCES a new multicol column — the side-by-side separator'
+);
+var paletteListRule = cssRule('.palette-list');
+check(
+  paletteListRule === null,
+  'base .palette-list carries no multicol properties — below 901px it is plain block flow so stacked groups 2+ stay reachable (a forced column break never wraps to a new row when only one column fits width-wise)'
+);
+var paletteListWideRule = cssRuleInMedia('min-width: 901px', '.palette-list');
+check(
+  paletteListWideRule && cssDecl(paletteListWideRule, 'column-fill') === 'auto',
+  'at 901px+ palette-list uses column-fill: auto — balance would insert extra breaks mid-group, splitting a group\'s own chips across two columns'
 );
 
 // The palette Sortable is RETIRED entirely (2026-08-31 honesty round):

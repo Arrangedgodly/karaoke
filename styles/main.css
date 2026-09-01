@@ -268,10 +268,26 @@ body {
     overflow: hidden;
   }
 
+  /* body{overflow:hidden} just above makes BODY the sticky containing
+     block for .topbar (position:sticky) instead of the viewport — and
+     body's own 1rem padding (still in effect below 901px, for the
+     .instrument bleed-trick's negative margin to cancel) then becomes
+     .topbar's stick-to offset floor, fighting that exact -1rem bleed and
+     shoving the sticky deck down by a padding's worth, over whatever
+     sits at the top of the voice deck below it. At this breakpoint
+     .instrument is sized directly off the viewport (height: 100vh, right
+     below) regardless of body's box, so the padding is doing nothing
+     visual here — zero it, and zero the bleed margin that existed only
+     to cancel it, rather than let the two mechanisms collide. */
+  body {
+    padding: 0;
+  }
+
   .instrument {
     height: 100vh;
     display: flex;
     flex-direction: column;
+    margin: 0;
   }
 
   .topbar,
@@ -279,34 +295,90 @@ body {
     flex: none;
   }
 
-  .layout {
+  /* .layout.voice-deck, not bare .layout: this block sits EARLIER in the
+     file (source order) than the unscoped base .layout rule (further
+     down, the "VOICE DECK" section) — at equal specificity a media query
+     does NOT win ties, only source order does, so a bare `.layout` here
+     would silently LOSE every property it shares with the base rule
+     (min-height, flex-direction) regardless of whether the media query
+     matches. This was a real, pre-existing bug (min-height: 0 here has
+     never actually applied) surfaced while adding flex-direction: row —
+     .voice-deck is the element's own second class (#chain-layout in
+     index.html), so this reads identically but now WINS on specificity
+     alone, matching the .preset-search fix earlier this session. */
+  .layout.voice-deck {
     flex: 1 1 auto;
     min-height: 0;
+    /* Left-sidebar round (2026-08-31 user direction): a bottom placement
+       for .build was tried and reverted — .layout runs as a ROW at this
+       breakpoint (.build | .voice-deck-face), reverting to a plain
+       stacked COLUMN below 901px (the base rule, unscoped) where
+       side-by-side positioning was never meant to apply anyway. */
+    flex-direction: row;
   }
 
-  /* The grid-blowout guard (the container round's real defect): without
-     min-width: 0 a flex child grows to its content's width (the
-     chain-list carries the row extent as its min-width) and pushes the
-     other stacked zones and the chassis frame off screen — every zone
-     must stay bounded so the board scrolls inside instead. */
+  /* The grid-blowout guard's HEIGHT half (the container round's real
+     defect): this only matters once .layout itself has a bounded height
+     (true only at this fixed-console breakpoint) — without min-height:0
+     a flex child grows to its content's height and pushes the other
+     stacked zones and the chassis frame off screen — every zone must
+     stay bounded so the board scrolls inside instead. The WIDTH half
+     (min-width: 0) is unscoped now — see .layout's own rule above. */
   .layout .canvas-panel,
   .layout .signal-order,
+  .layout .voice-deck-face,
   .layout .build {
     min-height: 0;
-    min-width: 0;
   }
 
   .layout .canvas-panel .canvas {
     min-width: 0;
   }
 
-  /* .build takes whatever height .canvas-panel's own max-height budget
-     and .signal-order's content height leave inside .layout's bounded
-     stack; its OWN child .build-tab-panel (not .build itself, so the
-     tab row stays put) is the actual scroll region — same "flanks
-     scroll their own content" contract the old .palette/.presets had. */
+  /* Row layout: .build is a fixed-width sidebar (collapsible to a rail,
+     see .build.collapsed below); .voice-deck-face — the board + the
+     signal-order strip, wrapped together so .build sits beside that
+     PAIR, not just the board — takes the remaining width and owns its
+     own column layout explicitly (rather than incidentally relying on
+     .canvas-panel's own self-contained max-height clamp to stay bounded,
+     which is the same "own your own contract" discipline the
+     grid-blowout guard above already documents). */
   .layout .build {
+    flex: 0 0 260px;
+  }
+
+  .layout .voice-deck-face {
     flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The collapsed rail: a narrow strip showing just the toggle + the two
+     tab labels (rotated — see .build-tabs button below), no tab content.
+     CSS-only — this NEVER touches the `hidden` attribute
+     initBuildTabs()/src/canvas.js manages on .build-tab-panel (its
+     "exactly one panel visible, one hidden" invariant stays true
+     underneath); collapse is a purely visual override layered on top. */
+  .build.collapsed {
+    flex-basis: 48px;
+    /* .panel's shared 0.85rem/0.9rem padding is sized for a 260px
+       sidebar — at 48px collapsed it would BE most of the rail. */
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+  }
+
+  .build.collapsed .build-tab-panel {
+    display: none;
+  }
+
+  .build.collapsed .build-tabs {
+    flex-direction: column;
+  }
+
+  .build.collapsed .build-tabs button {
+    writing-mode: vertical-rl;
+    padding: 0.6rem 0.3rem;
   }
 
   .layout .build-tab-panel {
@@ -1224,6 +1296,23 @@ select.control {
   background: var(--pm-chassis);
 }
 
+/* The grid-blowout guard's WIDTH half, unscoped: .layout is a column
+   flex container at every width (there is no narrow-viewport collapse
+   to author — see above), so a flex child's default min-width:auto can
+   force it wider than the panel at ANY width, not just the >=901px
+   fixed console — the @media block below adds min-height:0 there too
+   (that half genuinely only matters once .layout's own height is
+   bounded). Guided Patchbay's multi-column build panel is exactly the
+   content that blows this: .palette-list's forced per-group column
+   breaks (styles above) give it a multi-column min-content width, which
+   without this pushed .build wider than a narrow phone instead of
+   wrapping its columns down to fit. */
+.layout .canvas-panel,
+.layout .signal-order,
+.layout .build {
+  min-width: 0;
+}
+
 /* Gated until AudioEngine.start() succeeds (mirrors the Bypass button /
    old test button's disabled-until-started pattern) — dragging/adding
    nodes before the engine is running has nothing to build against.
@@ -1238,17 +1327,56 @@ select.control {
   padding: 0.85rem 0.9rem 1rem;
 }
 
-/* Refinement entry 3 (critique P2-3) — palette group legends. The ten
-   chips chunk into three operator groups under micro-legend headers in
-   the SAME register the surface already uses for grouped options (the
-   preset/device selects' optgroup labels — the in-house precedent):
-   uppercase, tracked 0.08em, print, 0.7rem = 11.2px above the 11px
-   floor. Real <h3>s (h1 title → h2 Palette → h3 groups) so screen
-   readers can navigate the chunking; non-interactive by construction —
-   no border, no pointer, proximity does the grouping (headers bind
-   tight to the chips below them, groups separate through the generous
-   space above each subsequent header; the first header needs no extra
-   top margin — the zone h2's rule already separates it). */
+/* Guided Patchbay round: the groups run SIDE BY SIDE as columns instead
+   of stacking one after another — CSS multi-column layout on the flat
+   #palette-list (chips MUST stay direct children in flat DOM order —
+   R2-2 button semantics, tab order, and test-palette-cards-cycle3's
+   exact child count all pin this; see src/canvas.js's renderPalette),
+   with each group's own header FORCING a new column
+   (.palette-group-label's break-before below) so a group's chips can
+   never straddle two columns. column-width (not a fixed column-count)
+   lets the browser fit as many ~11rem columns as the panel's own width
+   allows — one on a narrow phone, up to four on a wide desktop build
+   panel — without a hand-authored breakpoint ladder. Chrome-only by
+   product decision, so multicol's column-count/break-before behavior
+   needs no cross-browser hedge. */
+/* Multi-column layout (side-by-side groups) is DESKTOP-ONLY — see the
+   @media (min-width: 901px) block below. Below that, .palette-group-label's
+   break-before: column (below) would force each group into its own
+   multicol COLUMN rather than stacking it, and columns lay out
+   left-to-right, never wrapping down when only one fits width-wise — on
+   a narrow phone that makes every group after the first render off to
+   the right, entirely out of reach. Base .palette-list stays plain block
+   flow (the pre-Guided-Patchbay behavior) so groups 2+ just stack. */
+@media (min-width: 901px) {
+  .palette-list {
+    column-width: 11rem;
+    column-gap: 1.1rem;
+    /* auto, not the balance default: with auto height and only four forced
+       breaks (one per group), "balance" tries to equalize column heights
+       by inserting EXTRA breaks mid-group — splitting a group's own chips
+       across two columns. auto fills sequentially and breaks only where
+       forced (or where a column would overflow a constrained height, which
+       none of these have), so each group stays exactly one column. */
+    column-fill: auto;
+  }
+}
+
+/* Refinement entry 3 (critique P2-3) — palette group legends. The
+   fourteen chips chunk into four operator groups under micro-legend
+   headers in the SAME register the surface already uses for grouped
+   options (the preset/device selects' optgroup labels — the in-house
+   precedent): uppercase, tracked 0.08em, print, 0.7rem = 11.2px above
+   the 11px floor. Real <h3>s (h1 title → h2 Palette → h3 groups) so
+   screen readers can navigate the chunking; non-interactive by
+   construction — no border, no pointer, proximity does the grouping
+   (headers bind tight to the chips below them).
+   Base rhythm is the STACKED reading (generous top, tight bottom to its
+   own chips, no top margin on the first header) — the only reading
+   below 901px, where .palette-list is plain block flow (see its own
+   @media block above). At 901px+ groups run side-by-side as multicol
+   columns instead (below), so each header starts its OWN column
+   (break-before) and needs no top margin of its own. */
 .palette-group-label {
   margin: 0.9rem 0 0.35rem;
   font-size: 0.7rem;
@@ -1260,6 +1388,14 @@ select.control {
 
 .palette-group-label:first-child {
   margin-top: 0;
+}
+
+@media (min-width: 901px) {
+  .palette-group-label {
+    margin-top: 0;
+    break-before: column;
+    break-after: avoid;
+  }
 }
 
 /* ITEM 1b — palette chips as KEYS ON THE VOICE DECK, the flank twin of
@@ -1287,12 +1423,16 @@ select.control {
   font-family: inherit;
   text-align: left;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.6rem;
   margin-bottom: 0.5rem;
   border: 1px solid var(--pm-key-edge);
   border-radius: 4px;
+  /* Guided Patchbay round: a chip's box must never be sliced across a
+     multi-column break (.palette-list above). */
+  break-inside: avoid;
   background: var(--pm-key);
   font-size: 0.75rem;
   font-weight: 600;
@@ -1436,6 +1576,10 @@ select.control {
    height/opacity tween. */
 .chip-preview {
   display: block;
+  /* .node-chip is a flex row (family square + label); flex-basis: 100%
+     inside its now flex-wrap: wrap forces this onto its own line below
+     them, instead of squeezing in as a third item on the same row. */
+  flex-basis: 100%;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
@@ -1838,6 +1982,32 @@ select.control {
 
 .cord-jack-hot .jack-socket {
   fill: var(--pm-accent);
+}
+
+/* mic-out / out-in jacks: the REAL, labeled jack ring already lives in
+   the rail (.anchor::before, under "MIC IN"/"OUT") — painting a second
+   ring+socket here at rest reads as an unlabeled second jack floating
+   next to the real one, since the rail sits outside #chain-canvas's
+   scroll clip and the cord layer can never actually reach it. Keep the
+   invisible .jack-hit (dragging a relink still grabs from here) but only
+   paint the ring/socket as live feedback on hover or an active drag —
+   at rest there is exactly one visible jack per end, matching reality. */
+.cord-jack[data-jack-kind="mic-out"] .jack-ring,
+.cord-jack[data-jack-kind="mic-out"] .jack-socket,
+.cord-jack[data-jack-kind="out-in"] .jack-ring,
+.cord-jack[data-jack-kind="out-in"] .jack-socket {
+  opacity: 0;
+}
+
+.cord-jack[data-jack-kind="mic-out"]:hover .jack-ring,
+.cord-jack[data-jack-kind="mic-out"]:hover .jack-socket,
+.cord-jack[data-jack-kind="out-in"]:hover .jack-ring,
+.cord-jack[data-jack-kind="out-in"]:hover .jack-socket,
+.cord-jack[data-jack-kind="mic-out"].cord-jack-hot .jack-ring,
+.cord-jack[data-jack-kind="mic-out"].cord-jack-hot .jack-socket,
+.cord-jack[data-jack-kind="out-in"].cord-jack-hot .jack-ring,
+.cord-jack[data-jack-kind="out-in"].cord-jack-hot .jack-socket {
+  opacity: 1;
 }
 
 .cord-ghost {
@@ -2531,32 +2701,81 @@ select.control {
 
 /* ===========================================================================
    BUILD PANEL (Guided Patchbay round, replacing PS-3's Presets zone +
-   the old Palette zone) — the voice deck's third and final zone: a
-   two-tab panel, Effects (#palette-list, unchanged) and Presets
-   (curated factory cards + the real Save As/Load/Delete controls,
-   relocated here verbatim — same ids, same src/presets-ui.js wiring).
-   The preset display vocabulary below (silkscreen readout, control
-   keys) is unchanged from the old Presets zone; only its outer zone
-   chrome (the border/header this comment used to describe) is gone,
-   since the panel is no longer a side-by-side column.
+   the old Palette zone; left-sidebar round, 2026-08-31 user direction,
+   moved it back to a side column after a bottom placement shipped and
+   was reverted) — a two-tab panel, Effects (#palette-list, unchanged)
+   and Presets (a searchable, categorized row list + the real Save As
+   controls — src/presets-ui.js). At >=901px it is `.layout`'s first,
+   fixed-width child (a real column again, collapsible to a narrow rail
+   — .build.collapsed, styles above in the @media block, and
+   #build-collapse-toggle below); below that it stays the full-width
+   stacked block it already was, unaffected by any of this.
    =========================================================================== */
 
 .build {
-  /* Unscoped: just a flex column for the tabs+panel stack, natural
-     content height. The width-gated scroll budget (flex-grow share of
-     .layout's bounded height, min-height: 0) lives in the @media
-     (min-width: 901px) block below, matching .canvas-panel's own
-     always-on max-height vs. the old .palette/.presets' width-gated
-     overflow-y: auto — the board stays bounded at every width, the
-     build panel only gains its own internal scroll on the wide-screen
-     fixed console (below 901px the page keeps its scroll instead). */
+  /* Unscoped: just a flex column for the toggle+tabs+panel stack,
+     natural content height below 901px. The fixed sidebar width, the
+     collapse behavior, and the internal scroll budget are all scoped to
+     the @media (min-width: 901px) block above — the board stays bounded
+     at every width via its own self-contained max-height clamp
+     regardless of what .build is doing beside or below it. */
   display: flex;
   flex-direction: column;
   background: transparent;
-  /* The groove pair's lip half — .signal-order's own border-bottom is
-     the cut; this completes the cut-then-lip reading order the sections
-     use between themselves. */
-  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  /* The groove — now VERTICAL, on the panel's own right edge (.build
+     sits to the LEFT of the board, not above the signal-order strip) —
+     cut + lip both live here, self-contained on the one element, the
+     same "one element carries its own complete groove" pattern
+     .io-rail-in/.io-rail-out already use for their own vertical cuts. */
+  border-right: 1px solid var(--pm-groove-cut);
+  box-shadow: inset -1px 0 0 var(--pm-groove-lip);
+}
+
+/* The collapse toggle: sits above the tabs, always visible (collapsed or
+   not) since it's the only way back out of the rail. Drawn chevron mark
+   (below), never emoji/unicode standing in for an icon — the same
+   discipline every other control mark in this file follows. */
+#build-collapse-toggle {
+  flex: none;
+  align-self: flex-end;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 3px;
+  background: var(--pm-chassis);
+  color: var(--pm-print);
+  cursor: pointer;
+}
+
+#build-collapse-toggle:hover {
+  color: var(--pm-print-hi);
+  border-color: var(--pm-print);
+}
+
+#build-collapse-toggle .chevron-mark {
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 6px auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(135deg); /* points left: the panel will collapse */
+}
+
+.build.collapsed #build-collapse-toggle {
+  align-self: center;
+}
+
+.build.collapsed #build-collapse-toggle .chevron-mark {
+  transform: rotate(-45deg); /* points right: the panel will expand */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #build-collapse-toggle {
+    transition: border-color 150ms ease, color 150ms ease;
+  }
 }
 
 .build-tabs {
@@ -2597,54 +2816,203 @@ select.control {
    the old .palette zone — no selector changes needed for .node-chip et
    al. (they target the chip, not its ancestor panel). */
 
-/* Presets tab: the curated factory cards, above the real preset
-   controls (.preset-current etc. below, unchanged from the old zone). */
-.preset-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.85rem;
+/* Presets tab, compact-browsing round: a sticky search box over ONE
+   scrollable, groupable row list (.preset-list below), replacing both the
+   old factory-only card grid and the #preset-select dropdown+Load/Delete
+   pair — the only prior way user presets could be browsed at all. Sticky
+   against whichever ancestor actually scrolls (.build-tab-panel's own
+   overflow-y:auto at >=901px; the page itself below that — same dual-mode
+   behavior the panel already had), opaque so scrolled rows never show
+   through underneath it. */
+.preset-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--pm-chassis);
 }
 
-.preset-card {
-  flex: 1 1 12rem;
-  min-width: 10rem;
-  padding: 0.6rem 0.7rem;
+/* Specificity note: #build-panel-presets > .control (defined further
+   below) sets every direct-child .control's margin-top to 0.75rem at
+   EQUAL specificity to a same-shaped single-class override, so a later
+   source-order rule would win regardless of which one reads more
+   "specific" to the eye. Matching BOTH classes the input actually carries
+   (class="control preset-search") outranks the single-class rule outright
+   — sticky at the panel's own top must not carry a gap above it. */
+#build-panel-presets > .control.preset-search {
+  margin-top: 0;
+}
+
+/* One flat, scrollable list — TWO group headers ("Factory" then "Yours",
+   .preset-group-label below borrows .palette-group-label's exact register
+   minus its multicol break-before, since this list is never side-by-side
+   columns) over compact rows. No bounded height/inner scrollbar of its
+   own: it rides the SAME scroll the Effects tab's #palette-list already
+   uses (see .build-tab-panel's overflow-y:auto), so "many more presets"
+   scales the same well-tested way instead of a new nested scrollbox. */
+.preset-list {
+  margin-bottom: 0.75rem;
+}
+
+.preset-group-label {
+  margin: 0.9rem 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pm-print);
+}
+
+.preset-group-label:first-child {
+  margin-top: 0;
+}
+
+/* Compact-browsing v2: the sub-header nested inside "Factory" — lighter
+   than .preset-group-label so the hierarchy reads Factory > Music > row.
+   Same 0.7rem/11.2px silkscreen-label size (the 11px floor rule allows no
+   text smaller, and this register already differentiates tiers by COLOR
+   and letter-spacing, never by size — see the register-module/etch
+   discipline elsewhere in this file); dim ink + tighter tracking is what
+   reads as "one tier down," not a shrink. */
+.preset-category-label {
+  margin: 0.6rem 0 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pm-print-dim);
+}
+
+.preset-group-label + .preset-category-label {
+  margin-top: 0.3rem;
+}
+
+.preset-list-empty {
+  margin: 0.5rem 0;
+  font-size: 0.75rem;
+  color: var(--pm-print);
+}
+
+/* One row = one preset: the key vocabulary (--pm-key ground, cut-edge
+   bezel) shared with the Effects tab's chips, sized for TWO real sibling
+   buttons (never a button nested in a button) — .preset-row-load takes
+   the row's width, a user row's own .preset-row-delete sits at its end.
+   Compact-browsing v2: margin trimmed from 0.4rem — the description is
+   now a permanent second line (below), so the row is already taller than
+   v1's collapsed-by-default rows; the built-in "massive" complaint was
+   the padding/gaps stacking on TOP of that, not the text itself. */
+.preset-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
   border: 1px solid var(--pm-key-edge);
   border-radius: 4px;
   background: var(--pm-key);
+}
+
+.preset-row-active {
+  border-color: var(--pm-accent);
+}
+
+.preset-row:hover {
+  border-color: var(--pm-print);
+}
+
+.preset-row-active:hover {
+  border-color: var(--pm-accent-hi);
+}
+
+.preset-row-load {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: none;
+  border-radius: 4px 0 0 4px;
+  background: transparent;
+  font-family: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.preset-card:hover {
-  border-color: var(--pm-print);
-}
-
-.preset-card strong {
-  display: block;
-  font-size: 0.78rem;
+.preset-row-name {
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--pm-print-hi);
 }
 
-.preset-card small {
-  display: block;
-  margin-top: 0.3rem;
-  font-size: 0.7rem;
+/* Compact-browsing v2 (user direction): the description is ALWAYS
+   visible now, not hover-gated — the v1 hover-reveal (borrowed from the
+   Effects tab's .chip-preview) read as "less information than before"
+   against the old always-visible cards. line-clamp is the safety net
+   against a long description blowing out row height; tight line-height +
+   the row's own trimmed padding above are what keep this dense instead
+   of reverting to the old cards' generous spacing. */
+.preset-row-preview {
+  display: -webkit-box;
+  flex-basis: 100%;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.68rem;
   font-weight: 400;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--pm-print);
 }
 
-.preset-card-tags {
-  display: block;
-  margin-top: 0.5rem;
+.preset-row-tags {
+  /* Deliberately NOT flex-basis: 100% — stays on the SAME line as the
+     name (density: name + tags is one line, the always-visible
+     description below is the only forced second line). 0.68rem, not a
+     new smaller step — the 11px floor rule's one recorded exception is
+     the EXP badge's 0.6875rem; this stays at that same already-accepted
+     floor-adjacent size rather than drifting under it. */
   font-family: var(--font-readout);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--pm-display);
+}
+
+/* The per-row twin of the old shared Delete button — same key vocabulary,
+   small enough to sit at a row's end without competing with its name. */
+.preset-row-delete {
+  flex: none;
+  align-self: center;
+  margin-right: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 4px;
+  background: var(--pm-key);
+  color: var(--pm-print);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.preset-row-delete:hover {
+  border-color: var(--pm-print);
+  color: var(--pm-print-hi);
+}
+
+/* R2-3 — the armed second step of Delete: the safety-red EDGE role as
+   the bezel (tokens only; red FILL stays Bypass-only), plus the
+   "DELETE?" relabel from src/presets-ui.js. Edge + copy carry the
+   state together — neither alone. A class now (one row's button among
+   many), not the old single #delete-preset-btn id. */
+.preset-row-delete.danger-arm {
+  border-color: var(--red-edge);
+  color: var(--pm-print-hi);
+}
+
+.preset-row-delete.danger-arm:hover {
+  border-color: var(--red-edge);
 }
 
 .preset-current {
@@ -2690,25 +3058,15 @@ select.control {
   overflow-wrap: anywhere;
 }
 
-/* Direct children only — Save As… and the <select> stack full-width in the
-   column; the Load/Delete pair below is laid out separately via
-   .preset-actions so they can sit side by side instead. */
+/* Direct children only — Save As… (Load/Delete are gone, folded into each
+   .preset-row now — see above) stacks full-width in the column. The
+   .preset-search input is ALSO a direct child, but its own rule above
+   overrides margin-top: 0 (it's sticky at the panel's own top and must
+   not carry a gap above it). */
 #build-panel-presets > .control {
   display: block;
   width: 100%;
   margin-top: 0.75rem;
-}
-
-.preset-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.preset-actions .control {
-  flex: 1 1 0;
-  margin-top: 0;
-  min-width: 0;
 }
 
 /* R2-3 — the inline Save As naming row: the same control vocabulary as
@@ -2781,37 +3139,6 @@ input.preset-name-input:focus-visible {
 .preset-name-row .control:not(.control-primary) {
   flex: 1 1 0;
   min-width: 0;
-}
-
-/* R2-3 — the armed second step of Delete: the safety-red EDGE role as
-   the bezel (tokens only; red FILL stays Bypass-only), plus the
-   "DELETE?" relabel from src/presets-ui.js. Edge + copy carry the
-   state together — neither alone. */
-#delete-preset-btn.danger-arm {
-  border-color: var(--red-edge);
-  color: var(--pm-print-hi);
-}
-
-#delete-preset-btn.danger-arm:not(:disabled):hover {
-  border-color: var(--red-edge);
-}
-
-/* PS-4 — factory/user dropdown groups. The <optgroup> labels read as
-   silkscreen micro-legends (the etch-label vocabulary: small, bold,
-   tracked, print), so the native menu keeps the faceplate voice; the
-   option rows themselves stay native and dark via the root
-   color-scheme: dark rule (no per-option styling — the shared rules
-   already render the popup dark). Grouping is structural only: the
-   factory options carry 'factory:'-prefixed values in the DOM, so the
-   styling never carries meaning on its own. Uppercasing degrades to the
-   markup's title case where a platform ignores text-transform here. */
-#preset-select optgroup {
-  /* 0.7rem — the etch-label floor applies to the native popup too. */
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--pm-print);
 }
 
 /* PS-4 — the quiet inline refusal note under the preset controls (e.g.
@@ -3093,14 +3420,16 @@ input.preset-name-input:focus-visible {
 
 .safe-output-note {
   flex: none;
-  /* In the top-down flow the note sits BENEATH the OUT anchor —
-     left-aligned so it reads as that block's caption, not a free-floating
-     caption for the whole canvas. Redesign item 1: panel print on the
-     chassis (7.47), the print register's caption size. */
-  align-self: flex-start;
-  font-size: 0.75rem;
-  color: var(--pm-print);
-  white-space: nowrap;
+  /* Guided Patchbay round: the note now lives IN the Voice Out rail
+     (src/audio-graph.js#ensureSafeOutputNote), a discreet caption under
+     the OUT jack rather than text inside the board's scrolling face —
+     the rail's own centered, wrapping text rhythm, one size down from
+     the rail label so it reads as a footnote, not a second heading. */
+  text-align: center;
+  font-size: 0.65rem;
+  line-height: 1.3;
+  color: var(--pm-print-dim);
+  white-space: normal;
 }
 
 /* ===========================================================================
@@ -3664,11 +3993,6 @@ input.preset-name-input:focus-visible {
 
 .canvas-panel.flow-horizontal .pad-group {
   max-width: 100%;
-}
-
-.canvas-panel.flow-horizontal .safe-output-note {
-  align-self: center;
-  margin-top: 0;
 }
 
 .canvas-panel.flow-horizontal .watchdog-alert {

@@ -21,15 +21,18 @@
 //                   mcp-tools.js's list_presets/get_preset factory group.
 //                   Shape is EXACTLY two keys: tests/test-preset-tools.js
 //                   deep-equals it strictly, so metadata NEVER leaks here.
-//   describeAll()   {name, description}[] — the Presets tab's curated
-//                   browse cards (UI-only, never nodes).
+//   describeAll()   {name, description, category}[] — the Presets tab's
+//                   searchable list (UI-only, never nodes). `category` is
+//                   the entry's primary tag humanized (#28 taxonomy, one
+//                   source of truth — it absorbed compact-browsing v2's
+//                   hand-assigned categories).
 //   listDetailed()  {name, description, tags, primary, provenance}[] —
 //                   additive (wayfinder #30): everything except nodes, so
 //                   it can never become a second load path. presets-ui.js
-//                   groups the dropdown by `primary`; #32's metadata
+//                   feeds its search from these tags; #32's metadata
 //                   exposure reads the same entries.
-//   groupOrder()    the dropdown's primary-tag group order (from the data
-//                   module's PRIMARY_GROUP_ORDER — cleanup first, then
+//   groupOrder()    the category display order (data module's
+//                   PRIMARY_GROUP_ORDER, humanized — cleanup first, then
 //                   use-case, genre, vibe, gag; technique never groups).
 //
 // Degrade path: if src/factory-library-data.js failed to load (or a bare
@@ -84,15 +87,52 @@
   }
 
   /**
-   * UI-only {name, description} pairs for the Presets tab's browse cards —
-   * never nodes, never tags (this contract predates the taxonomy).
+   * UI-only browse listing for the Presets tab's searchable list — never
+   * nodes. `category` is DERIVED: the entry's primary tag from the #28
+   * taxonomy, humanized ('use-case:speech/hosting' -> 'Speech/Hosting'),
+   * so the browsing vocabulary has exactly one source of truth (the data
+   * module's tags/primary) and can never drift from it. This absorbed the
+   * compact-browsing v2 round's hand-assigned Karaoke/Music/Novelty/Speech
+   * categories, which #28's decision supersedes.
    *
-   * @returns {Array<{name: string, description: string}>}
+   * @returns {Array<{name: string, description: string, category: string}>}
    */
   function describeAll() {
     return data().map(function (preset) {
-      return { name: preset.name, description: preset.description };
+      return {
+        name: preset.name,
+        description: preset.description,
+        category: humanizeTag(preset.primary)
+      };
     });
+  }
+
+  /**
+   * Humanize a taxonomy tag for display: the value half of 'axis:value',
+   * each word (split on '/', '-', ' ') capitalized — 'gag:8-bit' ->
+   * '8-Bit', 'vibe:epic/big' -> 'Epic/Big'. Presentation lives here in the
+   * loader, never in the data module.
+   *
+   * @param {string} tag
+   * @returns {string}
+   */
+  function humanizeTag(tag) {
+    var value = tag.indexOf(':') !== -1 ? tag.slice(tag.indexOf(':') + 1) : tag;
+    var out = '';
+    var capNext = true;
+    for (var i = 0; i < value.length; i++) {
+      var ch = value[i];
+      if (ch === '/' || ch === '-' || ch === ' ') {
+        capNext = true;
+        out += ch;
+      } else if (capNext) {
+        out += ch.toUpperCase();
+        capNext = false;
+      } else {
+        out += ch;
+      }
+    }
+    return out;
   }
 
   /**
@@ -115,13 +155,16 @@
   }
 
   /**
-   * The dropdown's optgroup order for primary tags, from the data module.
+   * The display order for primary-tag categories, from the data module's
+   * PRIMARY_GROUP_ORDER, HUMANIZED to match describeAll()'s category
+   * strings ('use-case:cleanup' -> 'Cleanup' first, then the rest of
+   * use-case, genre, vibe, gag — technique never appears).
    *
    * @returns {string[]}
    */
   function groupOrder() {
     return (window.FACTORY_LIBRARY && Array.isArray(window.FACTORY_LIBRARY.PRIMARY_GROUP_ORDER))
-      ? window.FACTORY_LIBRARY.PRIMARY_GROUP_ORDER.slice()
+      ? window.FACTORY_LIBRARY.PRIMARY_GROUP_ORDER.map(humanizeTag)
       : [];
   }
 

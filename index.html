@@ -214,57 +214,33 @@
   -->
   <!-- VOICE DECK (item 1b): #chain-layout re-cast as the lower slab —
        class .voice-deck added alongside .layout; the engine-not-started
-       gate class and id are the wiring contracts, unchanged. -->
+       gate class and id are the wiring contracts, unchanged.
+       Left-sidebar round (2026-08-31 user direction): .build moves back
+       to a LEFT column (a bottom placement was tried and reverted — user
+       call) and is now collapsible to a narrow rail (src/canvas.js's
+       toggle handler + styles/main.css's .build.collapsed, both scoped to
+       the >=901px row layout — below that .build stays the existing
+       full-width stacked block, untouched). .canvas-panel + the
+       signal-order strip move into a new .voice-deck-face wrapper so
+       .build can sit beside that pair as a whole, rather than beside just
+       the board. -->
   <div class="layout voice-deck engine-not-started" id="chain-layout">
-    <div class="panel canvas-panel">
-      <div class="board-frame">
-        <aside class="io-rail io-rail-in">
-          <h3 class="io-rail-label">Voice In</h3>
-          <div class="anchor">MIC IN</div>
-        </aside>
-
-        <div class="canvas" id="chain-canvas">
-          <div class="chain-list" id="chain-list"></div>
-          <!--
-            Refinement entry 2: the empty-hint is STATE-AWARE. This static
-            default is the PRE-START copy — the palette is pointer-locked
-            until Start succeeds, so teaching the add verb here would be an
-            invitation the gated surface cannot honor (critique P2).
-            src/canvas.js's onEngineStarted() flips this element to the
-            working add verbs ("Click an effect to add it to the chain",
-            verbatim — palette drag is retired; click and keyboard are the
-            add paths) at the exact transition where adding becomes
-            possible; styles/main.css retires the dashed drop-target
-            affordance while the engine-not-started gate holds.
-          -->
-          <div class="empty-hint" id="empty-hint">Press Start to power on</div>
-          <!-- cord-layer SVG is appended here at runtime by
-               src/canvas.js#buildCordLayer(), always as the LAST child. -->
-        </div>
-
-        <aside class="io-rail io-rail-out">
-          <h3 class="io-rail-label">Voice Out</h3>
-          <div class="anchor">OUT</div>
-        </aside>
-      </div>
-    </div>
-
-    <!-- JS-built by src/canvas.js (see renderSignalOrderStrip in that
-         file) — the full mic-to-safe-out order in one readable line. -->
-    <div class="panel signal-order" id="signal-order-panel" aria-label="Complete signal order"></div>
-
     <!--
       BUILD PANEL — replaces PS-3's Presets column and UI-3's Palette
       column with one two-tab panel. Wired by src/canvas.js (Effects tab:
-      renderPalette() into #palette-list, unchanged) and
-      src/presets-ui.js (Presets tab: window.PresetStore,
+      renderPalette() into #palette-list, unchanged, plus initBuildTabs()'s
+      collapse toggle) and src/presets-ui.js (Presets tab: window.PresetStore,
       window.FactoryPresets, window.ChainEditing.apply()). Sibling of
-      .canvas-panel above, so it's gated by the same `engine-not-started`
+      .voice-deck-face below, so it's gated by the same `engine-not-started`
       class on #chain-layout (see styles/main.css's
-      `.layout.engine-not-started` rule, retargeted from
-      `.palette`/`.presets` to `.build`/`.signal-order`).
+      `.layout.engine-not-started` rule, covering `.build`/`.signal-order`).
     -->
-    <div class="panel build">
+    <div class="panel build" id="build-panel">
+      <!-- The mark is DRAWN (a rotated corner, the same chevron vocabulary
+           the node-card fold button uses — src/canvas.js's node-collapse),
+           not a text glyph; the accessible name lives on aria-label alone
+           and flips with state in src/canvas.js's toggle handler. -->
+      <button type="button" id="build-collapse-toggle" aria-expanded="true" aria-controls="build-panel" aria-label="Collapse build panel"><span class="chevron-mark" aria-hidden="true"></span></button>
       <div class="build-tabs" role="tablist" aria-label="Build the chain">
         <button type="button" role="tab" aria-selected="true" id="build-tab-effects" aria-controls="build-panel-effects" data-build-tab="effects">Effects</button>
         <button type="button" role="tab" aria-selected="false" id="build-tab-presets" aria-controls="build-panel-presets" data-build-tab="presets">Presets</button>
@@ -275,7 +251,18 @@
       </div>
 
       <div class="build-tab-panel" id="build-panel-presets" role="tabpanel" aria-labelledby="build-tab-presets" data-build-panel="presets" hidden>
-        <div class="preset-cards" id="preset-cards"></div>
+        <label for="preset-search-input" class="sr-only">Search presets</label>
+        <input type="text" id="preset-search-input" class="control preset-search" placeholder="Search presets…" autocomplete="off">
+
+        <!-- JS-built by src/presets-ui.js#renderPresetList() — one row per
+             factory + user preset, grouped by category (factory) or flat
+             (yours), filtered live by the search input above. Replaces
+             the old #preset-cards grid (factory-only, unbounded) and the
+             #preset-select dropdown+Load/Delete pair (the only way user
+             presets could be browsed) with ONE compact, scrollable,
+             searchable surface — see src/presets-ui.js's own header
+             comment for the full rationale. -->
+        <div class="preset-list" id="preset-list"></div>
 
         <div class="preset-current">
           <span id="current-preset-name" class="preset-name">Unsaved chain</span>
@@ -290,13 +277,46 @@
           Autosave is failing — changes will not survive a reload
         </div>
         <button id="save-preset-btn" class="control" type="button">Save As…</button>
-        <label for="preset-select" class="sr-only">Saved presets</label>
-        <select id="preset-select" class="control"><option value="">-- no presets --</option></select>
-        <div class="preset-actions">
-          <button id="load-preset-btn" class="control" type="button">Load</button>
-          <button id="delete-preset-btn" class="control" type="button">Delete</button>
+      </div>
+    </div>
+
+    <div class="voice-deck-face">
+      <div class="panel canvas-panel">
+        <div class="board-frame">
+          <aside class="io-rail io-rail-in">
+            <h3 class="io-rail-label">Voice In</h3>
+            <div class="anchor">MIC IN</div>
+          </aside>
+
+          <div class="canvas" id="chain-canvas">
+            <div class="chain-list" id="chain-list"></div>
+            <!--
+              Refinement entry 2: the empty-hint is STATE-AWARE. This static
+              default is the PRE-START copy — the palette is pointer-locked
+              until Start succeeds, so teaching the add verb here would be an
+              invitation the gated surface cannot honor (critique P2).
+              src/canvas.js's onEngineStarted() flips this element to the
+              working add verbs ("Click an effect to add it to the chain",
+              verbatim — palette drag is retired; click and keyboard are the
+              add paths) at the exact transition where adding becomes
+              possible; styles/main.css retires the dashed drop-target
+              affordance while the engine-not-started gate holds.
+            -->
+            <div class="empty-hint" id="empty-hint">Press Start to power on</div>
+            <!-- cord-layer SVG is appended here at runtime by
+                 src/canvas.js#buildCordLayer(), always as the LAST child. -->
+          </div>
+
+          <aside class="io-rail io-rail-out">
+            <h3 class="io-rail-label">Voice Out</h3>
+            <div class="anchor">OUT</div>
+          </aside>
         </div>
       </div>
+
+      <!-- JS-built by src/canvas.js (see renderSignalOrderStrip in that
+           file) — the full mic-to-safe-out order in one readable line. -->
+      <div class="panel signal-order" id="signal-order-panel" aria-label="Complete signal order"></div>
     </div>
   </div>
   </div>

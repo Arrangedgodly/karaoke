@@ -268,11 +268,40 @@ function main() {
   check(fp.list()[0].nodes[0].params.guke === undefined,
     'E1: list() hands out fresh copies (mutation of one result cannot reach the library)');
 
+  // Independent re-derivation of the loader's humanize rules, so the test
+  // asserts the DERIVATION (category === humanized primary) rather than
+  // trusting the loader's own copy of the algorithm.
+  function humanize(tag) {
+    var value = tag.indexOf(':') !== -1 ? tag.slice(tag.indexOf(':') + 1) : tag;
+    var out = '';
+    var capNext = true;
+    for (var i = 0; i < value.length; i++) {
+      var ch = value[i];
+      if (ch === '/' || ch === '-' || ch === ' ') {
+        capNext = true;
+        out += ch;
+      } else if (capNext) {
+        out += ch.toUpperCase();
+        capNext = false;
+      } else {
+        out += ch;
+      }
+    }
+    return out;
+  }
+
   var described = fp.describeAll();
   check(described.length === entries.length, 'E2: describeAll() covers every entry');
   described.forEach(function (e) {
-    check(Object.keys(e).sort().join(',') === 'description,name',
-      "E2: describeAll() entry '" + e.name + "' has exactly {name, description}");
+    check(Object.keys(e).sort().join(',') === 'category,description,name',
+      "E2: describeAll() entry '" + e.name + "' has exactly {name, description, category}");
+  });
+  var byName = {};
+  entries.forEach(function (entry) { byName[entry.name] = entry; });
+  described.forEach(function (e) {
+    check(e.category === humanize(byName[e.name].primary),
+      "E2: describeAll() entry '" + e.name + "' category '" + e.category +
+      "' is the humanized primary tag (derived, never stored per-entry)");
   });
 
   var detailed = fp.listDetailed();
@@ -284,8 +313,18 @@ function main() {
   detailed[0].tags.push('genre:Sneaky');
   check(fp.listDetailed()[0].tags.indexOf('genre:Sneaky') === -1,
     'E3: listDetailed() tags are fresh copies');
-  check(Array.isArray(fp.groupOrder()) && fp.groupOrder()[0] === 'use-case:cleanup',
-    'E3: groupOrder() exposes the group order, cleanup first');
+  check(Array.isArray(fp.groupOrder()) && fp.groupOrder()[0] === 'Cleanup',
+    'E3: groupOrder() exposes the humanized category order, Cleanup first');
+  (function () {
+    var seen = {};
+    var dup = null;
+    fp.groupOrder().forEach(function (label) {
+      if (seen[label]) { dup = label; }
+      seen[label] = true;
+    });
+    check(dup === null,
+      'E3: humanized group-order labels are unique' + (dup ? " (collision: '" + dup + "' would silently merge groups)" : ''));
+  })();
 
   // Degrade: loader alone (no data module) exports empty everything.
   var bare = createSandbox();
