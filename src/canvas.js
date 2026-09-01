@@ -93,31 +93,15 @@
   // ---------------------------------------------------------------------
   var GRID_PITCH = 16; // the snap quantum (px) for width-resize only now
   // Per-card WIDTH: a condensed section's own width in px, snap-quantized
-  // and clamped. The clamp bounds mirror main.css's horizontal-mode
-  // min/max-width (13rem..24rem).
-  //
-  // Width floors: every card HUGS its own content — JS measures the
-  // widest KNOB row after render (trims/pads stretch to fill whatever
-  // width exists, so they never leave dead space) and that measurement is
-  // the card's default width. 128px is the layout-less fallback default
-  // (stripped harnesses measure nothing); 384px the ceiling.
-  //
-  // 208px is the resize FLOOR (2026-09-01, raised from 112px alongside
-  // the new per-card BYPASS button — a third button now shares the rail's
-  // foot with fold/remove, and the hug measurement only ever reads the
-  // BODY's widest knob row, never the header band's own content). Worst
-  // case measured live: Autotune's rail (3-letter code + its
-  // "Experimental" badge) needed 184px once the badge switched to its
-  // already-compact palette-chip form ("EXP" — see createExperimentalBadge
-  // below, a real bugfix, not a width carve-out); the floor carries one
-  // grid tick of headroom above that. CARD_W_DEFAULT_PX matches the floor
-  // exactly — clampCardW's no-value branch must never resolve BELOW its
-  // own minimum.
-  var CARD_W_DEFAULT_PX = 208;
-  var CARD_W_MIN_PX = 208; // 13rem
-  var CARD_W_MAX_PX = 384; // 24rem
-  var cardHugW = {}; // id -> measured content width (real browsers only)
-  var cardWidths = {}; // id -> manually-resized width (px); absent = hug/default
+  // and clamped. Unresized cards start at the smallest safe expanded
+  // width; natural-width controls wrap left-to-right as the card widens.
+  // Folding paints a separate vertical identity rail without overwriting
+  // the stored expanded width.
+  var CARD_W_DEFAULT_PX = 144; // 9rem, smallest safe expanded width
+  var CARD_W_MIN_PX = 144; // 9rem, expanded resize floor
+  var CARD_W_COLLAPSED_PX = 56; // 3.5rem, vertical identity rail
+  var CARD_W_MAX_PX = 640; // 40rem, enough for a one-line control field
+  var cardWidths = {}; // id -> manually-resized expanded width; absent = default
   var resizeDrag = null; // the live width-resize drag, if any
   var reorderDrag = null; // the live drag-to-reorder gesture, if any
   var paletteDrag = null; // the live drag-an-effect-in-from-the-palette gesture
@@ -148,53 +132,13 @@
     return w;
   }
 
-  /** A card's effective width in px: its manually-resized width clamped
-   *  into the condensed range; else its MEASURED content hug (plus the
-   *  card's own side padding and border); else the layout-less default.
-   *  Single source for the width-resize gesture and every repaint. */
+  /** A card's expanded width in px: its manually-resized width clamped
+   *  into the condensed range, otherwise the uniform default. */
   function cardWidth(id) {
     if (typeof cardWidths[id] === 'number') {
       return clampCardW(cardWidths[id]);
     }
-    if (typeof cardHugW[id] === 'number') {
-      return clampCardW(cardHugW[id] + 15); // + 2x0.4rem padding + 2px border
-    }
     return clampCardW(undefined);
-  }
-
-  /** Measure a LIVE card's widest intrinsic control row (the content
-   *  hug). Trim and pad rows stretch to the available width by
-   *  construction, so they are skipped — only knob rows define the hug.
-   *  Must run AFTER the card is in the document (offsetWidth is 0
-   *  otherwise — the creation-time measurement always read zero, which
-   *  is why the hug never landed until this fix). Stripped harnesses
-   *  report no widths and simply keep the default. */
-  function ensureCardHug(id, card) {
-    if (cardHugW[id] !== undefined || !card || typeof card.querySelector !== 'function') {
-      return;
-    }
-    try {
-      var inner = card.querySelector('.node-params-inner');
-      if (!inner || !inner.children) {
-        return;
-      }
-      var hug = 0;
-      Array.prototype.forEach.call(inner.children, function (row) {
-        if (!row.classList || row.classList.contains('trim-row') ||
-            row.classList.contains('pad-row')) {
-          return;
-        }
-        var w = row.offsetWidth;
-        if (w > hug) {
-          hug = w;
-        }
-      });
-      if (hug > 0) {
-        cardHugW[id] = hug;
-      }
-    } catch (err) {
-      /* measurement is a real-browser nicety only */
-    }
   }
 
   /** Paint one card's own width (the only per-id layout fact left — see
@@ -204,12 +148,12 @@
     if (!id) {
       return;
     }
-    ensureCardHug(id, card); // first paint after render — the card is live
-    card.style.width = cardWidth(id) + 'px';
+    card.style.width = (card.classList && card.classList.contains('collapsed')
+      ? CARD_W_COLLAPSED_PX
+      : cardWidth(id)) + 'px';
   }
 
-  /** Repaint every card's width from the current cardWidths/cardHugW
-   *  state — used after a full model render (renderModel below). */
+  /** Repaint every card's width from the current stored/default state. */
   function applyCardWidths() {
     var cardEls = chainListEl.querySelectorAll('.node-card');
     Array.prototype.forEach.call(cardEls, function (card) {
@@ -557,7 +501,7 @@
     card.style.height = '';
     card.style.margin = '';
     card.style.transform = '';
-    card.style.width = cardWidth(drag.id) + 'px';
+    applyCardWidth(card, drag.id);
   }
 
   /** Arm (not start) a reorder from a press on a section — mirrors the
@@ -2032,9 +1976,19 @@
     // (the collapse/remove buttons' aria-labels carry the module name).
     code.title = effectLabel(type);
 
+    // Full identity for the folded rail. Expanded cards keep the compact
+    // family code; CSS reveals this label sideways only when collapsed.
+    // It is visual redundancy, so the named buttons remain the announced
+    // controls.
+    var sectionName = document.createElement('span');
+    sectionName.className = 'section-name';
+    sectionName.textContent = effectLabel(type);
+    sectionName.setAttribute('aria-hidden', 'true');
+
     handle.appendChild(gripIcon);
     rail.appendChild(handle);
     rail.appendChild(code);
+    rail.appendChild(sectionName);
 
     // UI-2 (cycle 3): the formal experimental badge on the section of
     // every catalog-declared experimental type (autotune only, cycle-3 scope) —
@@ -2085,7 +2039,7 @@
     collapseBtn.type = 'button';
     collapseBtn.className = 'node-collapse';
     collapseBtn.setAttribute('aria-expanded', 'true');
-    collapseBtn.setAttribute('aria-label', 'Toggle parameters for ' + effectLabel(type));
+    collapseBtn.setAttribute('aria-label', 'Collapse parameters for ' + effectLabel(type));
     var chevronMark = document.createElement('span');
     chevronMark.className = 'chevron-mark';
     chevronMark.setAttribute('aria-hidden', 'true');
@@ -2175,6 +2129,9 @@
       // some minimal DOM stubs return undefined from toggle().
       var collapsed = card.classList.contains('collapsed');
       collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      collapseBtn.setAttribute('aria-label', (collapsed ? 'Expand' : 'Collapse') +
+        ' parameters for ' + effectLabel(type));
+      applyCardWidth(card, id);
       // Folding re-boxes the section (the rail becomes the slim row) —
       // normal flex reflow handles this for free now that cards sit in
       // ordinary DOM flow instead of absolute position; nothing here
@@ -2228,7 +2185,6 @@
       // on save anyway; keeping the live map exact means currentLayout()
       // is always garbage-free).
       delete cardWidths[id];
-      delete cardHugW[id];
       // Same one structural gesture adapter used by add and drag reorder.
       commitStructuralChange();
     });
@@ -2266,7 +2222,7 @@
 
     // ...and so is the SECTION ITSELF (2026-09-01 user direction: "cards
     // don't want to drag as easily as they should"). The rail alone was
-    // a 6.5rem strip on a 208px card — the advertised grip, but far too
+    // a small strip on the card — the advertised grip, but far too
     // small to be the only one. Pressing anywhere on the section arms the
     // same gesture, EXCLUDING every control that owns its own press
     // (NO_DRAG_SELECTOR: knobs, pads, trims, the bypass/fold/eject keys,
@@ -2453,7 +2409,7 @@
    *   an entry carries a `w`, that width is applied EXACTLY (clamped);
    *   nodes without one are carried forward at their current width if
    *   already on the board (an agent rebuild keeps a human's manual
-   *   resize), else default to the content hug. When omitted the same
+   *   resize), else default to the uniform 240px width. When omitted the same
    *   rules run against an empty saved map. Order is no longer a layout
    *   concern — the array's own order IS the chain order.
    * @param {{freshSeats?: boolean}} [options]
@@ -2525,7 +2481,7 @@
     recomputeModelFromDom();
 
     // Resolve each card's WIDTH for the freshly-loaded chain (saved entry
-    // > carried-forward manual resize > content hug/default), then paint.
+    // > carried-forward manual resize > uniform default), then paint.
     // Order needs no resolution at all — model.forEach above already
     // appended every card in the model's own order, and DOM order IS
     // chain order (PD-4).
@@ -2533,7 +2489,7 @@
     // options.freshSeats (#16 stale-seats finding, name carried forward
     // from the free-board era): a PRESET LOAD replaces the whole board,
     // so a matching node id does NOT inherit its old manual resize —
-    // every card takes its saved width or the content hug (the
+    // every card takes its saved width or the uniform default (the
     // documented tidy default). Agent rebuilds and startup restores leave
     // it unset and keep the carry-forward rule.
     var freshSeats = !!(options && options.freshSeats);
@@ -2800,6 +2756,7 @@
     // tests + future consumers read the one source.
     CARD_W_DEFAULT_PX: CARD_W_DEFAULT_PX,
     CARD_W_MIN_PX: CARD_W_MIN_PX,
+    CARD_W_COLLAPSED_PX: CARD_W_COLLAPSED_PX,
     CARD_W_MAX_PX: CARD_W_MAX_PX,
     snapToGrid: snapToGrid,
     currentLayout: currentLayout,

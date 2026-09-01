@@ -679,8 +679,8 @@ NEW_TYPES.forEach(function (t) {
   );
   check(
     collapseBtn.attrs['aria-label'] ===
-      'Toggle parameters for ' + t.label,
-    t.type + ' collapse aria-label names the module'
+      'Collapse parameters for ' + t.label,
+    t.type + ' collapse aria-label names the current action and module'
   );
   check(
     removeBtn.attrs['aria-label'] === 'Remove ' + t.label,
@@ -750,14 +750,16 @@ NEW_TYPES.forEach(function (t) {
   collapseBtn.fire('click');
   check(
     card.classList.contains('collapsed') &&
-      collapseBtn.attrs['aria-expanded'] === 'false',
-    t.type + ' collapse toggle collapses the card + mirrors aria-expanded'
+      collapseBtn.attrs['aria-expanded'] === 'false' &&
+      collapseBtn.attrs['aria-label'] === 'Expand parameters for ' + t.label,
+    t.type + ' collapse toggle collapses the card + mirrors its expand action'
   );
   collapseBtn.fire('click');
   check(
     !card.classList.contains('collapsed') &&
-      collapseBtn.attrs['aria-expanded'] === 'true',
-    t.type + ' collapse toggle re-expands the card'
+      collapseBtn.attrs['aria-expanded'] === 'true' &&
+      collapseBtn.attrs['aria-label'] === 'Collapse parameters for ' + t.label,
+    t.type + ' collapse toggle re-expands the card + restores its collapse action'
   );
 });
 

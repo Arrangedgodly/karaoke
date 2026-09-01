@@ -303,27 +303,18 @@ left-to-right row; the FLOW toggle, its preference key, and the vertical
 geometry branches are deleted (`.flow-horizontal` is a permanent panel
 class), and legacy vertical payloads load horizontal.
 
-**The board (free positioning, cycle 4 + the 2026-08-31 rounds):** every
-section is an absolutely positioned slab translated to its board seat by
-JS (`transform: translate(x,y)`, snap-quantized to the 16px grid). Each
-section is a CONDENSED MODULE — the rail collapses into a compact header
-band (grip · code · label · fold/eject right) over the wrapping encoder
-field. Every module HUGS ITS OWN CONTENT: JS measures the widest
-intrinsic control row after render (knob rows only — trims and pads
-stretch to fill by construction) and that is the module's default width
-(clamped 96–384px, resize floor 96; the layout-less fallback default is
-128px). Values hug their text inside the module (no 6ch slot), so a
-module opens as a single stack with no right-hand dead space; widening
-re-wraps the field to fill. Height hugs content.
-Position AND width are STYLE ONLY — DOM order always equals chain order
-(PD-4), so bring-to-front z-order is paint, never sequence. The header
-band and grip drag move a section's seat; the corner resize grip (a
-machined dot-field mark, bottom-right) adjusts its width (`w` joins x/y
-in the layout entry; snap-quantized, clamped, end-only persistence);
-neither ever touches sound. The arrangement autosaves. THE BOARD HAS NO
-TIDY/ARRANGE KEY (retired 2026-08-31, user direction: not helpful) —
-nothing moves the operator's cards but the operator; the board is a
-free canvas.
+**The board (ordered row, 2026-09-01):** sections sit in a horizontal
+flex row and DOM order equals chain order (PD-4). Each section is a
+CONDENSED MODULE with a compact header band over the encoder field.
+Unresized modules start at the smallest safe expanded width, 144px. The
+corner grip resizes an expanded module from 144–640px in 16px steps and
+persists only that expanded width. Controls keep their natural width and
+wrap from the left, so the minimum stacks them while a stretched module can
+place a complete knob or slider field on one line. Folding is session-only:
+it hides the encoder field and turns the module into a 56px vertical rail
+with the full plugin name printed sideways and its actions stacked below,
+then restores the saved expanded width. Resizing and folding never touch
+sound.
 
 **Patch cords (FEW-3/FEW-4, geometry by OQ-9):** an SVG cord layer
 behind the sections draws MIC OUT → sections in chain order → OUT IN
@@ -347,7 +338,7 @@ is the twin). Ghost cords and hot drop targets take the accent ink.
 
 Spacing rhythm is console-tight (4/8/12/16px); panel padding ~0.85–1rem;
 section padding 0.4/0.6/0.45/0.7rem (the board: header band + wrapping
-body inside the condensed module, default width at the 176px resize
+body inside the condensed module, default width at the 144px resize
 floor so controls open as a single stack) + fluid encoder field grid.
 
 ## Elevation & Depth
@@ -408,7 +399,7 @@ never shadow or glow.
 - One etched slot on the chain face's top edge: inset register ground, machined lip, a 3px accent mark at the left edge, FIXED 3rem height over two lines (main + help) that clip, never reflow. Main line: `module · param · value` in mono tabular 13.6px — module segment in signal orange, segments differentiated by color/weight, never size. Help line at the 12px value tier. The touched control's value writes it; the ONE blink (register-blink) lives here. aria-hidden: the controls carry semantics; this is the redundant display.
 
 ### Sections (chain effects)
-- WEIGHTED SLABS on the one faceplate (OQ-9): radius 0, `--pm-slab` face ground one step lighter than the chassis, a 1px sawn groove-cut edge all round, and the machined slab lip (inset 1px under the top cut) — a raised casting separated from its neighbors by the chassis ground, never a floating card and never a shadow at rest. Grid (vertical reading): 6.5rem family rail | fluid encoder field; grid (horizontal/default reading): one column — the rail collapsed into a compact header band over the wrapping body, the module width per its layout `w` (uniform 240px default, 176–384px clamp, corner-resize grip). **Rail:** the family print block — 3px family tick down its left edge · machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · IN/BYP key · fold chevron + eject × at the rail's foot; a groove-cut division separates rail from encoder field. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Per-effect bypass:** BYP strikes the family code and recedes the encoder field to 0.42 while leaving controls usable. The node, settings, and live plugin instance remain present. This state never borrows emergency red, the global hatch, or the global Bypass label. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the whole section is grab surface (the rail is the ADVERTISED grip and the only one carrying the grab cursor; the encoder field's controls — knobs, pads, trims, the bypass/fold/eject keys, the resize corner — own their own press and never start a drag). The chosen (held) section lifts out of flow with the one permitted drag shadow and its machined lip goes accent; the ghost is a dashed print slot carrying the module's name — a groove reservation, not a section — and MOVING that ghost is the entire drop preview: the real sections never move under the cursor, and nothing commits until the drop. A chip dragged in from the palette opens the same ghost, on the same slot rules (including the terminal limiter's locked-last clamp), and adds nothing at all when released off the board. **Agent pulse:** one accent blink on the section's machined lip (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
+- WEIGHTED SLABS on the one faceplate (OQ-9): radius 0, `--pm-slab` face ground one step lighter than the chassis, a 1px sawn groove-cut edge all round, and the machined slab lip (inset 1px under the top cut) — a raised casting separated from its neighbors by the chassis ground, never a floating card and never a shadow at rest. Grid (vertical reading): 6.5rem family rail | fluid encoder field; grid (horizontal/default reading): one column — the rail is a compact header band over the wrapping body, and the module width per its layout `w` starts at 144px with a 144–640px expanded clamp and corner-resize grip. **Rail:** the family print block — 3px family tick down its left edge · machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · IN/BYP key · fold chevron + eject × at the rail's foot; a groove-cut division separates rail from encoder field. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Per-effect bypass:** BYP strikes the family code and recedes the encoder field to 0.42 while leaving controls usable. The node, settings, and live plugin instance remain present. This state never borrows emergency red, the global hatch, or the global Bypass label. **Fold:** the params field leaves the tab order and the card becomes a 56px vertical identity rail (session-only, `aria-expanded`); its full name reads sideways, actions stack vertically, and expanding restores the saved width. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the whole section is grab surface (the rail is the ADVERTISED grip and the only one carrying the grab cursor; the encoder field's controls — knobs, pads, trims, the bypass/fold/eject keys, the resize corner — own their own press and never start a drag). The chosen (held) section lifts out of flow with the one permitted drag shadow and its machined lip goes accent; the ghost is a dashed print slot carrying the module's name — a groove reservation, not a section — and MOVING that ghost is the entire drop preview: the real sections never move under the cursor, and nothing commits until the drop. A chip dragged in from the palette opens the same ghost, on the same slot rules (including the terminal limiter's locked-last clamp), and adds nothing at all when released off the board. **Agent pulse:** one accent blink on the section's machined lip (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
 
 ### Chips (palette zone)
 - Real `<button>`s rendered as KEYS on the voice deck: key ground, cut-edge bezel, a 20px family legend square (saturated rq5 token — the identity mark) beside the module name as a silkscreen legend (12px uppercase). Rest seam is the cut edge; hover raises to full print; active/drag-origin goes signal orange. Fourteen chips chunk under five non-interactive group legends in operator language ("Shape your voice" / "Add movement" / "Change your pitch" / "Polish your sound" / "Keep it safe") as real `<h3>`s — re-categorized 2026-09-01 when the Tone.js four joined the catalog: "shape" narrowed to tone/timbre only (EQ, Distortion, Bitcrusher), "movement" is the standard modulation grouping (Chorus, Tremolo, Phaser), "pitch" is the pitch domain (Autotune, Pitch Shift) — splitting what had been one crowded "character" bucket into three legible ones.

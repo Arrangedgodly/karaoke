@@ -12,8 +12,9 @@
 //       class) and the FLOW toggle is gone from the chrome
 //   H2  absent layout -> cards render in the model's own order, no
 //       card has a manual width on record
-//   H3  every card paints the default/floor width (a layout-less host
-//       measures nothing, so every card takes CARD_W_DEFAULT_PX)
+//   H3  every unresized card paints the 144px safe expanded minimum
+//   H4  folding paints a separate compact width and expanding restores
+//       the card's saved/default expanded width
 //   H5  a saved per-card width `w` is honored and clamped
 //   H6  the corner resize grip adjusts a card's width live,
 //       snap-quantized, clamped, and persists exactly once on gesture end
@@ -254,8 +255,9 @@ check(
 );
 
 check(
-  CC.CARD_W_DEFAULT_PX === 208 && CC.CARD_W_MIN_PX === 208 && CC.CARD_W_MAX_PX === 384,
-  'H1b: the width contract exports (default/floor 208 — the header band\'s own minimum with the new bypass button, default and floor now equal, ceiling 384 — real browsers hug each card\'s measured content)'
+  CC.CARD_W_DEFAULT_PX === 144 && CC.CARD_W_MIN_PX === 144 &&
+    CC.CARD_W_COLLAPSED_PX === 56 && CC.CARD_W_MAX_PX === 640,
+  'H1b: the width contract exports (144px default/floor, 56px folded rail, 640px ceiling)'
 );
 check(
   queryAll(canvasPanelEl, '.flow-toggle').length === 0,
@@ -269,14 +271,14 @@ check(
 );
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({}),
-  'H2b: no card has a manual width on record -> currentLayout() is empty (every card takes its content-hug/default)'
+  'H2b: no card has a manual width on record -> currentLayout() is empty (every card takes the uniform default)'
 );
 
 check(
-  cardById('n1').style.width === '208px' &&
-    cardById('n2').style.width === '208px' &&
-    cardById('n3').style.width === '208px',
-  'H3: every card paints the default/floor width (a layout-less host measures nothing, so every card takes CARD_W_DEFAULT_PX)'
+  cardById('n1').style.width === '144px' &&
+    cardById('n2').style.width === '144px' &&
+    cardById('n3').style.width === '144px',
+  'H3: every unresized card paints the smallest safe expanded width (144px)'
 );
 
 // ----------------------------------------------------------------------
@@ -288,9 +290,23 @@ CC.renderModel(model3(), {
 });
 check(
   cardById('n1').style.width === '320px' &&
-    cardById('n2').style.width === '384px' &&
-    cardById('n3').style.width === '208px',
-  'H5: a saved width is honored, an out-of-range one clamps, a missing one takes the floor default'
+    cardById('n2').style.width === '640px' &&
+    cardById('n3').style.width === '144px',
+  'H5: a saved width is honored, an out-of-range one clamps, a missing one takes the safe minimum default'
+);
+
+var foldedN1 = cardById('n1');
+var foldButton = descendFind(foldedN1, 'node-collapse');
+foldButton.__fire('click');
+check(
+  foldedN1.style.width === '56px' && foldButton.attrs['aria-expanded'] === 'false' &&
+    CC.currentLayout().n1.w === 320,
+  'H4a: folding paints a 56px vertical rail without overwriting the saved 320px expanded width'
+);
+foldButton.__fire('click');
+check(
+  foldedN1.style.width === '320px' && foldButton.attrs['aria-expanded'] === 'true',
+  'H4b: expanding restores the saved expanded width'
 );
 
 // ----------------------------------------------------------------------
@@ -308,7 +324,9 @@ check(
   'H6c: the live drag repaints the width snap-quantized into the layout entry (320+48 -> 368)'
 );
 documentStub.__fire('pointermove', { clientX: 1000, clientY: 50 }); // far right -> clamp at max
-check(n1.style.width === '384px', 'H6d: the drag clamps at the condensed max (384px)');
+check(n1.style.width === '640px', 'H6d: the drag clamps at the wide one-line ceiling (640px)');
+documentStub.__fire('pointermove', { clientX: -1000, clientY: 50 }); // far left -> clamp at min
+check(n1.style.width === '144px', 'H6d2: the drag clamps at the readable expanded minimum (144px)');
 documentStub.__fire('pointerup', {});
 check(
   CC.isDragActive() === false && saves.length === 1,
@@ -330,8 +348,8 @@ CC.renderModel(model3(), {
 }, { freshSeats: true });
 check(
   JSON.stringify(CC.currentLayout()) === JSON.stringify({}) &&
-    cardById('n1').style.width === '208px' &&
-    cardById('n2').style.width === '208px',
+    cardById('n1').style.width === '144px' &&
+    cardById('n2').style.width === '144px',
   'H7: a legacy x/y/flow-shaped entry carries no `w` and is ignored -- every card falls back to its default width, not a crash'
 );
 
