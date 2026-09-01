@@ -36,8 +36,12 @@
   // only — never a dropdown group, never steering copy). Values are the
   // exact legal tag strings; membership is exact-match.
   var VOCABULARIES = {
+    // Append-only in action: 'retro' and 'psychedelic' joined vibe on
+    // 2026-09-01 when the #31 seed batch filled the #28 cells "vibe ·
+    // retro" and "vibe · psychedelic space lounge" — the first real
+    // requests those cells exist to answer.
     genre: ['Pop', 'Rock', 'Metal', 'Rap/Hip-Hop', 'R&B/Soul', 'Country', 'Jazz', 'Dance/EDM', 'Musicals'],
-    vibe: ['natural', 'warm', 'bright', 'dark/moody', 'epic/big', 'intimate', 'spacious', 'lo-fi'],
+    vibe: ['natural', 'warm', 'bright', 'dark/moody', 'epic/big', 'intimate', 'spacious', 'lo-fi', 'retro', 'psychedelic'],
     'use-case': ['performance', 'speech/hosting', 'cleanup', 'practice'],
     gag: ['robot', 'chipmunk', 'helium', 'deep-voice', 'radio', 'telephone', 'megaphone', 'darth-vader', '8-bit', 'monster/demon'],
     technique: ['hard-tune', 'pitch-gag', 'lo-fi', 'ambience-short', 'ambience-long', 'modulated/wide', 'clean']
@@ -69,6 +73,8 @@
     'vibe:intimate',
     'vibe:spacious',
     'vibe:lo-fi',
+    'vibe:retro',
+    'vibe:psychedelic',
     'gag:robot',
     'gag:chipmunk',
     'gag:helium',
