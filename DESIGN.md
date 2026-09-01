@@ -38,6 +38,10 @@ colors:
   family-chorus: "#9E9ED1"
   family-gate: "#9AD5B2"
   family-autotune: "#D19ED1"
+  family-phaser: "#96E3CC"
+  family-tremolo: "#96CAE3"
+  family-pitchshift: "#CB96E3"
+  family-bitcrusher: "#E396CF"
   pm-family-gain: "#cdc5ad"
   pm-family-compressor: "#b0c6a9"
   pm-family-eq: "#aabacf"
@@ -48,6 +52,10 @@ colors:
   pm-family-chorus: "#afafca"
   pm-family-gate: "#aecbbd"
   pm-family-autotune: "#cfb4cf"
+  pm-family-phaser: "#aacbc1"
+  pm-family-tremolo: "#aac0cb"
+  pm-family-pitchshift: "#c0aacb"
+  pm-family-bitcrusher: "#cbaac2"
   status-live: "#7BD389"
   status-error: "#FF806E"
   vu-low: "#4ea96b"
@@ -145,6 +153,20 @@ components:
 
 # Design System: VOXCHAIN
 
+## Current design scope
+
+The dark pro-audio material system below remains the visual authority. The
+three-column layout, free-board composition, cable topology, and MIC IN / OUT
+anchor treatment no longer do. They are incumbent production decisions under
+review, not constraints on new layout prototypes.
+
+Any replacement must preserve the competition-critical interaction facts in
+[`docs/WEBMCP-CHALLENGE.md`](docs/WEBMCP-CHALLENGE.md): one visible state for
+human and agent edits, a prominent human-only Bypass, visible mutation and
+Undo feedback, plain-language entry, keyboard access, and truthful engine and
+output status. Prototype code does not change this design system until the
+user selects a direction.
+
 ## Overview
 
 **Creative North Star: "The Pattern Machine"**
@@ -189,7 +211,7 @@ legend squares.
 - Free board: snap-grid positioning, patch cords that EDIT order but never gate audio; DOM order is always chain order. No arrange/tidy key — the board is a free canvas (retired 2026-08-31).
 - One signal orange for system states only; family color on the arc alone; BYPASS's split-role red outranks everything on the deck.
 - Two-register type (silkscreen sans / dot-matrix mono tabular), 12px/13.6px value ladder, 11px floor.
-- One disabled grammar — diagonal hatch + recede — for exactly two states (pre-Start gate, bypassed chain).
+- One global disabled grammar — diagonal hatch + recede — for exactly two states (pre-Start gate, emergency-bypassed chain). A bypassed effect uses its local IN/BYP key, a struck family code, and a receded encoder field instead.
 
 ## Colors
 
@@ -203,8 +225,8 @@ measured in the build records (redesign.md item 1/1b tables).
 - **Dot-Matrix Amber** (#ffd75e, `--pm-display`): machine values on the register (14.09 on the register ground) and the EXP badge (13.36 on chassis). The register's own ink — nothing else speaks it.
 
 ### Secondary
-- **Ten family tokens (saturated, rq5)** — Gain #D9C37A, Compressor #8CC079, EQ #82A9DE, Delay #B18FDE, Reverb #6FC2C8, Limiter #DE8FB0, Distortion #C0CE97, Chorus #9E9ED1, Gate #9AD5B2, Autotune #D19ED1: the KNOB ARCS (via `--knob-arc` per `data-family`, 6.93–11.07 as non-text arcs on chassis) and the palette chip's 20px legend squares. A section's arcs answer in its menu color.
-- **Ten family silkscreen inks (desaturated, `--pm-family-*`)** — e.g. gain #cdc5ad, eq #aabacf: the rail's 3-letter family code and its 2px left tick (8.66–10.76 on chassis — clears AA even at small print).
+- **Fourteen family tokens (saturated, rq5)** — Gain #D9C37A, Compressor #8CC079, EQ #82A9DE, Delay #B18FDE, Reverb #6FC2C8, Limiter #DE8FB0, Distortion #C0CE97, Chorus #9E9ED1, Gate #9AD5B2, Autotune #D19ED1, plus the 2026-09-01 color pass for the four Tone.js effects — Phaser #96E3CC, Tremolo #96CAE3, Pitch Shift #CB96E3, Bitcrusher #E396CF (hues at the widest remaining gaps in the wheel, S58/L74 — a deliberately more vivid generation than cycle-3's muted S36 batch, for perceptual separation at the tighter hue spacing 14 colors forces): the KNOB ARCS (via `--knob-arc` per `data-family`, 6.93–12.50 as non-text arcs on chassis) and the palette chip's 20px legend squares. A section's arcs answer in its menu color.
+- **Fourteen family silkscreen inks (desaturated, `--pm-family-*`)** — e.g. gain #cdc5ad, eq #aabacf, plus phaser #aacbc1, tremolo #aac0cb, pitch shift #c0aacb, bitcrusher #cbaac2: the rail's 3-letter family code and its 2px left tick (8.66–10.76 on chassis — clears AA even at small print).
 - **Split-role safety red**: Edge Red #E5484D (rings/bezels only — BYPASS's 2px ring, refusal-toast bezel) and Fill Red #C93A32 (solid fills with white text 5.08 — engaged BYPASS). Never swapped, never white-on-edge-red.
 
 ### Tertiary
@@ -334,13 +356,14 @@ Flat by machined geometry, not by shadow. Depth is cut faces and tonal
 casting: the bench around the instrument, the two deck castings, the
 inset register slot, grooves and the seam as dark cuts under light lips,
 keys as cut-edge bezels. The only real shadow in the world is the drag
-LIFT (SortableJS's live clone) and the residual lifted toasts; a touched
+LIFT (the held section, or a palette chip's drag image, fixed to its own
+box and following the pointer) and the residual lifted toasts; a touched
 section lifts a hair while neighbors recede — `filter: brightness(1.13)`
 on `:focus-within`, `brightness(0.9)` on the rest — explicitly NO
 shadow. No glow, no hover shadows, no ambient anything.
 
 ### Shadow Vocabulary
-- **Drag lift** (SortableJS clone): the one physical lift on the chassis.
+- **Drag lift** (the held section / the dragged chip's image): the one physical lift on the chassis.
 - **Knob cap lip** (`inset 0 1px 0 rgba(255,255,255,0.06)`): bevel geometry, not ambient depth.
 
 ### Named Rules
@@ -385,10 +408,10 @@ never shadow or glow.
 - One etched slot on the chain face's top edge: inset register ground, machined lip, a 3px accent mark at the left edge, FIXED 3rem height over two lines (main + help) that clip, never reflow. Main line: `module · param · value` in mono tabular 13.6px — module segment in signal orange, segments differentiated by color/weight, never size. Help line at the 12px value tier. The touched control's value writes it; the ONE blink (register-blink) lives here. aria-hidden: the controls carry semantics; this is the redundant display.
 
 ### Sections (chain effects)
-- WEIGHTED SLABS on the one faceplate (OQ-9): radius 0, `--pm-slab` face ground one step lighter than the chassis, a 1px sawn groove-cut edge all round, and the machined slab lip (inset 1px under the top cut) — a raised casting separated from its neighbors by the chassis ground, never a floating card and never a shadow at rest. Grid (vertical reading): 6.5rem family rail | fluid encoder field; grid (horizontal/default reading): one column — the rail collapsed into a compact header band over the wrapping body, the module width per its layout `w` (uniform 240px default, 176–384px clamp, corner-resize grip). **Rail:** the family print block — 3px family tick down its left edge · machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · fold chevron + eject × at the rail's foot; a groove-cut division separates rail from encoder field. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the chosen (held) section's machined lip goes accent; the ghost is a dashed print slot — a groove reservation, not a section. **Agent pulse:** one accent blink on the section's machined lip (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
+- WEIGHTED SLABS on the one faceplate (OQ-9): radius 0, `--pm-slab` face ground one step lighter than the chassis, a 1px sawn groove-cut edge all round, and the machined slab lip (inset 1px under the top cut) — a raised casting separated from its neighbors by the chassis ground, never a floating card and never a shadow at rest. Grid (vertical reading): 6.5rem family rail | fluid encoder field; grid (horizontal/default reading): one column — the rail collapsed into a compact header band over the wrapping body, the module width per its layout `w` (uniform 240px default, 176–384px clamp, corner-resize grip). **Rail:** the family print block — 3px family tick down its left edge · machined grip dot field (the drag part) · family code in desaturated ink · module label · EXP badge · IN/BYP key · fold chevron + eject × at the rail's foot; a groove-cut division separates rail from encoder field. **Family derivations:** one rule per `data-family` carries BOTH `--card-family` (rail print ink) and `--knob-arc` (saturated arc token) — single source, no per-control classes. **Per-effect bypass:** BYP strikes the family code and recedes the encoder field to 0.42 while leaving controls usable. The node, settings, and live plugin instance remain present. This state never borrows emergency red, the global hatch, or the global Bypass label. **Fold:** the params field animates 1fr→0fr to a groove-line slim row (~35px, session-only, `aria-expanded`); folded rows leave the tab order. **Focus lift:** `:focus-within` brightens to 1.13, neighbors recede to 0.9 (180ms, guarded). **Drag:** the whole section is grab surface (the rail is the ADVERTISED grip and the only one carrying the grab cursor; the encoder field's controls — knobs, pads, trims, the bypass/fold/eject keys, the resize corner — own their own press and never start a drag). The chosen (held) section lifts out of flow with the one permitted drag shadow and its machined lip goes accent; the ghost is a dashed print slot carrying the module's name — a groove reservation, not a section — and MOVING that ghost is the entire drop preview: the real sections never move under the cursor, and nothing commits until the drop. A chip dragged in from the palette opens the same ghost, on the same slot rules (including the terminal limiter's locked-last clamp), and adds nothing at all when released off the board. **Agent pulse:** one accent blink on the section's machined lip (150ms ×2, animationend-pinned class name), plus the agent chip's single 1.2s activity breath while acting — the only slow animations, both reduced-motion-guarded.
 
 ### Chips (palette zone)
-- Real `<button>`s rendered as KEYS on the voice deck: key ground, cut-edge bezel, a 20px family legend square (saturated rq5 token — the identity mark) beside the module name as a silkscreen legend (12px uppercase). Rest seam is the cut edge; hover raises to full print; active/drag-origin goes signal orange. Ten chips chunk under three non-interactive group legends in operator language ("Shape your voice" / "Polish your sound" / "Keep it safe") as real `<h3>`s.
+- Real `<button>`s rendered as KEYS on the voice deck: key ground, cut-edge bezel, a 20px family legend square (saturated rq5 token — the identity mark) beside the module name as a silkscreen legend (12px uppercase). Rest seam is the cut edge; hover raises to full print; active/drag-origin goes signal orange. Fourteen chips chunk under five non-interactive group legends in operator language ("Shape your voice" / "Add movement" / "Change your pitch" / "Polish your sound" / "Keep it safe") as real `<h3>`s — re-categorized 2026-09-01 when the Tone.js four joined the catalog: "shape" narrowed to tone/timbre only (EQ, Distortion, Bitcrusher), "movement" is the standard modulation grouping (Chorus, Tremolo, Phaser), "pitch" is the pitch domain (Autotune, Pitch Shift) — splitting what had been one crowded "character" bucket into three legible ones.
 
 ### Cards / Containers
 - **Experimental badge (autotune only):** one class, two placements (section rail + palette chip, "EXP" at chip density) — display-amber silkscreen on transparent (a machine marking, not a bright object), 1px amber border, 3px radius, 0.6875rem/700 mono at the 11px floor. A status tag, not a control: no focus, no pointer. Single-sourced from the type registration.
@@ -404,6 +427,7 @@ never shadow or glow.
 ### Inputs / Fields
 - **Selects (device, presets):** shared key vocabulary, native dark rendering via root `color-scheme: dark`; optgroup labels read as silkscreen micro-legends.
 - **Inline preset naming (Save As):** no browser dialogs — the naming row opens under the select in the key vocabulary; Enter commits, Escape cancels, blur never commits.
+- **Preset transfer:** place Import with the Presets panel's existing actions and expose Download only for the selected personal preset. Import preview and duplicate-name handling stay inline in the panel. A collision presents Rename, Replace, and Cancel as explicit keys. The file picker is the only native dialog. Transfer feedback must name the preset and result without moving or loading the live chain.
 - **Armed Delete:** two-step in-panel — first click relabels to "DELETE?" and raises an edge-red bezel (edge, never fill — fill red is BYPASS-only); second click within 5s deletes.
 
 ## Do's and Don'ts
@@ -412,7 +436,7 @@ never shadow or glow.
 - **Do** extend the `--pm-*` register — introduce no raw hex values; new colors enter as tokens in the measured vocabulary.
 - **Do** keep the value ladder exact: every value/state readout mono tabular at 12px, the register main line at 13.6px, silkscreen labels at 11.2px sans — nothing between the tiers.
 - **Do** keep color redundant: family identity is always code + label + arc/legend-square together; every state change is copy + color.
-- **Do** draw boundaries as cut faces (dark cut under light lip) and emphasis as brightness on matte; keep the one disabled grammar (hatch + recede) for exactly the pre-Start gate and the bypassed chain.
+- **Do** draw boundaries as cut faces (dark cut under light lip) and emphasis as brightness on matte; reserve the hatch + recede grammar for the pre-Start gate and the emergency-bypassed chain. Use the local IN/BYP state for one effect.
 - **Do** keep DOM order equal to chain order — board seats and z-order are paint; the cords layer re-routes from the same positions map on every write.
 - **Do** guard every motion addition with `prefers-reduced-motion` (150–250ms state answers); meter ballistics stay live by drawing per-frame.
 

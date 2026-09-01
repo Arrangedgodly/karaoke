@@ -476,8 +476,8 @@ check(
   'palette renders one chip per registered type (10)'
 );
 check(
-  paletteListEl.children.length === 13,
-  'flat palette list carries 10 chips + 3 group headers as direct children'
+  paletteListEl.children.length === 15,
+  'flat palette list carries 10 chips + 5 group headers as direct children'
 );
 check(
   windowStub.Sortable.instances.length === 0,
@@ -567,8 +567,8 @@ check(
 );
 check(
   emptyHintEl.textContent ===
-    'Click an effect to add it to the chain',
-  'empty-hint copy flips at the Start transition (the working add verbs — palette drag is retired)'
+    'Click an effect to add it at the end — or drag one here to place it',
+  'empty-hint copy flips at the Start transition, naming BOTH add verbs (click = end of chain, drag = a chosen slot)'
 );
 windowStub.ChainCanvas.onEngineStopped();
 check(
@@ -829,8 +829,8 @@ check(
   'autotune card carries the .node-experimental-badge component'
 );
 check(
-  autotuneBadge && autotuneBadge.textContent === 'Experimental',
-  'card badge text is "Experimental" (SR-visible by content, not title-only)'
+  autotuneBadge && autotuneBadge.textContent === 'EXP',
+  'card badge text is "EXP" (2026-09-01 width-floor fix: matches the palette chip\'s own compact form; SR-visible by content, not title-only)'
 );
 check(
   autotuneBadge && /Autotune is experimental/.test(autotuneBadge.title),
@@ -1177,11 +1177,17 @@ check(
 );
 
 // ----------------------------------------------------------------------
-// J. Grouping (finishing entry 3, critique P2-3) — the ten chips chunk
-// under three operator-language silkscreen headers, INTERLEAVED in the
-// flat palette list. Everything the critique demanded is guarded here:
-// group structure + membership (registry-driven within groups), the
-// legend register of the header rule (the optgroup precedent), chips
+// J. Grouping (finishing entry 3, critique P2-3; re-categorized
+// 2026-09-01 once the Tone.js effects pushed the catalog to 14 types —
+// see canvas.js's PALETTE_TYPE_GROUP comment for the full rationale).
+// This harness only registers the original ten (NEW_TYPES above adds
+// cycle-3's four; the Tone.js four are a separate suite,
+// test-tone-effects.js), so of the five groups the re-categorization
+// introduced, "movement" and "pitch" render here with exactly one member
+// each (chorus, autotune) — still real, still-rendering groups, not an
+// artifact of this harness. Everything the critique demanded is guarded
+// here: group structure + membership (registry-driven within groups),
+// the legend register of the header rule (the optgroup precedent), chips
 // staying direct-children buttons in DOM order (R2-2 keyboard/SR flow
 // unchanged, no new interactive layer), every chip still operative
 // through the shared commit chokepoint, the limiter chip preserved
@@ -1189,21 +1195,23 @@ check(
 // its drag items to '.node-chip' so headers are inert to the pointer.
 // This doubles as a grouping-completeness gate: a future type without a
 // group mapping falls into the 'more' fallback and FAILS the
-// exactly-3-headers check, forcing a deliberate grouping decision the
+// exactly-5-headers check, forcing a deliberate grouping decision the
 // same way section H forces a help-lines decision.
 // ----------------------------------------------------------------------
-console.log('J. palette grouping (finishing entry 3)');
+console.log('J. palette grouping (finishing entry 3, re-categorized 2026-09-01)');
 
 var GROUP_HEADERS = [
-  { id: 'shape', label: 'Shape your voice', members: ['eq', 'distortion', 'chorus', 'autotune'] },
+  { id: 'shape', label: 'Shape your voice', members: ['eq', 'distortion'] },
+  { id: 'movement', label: 'Add movement', members: ['chorus'] },
+  { id: 'pitch', label: 'Change your pitch', members: ['autotune'] },
   { id: 'polish', label: 'Polish your sound', members: ['gain', 'compressor', 'delay', 'reverb'] },
   { id: 'safe', label: 'Keep it safe', members: ['limiter', 'gate'] }
 ];
 
 var headerEls = paletteListEl.querySelectorAll('.palette-group-label');
 check(
-  headerEls.length === 3,
-  'exactly three group headers render (no fallback group — every type mapped)'
+  headerEls.length === 5,
+  'exactly five group headers render (no fallback group — every type mapped)'
 );
 check(
   headerEls.every(function (h) { return h.tagName === 'H3'; }),
@@ -1212,7 +1220,7 @@ check(
 check(
   headerEls.map(function (h) { return h.attrs['data-group']; }).join(',') ===
     GROUP_HEADERS.map(function (g) { return g.id; }).join(','),
-  'group order is shape → polish → safe'
+  'group order is shape → movement → pitch → polish → safe'
 );
 GROUP_HEADERS.forEach(function (g, gi) {
   var h = headerEls[gi];

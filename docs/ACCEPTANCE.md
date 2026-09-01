@@ -14,8 +14,8 @@ node tests/run.js        # zero-dependency regression gate (issue #9)
 |---|---|
 | `tests/test-tool-registration.js` | all ten WebMCP tools register in the fixed order with the intended schemas + annotations |
 | `tests/test-factory-presets-policy.js` | the current chain and every factory preset round-trip `set_chain` (policy-conforming) |
-| `tests/test-node-reuse-type-match.js` | a same-ID type change creates the correct physical AudioNode |
-| `tests/test-safety-refusals.js` | limiter removal / a node after the limiter / an unsafe ceiling are refused, with nothing applied |
+| `tests/test-node-reuse-type-match.js` | a same-ID type change creates the correct physical AudioNode; effect bypass routes around the plugin while retaining its instance |
+| `tests/test-safety-refusals.js` | limiter removal / bypass / a node after the limiter / an unsafe ceiling are refused for agents, with nothing applied |
 | `tests/test-mutation-undo.js` | one valid mutation applies, then Undo restores model + physical graph exactly |
 | `tests/test-preset-tools.js` | `get_preset` reads complete factory/user presets without side effects; `load_preset` uses the policy-checked apply path and supports Undo |
 | `tests/test-abort-signal.js` | the shared queued-mutation executor honors AbortSignal; `save_preset` checks both pre-abort and the last safe boundary before persistence, with no storage or UI side effects |
@@ -105,6 +105,9 @@ PA. Start from the factory **Classic Karaoke** preset.
       line is a hard FAIL** (an audible step on one of the three disclosed
       plain-property exceptions is a finding to record, not a surprise).
 - [ ] Reordering/removing nodes mid-signal: no pop, no dropped audio.
+- [ ] Per-effect **IN/BYP**: bypass Reverb mid-signal, confirm the dry path
+      stays continuous and the card/settings remain; tune Mix while bypassed,
+      return it to **IN**, and confirm the new value takes effect with no pop.
 - [ ] Date / operator / result: ____________
 
 ## 3. Hidden-tab watchdog behavior (issue #7 — protection active while hidden)
@@ -254,12 +257,26 @@ is secondary evidence, not a substitute for section 4.
 ## 6. Latency readout sanity
 
 The status strip's LATENCY readout is the context-reported
-`baseLatency + outputLatency` estimate (src/status-readouts.js) — sanity,
-not a lab measurement.
+`baseLatency + outputLatency` estimate PLUS the live chain's own declared
+added latency — each registered effect's `EffectCatalog.getLatencySeconds()`
+summed over the current chain (src/status-readouts.js) — sanity, not a lab
+measurement. It refreshes at 1 Hz alongside NODES, so a chain edit shows up
+within a second without a restart.
 
-- [ ] After Start, LATENCY shows a plausible value (typically ~5–50 ms on
-      laptop hardware; **—** is acceptable only on browsers that report
-      neither field — note the browser if so).
+- [ ] After Start with an empty chain, LATENCY shows a plausible
+      mic-I/O-only value (typically ~5–50 ms on laptop hardware; **—** is
+      acceptable only on browsers that report neither field — note the
+      browser if so).
+- [ ] Add a Noise Gate: LATENCY increases by ~5 ms within a second, with no
+      Start/Stop needed.
+- [ ] Add Autotune: LATENCY increases by ~20 ms; add Pitch Shift: by
+      ~100 ms; add a Compressor or the terminal Limiter: by ~6 ms each —
+      each on top of whatever the chain already carries.
+- [ ] Remove an effect: LATENCY drops back by that effect's amount within
+      a second.
+- [ ] Engage Bypass: LATENCY drops to the mic-I/O-only value (the room is
+      hearing the independent dry tap, not the chain) — disengaging
+      restores the chain's total.
 - [ ] Compare feel, not just the number: singing against the PA, the
       round trip is not an audible slap-back (a distracking echo means
       stop and re-check the PA path, whatever the readout says).
@@ -351,13 +368,44 @@ itself as before.
       discipline).
 - [ ] Date / operator / result: ____________
 
-Scope note (updated 2026-08-31): card RESIZE shipped (the corner mark);
+Scope note (updated 2026-09-01): card RESIZE shipped (the corner mark);
 the per-card flow glyph, the canvas-level FLOW toggle, and TIDY are
-RETIRED (the board is permanently horizontal and free — nothing arranges
-cards automatically); the palette DRAG is retired with its dead receiver
-(click / Tab+Enter are the add verbs; SortableJS is no longer bundled).
-The chain's drag-to-reorder is retired on purpose: ordering is
-cords-only.
+RETIRED (the board is permanently horizontal — nothing arranges cards
+automatically). Patch cords and free card positions are retired: the row
+is a plain ordered list, DOM order IS chain order, and ordering is done
+by DRAG-TO-REORDER (or Alt+Left/Right on a focused grip). The palette has
+two add verbs again — a chip CLICK appends at the end of the chain (in
+front of a terminal limiter), and a chip DRAG places the module in the
+exact slot its ghost reserves. Both drop gestures are hand-rolled pointer
+code; SortableJS is no longer bundled.
+
+## 10. Portable preset sharing
+
+- [ ] Save the accepted prompted chain as a personal preset. Download it
+      from the Presets panel and confirm the filename ends in
+      `.voxchain-preset.json`.
+- [ ] Open the file as text. It contains only `schemaVersion`, `name`, and
+      `nodes`, with readable effect parameters. It contains no layout,
+      microphone, audio, autosave, account, agent, or browser data.
+- [ ] In a fresh browser profile, start VoxChain and import the file. The
+      preview shows the expected preset name and effect count. Import does
+      not change the current chain.
+- [ ] Load the imported preset. Its ordered nodes and parameter values match
+      the source preset, including the terminal limiter, and the sound is
+      equivalent through the same microphone setup.
+- [ ] Import the same file again. Test Rename, Replace, and Cancel. Cancel
+      changes nothing, and no path overwrites a preset without the explicit
+      Replace action.
+- [ ] Try malformed JSON, a file above 64 KiB, an unsupported version, a
+      duplicate node id, an unknown or hidden effect, a missing limiter, a
+      limiter that is not last, and an unsafe gain budget. Each attempt
+      explains the problem and saves nothing.
+- [ ] Force personal-preset storage to fail, then import a valid file. The
+      interface reports failure and no phantom preset appears.
+- [ ] Confirm the built-in browser still discovers exactly the same ten
+      WebMCP tools. Import and Download never start audio, toggle Bypass, or
+      create chain Undo entries.
+- [ ] Date / operator / result: ____________
 
 ---
 
