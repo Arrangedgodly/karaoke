@@ -286,7 +286,7 @@
   }
 
   /**
-   * PRE-1 (cycle 3): does `nodes` name a node type the LIVE registry does
+   * PRE-1 (cycle 3): does `nodes` name an effect type the LIVE catalog does
    * not know? Returns the first offending type name (truthy) or false.
    * Same rationale and same degrade-to-lenient guard as src/persistence.js's
    * copy (kept per-file on purpose — the two storage layers are independent
@@ -295,7 +295,7 @@
    * exercises both copies): without it, a hand-edited preset naming a bogus
    * type passes deserialize() (deliberately structural — see
    * src/preset-schema.js) and then dies inside AudioGraph.buildGraph()'s
-   * synchronous unknown-type throw, mid-loadModel, with the canvas already
+   * synchronous unknown-effect-type throw, mid-loadModel, with the canvas already
    * half-cleared. Rejecting HERE takes the panel's existing quiet recovery
    * ("Could not load that preset") instead.
    *
@@ -304,10 +304,10 @@
    */
   function unregisteredNodeType(nodes) {
     try {
-      if (!window.NodeTypes || typeof window.NodeTypes.getAllTypes !== 'function') {
+      if (!window.EffectCatalog || typeof window.EffectCatalog.getAllTypes !== 'function') {
         return false;
       }
-      var known = window.NodeTypes.getAllTypes();
+      var known = window.EffectCatalog.getAllTypes();
       if (!known || known.length === 0) {
         return false;
       }
@@ -331,7 +331,7 @@
    *   PresetSchema.deserialize()'s structural validation (corrupt/malformed
    *   — e.g. hand-edited localStorage — including PRE-1's per-type param
    *   contracts for the cycle-3 node types) or names a node type the live
-   *   registry does not know (PRE-1 — see unregisteredNodeType). Never
+   *   catalog does not know (PRE-1 — see unregisteredNodeType). Never
    *   throws.
    */
   function load(name) {

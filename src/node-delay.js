@@ -3,10 +3,9 @@
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Same as src/node-gain.js, src/node-compressor.js,
 // and src/node-eq.js, this file doesn't export a new `window.X` namespace of
-// its own — its only job is to CALL INTO the two registries that already
-// exist (window.AudioGraph.registerNodeType from src/audio-graph.js, and
-// window.NodeTypes.register from src/node-types.js), once each, at load
-// time. The IIFE wrapper is kept anyway to match this project's file-level
+// its own — its only job is to register one complete definition with
+// window.EffectCatalog at load time. The IIFE wrapper is kept anyway to
+// match this project's file-level
 // convention (every src/*.js file is one) even though there's no local state
 // here that actually needs hiding behind a closure.
 //
@@ -28,12 +27,11 @@
 // to audio-graph.js is needed for this task — the contract it already
 // supports is exactly what's used below.
 //
-// One `AudioGraph.registerNodeType(type, factory)` call and one
-// `NodeTypes.register(type, {label, paramSpec, applyParam})` call, same as
-// every other node-type file — registering under the permanent, committed
+// One complete EffectCatalog definition, same as every other node-type
+// file — registering under the permanent, committed
 // type name `delay` is enough on its own for "Delay" to appear as a real,
 // usable palette chip (UI-3's palette, src/canvas.js, builds itself
-// dynamically from NodeTypes.getAllTypes()); no other file needs any change
+// dynamically from EffectCatalog.getAllTypes()); no other file needs any change
 // for this task beyond the new <script> tag in index.html.
 //
 // Per docs/ultron/design/px2-node-parameters.md's Delay section, the signal
@@ -95,12 +93,11 @@
 (function () {
   'use strict';
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> node.
-  // Called by AudioGraph.buildGraph() (src/audio-graph.js) whenever a model
-  // entry has type "delay" and no existing node instance is being reused for
+  // Factory called by AudioGraph.buildGraph() (src/audio-graph.js) whenever
+  // a model entry has type "delay" and no existing node instance is being reused for
   // its id. Returns a COMPOSITE value (see file-level comment above), same
   // shape as AE-7's EQ.
-  window.AudioGraph.registerNodeType('delay', function (audioContext, params) {
+  function createEffect(audioContext, params) {
     var p = params || {};
 
     var timeMs = typeof p.timeMs === 'number' ? p.timeMs : 300;
@@ -162,10 +159,10 @@
       dryGain: dryGain,
       wetGain: wetGain,
     };
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec (rendered
-  // generically by src/param-controls.js) + applyParam (this type's direct
+  // UI-facing metadata rendered generically by src/param-controls.js, plus
+  // applyParam (this type's direct
   // AudioParam writes — with the timeMs ms->s conversion and the feedback/
   // mix conversions described in the file-level comment above — for live
   // slider updates, called by param-controls.js on every `input` event —
@@ -184,13 +181,15 @@
   // delay-length change re-reads the circular buffer at a new offset (the
   // classic delay "zipper"/pitch-blip); a short ramp slides the read point
   // instead. mix ramps BOTH crossfade sides in one schedule pair.
-  window.NodeTypes.register('delay', {
+  window.EffectCatalog.register('delay', {
     label: 'Delay',
+    experimental: false,
     paramSpec: [
       { id: 'timeMs', label: 'Time', min: 10, max: 1000, default: 300, step: 10, unit: 'ms' },
       { id: 'feedback', label: 'Feedback', min: 0, max: 90, default: 25, step: 1, unit: '%' },
       { id: 'mix', label: 'Mix', min: 0, max: 100, default: 25, step: 1, unit: '%' }
     ],
+    create: createEffect,
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'timeMs') {
         window.AudioParamRamp.schedule(nodeInstance.delayNode.delayTime, value / 1000);

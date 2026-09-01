@@ -11,7 +11,7 @@
 //
 // So this file loads the real src/mcp-server.js, the real
 // src/agent-ui.js (the shim and the tool layer both drive its state
-// contract), the real node registry (audio-graph + node-types + the six
+// contract), the real effect catalog (effect-catalog + the six
 // node files, so add_node's schema enum comes from the LIVE registry
 // exactly as in index.html), and the real src/mcp-tools.js — into the
 // same zero-dependency vm sandbox the other committed tests use. In place
@@ -308,11 +308,11 @@ function byName(list, name) {
 async function main() {
   var sandbox = createSandbox();
   // index.html order: AgentUI first (both the shim and the tool layer
-  // guard on it), then the shim, then the node registry the tools read.
+  // guard on it), then the shim, then the effect catalog the tools read.
   loadSrc(sandbox, 'src/agent-ui.js');
   loadSrc(sandbox, 'src/mcp-server.js');
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js'); // issue #5: the ramp helper the node applyParam handlers call
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-compressor.js');
@@ -517,7 +517,7 @@ async function main() {
   );
 
   var addNode = byName(apiRegisterCalls, 'add_node').inputSchema;
-  var liveTypes = sandbox.NodeTypes.getAllTypes();
+  var liveTypes = sandbox.EffectCatalog.getAllTypes();
   check(
     sameMembers(addNode.required, ['type']),
     'C4: add_node requires [type]'
@@ -651,7 +651,7 @@ async function main() {
   var sandboxForRead = createSandbox();
   sandboxForRead.AudioEngine = { isStarted: false };
   [
-    'src/node-types.js',
+    'src/effect-catalog.js',
     'src/mcp-server.js',
     'src/mcp-tools.js'
   ].forEach(function (relPath) { loadSrc(sandboxForRead, relPath); });

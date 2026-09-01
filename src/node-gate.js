@@ -3,10 +3,7 @@
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Like src/node-distortion.js and src/node-chorus.js,
 // this file exports no `window.X` namespace of its own — its only job is to
-// CALL INTO the two registries that already exist
-// (window.AudioGraph.registerNodeType from src/audio-graph.js, and
-// window.NodeTypes.register from src/node-types.js), once each, at load
-// time.
+// register one complete definition with window.EffectCatalog at load time.
 //
 // GATE-1 scope (cycle 3, docs/ultron/plan.md): built exactly per the D1
 // research decision (docs/ultron/research/rq1-noise-gate.md, RQ-1 COMMITTED
@@ -22,22 +19,14 @@
 // property the watchdog worklet already proved in production).
 //
 // Why the wrapper at all: Web Audio has no native gate node (D1's
-// evidence), and this file supplies exactly the two registry entries the
-// existing contract absorbs whole — no changes to audio-graph.js,
-// node-types.js, param-controls.js, or audio-bypass.js:
-//
-//   - AudioGraph.registerNodeType('gate', factory): returns a composite
-//     {input, output, worklet, pendingParams} — the AE-7 composite shape
-//     EQ/Delay/Reverb/Distortion/Chorus already use. inputGain/outputSum
-//     are unity GainNodes whose ONLY job is to be stable connect points
-//     while the worklet itself is inserted between them (see the async
-//     note below); they add no gain of their own.
-//   - NodeTypes.register('gate', {label, paramSpec, applyParam}): the four
-//     D1 params — Threshold / Attack / Release / Floor, plain-language
-//     labels per house style. They are REAL AudioParams (the worklet's
-//     parameterDescriptors), so applyParam is four
-//     AudioParamRamp.schedule(node.parameters.get(id), value) calls —
-//     the exact compressor shape (Issue #5 click-safe writes, unchanged).
+// evidence). The factory returns a composite
+// {input, output, worklet, pendingParams} — the AE-7 composite shape
+// EQ/Delay/Reverb/Distortion/Chorus already use. inputGain/outputSum
+// are unity GainNodes whose ONLY job is to be stable connect points
+// while the worklet itself is inserted between them (see the async
+// note below); they add no gain of their own. The four D1 params are REAL
+// AudioParams (the worklet's parameterDescriptors), so applyParam follows
+// the compressor's click-safe AudioParamRamp shape.
 //
 // ---------------------------------------------------------------------
 // THE WRINKLE: async addModule vs. a synchronous factory contract.
@@ -88,7 +77,7 @@
   var PROCESSOR_NAME = 'noise-gate';
 
   // D1 paramSpec defaults — must match the worklet's parameterDescriptors
-  // and the NodeTypes paramSpec below (all three stay in lockstep).
+  // and the EffectCatalog paramSpec below (all three stay in lockstep).
   var DEFAULT_THRESHOLD_DB = -50;
   var DEFAULT_ATTACK_S = 0.005;
   var DEFAULT_RELEASE_S = 0.15;
@@ -142,11 +131,10 @@
     });
   }
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> node.
-  // Called by AudioGraph.buildGraph() (src/audio-graph.js) whenever a model
-  // entry has type "gate" and no existing node instance is being reused
+  // Factory called by AudioGraph.buildGraph() (src/audio-graph.js) whenever
+  // a model entry has type "gate" and no existing node instance is being reused
   // for its id. Returns a COMPOSITE value, same shape as EQ/Delay/Chorus.
-  window.AudioGraph.registerNodeType('gate', function (audioContext, params) {
+  function createEffect(audioContext, params) {
     var p = params || {};
 
     var threshold = typeof p.threshold === 'number' ? p.threshold : DEFAULT_THRESHOLD_DB;
@@ -211,10 +199,9 @@
     }
 
     return composite;
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec + applyParam,
-  // same shape as every other node-type file. Plain-language labels per the
+  // UI-facing metadata plus applyParam. Plain-language labels per the
   // cycle-3 scope table (Threshold / Attack / Release / Floor — the plan's
   // own words); ranges/defaults per D1's paramSpec block:
   //   threshold −80..0 dB, default −50 (open point)
@@ -227,14 +214,16 @@
   // AudioParamRamp.schedule() (src/audio-param-ramp.js) — the click-safe
   // form. The factory's creation-time writes above stay direct (a new node
   // has no live signal to protect yet), same convention as the compressor.
-  window.NodeTypes.register('gate', {
+  window.EffectCatalog.register('gate', {
     label: 'Noise Gate',
+    experimental: false,
     paramSpec: [
       { id: 'threshold', label: 'Threshold', min: -80, max: 0, default: -50, step: 1, unit: 'dB' },
       { id: 'attack', label: 'Attack', min: 0.001, max: 0.5, default: 0.005, step: 0.001, unit: 's' },
       { id: 'release', label: 'Release', min: 0.01, max: 2, default: 0.15, step: 0.01, unit: 's' },
       { id: 'floor', label: 'Floor', min: -60, max: 0, default: -40, step: 1, unit: 'dB' }
     ],
+    create: createEffect,
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'threshold' || paramId === 'attack' ||
           paramId === 'release' || paramId === 'floor') {

@@ -490,8 +490,8 @@ function assertNothingApplied(sandbox, ctx, tag) {
 async function main() {
   var sandbox = createSandbox();
   loadSrc(sandbox, 'src/agent-ui.js');
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-compressor.js');

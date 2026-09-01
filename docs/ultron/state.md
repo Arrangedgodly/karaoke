@@ -992,3 +992,35 @@ Suite 33/33 files / 2428 checks green. Real-browser spot-check (per the
 QA-5 lesson, badges are a render surface): four chips badge-free,
 autotune chip keeps EXP, guide serves transposed/spacey/warble/lofi at
 1698 chars, zero console errors.
+
+### Effect catalog migration BUILT (2026-08-31, issue #21) — local branch, awaiting publication + physical acceptance
+The split effect metadata and graph-factory registries are now one
+browser-global `EffectCatalog`. Each of the 10 native effects and the four
+Tone-backed effects registers exactly one complete definition: identity,
+label, param spec/defaults, experimental state, create, live apply, and
+optional dispose. AudioGraph, ChainEditing, canvas/palette, parameter
+controls, persistence, presets, and WebMCP now consume that catalog; the
+legacy `NodeTypes`, `AudioGraph.registerNodeType`, static MCP snapshots,
+and preset param-contract mirror are deleted. Agent loudness policy and
+sound-design guidance remain separate concerns, with startup validation
+proving every referenced effect and parameter exists in the catalog.
+
+Compatibility/hardening carried through the shared boundary: legacy raw
+numeric aliases for autotune enums still normalize to strings; preset and
+catalog numeric validation share the 1e-9 slider-fuzz tolerance; reserved
+parameter keys survive schema reload/save; and catalog-only numeric params
+now honor the `clamp` action published by WebMCP consistently across
+`set_param`, `set_chain`, and `add_node`. Discovery returns defensive
+copies, duplicate/incomplete registrations fail early, and graph creation,
+live writes, staged cleanup, and Tone disposal dispatch through the same
+definition.
+
+Verification: suite 36/36 files / 2602 checks green. Final real-browser
+reload on the production page proved 14 complete definitions, the same 14
+types in the palette and `add_node` schema, six factory presets valid
+against the live catalog, valid policy/guide references, AGENT READY, and
+no legacy registry global/script; no console errors or warnings. The
+browser check deliberately did not press Start or request microphone
+permission. Physical mic, Tone/WebAudio DSP, hidden-tab, and PA listening
+acceptance remain the operator-owned manual gate. Work is local on
+`codex/effect-catalog`; it is not yet pushed or in a PR.

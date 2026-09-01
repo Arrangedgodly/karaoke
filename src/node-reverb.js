@@ -3,10 +3,9 @@
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Same as src/node-gain.js, src/node-compressor.js,
 // src/node-eq.js, and src/node-delay.js, this file doesn't export a new
-// `window.X` namespace of its own — its only job is to CALL INTO the two
-// registries that already exist (window.AudioGraph.registerNodeType from
-// src/audio-graph.js, and window.NodeTypes.register from src/node-types.js),
-// once each, at load time. The IIFE wrapper is kept anyway to match this
+// `window.X` namespace of its own — its only job is to register one complete
+// definition with window.EffectCatalog at load time. The IIFE wrapper is
+// kept anyway to match this
 // project's file-level convention (every src/*.js file is one), though this
 // file DOES have real module-level state that needs the closure this time
 // (the IR fetch/decode cache below) — unlike node-delay.js et al., where the
@@ -28,12 +27,11 @@
 // inputGain/outputSum split. NO CHANGE to audio-graph.js is needed for this
 // task.
 //
-// One `AudioGraph.registerNodeType(type, factory)` call and one
-// `NodeTypes.register(type, {label, paramSpec, applyParam})` call, same as
-// every other node-type file — registering under the permanent, committed
+// One complete EffectCatalog definition, same as every other node-type
+// file — registering under the permanent, committed
 // type name `reverb` is enough on its own for "Reverb" to appear as a real,
 // usable palette chip (UI-3's palette, src/canvas.js, builds itself
-// dynamically from NodeTypes.getAllTypes()); no other file needs any change
+// dynamically from EffectCatalog.getAllTypes()); no other file needs any change
 // for this task beyond the new <script> tag in index.html.
 //
 // Per docs/ultron/design/px2-node-parameters.md's Reverb section, the ONLY
@@ -176,16 +174,15 @@
     return decodePromise;
   }
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> node.
-  // Called by AudioGraph.buildGraph() (src/audio-graph.js) whenever a model
-  // entry has type "reverb" and no existing node instance is being reused
+  // Factory called by AudioGraph.buildGraph() (src/audio-graph.js) whenever
+  // a model entry has type "reverb" and no existing node instance is being reused
   // for its id. Returns a COMPOSITE value (see file-level comment above),
   // same shape as AE-7's EQ and AE-8's Delay — and, per the file-level
   // comment's async-loading section, returns SYNCHRONOUSLY (satisfying
   // buildGraph()'s contract) even though the convolver's `.buffer` isn't
   // populated until the IR finishes loading/decoding, separately and
   // asynchronously, below.
-  window.AudioGraph.registerNodeType('reverb', function (audioContext, params) {
+  function createEffect(audioContext, params) {
     var p = params || {};
     var mixPct = typeof p.mix === 'number' ? p.mix : 20;
 
@@ -244,10 +241,10 @@
       dryGain: dryGain,
       wetGain: wetGain,
     };
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec (rendered
-  // generically by src/param-controls.js) + applyParam (this type's direct
+  // UI-facing metadata rendered generically by src/param-controls.js, plus
+  // applyParam (this type's direct
   // AudioParam writes for live slider updates, called by param-controls.js
   // on every `input` event — never routed through AudioGraph.buildGraph(),
   // per that file's own comment on why). `applyParam` is where the
@@ -263,11 +260,13 @@
   // `.value =` assignments — the click-safe form the 'host-param-ramps'
   // capability promise describes (the factory's creation-time writes stay
   // direct: a new node has no live signal to protect yet).
-  window.NodeTypes.register('reverb', {
+  window.EffectCatalog.register('reverb', {
     label: 'Reverb',
+    experimental: false,
     paramSpec: [
       { id: 'mix', label: 'Mix', min: 0, max: 100, default: 20, step: 1, unit: '%' }
     ],
+    create: createEffect,
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'mix') {
         var m = value / 100;

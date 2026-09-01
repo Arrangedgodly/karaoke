@@ -1,19 +1,14 @@
 // Tone.js adapter — one-call registration for Tone-backed node types.
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single `window.X`
-// export pattern as node-types.js / audio-graph.js. Defines NO node types
-// itself; a Tone-backed effect file (e.g. src/node-pitchshift.js) calls
-// ToneAdapter.register() once at load time and this file performs BOTH
-// registry registrations on its behalf:
-//
-//   - AudioGraph.registerNodeType(type, factory) — the factory this file
-//     generates wraps the Tone effect node between two native unity
-//     GainNodes ({input, output, tone, dispose}), the AE-7 composite
-//     contract buildGraph() already resolves via getNodeInput()/
-//     getNodeOutput(), so the graph builder needs no Tone knowledge.
-//   - NodeTypes.register(type, config) — label/paramSpec/experimental pass
-//     through verbatim; the generated applyParam dispatches to the `set`
-//     function each paramSpec entry may carry (see below).
+// export pattern as the rest of the audio stack. Defines NO effects itself;
+// a Tone-backed effect file (e.g. src/node-pitchshift.js) calls
+// ToneAdapter.register() once at load time and this file registers one
+// complete EffectCatalog definition on its behalf. The generated create
+// function wraps the Tone effect node between two native unity GainNodes
+// ({input, output, tone, dispose}), so the graph builder needs no Tone
+// knowledge. The generated applyParam dispatches to the `set` function each
+// paramSpec entry may carry (see below).
 //
 // The point of the shape: adding a Tone effect is ONE small config file —
 // param plumbing, composite wiring, context sharing, and teardown are all
@@ -91,25 +86,6 @@
   }
 
   /**
-   * Resolve the params object a factory receives (possibly partial — a
-   * preset may omit params, a fresh palette add passes type-level defaults
-   * only) against a paramSpec: every spec id present in `params` passes
-   * through, every missing one falls back to its registered default. The
-   * result is what config.create() receives, so a Tone effect file never
-   * repeats default fallbacks.
-   */
-  function resolveParams(paramSpec, params) {
-    var resolved = {};
-    paramSpec.forEach(function (spec) {
-      resolved[spec.id] =
-        params && Object.prototype.hasOwnProperty.call(params, spec.id) && params[spec.id] !== undefined
-          ? params[spec.id]
-          : spec.default;
-    });
-    return resolved;
-  }
-
-  /**
    * Build the AE-7 composite around a constructed Tone node: native unity
    * GainNodes at both ends so buildGraph()'s plain .connect() topology
    * works unchanged, wired through Tone's connect() (the native<->Tone
@@ -142,13 +118,12 @@
   }
 
   /**
-   * Register a Tone-backed node type into BOTH registries.
+   * Register one complete Tone-backed effect definition.
    *
-   * @param {string} type - unique node type name (same string both
-   *   registries key on, matching the native node files' convention).
+   * @param {string} type - unique effect type name.
    * @param {{label: string, paramSpec: Array<Object>, create: Function, experimental?: boolean}} config
-   *   - label / paramSpec / experimental: exactly NodeTypes.register's
-   *     config (src/node-types.js). paramSpec entries are the standard
+   *   - label / paramSpec / experimental: catalog metadata. paramSpec
+   *     entries are the standard
    *     {id, label, min, max, default, step, unit} descriptors and may
    *     additionally carry `set: (toneNode, value, composite) => void` —
    *     the LIVE-write mapping for that param (ramp a Tone Param, or
@@ -173,8 +148,8 @@
       throw new Error('ToneAdapter.register: config.create must be a function.');
     }
 
-    // The spec NodeTypes gets: verbatim entries minus the adapter-private
-    // `set` helpers (paramSpec is metadata — read by ParamControls,
+    // The catalog spec: verbatim entries minus the adapter-private `set`
+    // helpers (paramSpec is metadata — read by ParamControls,
     // mcp-tools.js's capabilities readout, and preset persistence — and
     // none of them should ever see a function in it).
     var cleanSpec = config.paramSpec.map(function (spec) {
@@ -189,7 +164,7 @@
 
     // Live-write dispatch by paramId, from the ORIGINAL spec entries (the
     // ones still carrying `set`). Unknown paramId: no-op, defensive — the
-    // same stale-reference/edge-case philosophy as NodeTypes.applyParam.
+    // same stale-reference/edge-case philosophy as catalog dispatch.
     var setters = {};
     config.paramSpec.forEach(function (spec) {
       if (typeof spec.set === 'function') {
@@ -197,24 +172,23 @@
       }
     });
 
-    // The AudioGraph factory. Synchronous by requirement (buildGraph's
-    // Phase 1 resolves every entry NOW) — Tone effect constructors are
-    // synchronous; anything genuinely async (worklet-backed effects like
-    // BitCrusher finish wiring internally when the worklet loads) needs
+    // The catalog create function. Synchronous by requirement — Tone effect
+    // constructors are synchronous. Anything genuinely async (worklet-backed
+    // effects like BitCrusher finish wiring internally when the worklet loads) needs
     // the unity-passthrough-then-splice pattern instead, which Tone's own
     // worklet nodes already implement internally.
     function factory(audioContext, params) {
       ensureToneContext(audioContext);
-      var toneNode = config.create(audioContext, resolveParams(config.paramSpec, params));
+      var toneNode = config.create(audioContext, params);
       var composite = wrapToneNode(audioContext, toneNode);
       return composite;
     }
 
-    window.AudioGraph.registerNodeType(type, factory);
-    window.NodeTypes.register(type, {
+    window.EffectCatalog.register(type, {
       label: config.label,
       paramSpec: cleanSpec,
       experimental: !!config.experimental,
+      create: factory,
       applyParam: function (composite, paramId, value) {
         if (!composite || !composite.tone) {
           return;
@@ -222,6 +196,11 @@
         var setter = setters[paramId];
         if (setter) {
           setter(composite.tone, value, composite);
+        }
+      },
+      dispose: function (composite) {
+        if (composite && typeof composite.dispose === 'function') {
+          composite.dispose();
         }
       }
     });

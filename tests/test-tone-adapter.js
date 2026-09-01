@@ -9,8 +9,8 @@
 // that sandbox, so the code under test is exactly what ships in
 // index.html:
 //
+//   src/effect-catalog.js (the complete effect definition registry)
 //   src/audio-graph.js    (buildGraph + the dispose teardown hook)
-//   src/node-types.js     (UI metadata registry)
 //   src/tone-adapter.js   (the adapter under test)
 //
 // window.Tone is stubbed to exactly the surface the adapter touches
@@ -201,14 +201,14 @@ function captureThrow(fn) {
 async function main() {
   var sandbox = createSandbox();
   // NOTE: no window.Tone yet — section B asserts registration is Tone-free.
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/tone-adapter.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js'); // node-gain's applyParam ramps through it
   loadSrc(sandbox, 'src/node-gain.js');
 
   var AG = sandbox.AudioGraph;
-  var NT = sandbox.NodeTypes;
+  var catalog = sandbox.EffectCatalog;
   var TA = sandbox.ToneAdapter;
 
   // --------------------------------------------------------------------
@@ -246,9 +246,9 @@ async function main() {
       throw new Error('test bug: create must not run in section B');
     }
   });
-  check(NT.getAllTypes().indexOf('probe') !== -1, 'B1: type listed in NodeTypes without Tone loaded');
-  check(NT.getLabel('probe') === 'Probe', 'B1: label registered');
-  check(NT.getParamSpec('probe').length === 1 && NT.getParamSpec('probe')[0].id === 'amount', 'B1: paramSpec registered');
+  check(catalog.getAllTypes().indexOf('probe') !== -1, 'B1: type listed in EffectCatalog without Tone loaded');
+  check(catalog.getLabel('probe') === 'Probe', 'B1: label registered');
+  check(catalog.getParamSpec('probe').length === 1 && catalog.getParamSpec('probe')[0].id === 'amount', 'B1: paramSpec registered');
   var factoryErr = captureThrow(function () {
     sandbox.AudioGraph; // presence
     // Reach the factory through buildGraph's Phase-1 resolution.
@@ -312,14 +312,14 @@ async function main() {
     sandbox.AudioEngine.sourceNode.__connectsTo(comp.input) && comp.output.__connectsTo(AG.getChainGate()),
     'C2: buildGraph wired sourceNode->composite.input and composite.output->chainGate (AE-7 shape)'
   );
-  check(NT.isExperimental('echo'), 'C3: experimental flag flows to NodeTypes');
-  check(!NT.isExperimental('gain') && !NT.isExperimental('probe'), 'C3: absent flag means not experimental');
+  check(catalog.isExperimental('echo'), 'C3: experimental flag flows to EffectCatalog');
+  check(!catalog.isExperimental('gain') && !catalog.isExperimental('probe'), 'C3: absent flag means not experimental');
 
   // --------------------------------------------------------------------
   console.log('D. applyParam dispatch + paramSpec hygiene');
   // --------------------------------------------------------------------
 
-  NT.applyParam('echo', comp, 'rate', 7);
+  catalog.applyParam('echo', comp, 'rate', 7);
   check(
     fakeTone.ramps.length === 1 &&
     fakeTone.ramps[0].param === 'wet' &&
@@ -327,14 +327,17 @@ async function main() {
     Math.abs(fakeTone.ramps[0].rampTime - 0.015) < 1e-9,
     'D1: set() dispatched with (toneNode, value); rampParam ramped 7 over 15 ms'
   );
-  NT.applyParam('echo', comp, 'amount', 90);
+  catalog.applyParam('echo', comp, 'amount', 90);
   check(fakeTone.ramps.length === 1, 'D1: param without a set helper is a defensive no-op');
-  NT.applyParam('echo', comp, 'nonsense', 1);
-  check(fakeTone.ramps.length === 1, 'D1: unknown paramId is a defensive no-op');
-  NT.applyParam('echo', null, 'rate', 8);
+  var unknownParamError = captureThrow(function () {
+    catalog.applyParam('echo', comp, 'nonsense', 1);
+  });
+  check(unknownParamError !== null && /unknown param/.test(unknownParamError.message),
+    'D1: unknown paramId is rejected by the catalog boundary');
+  catalog.applyParam('echo', null, 'rate', 8);
   check(fakeTone.ramps.length === 1, 'D1: null instance is a defensive no-op');
 
-  var specEcho = NT.getParamSpec('echo');
+  var specEcho = catalog.getParamSpec('echo');
   var specHasSet = specEcho.some(function (s) { return typeof s.set === 'function'; });
   check(!specHasSet, 'D2: registered paramSpec carries NO set functions (metadata stays data)');
   check(

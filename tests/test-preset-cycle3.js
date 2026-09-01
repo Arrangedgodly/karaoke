@@ -6,9 +6,8 @@
 // new-type entry through PresetSchema; this is the formal CHAIN-level pass
 // the plan's acceptance names:
 //
-//   A. schema declarations — PresetSchema.TYPE_PARAM_CONTRACTS mirrors the
-//      four node files' LIVE NodeTypes paramSpecs (drift check: ids,
-//      numeric ranges, and the UI-1 Key/Scale vocabularies).
+//   A. catalog-backed validation — PresetSchema reads the LIVE
+//      EffectCatalog param specs with no exported metadata mirror.
 //   B. save -> reload -> EXACT compare for one chain containing ALL FOUR
 //      new effects together with existing ones (every new-type param at a
 //      non-default value: key/scale, retune, mix, threshold/attack/release/
@@ -20,10 +19,9 @@
 //      exactly {id, type, params} per node).
 //   C. boundary acceptance — every contract param at its min and max (and
 //      params:{} entirely absent) deserializes clean.
-//   D. legacy — presets saved before cycle 3 (six legacy types, no
-//      new-type entries) load byte-unchanged, including out-of-nominal
-//      legacy param values (structure-only treatment for undeclared types
-//      is unchanged).
+//   D. legacy — valid presets saved before cycle 3 (six legacy types, no
+//      new-type entries) load byte-unchanged, while corrupted values on a
+//      registered legacy effect use the same live catalog validation.
 //   E. hostile entries hit the EXISTING error-recovery paths — never a
 //      crash, never a silent substitution: unknown node type, bad key
 //      ('H'), bad scale ('Dorian'), out-of-enum/non-integer key numbers,
@@ -31,7 +29,7 @@
 //      number, null), typo'd param name. Autosave => Persistence falls
 //      back to the default chain; named preset => PresetStore.load()
 //      returns null; both log via console.error and never throw.
-//   F. the live-registry guard degrades to lenient when the registry is
+//   F. the live-catalog guard degrades to lenient when the catalog is
 //      absent/empty/broken (bare-harness behavior unchanged).
 //   G. factory library + default chain unchanged by this task (the PRE-1
 //      decisions: no cycle-3 content in either, notes in both files).
@@ -97,9 +95,9 @@ function copyNodes(nodes) {
 // The sandbox: a vm context whose global IS `window` (host timers, a quiet
 // console that RECORDS console.error, a plain localStorage box, the
 // never-settling fetch src/node-reverb.js tolerates, no DOM — none of the
-// files under test needs one at load time). The full ten-module node
-// registry is loaded exactly as index.html orders it, so NodeTypes carries
-// the LIVE paramSpecs the drift check and the registry guard read.
+// files under test needs one at load time). The full ten-module effect
+// catalog is loaded exactly as index.html orders it, so validation reads
+// the same live paramSpecs as every other production consumer.
 // ----------------------------------------------------------------------
 function createEnv() {
   var storageBox = {};
@@ -146,8 +144,8 @@ function createEnv() {
   env.storageBox = storageBox;
 
   [
+    'src/effect-catalog.js',
     'src/audio-graph.js',
-    'src/node-types.js',
     'src/audio-param-ramp.js',
     'src/node-gain.js',
     'src/node-compressor.js',
@@ -238,56 +236,91 @@ async function main() {
   var SCALE_NAMES = ['Chromatic', 'Major', 'Minor'];
 
   // ------------------------------------------------------------------
-  console.log('A. schema declarations: TYPE_PARAM_CONTRACTS vs the LIVE registry');
+  console.log('A. preset validation reads the live EffectCatalog without a metadata mirror');
   // ------------------------------------------------------------------
   {
-    var contracts = PresetSchema.TYPE_PARAM_CONTRACTS;
-    check(!!contracts && typeof contracts === 'object', 'A: PresetSchema.TYPE_PARAM_CONTRACTS is exported');
     check(
-      deepEqual(Object.keys(contracts).sort(), ['autotune', 'chorus', 'distortion', 'gate']),
-      'A: contracts declared for exactly the four cycle-3 types'
+      deepEqual(Object.keys(PresetSchema).sort(), ['CURRENT_VERSION', 'deserialize', 'serialize']),
+      'A: PresetSchema exports behavior only, with no metadata mirror'
     );
 
     ['distortion', 'chorus', 'gate', 'autotune'].forEach(function (type) {
-      var spec = sandbox.NodeTypes.getParamSpec(type);
-      var contract = contracts[type];
-      var specIds = spec.map(function (s) { return s.id; }).sort();
-      var contractIds = Object.keys(contract).sort();
+      var spec = sandbox.EffectCatalog.getParamSpec(type);
       check(
-        deepEqual(specIds, contractIds),
-        'A: ' + type + ' contract param ids match the live paramSpec exactly'
+        spec.length > 0,
+        'A: ' + type + ' exposes its validation contract through the live catalog'
       );
-      Object.keys(contract).forEach(function (paramId) {
-        var c = contract[paramId];
-        var s = null;
-        spec.forEach(function (entry) {
-          if (entry.id === paramId) { s = entry; }
-        });
-        if (c.kind === 'enum') {
-          check(
-            !!s && Array.isArray(s.values) && deepEqual(s.values, c.values) &&
-              c.enumMax === c.values.length - 1,
-            'A: ' + type + '.' + paramId + ' enum vocabulary matches the live UI-1 values (enumMax ' + c.enumMax + ')'
-          );
-        } else {
-          check(
-            !!s && typeof s.min === 'number' && typeof s.max === 'number' &&
-              c.min === s.min && c.max === s.max,
-            'A: ' + type + '.' + paramId + ' range ' + c.min + '..' + c.max + ' matches the live paramSpec'
-          );
-        }
-      });
     });
 
     // The two vocabularies the scope fixed: 12 keys x 3 scales.
+    var autotuneSpec = sandbox.EffectCatalog.getParamSpec('autotune');
+    var keySpec = autotuneSpec.filter(function (entry) { return entry.id === 'key'; })[0];
+    var scaleSpec = autotuneSpec.filter(function (entry) { return entry.id === 'scale'; })[0];
     check(
-      deepEqual(contracts.autotune.key.values, KEY_NAMES) &&
-        contracts.autotune.key.values.length === 12,
-      'A: autotune key vocabulary is the 12 musical keys C..B'
+      !!keySpec && deepEqual(keySpec.values, KEY_NAMES) && keySpec.values.length === 12,
+      'A: the live autotune key vocabulary is the 12 musical keys C..B'
     );
     check(
-      deepEqual(contracts.autotune.scale.values, SCALE_NAMES),
-      'A: autotune scale vocabulary is Chromatic/Major/Minor'
+      !!scaleSpec && deepEqual(scaleSpec.values, SCALE_NAMES),
+      'A: the live autotune scale vocabulary is Chromatic/Major/Minor'
+    );
+
+    sandbox.EffectCatalog.register('schema-live-probe', {
+      label: 'Schema live probe',
+      paramSpec: [{ id: 'amount', label: 'Amount', min: 0, max: 1, step: 0.1, default: 0.5 }],
+      experimental: false,
+      create: function () { return {}; },
+      applyParam: function () {}
+    });
+    check(
+      PresetSchema.deserialize(wirePreset('probe', [
+        { id: 'probe-1', type: 'schema-live-probe', params: { amount: 0.7 } }
+      ])).nodes[0].params.amount === 0.7,
+      'A: a type registered after PresetSchema loads validates through the live catalog'
+    );
+    var liveRangeError = null;
+    try {
+      PresetSchema.deserialize(wirePreset('probe', [
+        { id: 'probe-2', type: 'schema-live-probe', params: { amount: 2 } }
+      ]));
+    } catch (err) {
+      liveRangeError = err;
+    }
+    check(!!liveRangeError, 'A: the live catalog range rejects an out-of-range probe value');
+
+    sandbox.EffectCatalog.register('schema-reserved-key-probe', {
+      label: 'Schema reserved-key probe',
+      paramSpec: [{ id: '__proto__', label: 'Reserved key', min: 0, max: 1, step: 0.1, default: 0.4 }],
+      experimental: false,
+      create: function () { return {}; },
+      applyParam: function () {}
+    });
+    var reservedInput = JSON.parse(
+      '{"schemaVersion":1,"name":"reserved key","nodes":[' +
+        '{"id":"reserved-1","type":"schema-reserved-key-probe","params":{"__proto__":0.8}}]}'
+    );
+    var reservedRestored = PresetSchema.deserialize(reservedInput);
+    var reservedSerialized = PresetSchema.serialize(
+      reservedRestored.name,
+      reservedRestored.nodes
+    );
+    var reservedWire = JSON.parse(JSON.stringify(reservedSerialized));
+    var reservedNormalized = sandbox.EffectCatalog.normalizeParams(
+      'schema-reserved-key-probe',
+      reservedWire.nodes[0].params
+    );
+    check(
+      [
+        reservedInput.nodes[0].params,
+        reservedRestored.nodes[0].params,
+        reservedSerialized.nodes[0].params,
+        reservedWire.nodes[0].params,
+        reservedNormalized
+      ].every(function (params) {
+        return Object.prototype.hasOwnProperty.call(params, '__proto__') &&
+          params.__proto__ === 0.8;
+      }),
+      'A: a non-default __proto__ param survives JSON input, schema reload/save, and catalog normalization'
     );
   }
 
@@ -454,16 +487,20 @@ async function main() {
       'D3: a legacy named preset loads through PresetStore UNCHANGED'
     );
 
-    // Legacy types keep structure-only treatment: even an out-of-NOMINAL
-    // legacy param (hand-edited) still deserializes — exactly the behavior
-    // presets saved before cycle 3 have always had. (Their factories clamp
-    // defensively at build time; the cycle-3 contracts do not reach back.)
-    var outOfRangeLegacy = PresetSchema.deserialize(
-      wirePreset('legacy hostile', [{ id: 'h1', type: 'gain', params: { gainDb: 999 } }])
-    );
+    // Every registered type now shares the catalog-backed validation path.
+    // Valid legacy presets still round-trip unchanged, while corrupted
+    // hand-edited values are rejected consistently with newer effects.
+    var outOfRangeLegacyError = null;
+    try {
+      PresetSchema.deserialize(
+        wirePreset('legacy hostile', [{ id: 'h1', type: 'gain', params: { gainDb: 999 } }])
+      );
+    } catch (err) {
+      outOfRangeLegacyError = err;
+    }
     check(
-      outOfRangeLegacy.nodes[0].params.gainDb === 999,
-      'D4: out-of-range LEGACY-type params still deserialize (structure-only, unchanged)'
+      !!outOfRangeLegacyError,
+      'D4: a corrupted legacy-type value is rejected by the same live catalog contract'
     );
   }
 
@@ -472,8 +509,8 @@ async function main() {
   // ------------------------------------------------------------------
   {
     // (1) Unknown node type: deserialize stays structural (by documented
-    // design — the check belongs to the registry), and the STORE layers'
-    // new live-registry guard routes it to recovery.
+    // design — the check belongs to the catalog), and the STORE layers'
+    // live-catalog guard routes it to recovery.
     var unknownTypeNodes = [
       { id: 'u1', type: 'gain', params: { gainDb: 0 } },
       { id: 'u2', type: 'fluxcapacitor', params: { joules: 1.21 } },
@@ -584,37 +621,43 @@ async function main() {
   }
 
   // ------------------------------------------------------------------
-  console.log('F. the live-registry guard degrades to lenient without a registry');
+  console.log('F. the live-catalog guard degrades to lenient without a catalog');
   // ------------------------------------------------------------------
   {
-    // Simulate a bare harness: registry absent, then empty, then broken.
-    var realNodeTypes = sandbox.NodeTypes;
-    delete sandbox.NodeTypes;
+    // Simulate a bare harness: catalog absent, then empty, then broken.
+    var realEffectCatalog = sandbox.EffectCatalog;
+    delete sandbox.EffectCatalog;
     check(
       deepEqual(sandbox.Persistence.loadInitialModel(), ALL_TEN_MODEL) ||
         deepEqual(sandbox.Persistence.loadInitialModel(), sandbox.DEFAULT_PRESET.nodes),
-      'F: no-registry sandbox still returns a valid model (guard skips, no throw)'
+      'F: no-catalog sandbox still returns a valid model (guard skips, no throw)'
     );
     // With the registry ABSENT the guard must not reject a legacy load:
     sandbox.PresetStore.save('No Registry', copyNodes(LEGACY_MODEL));
     check(
       !!sandbox.PresetStore.load('No Registry'),
-      'F: with NodeTypes absent, a legacy preset loads (guard degrades to lenient)'
+      'F: with EffectCatalog absent, a legacy preset loads (guard degrades to lenient)'
     );
-    sandbox.NodeTypes = { getAllTypes: function () { return []; } };
+    sandbox.EffectCatalog = {
+      getAllTypes: function () { return []; },
+      getParamSpec: function () { return []; }
+    };
     check(
       !!sandbox.PresetStore.load('No Registry'),
-      'F: with an EMPTY registry, load still degrades to lenient (no false rejections)'
+      'F: with an EMPTY catalog, load still degrades to lenient (no false rejections)'
     );
-    sandbox.NodeTypes = { getAllTypes: function () { throw new Error('broken registry'); } };
+    sandbox.EffectCatalog = {
+      getAllTypes: function () { throw new Error('broken catalog'); },
+      getParamSpec: function () { throw new Error('broken catalog'); }
+    };
     check(
       !!sandbox.PresetStore.load('No Registry'),
-      'F: with a THROWING registry, load still degrades to lenient (never crashes on the guard)'
+      'F: with a THROWING catalog, load still degrades to lenient (never crashes on the guard)'
     );
-    sandbox.NodeTypes = realNodeTypes;
+    sandbox.EffectCatalog = realEffectCatalog;
     check(
       !!sandbox.PresetStore.load('No Registry'),
-      'F: registry restored, the same legacy preset still loads'
+      'F: catalog restored, the same legacy preset still loads'
     );
   }
 

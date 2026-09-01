@@ -37,6 +37,15 @@ function check(cond, label) {
   }
 }
 
+function captureThrow(fn) {
+  try {
+    fn();
+    return null;
+  } catch (err) {
+    return err;
+  }
+}
+
 function approx(a, b) {
   return Math.abs(a - b) < 1e-9;
 }
@@ -292,8 +301,8 @@ async function main() {
   var sandbox = createSandbox();
   installToneStub(sandbox);
   loadSrc(sandbox, 'src/agent-ui.js');
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-limiter.js'); // terminal limiter for the chain rules
   loadSrc(sandbox, 'src/param-controls.js');
@@ -309,7 +318,7 @@ async function main() {
   loadSrc(sandbox, 'src/mcp-tools.js');
 
   var AG = sandbox.AudioGraph;
-  var NT = sandbox.NodeTypes;
+  var catalog = sandbox.EffectCatalog;
 
   var TYPES = ['pitchshift', 'tremolo', 'bitcrusher', 'phaser'];
   var LABELS = {
@@ -324,12 +333,12 @@ async function main() {
   // --------------------------------------------------------------------
 
   TYPES.forEach(function (type) {
-    check(NT.getAllTypes().indexOf(type) !== -1, 'A1: ' + type + ' listed in NodeTypes');
-    check(NT.getLabel(type) === LABELS[type], 'A1: ' + type + ' label is ' + LABELS[type]);
+    check(catalog.getAllTypes().indexOf(type) !== -1, 'A1: ' + type + ' listed in EffectCatalog');
+    check(catalog.getLabel(type) === LABELS[type], 'A1: ' + type + ' label is ' + LABELS[type]);
     // Promoted out of experimental by owner sign-off 2026-08-31 (arrived
     // experimental with the cycle-4 round; autotune stays badged).
-    check(!NT.isExperimental(type), 'A1: ' + type + ' is NOT experimental (promoted)');
-    var spec = NT.getParamSpec(type);
+    check(!catalog.isExperimental(type), 'A1: ' + type + ' is NOT experimental (promoted)');
+    var spec = catalog.getParamSpec(type);
     check(spec.length > 0, 'A2: ' + type + ' has a non-empty paramSpec');
     check(
       spec.every(function (s) { return typeof s.set !== 'function'; }),
@@ -337,18 +346,18 @@ async function main() {
     );
   });
 
-  var psSpec = NT.getParamSpec('pitchshift');
+  var psSpec = catalog.getParamSpec('pitchshift');
   check(psSpec.length === 2 && psSpec[0].id === 'pitch' && psSpec[0].min === -12 && psSpec[0].max === 12 &&
     psSpec[0].default === 0 && psSpec[0].step === 1 && psSpec[0].unit === 'st', 'A3: pitchshift pitch spec exact');
   check(psSpec[1].id === 'mix' && psSpec[1].min === 0 && psSpec[1].max === 100 && psSpec[1].default === 100,
     'A3: pitchshift mix spec exact');
-  var trSpec = NT.getParamSpec('tremolo');
+  var trSpec = catalog.getParamSpec('tremolo');
   check(trSpec.length === 2 && trSpec[0].id === 'rateHz' && trSpec[0].default === 5 && trSpec[0].unit === 'Hz' &&
     trSpec[1].id === 'depth' && trSpec[1].default === 50 && trSpec[1].unit === '%', 'A3: tremolo specs exact');
-  var bcSpec = NT.getParamSpec('bitcrusher');
+  var bcSpec = catalog.getParamSpec('bitcrusher');
   check(bcSpec.length === 2 && bcSpec[0].id === 'bits' && bcSpec[0].min === 1 && bcSpec[0].max === 8 &&
     bcSpec[0].default === 4 && bcSpec[1].id === 'mix' && bcSpec[1].default === 50, 'A3: bitcrusher specs exact');
-  var phSpec = NT.getParamSpec('phaser');
+  var phSpec = catalog.getParamSpec('phaser');
   check(phSpec.length === 3 && phSpec[0].id === 'rateHz' && phSpec[0].default === 0.5 &&
     phSpec[1].id === 'depth' && phSpec[1].default === 60 &&
     phSpec[2].id === 'baseHz' && phSpec[2].default === 350, 'A3: phaser specs exact');
@@ -394,8 +403,8 @@ async function main() {
   console.log('C. live writes: applyParam maps every param onto the Tone node');
   // --------------------------------------------------------------------
 
-  NT.applyParam('pitchshift', psComp, 'pitch', -4);
-  NT.applyParam('pitchshift', psComp, 'mix', 40);
+  catalog.applyParam('pitchshift', psComp, 'pitch', -4);
+  catalog.applyParam('pitchshift', psComp, 'mix', 40);
   check(psComp.tone.pitch === -4, 'C1: pitch assigned directly (plain setter)');
   check(
     psComp.tone.__ramps.some(function (r) {
@@ -404,25 +413,25 @@ async function main() {
     'C1: mix 40% ramped wet to 0.4 over 15 ms'
   );
 
-  NT.applyParam('tremolo', trComp, 'rateHz', 8);
-  NT.applyParam('tremolo', trComp, 'depth', 80);
+  catalog.applyParam('tremolo', trComp, 'rateHz', 8);
+  catalog.applyParam('tremolo', trComp, 'depth', 80);
   check(
     trComp.tone.__ramps.some(function (r) { return r.param === 'frequency' && r.value === 8; }) &&
     trComp.tone.__ramps.some(function (r) { return r.param === 'depth' && approx(r.value, 0.8); }),
     'C2: rateHz ramped raw; depth % ramped /100'
   );
 
-  NT.applyParam('bitcrusher', bcComp, 'bits', 6);
-  NT.applyParam('bitcrusher', bcComp, 'mix', 25);
+  catalog.applyParam('bitcrusher', bcComp, 'bits', 6);
+  catalog.applyParam('bitcrusher', bcComp, 'mix', 25);
   check(
     bcComp.tone.__ramps.some(function (r) { return r.param === 'bits' && r.value === 6; }) &&
     bcComp.tone.__ramps.some(function (r) { return r.param === 'wet' && approx(r.value, 0.25); }),
     'C3: bits ramped raw; mix % ramped /100'
   );
 
-  NT.applyParam('phaser', phComp, 'rateHz', 2);
-  NT.applyParam('phaser', phComp, 'depth', 100);
-  NT.applyParam('phaser', phComp, 'baseHz', 800);
+  catalog.applyParam('phaser', phComp, 'rateHz', 2);
+  catalog.applyParam('phaser', phComp, 'depth', 100);
+  catalog.applyParam('phaser', phComp, 'baseHz', 800);
   check(
     phComp.tone.__ramps.some(function (r) { return r.param === 'frequency' && r.value === 2; }),
     'C4: rateHz ramped'
@@ -431,9 +440,13 @@ async function main() {
     'C4: depth 100% -> octaves 5; baseHz assigned directly');
 
   var rampCountBefore = phComp.tone.__ramps.length;
-  NT.applyParam('phaser', phComp, 'nonsense', 1);
-  NT.applyParam('phaser', null, 'rateHz', 1);
-  check(phComp.tone.__ramps.length === rampCountBefore, 'C5: unknown param / null instance are no-ops');
+  var unknownParamError = captureThrow(function () {
+    catalog.applyParam('phaser', phComp, 'nonsense', 1);
+  });
+  catalog.applyParam('phaser', null, 'rateHz', 1);
+  check(unknownParamError !== null && /unknown param/.test(unknownParamError.message) &&
+    phComp.tone.__ramps.length === rampCountBefore,
+    'C5: catalog rejects an unknown param; a null instance remains a no-op');
 
   // --------------------------------------------------------------------
   console.log('D. WebMCP integration: add_node enum, capabilities, set_param fast path');

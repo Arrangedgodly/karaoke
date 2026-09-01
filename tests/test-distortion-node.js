@@ -10,7 +10,7 @@
 // recorded connect edges) — not just the registered metadata.
 //
 // Covers the node-level DIST-1 acceptance slice:
-//   - registration in both registries (AudioGraph + NodeTypes)
+//   - registration in EffectCatalog
 //   - curve construction per D3 (odd length, symmetric/DC-free,
 //     normalized f(1)=1, monotonic, near-linear at center)
 //   - internal topology (driveGain -> shaper -> tone -> outGain)
@@ -138,8 +138,8 @@ function loadSrc(sandbox, relPath) {
 // ----------------------------------------------------------------------
 async function main() {
   var sandbox = createSandbox();
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-distortion.js');
   loadSrc(sandbox, 'src/preset-schema.js');
@@ -148,12 +148,12 @@ async function main() {
 
   // -- Registration ------------------------------------------------------
   check(
-    sandbox.NodeTypes.getAllTypes().indexOf('distortion') !== -1,
-    'distortion registered in NodeTypes (palette chip source)'
+    sandbox.EffectCatalog.getAllTypes().indexOf('distortion') !== -1,
+    'distortion registered in EffectCatalog (palette chip source)'
   );
-  check(sandbox.NodeTypes.getLabel('distortion') === 'Distortion', 'label is "Distortion"');
+  check(sandbox.EffectCatalog.getLabel('distortion') === 'Distortion', 'label is "Distortion"');
 
-  var spec = sandbox.NodeTypes.getParamSpec('distortion');
+  var spec = sandbox.EffectCatalog.getParamSpec('distortion');
   check(spec.length === 3, 'paramSpec has exactly 3 params (Drive/Tone/Output)');
   var specById = {};
   spec.forEach(function (s) { specById[s.id] = s; });
@@ -216,7 +216,7 @@ async function main() {
 
   // -- applyParam mappings (ramped writes) ----------------------------------
   function apply(paramId, value) {
-    sandbox.NodeTypes.applyParam('distortion', instance, paramId, value);
+    sandbox.EffectCatalog.applyParam('distortion', instance, paramId, value);
   }
   apply('drive', 1);
   check(approx(instance.driveGain.gain.value, 10, 1e-6), 'drive 1 -> pre-gain 10 (+20 dB)');
@@ -232,17 +232,27 @@ async function main() {
   // -- Output guard ceiling --------------------------------------------------
   apply('output', 0);
   check(approx(instance.outGain.gain.value, 1.0, 1e-9), 'output 0 dB (max) -> exactly unity, never above');
-  apply('output', 6); // out-of-spec value (hand-edited preset defense)
-  check(approx(instance.outGain.gain.value, 1.0, 1e-9), 'out-of-spec output +6 dB clamped to unity');
-  // And at construction time too:
-  vm.runInContext(
-    'window.AudioGraph.buildGraph([{id: "d2", type: "distortion", params: {output: 12}}]);',
-    sandbox
-  );
-  await new Promise(function (r) { setTimeout(r, 60); });
-  var hostile = vm.runInContext('window.AudioGraph.getNodeInstance("d2")', sandbox);
-  check(approx(hostile.outGain.gain.value, 1.0, 1e-9),
-    'factory also clamps hostile output +12 dB to unity (guard holds on every write path)');
+  var liveRangeError = null;
+  try {
+    apply('output', 6);
+  } catch (err) {
+    liveRangeError = err;
+  }
+  check(liveRangeError && /range -24\.\.0/.test(liveRangeError.message) &&
+    approx(instance.outGain.gain.value, 1.0, 1e-9),
+    'catalog rejects out-of-spec output +6 dB and preserves the unity ceiling');
+  var createRangeError = null;
+  try {
+    vm.runInContext(
+      'window.AudioGraph.buildGraph([{id: "d2", type: "distortion", params: {output: 12}}]);',
+      sandbox
+    );
+  } catch (err) {
+    createRangeError = err;
+  }
+  check(createRangeError && /range -24\.\.0/.test(createRangeError.message) &&
+    vm.runInContext('window.AudioGraph.getNodeInstance("d1")', sandbox) === instance,
+    'catalog rejects hostile construction params before replacing the live graph');
 
   // -- Preset round-trip (PresetSchema) --------------------------------------
   var model = [

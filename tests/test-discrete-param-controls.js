@@ -6,11 +6,11 @@
 // A spec entry carrying `values: [...]` renders one pad per value and
 // commits its STRING value through the exact same pipeline a knob move
 // uses — AudioGraph.updateNodeParams (model bookkeeping) +
-// NodeTypes.applyParam (live write). No autotune node exists yet, so
+// EffectCatalog.applyParam (live write). No autotune node exists yet, so
 // this validates against a throwaway `test-keys` type registered only
 // inside this script (same precedent as UI-4's throwaway `test-gain`).
 //
-// Checked here, on the REAL src/param-controls.js + src/node-types.js
+// Checked here, on the REAL src/param-controls.js + src/effect-catalog.js
 // loaded into a vm sandbox with a minimal fake DOM:
 //   A. RENDER: a `values` spec renders a pad group of real buttons (one
 //      per value, aria-checked on the spec default), named by its label
@@ -18,7 +18,7 @@
 //      tabindex (exactly the selected pad is tabbable); a sibling
 //      numeric spec still renders a range input (no regression).
 //   B. COMMIT: firing a pad's `click` handler (the keyboard Enter/Space
-//      twin) reaches NodeTypes.applyParam with the STRING value ('A'),
+//      twin) reaches EffectCatalog.applyParam with the STRING value ('A'),
 //      updates the model via AudioGraph.updateNodeParams, and reports
 //      through onParamsChanged with the full params object.
 //   C. EXTERNAL WRITE: ParamControls.updateControl (the agent set_param
@@ -140,7 +140,7 @@ function loadSrc(file) {
   );
 }
 
-loadSrc('node-types.js');
+loadSrc('effect-catalog.js');
 loadSrc('param-controls.js');
 
 // ----------------------------------------------------------------------
@@ -152,8 +152,9 @@ var KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 var SCALES = ['Chromatic', 'Major', 'Minor'];
 
 var applied = [];
-windowStub.NodeTypes.register('test-keys', {
+windowStub.EffectCatalog.register('test-keys', {
   label: 'Test Keys',
+  experimental: false,
   paramSpec: [
     { id: 'key', label: 'Key', values: KEYS, default: 'C' },
     { id: 'scale', label: 'Scale', values: SCALES, default: 'Chromatic' },
@@ -161,7 +162,8 @@ windowStub.NodeTypes.register('test-keys', {
   ],
   applyParam: function (node, paramId, value) {
     applied.push({ node: node, paramId: paramId, value: value });
-  }
+  },
+  create: function () { return calls.nodeInstance; }
 });
 
 function padGroupOf(row) {

@@ -17,8 +17,8 @@
 //   B. PARAM-CONTROLS — the UI-1 discrete branch is keyed strictly on
 //      `spec.values`: every legacy param still renders a range slider and
 //      still commits parseFloat(input.value) as a NUMBER through
-//      AudioGraph.updateNodeParams + NodeTypes.applyParam (recorded at the
-//      registry boundary — the exact pre-cycle-3 pipeline).
+//      AudioGraph.updateNodeParams + EffectCatalog.applyParam (recorded at
+//      the catalog boundary — the exact live-write pipeline).
 //   C. PRESET DATA — preset-schema's PRE-1 validation is scoped to the four
 //      declared cycle-3 types: legacy entries keep structure-only treatment
 //      (a hostile legacy preset with unknown params / out-of-range numbers
@@ -412,8 +412,8 @@ function createSandbox() {
 
 // The exact src load lists per part. index.html order for the real files.
 var CORE_FILES = [
+  'src/effect-catalog.js',
   'src/audio-graph.js',
-  'src/node-types.js',
   'src/audio-param-ramp.js'
 ];
 var LEGACY_NODE_FILES = [
@@ -442,7 +442,7 @@ function partA() {
     loadSrc(s, f);
   });
 
-  var NT = s.NodeTypes;
+  var NT = s.EffectCatalog;
   check(
     deepEqual(NT.getAllTypes(), LEGACY_TYPES),
     'A1: getAllTypes() = exactly the six legacy types, in load order (the pre-cycle-3 registry shape)'
@@ -472,12 +472,12 @@ function partA() {
   });
   LEGACY_TYPES.concat(['distortion', 'chorus', 'gate']).forEach(function (type) {
     check(
-      s10.NodeTypes.isExperimental(type) === false,
+      s10.EffectCatalog.isExperimental(type) === false,
       'A4: with all ten modules loaded, ' + type + ' still reads NOT experimental'
     );
   });
   check(
-    s10.NodeTypes.isExperimental('autotune') === true,
+    s10.EffectCatalog.isExperimental('autotune') === true,
     'A4: with all ten modules loaded, autotune alone reads experimental'
   );
 }
@@ -497,8 +497,8 @@ function partB() {
   // Record at the two boundaries param-controls commits through (the exact
   // pre-cycle-3 pipeline); the REAL functions still run underneath.
   var applied = [];
-  var realApplyParam = s.NodeTypes.applyParam;
-  s.NodeTypes.applyParam = function (type, instance, paramId, value) {
+  var realApplyParam = s.EffectCatalog.applyParam;
+  s.EffectCatalog.applyParam = function (type, instance, paramId, value) {
     applied.push({ type: type, paramId: paramId, value: value });
     return realApplyParam(type, instance, paramId, value);
   };
@@ -577,7 +577,7 @@ function partB() {
     );
 
     var rows = container.children;
-    var spec = s.NodeTypes.getParamSpec(type);
+    var spec = s.EffectCatalog.getParamSpec(type);
     check(
       rows.length === spec.length,
       'B1: ' + type + ' renders one row per paramSpec entry (' + spec.length + ')'
@@ -640,9 +640,11 @@ function partB() {
   // SAME render loop, proving the branch selector itself discriminates.
   // (Redesign item 1: the discrete shape is a pad group — real buttons in
   // a radiogroup — no longer a <select>; the branch KEY is unchanged.)
-  s.NodeTypes.register('test-discrete-throwaway', {
+  s.EffectCatalog.register('test-discrete-throwaway', {
     label: 'Throwaway',
     paramSpec: [{ id: 'pick', label: 'Pick', values: ['a', 'b', 'c'], default: 'b' }],
+    experimental: false,
+    create: function () { return {}; },
     applyParam: function () {}
   });
   container = makeElement('div');
@@ -681,13 +683,16 @@ function partB() {
 }
 
 // ======================================================================
-// C. PRESET DATA — validation scoped, serialize shape unchanged,
+// C. PRESET DATA — live-catalog validation, serialize shape unchanged,
 //    DEFAULT_PRESET still the committed six-node chain.
 // ======================================================================
 function partC() {
   console.log('C. preset data: legacy lenience + shape + default chain');
 
   var s = createSandbox();
+  loadSrc(s, 'src/effect-catalog.js');
+  loadSrc(s, 'src/audio-param-ramp.js');
+  loadSrc(s, 'src/node-autotune.js');
   loadSrc(s, 'src/preset-schema.js');
   loadSrc(s, 'src/default-preset.js');
   var PS = s.PresetSchema;
@@ -745,7 +750,7 @@ function partC() {
     'C3: hostile LEGACY preset still loads verbatim (structure-only treatment unchanged)'
   );
 
-  // The differential: the same abuse on a DECLARED cycle-3 type rejects.
+  // The differential: the same abuse on a live-catalog type rejects.
   var hostileNew = {
     schemaVersion: PS.CURRENT_VERSION,
     name: 'hostile-new',
@@ -757,7 +762,7 @@ function partC() {
   } catch (err) {
     rejected = true;
   }
-  check(rejected, 'C4: the same abuse on autotune (key \'H#\') is rejected — the tightening is scoped to declared types');
+  check(rejected, 'C4: the same abuse on registered autotune (key \'H#\') is rejected through the live catalog');
 
   // DEFAULT_PRESET is still exactly PX-3's committed chain (PRE-1's
   // "default chain UNCHANGED" decision, regression-guarded).

@@ -7,8 +7,8 @@
 //
 // What runs here (and what is deliberately NOT re-run):
 //   - REAL production node code, offline under Node, two ways:
-//       1. NATIVE-NODE EFFECTS (distortion, chorus): src/audio-graph.js +
-//          src/node-types.js + src/audio-param-ramp.js + the four node
+//       1. NATIVE-NODE EFFECTS (distortion, chorus): src/effect-catalog.js +
+//          src/audio-graph.js + src/audio-param-ramp.js + the four node
 //          files are loaded into a vm sandbox whose AudioContext stub
 //          actually RENDS (Gain/WaveShaper/Biquad/Delay/Oscillator/
 //          StereoPanner with spec DSP — the stub is the Web Audio runtime,
@@ -484,8 +484,8 @@ function createRenderSandbox(pcm, opts) {
   vm.createContext(sandbox);
 
   [
+    'src/effect-catalog.js',
     'src/audio-graph.js',
-    'src/node-types.js',
     'src/audio-param-ramp.js',
     'src/node-distortion.js',
     'src/node-chorus.js',
@@ -1218,7 +1218,7 @@ async function main() {
     metric('F.react.' + rc[0] + '.' + rc[1] + '.worst_window_db=' + f1(worstWin));
   }
 
-  // Live applyParam path sanity (one param per effect, real NodeTypes call):
+  // Live applyParam path sanity (one param per effect, real catalog call):
   var liveChecks = [
     ['distortion', 'drive', 1, function (inst) { return inst.driveGain.gain.value; }, 10],
     ['chorus', 'rateHz', 4.5, function (inst) { return inst.lfo.frequency.value; }, 4.5],
@@ -1228,7 +1228,7 @@ async function main() {
   for (var li = 0; li < liveChecks.length; li++) {
     var lc = liveChecks[li];
     var r = await renderChain(sliceCopy, [{ id: 'lx', type: lc[0], params: {} }]);
-    vm.runInContext('window.NodeTypes.applyParam(' + JSON.stringify(lc[0]) +
+    vm.runInContext('window.EffectCatalog.applyParam(' + JSON.stringify(lc[0]) +
       ', window.AudioGraph.getNodeInstance("lx"), ' + JSON.stringify(lc[1]) + ', ' +
       JSON.stringify(lc[2]) + ')', r.rs.sandbox);
     var got = lc[3](r.instance);

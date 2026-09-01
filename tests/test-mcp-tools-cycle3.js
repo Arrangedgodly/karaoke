@@ -13,7 +13,7 @@
 //     a numeric param, out-of-nominal numbers) reject CLEANLY —
 //     descriptive INVALID_ARGUMENTS results, nothing applied, no crash.
 //   - get_capabilities marks autotune EXPERIMENTAL (badge + note) from
-//     the one source of truth (NodeTypes.isExperimental — the type's own
+//     the one source of truth (EffectCatalog.isExperimental — the type's own
 //     registration; src/canvas.js's badge reads the same lookup).
 //   - Raw 0..11 / 0..2 enums are equally legal (preset-schema's PRE-1
 //     contract mirrored at the tool layer).
@@ -106,6 +106,34 @@ function makeParam(initial) {
       this.value = v;
     },
     setTargetAtTime: function () {}
+  };
+}
+
+// The contract regression below builds one real Tone-backed catalog type.
+// Keep the stub to PitchShift's exact adapter seam: context ownership,
+// native/Tone bridging, the plain pitch property, and the rampable wet param.
+function installPitchShiftToneStub(sandbox) {
+  var currentRaw = null;
+  sandbox.Tone = {
+    getContext: function () {
+      return { rawContext: currentRaw };
+    },
+    setContext: function (ctx) {
+      currentRaw = ctx;
+    },
+    connect: function (src, dst) {
+      return dst;
+    },
+    PitchShift: function (options) {
+      this.pitch = options.pitch;
+      this.wet = {
+        value: options.wet,
+        rampTo: function (value) {
+          this.value = value;
+        }
+      };
+      this.dispose = function () {};
+    }
   };
 }
 
@@ -450,9 +478,10 @@ function nodeById(model, id) {
 // ----------------------------------------------------------------------
 async function main() {
   var sandbox = createSandbox();
+  installPitchShiftToneStub(sandbox);
   loadSrc(sandbox, 'src/agent-ui.js');
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-compressor.js');
@@ -522,9 +551,9 @@ async function main() {
     caps.experimental.gate === undefined &&
     caps.experimental.pitchshift === undefined,
     'A4: autotune is the ONLY badged type');
-  check(sandbox.NodeTypes.isExperimental('autotune') === true &&
-    sandbox.NodeTypes.isExperimental('gate') === false,
-    'A5: the registry itself is the badge source (NodeTypes.isExperimental)');
+  check(sandbox.EffectCatalog.isExperimental('autotune') === true &&
+    sandbox.EffectCatalog.isExperimental('gate') === false,
+    'A5: the catalog itself is the badge source (EffectCatalog.isExperimental)');
   var atParams = byType.autotune;
   check(atParams.key && Array.isArray(atParams.key.values) &&
     atParams.key.values.length === 12 && atParams.key.values[9] === 'A' &&
@@ -920,7 +949,82 @@ async function main() {
     'F4: worklet received enums 5 / 1 (the node file maps the canonical strings back at apply time)');
 
   // ====================================================================
-  console.log('G. bare harness: snapshot registry + badge fallback hold');
+  console.log('G. catalog fallback action matches set_param/add_node/set_chain behavior');
+  // ====================================================================
+  var pitchPolicy = byType.pitchshift.pitch;
+  check(pitchPolicy && pitchPolicy.action === 'clamp' &&
+    deepEqual(pitchPolicy.range, [-12, 12]),
+    'G1: pitchshift.pitch declares clamp over [-12, 12]');
+
+  var toneSeed = await setChain.execute({
+    chain: {
+      schemaVersion: 1,
+      name: 'tone clamp seed',
+      nodes: [
+        { id: 'tone1', type: 'pitchshift', params: { pitch: 0, mix: 100 } },
+        { id: 'tone-lim', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    }
+  });
+  check(toneSeed.applied === true, 'G2: valid Tone-backed seed chain applied');
+
+  var paramClamp = await setParam.execute({
+    nodeId: 'tone1',
+    param: 'pitch',
+    value: 99
+  });
+  check(paramClamp.applied === true && paramClamp.clamped &&
+    paramClamp.clamped.length === 1 &&
+    paramClamp.clamped[0].requested === 99 &&
+    paramClamp.clamped[0].applied === 12,
+    'G3: set_param follows declared clamp action and discloses 99 -> 12');
+  check(nodeById(modelSnapshot(), 'tone1').params.pitch === 12,
+    'G4: set_param stores the clamped pitch');
+
+  var chainClamp = await setChain.execute({
+    chain: {
+      schemaVersion: 1,
+      name: 'tone chain clamp',
+      nodes: [
+        { id: 'tone2', type: 'pitchshift', params: { pitch: -99, mix: 100 } },
+        { id: 'tone-lim2', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    }
+  });
+  check(chainClamp.applied === true && chainClamp.clamped &&
+    chainClamp.clamped.length === 1 &&
+    chainClamp.clamped[0].requested === -99 &&
+    chainClamp.clamped[0].applied === -12,
+    'G5: set_chain follows declared clamp action and discloses -99 -> -12');
+  check(nodeById(modelSnapshot(), 'tone2') &&
+    nodeById(modelSnapshot(), 'tone2').params.pitch === -12,
+    'G6: set_chain stores the clamped pitch');
+
+  await setChain.execute({
+    chain: {
+      schemaVersion: 1,
+      name: 'tone add clamp seed',
+      nodes: [
+        { id: 'tone-add-lim', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    }
+  });
+  var addClamp = await addNode.execute({
+    type: 'pitchshift',
+    params: { pitch: 99, mix: 100 },
+    position: 0
+  });
+  check(addClamp.applied === true && addClamp.clamped &&
+    addClamp.clamped.length === 1 &&
+    addClamp.clamped[0].requested === 99 &&
+    addClamp.clamped[0].applied === 12,
+    'G7: add_node follows declared clamp action and discloses 99 -> 12');
+  var addedPitch = addClamp.nodeIds && nodeById(modelSnapshot(), addClamp.nodeIds[0]);
+  check(addedPitch && addedPitch.params.pitch === 12,
+    'G8: add_node stores the clamped pitch');
+
+  // ====================================================================
+  console.log('H. bare harness: no static registry or badge fallback');
   // ====================================================================
   var bare = {
     console: console,
@@ -930,22 +1034,16 @@ async function main() {
   };
   bare.window = bare;
   vm.createContext(bare);
+  loadSrc(bare, 'src/effect-catalog.js');
   loadSrc(bare, 'src/mcp-tools.js');
   var bareCaps = await getTool(bare, 'get_capabilities').execute({});
-  check(Object.keys(bareCaps.nodeTypes).length === 10,
-    'G1: bare harness (no node files): snapshot still lists 10 types');
-  check(bareCaps.experimental && typeof bareCaps.experimental.autotune === 'string' &&
-    /EXPERIMENTAL/.test(bareCaps.experimental.autotune) &&
-    Object.keys(bareCaps.experimental).length === 1,
-    'G2: bare harness: autotune still badged via the snapshot fallback (only autotune)');
-  check(bareCaps.nodeTypes.autotune.key && Array.isArray(bareCaps.nodeTypes.autotune.key.values) &&
-    bareCaps.nodeTypes.autotune.key.values.length === 12,
-    'G3: bare harness: key value list mirrored in the snapshot');
-  check(bareCaps.experimental.gate === undefined,
-    'G4: bare harness: gate not badged');
+  check(Object.keys(bareCaps.nodeTypes).length === 0,
+    'H1: bare harness (no effect scripts) publishes no invented node types');
+  check(bareCaps.experimental && Object.keys(bareCaps.experimental).length === 0,
+    'H2: bare harness publishes no invented experimental badges');
   var addDef = getTool(bare, 'add_node');
-  check(addDef.inputSchema.properties.type.enum.length === 10,
-    'G5: bare harness: add_node type enum = the 10 snapshot types');
+  check(addDef.inputSchema.properties.type.enum.length === 0,
+    'H3: bare harness add_node enum comes from the empty live catalog');
 
   // ------------------------------------------------------------------
   console.log(failures.length === 0 ? 'ALL CHECKS PASSED' : 'FAILURES: ' + failures.length);
