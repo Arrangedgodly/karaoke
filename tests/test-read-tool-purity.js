@@ -304,8 +304,8 @@ function createEnv() {
   env.sandbox = sandbox;
 
   [
+    'src/effect-catalog.js',
     'src/audio-graph.js',
-    'src/node-types.js',
     'src/audio-param-ramp.js',
     'src/node-gain.js',
     'src/node-compressor.js',

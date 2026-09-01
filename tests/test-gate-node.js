@@ -8,7 +8,7 @@
 // sandboxes, per-check ok/FAIL prints, exit 0 on pass / 1 on any failure.
 // Two sandboxes with different jobs:
 //
-//   1. NODE SANDBOX — audio-graph.js / node-types.js / audio-param-ramp.js
+//   1. NODE SANDBOX — effect-catalog.js / audio-graph.js / audio-param-ramp.js
 //      / node-gate.js / preset-schema.js with an AudioWorkletNode stub:
 //      registration, paramSpec, the async addModule load story (placeholder
 //      passthrough -> worklet splice; deferred / failing / context-property
@@ -211,8 +211,8 @@ function createNodeSandbox(opts) {
 }
 
 function loadNodeSources(sandbox) {
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js');
   loadSrc(sandbox, 'src/node-gate.js');
 }
@@ -231,11 +231,11 @@ async function nodeLevelTests() {
   loadNodeSources(ok);
   loadSrc(ok, 'src/preset-schema.js');
 
-  check(ok.NodeTypes.getAllTypes().indexOf('gate') !== -1,
-    'gate registered in NodeTypes (palette chip source)');
-  check(ok.NodeTypes.getLabel('gate') === 'Noise Gate', 'label is "Noise Gate"');
+  check(ok.EffectCatalog.getAllTypes().indexOf('gate') !== -1,
+    'gate registered in EffectCatalog (palette chip source)');
+  check(ok.EffectCatalog.getLabel('gate') === 'Noise Gate', 'label is "Noise Gate"');
 
-  var spec = ok.NodeTypes.getParamSpec('gate');
+  var spec = ok.EffectCatalog.getParamSpec('gate');
   check(spec.length === 4, 'paramSpec has exactly 4 params (fixed by scope)');
   var byId = {};
   spec.forEach(function (s) { byId[s.id] = s; });
@@ -336,7 +336,7 @@ async function nodeLevelTests() {
   console.log('C. REAL AUDIOPARAM WIRING (applyParam -> AudioParamRamp)');
   // ------------------------------------------------------------------
   function apply(node, paramId, value) {
-    ok.NodeTypes.applyParam('gate', node, paramId, value);
+    ok.EffectCatalog.applyParam('gate', node, paramId, value);
   }
 
   apply(g1, 'threshold', -30);
@@ -352,14 +352,15 @@ async function nodeLevelTests() {
   check(g1.worklet.__paramsById.floor.value === -10,
     'applyParam floor -> the REAL floor AudioParam');
 
-  var threw = false;
+  var unknownParamError = null;
   try {
-    apply(g1, 'mix', 50); // not a gate param — must be ignored, not thrown
+    apply(g1, 'mix', 50);
   } catch (err) {
-    threw = true;
+    unknownParamError = err;
   }
-  check(!threw && g1.worklet.__paramsById.floor.value === -10,
-    'unknown paramId is a no-op (no throw, no param touched)');
+  check(unknownParamError && /unknown param/.test(unknownParamError.message) &&
+    g1.worklet.__paramsById.floor.value === -10,
+    'catalog rejects an unknown paramId without touching the live node');
 
   // Construction-time params land on the worklet's AudioParams directly.
   vm.runInContext(
@@ -393,7 +394,7 @@ async function nodeLevelTests() {
     'no worklet node and no error while the module is in flight');
 
   // A live param change in the window is recorded and survives insertion.
-  df.NodeTypes.applyParam('gate', d1, 'threshold', -33);
+  df.EffectCatalog.applyParam('gate', d1, 'threshold', -33);
   check(d1.worklet === null && d1.pendingParams.threshold === -33,
     'applyParam during the window is recorded (pending), not dropped');
 
@@ -423,7 +424,7 @@ async function nodeLevelTests() {
     'addModule failure: exactly one honest console diagnostic');
   var failApplyThrew = false;
   try {
-    fl.NodeTypes.applyParam('gate', f1, 'threshold', -20);
+    fl.EffectCatalog.applyParam('gate', f1, 'threshold', -20);
   } catch (err) {
     failApplyThrew = true;
   }

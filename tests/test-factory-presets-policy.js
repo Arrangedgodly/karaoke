@@ -23,9 +23,9 @@
 // (get_capabilities' published tables, and set_chain's own
 // applyPolicyToNodes + evaluateChainRules pass over the real candidate).
 //
-//   src/audio-graph.js       (node-type registry the node files load into)
-//   src/node-types.js        (UI metadata registry — param specs/defaults)
-//   src/node-gain.js etc.    (all six node files, so the LIVE registry is
+//   src/effect-catalog.js    (the complete effect definition registry)
+//   src/audio-graph.js       (the runtime graph consumer)
+//   src/node-gain.js etc.    (all six node files, so the LIVE catalog is
 //                             populated exactly as in index.html)
 //   src/default-preset.js    (the shipped default chain under test)
 //   src/factory-presets.js   (the shipped factory library under test)
@@ -210,8 +210,8 @@ function limiterOf(nodes) {
 // ----------------------------------------------------------------------
 async function main() {
   var sandbox = createSandbox();
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js'); // issue #5: the ramp helper the node applyParam handlers call
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-compressor.js');

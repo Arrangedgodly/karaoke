@@ -17,8 +17,8 @@
 // vm.runInContext) into that sandbox, so the code under test is exactly
 // what ships in index.html:
 //
+//   src/effect-catalog.js (effect metadata, factory, and apply dispatch)
 //   src/audio-graph.js   (graph model, buildGraph, getNodeInstance)
-//   src/node-types.js    (UI metadata registry — applyParam dispatch)
 //   src/node-gain.js     (real `gain` factory + applyParam)
 //   src/node-limiter.js  (real `limiter` factory + applyParam)
 //   src/mcp-tools.js     (the 10 agent tools, incl. set_chain/set_param)
@@ -228,7 +228,7 @@ function installChainCanvasStub(sandbox) {
   };
 }
 
-// Record every NodeTypes.applyParam dispatch so the catch-up guard is
+// Record every EffectCatalog.applyParam dispatch so the catch-up guard is
 // directly observable: the regression must show that NO param write ever
 // targets an instance whose type no longer matches the entry. The wrapper
 // records BEFORE delegating, so a call that throws inside the real
@@ -236,8 +236,8 @@ function installChainCanvasStub(sandbox) {
 // `node.threshold` is undefined there) is still captured.
 function installApplyParamRecorder(sandbox) {
   var calls = [];
-  var real = sandbox.NodeTypes.applyParam;
-  sandbox.NodeTypes.applyParam = function (type, node, paramId, value) {
+  var real = sandbox.EffectCatalog.applyParam;
+  sandbox.EffectCatalog.applyParam = function (type, node, paramId, value) {
     calls.push({ type: type, node: node, paramId: paramId, value: value });
     return real(type, node, paramId, value);
   };
@@ -259,8 +259,8 @@ function getTool(sandbox, name) {
 // ----------------------------------------------------------------------
 async function main() {
   var sandbox = createSandbox();
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js'); // issue #5: the ramp helper the node applyParam handlers call
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-limiter.js');
@@ -307,11 +307,17 @@ async function main() {
   );
 
   var stagedProbe = null;
-  AG.registerNodeType('probe', function () {
-    stagedProbe = makeBaseNode('ProbeNode');
-    stagedProbe.__disposed = false;
-    stagedProbe.dispose = function () { stagedProbe.__disposed = true; };
-    return stagedProbe;
+  sandbox.EffectCatalog.register('probe', {
+    label: 'Probe',
+    paramSpec: [{ id: 'value', label: 'Value', min: 0, max: 1, step: 1, default: 0, unit: '' }],
+    experimental: false,
+    create: function () {
+      stagedProbe = makeBaseNode('ProbeNode');
+      stagedProbe.__disposed = false;
+      return stagedProbe;
+    },
+    applyParam: function () {},
+    dispose: function (instance) { instance.__disposed = true; }
   });
   var superseded = AG.buildGraph([{ id: 'staged', type: 'probe', params: {} }]);
   var replacement = AG.buildGraph([{ id: 'n1', type: 'gain', params: { gainDb: 6 } }]);
@@ -325,11 +331,17 @@ async function main() {
     'A1b: only the replacement build becomes the accepted live graph');
 
   var abortProbe = null;
-  AG.registerNodeType('abort-probe', function () {
-    abortProbe = makeBaseNode('AbortProbeNode');
-    abortProbe.__disposed = false;
-    abortProbe.dispose = function () { abortProbe.__disposed = true; };
-    return abortProbe;
+  sandbox.EffectCatalog.register('abort-probe', {
+    label: 'Abort Probe',
+    paramSpec: [{ id: 'value', label: 'Value', min: 0, max: 1, step: 1, default: 0, unit: '' }],
+    experimental: false,
+    create: function () {
+      abortProbe = makeBaseNode('AbortProbeNode');
+      abortProbe.__disposed = false;
+      return abortProbe;
+    },
+    applyParam: function () {},
+    dispose: function (instance) { instance.__disposed = true; }
   });
   var preCommitController = new AbortController();
   var gateBeforeAbort = AG.getChainGate().gain.value;
@@ -542,7 +554,7 @@ async function main() {
   });
   check(
     sawWrite,
-    'D1: the apply went through NodeTypes.applyParam on the reused instance'
+    'D1: the apply went through EffectCatalog.applyParam on the reused instance'
   );
 
   // --------------------------------------------------------------------

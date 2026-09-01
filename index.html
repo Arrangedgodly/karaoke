@@ -322,9 +322,9 @@
   </div>
 
   <script src="src/audio-engine.js"></script>
+  <script src="src/effect-catalog.js"></script>
   <script src="src/audio-graph.js"></script>
   <script src="src/audio-bypass.js"></script>
-  <script src="src/node-types.js"></script>
   <!--
     Issue #5 — shared click-safe AudioParam scheduling
     (window.AudioParamRamp, src/audio-param-ramp.js): the ONE ramp every
@@ -349,12 +349,11 @@
   <script src="vendor/tone.min.js"></script>
   <!--
     ToneAdapter (src/tone-adapter.js): one-call registration for Tone-backed
-    node types — generates BOTH registry registrations (AudioGraph factory
-    + NodeTypes metadata) around a Tone effect node wrapped in the AE-7
-    native composite contract. Loads after vendor/tone.min.js and after both
-    registries; the Tone effect files below (node-pitchshift.js etc.) call
-    ToneAdapter.register() at parse time. Touches window.Tone only at
-    factory time, never at registration time (harness safety).
+    node types — creates one complete EffectCatalog definition around a Tone
+    effect node wrapped in the AE-7 native composite contract. The Tone
+    effect files below (node-pitchshift.js etc.) call ToneAdapter.register()
+    at parse time. Touches window.Tone only at factory time, never at
+    registration time (harness safety).
   -->
   <script src="src/tone-adapter.js"></script>
   <script src="src/node-gain.js"></script>
@@ -371,7 +370,7 @@
     audioContext.audioWorklet.addModule('src/gate-worklet.js') from inside
     src/node-gate.js (the same loading convention as the issue #7 watchdog
     worklet). Palette chip appears automatically via
-    NodeTypes.getAllTypes() (src/canvas.js).
+    EffectCatalog.getAllTypes() (src/canvas.js).
   -->
   <script src="src/node-gate.js"></script>
   <!--
@@ -389,11 +388,11 @@
   <script src="src/node-autotune.js"></script>
   <!--
     Tone-backed effects (cycle 4): each file is ONE ToneAdapter.register()
-    call — the adapter (src/tone-adapter.js) builds both registry
-    registrations around a vendor/tone.min.js (Tone.js 15.1.22) effect
-    node. Palette chips, MCP add_node enum entries, set_param validation,
-    and preset persistence all pick these up automatically from the live
-    NodeTypes registry. Promoted out of experimental by owner sign-off
+    call — the adapter (src/tone-adapter.js) installs a complete definition
+    for a vendor/tone.min.js (Tone.js 15.1.22) effect node. Palette chips,
+    MCP add_node enum entries, set_param validation, and preset persistence
+    all pick these up automatically from the live EffectCatalog. Promoted out
+    of experimental by owner sign-off
     2026-08-31 (autotune keeps the cycle-3 experimental badge).
   -->
   <script src="src/node-pitchshift.js"></script>

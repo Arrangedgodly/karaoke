@@ -273,8 +273,7 @@ var calls = {
   buildGraph: [],
   persist: [],
   markModified: 0,
-  noteHumanEdit: 0,
-  registeredTypes: []
+  noteHumanEdit: 0
 };
 
 function snapshotModel(model) {
@@ -286,11 +285,9 @@ function snapshotModel(model) {
 var windowStub = {
   document: documentStub,
 
-  // AudioGraph stub: registration is recorded (the real graph builder is
-  // the node tasks' own test subject); buildGraph captures the model each
-  // structural commit sends.
+  // AudioGraph stub: the real graph builder is the node tasks' own test
+  // subject; buildGraph captures the model each structural commit sends.
   AudioGraph: {
-    registerNodeType: function (type) { calls.registeredTypes.push(type); },
     buildGraph: function (model) { calls.buildGraph.push(snapshotModel(model)); },
     updateNodeParams: function () {},
     getNodeInstance: function () { return { marker: 'fake-live-node' }; }
@@ -340,11 +337,11 @@ function loadSrc(file) {
 
 // ----------------------------------------------------------------------
 // Load the real sources — same order as index.html's <script> tags:
-// registries first, then all TEN node modules (so the palette below is
+// the catalog first, then all TEN node modules (so the palette below is
 // the production palette, not a synthetic subset), then param-controls,
 // then canvas itself.
 // ----------------------------------------------------------------------
-loadSrc('node-types.js');
+loadSrc('effect-catalog.js');
 loadSrc('param-controls.js');
 loadSrc('node-gain.js');
 loadSrc('node-compressor.js');
@@ -460,12 +457,12 @@ function rowOfClass(row, cls) {
 // ----------------------------------------------------------------------
 console.log('A. registry + palette');
 
-var allTypes = windowStub.NodeTypes.getAllTypes();
+var allTypes = windowStub.EffectCatalog.getAllTypes();
 check(allTypes.length === 10, 'ten node types registered (6 existing + 4 new)');
 NEW_TYPES.forEach(function (t) {
   check(allTypes.indexOf(t.type) !== -1, t.type + ' is registered');
   check(
-    windowStub.NodeTypes.getLabel(t.type) === t.label,
+    windowStub.EffectCatalog.getLabel(t.type) === t.label,
     t.type + ' label is "' + t.label + '"'
   );
 });
@@ -692,7 +689,7 @@ NEW_TYPES.forEach(function (t) {
       paramsEl.children.length === 1,
     t.type + ' params wrapped for the collapse boundary (.node-params-inner)'
   );
-  var spec = windowStub.NodeTypes.getParamSpec(t.type);
+  var spec = windowStub.EffectCatalog.getParamSpec(t.type);
   check(
     inner.children.length === t.params && spec.length === t.params,
     t.type + ' renders one row per paramSpec entry (' + t.params + ')'
@@ -898,7 +895,7 @@ helpCards.forEach(function (card) {
   var type = card.attrs['data-family'];
   var nodeId = card.attrs['data-node-id'];
   var rows = paramRows(card);
-  var spec = windowStub.NodeTypes.getParamSpec(type);
+  var spec = windowStub.EffectCatalog.getParamSpec(type);
   rows.forEach(function (row, i) {
     helpRowCount += 1;
     var helpSpan = rowOfClass(row, 'sr-only');
@@ -943,7 +940,7 @@ check(helpRowCount === 28, '28 param rows across all ten types, every one helped
   ['distortion', 'output'], ['autotune', 'retune']].forEach(function (p) {
   var idx = helpCards.map(function (c) { return c.attrs['data-family']; }).indexOf(p[0]);
   var rows = paramRows(helpCards[idx]);
-  var spec = windowStub.NodeTypes.getParamSpec(p[0]);
+  var spec = windowStub.EffectCatalog.getParamSpec(p[0]);
   var row = rows[spec.map(function (s) { return s.id; }).indexOf(p[1])];
   check(/ [=] /.test(row.title), p[0] + ' ' + p[1] + ' carries a direction clause');
 });
@@ -1508,7 +1505,7 @@ check(
 
 // K4. Agent set_param canvas half: ChainCanvas.updateNodeParam — the exact
 // call MCP's parameter-only fast path makes after AudioGraph/
-// NodeTypes.applyParam — still receives 0..1 and converts the readout the
+// EffectCatalog.applyParam — still receives 0..1 and converts the readout the
 // same way. (The MCP-side 0..1 contract itself is pinned by
 // tests/test-mcp-tools-cycle3.js C8: set_param drive 0.9 -> model 0.9.)
 var kPersistBefore = calls.persist.length;
@@ -1539,7 +1536,7 @@ check(
 // scale fails here; a 0-100 % param that gains one fails here too.
 var kPercentSpecs = 0;
 allTypes.forEach(function (type) {
-  windowStub.NodeTypes.getParamSpec(type).forEach(function (s) {
+  windowStub.EffectCatalog.getParamSpec(type).forEach(function (s) {
     if (s.unit === '%' && !Array.isArray(s.values)) {
       kPercentSpecs += 1;
       if (s.max <= 1) {

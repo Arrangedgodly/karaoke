@@ -2,10 +2,8 @@
 //
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Like src/node-gate.js, this file exports no
-// `window.X` namespace of its own — its only job is to CALL INTO the two
-// registries that already exist (window.AudioGraph.registerNodeType from
-// src/audio-graph.js, and window.NodeTypes.register from src/node-types.js),
-// once each, at load time.
+// `window.X` namespace of its own — its only job is to register one complete
+// definition with window.EffectCatalog at load time.
 //
 // AT-1 scope (cycle 3, docs/ultron/plan.md): the Outcome-PASS branch of the
 // AT-0 spike (docs/ultron/research/at0-spike-result.md — HARD-TUNE PASS),
@@ -35,7 +33,7 @@
 // The UI-facing paramSpec carries Key and Scale as DISCRETE string values
 // ('C'..'B', 'Chromatic'/'Major'/'Minor') — exactly what UI-1's
 // param-controls.js `values:[...]` selects render and commit verbatim
-// through NodeTypes.applyParam, and exactly what presets persist. The
+// through EffectCatalog.applyParam, and exactly what presets persist. The
 // worklet's REAL AudioParams are the numeric enums (key 0..11, scale 0..2),
 // so this file owns the string→enum mapping at every boundary:
 //   - the factory maps model params (strings OR numbers — robustness
@@ -182,9 +180,8 @@
     });
   }
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> node.
-  // Returns a COMPOSITE value, same shape as EQ/Delay/Chorus/Gate.
-  window.AudioGraph.registerNodeType('autotune', function (audioContext, params) {
+  // Factory returns a COMPOSITE value, same shape as EQ/Delay/Chorus/Gate.
+  function createEffect(audioContext, params) {
     var p = params || {};
 
     // Enum-mapped creation values (strings OR numbers accepted — see the
@@ -252,10 +249,9 @@
     }
 
     return composite;
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec + applyParam,
-  // same shape as every other node-type file. Plain-language labels per the
+  // UI-facing metadata plus applyParam. Plain-language labels per the
   // cycle-3 scope table (Key+Scale / Retune Speed / Mix — the plan's own
   // words). Key/Scale are the UI-1 discrete `values` selects (strings); the
   // numeric params follow the house conventions (Retune in ms like the
@@ -271,11 +267,11 @@
   // params between two integers; the worklet rounds on read, so a key
   // change lands atomically at one block boundary mid-ramp (a ~15 ms
   // crossfade of two snap grids is inaudible next to the retune glide).
-  window.NodeTypes.register('autotune', {
+  window.EffectCatalog.register('autotune', {
     label: 'Autotune',
     // MCP-1 (cycle 3): the experimental status declared at the type's own
     // registration — the single source canvas.js's badge and mcp-tools.js's
-    // capabilities readout both read via NodeTypes.isExperimental().
+    // capabilities readout both read via EffectCatalog.isExperimental().
     experimental: true,
     paramSpec: [
       { id: 'key', label: 'Key', values: KEY_NAMES.slice(), default: DEFAULT_KEY },
@@ -283,6 +279,7 @@
       { id: 'retune', label: 'Retune Speed', min: 0, max: 500, default: DEFAULT_RETUNE_MS, step: 5, unit: 'ms' },
       { id: 'mix', label: 'Mix', min: 0, max: 100, default: DEFAULT_MIX_PCT, step: 1, unit: '%' }
     ],
+    create: createEffect,
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'key' || paramId === 'scale' ||
           paramId === 'retune' || paramId === 'mix') {

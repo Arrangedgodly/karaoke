@@ -15,10 +15,9 @@
 //     node's real AudioNode, in order -> AudioContext.destination. With an
 //     EMPTY model this reduces to a direct passthrough (source straight to
 //     destination), which is exactly the M1 passthrough requirement.
-//   - `registerNodeType()` / `nodeFactories`, the registry contract that
-//     later tasks (AE-5 through AE-10: Gain, Compressor, EQ, Delay, Reverb,
-//     Limiter) will populate. Nothing registers into it yet — that's fine,
-//     `buildGraph([])` never consults it.
+//   - Effect construction is delegated to window.EffectCatalog. An empty
+//     model never consults the catalog, so `buildGraph([])` remains a valid
+//     passthrough even in stripped graph-only harnesses.
 //
 // AE-3 addendum: this file also owns the shared "chain gate" `GainNode` (see
 // getChainGate() below). AE-3 (bypass routing) needs a single point after
@@ -39,7 +38,7 @@
 //     new model reuses the SAME AudioNode object (preserving internal DSP
 //     state — e.g. a compressor's envelope, a delay's buffer contents —
 //     across a pure reorder) instead of recreating it from scratch. Only ids
-//     that are actually new call their registered factory.
+//     that are actually new ask EffectCatalog to create an instance.
 //   - The rewire itself is deferred (via setTimeout, timed to land after the
 //     duck-down fade completes) and debounced: rapid successive buildGraph()
 //     calls cancel any not-yet-executed previous rewire, so only the LAST
@@ -51,20 +50,19 @@
 //   deferred to this task. See buildGraph() below for the full algorithm and
 //   the specific bugs its design avoids.
 //
-// AE-7 addendum: extends the factory contract to allow a COMPOSITE return
-// value. Before this task every registered factory (Gain, Compressor)
-// returned a single plain AudioNode that served as both the connection
+// AE-7 addendum: effect creation may return a COMPOSITE value. Gain and
+// Compressor return a single plain AudioNode that serves as both the connection
 // point for whatever comes before it and for whatever comes after it — true
 // for one node, but not for EQ (src/node-eq.js), the first type built from
 // more than one internal AudioNode (three chained BiquadFilterNodes).
 // buildGraph() now identifies each resolved node's real input/output via
 // getNodeInput()/getNodeOutput() (defined near rampGateTo() below) instead
 // of assuming the resolved value itself is directly connectable in both
-// directions. A factory may still return a plain AudioNode (Gain and
+// directions. An effect may still return a plain AudioNode (Gain and
 // Compressor need zero changes) or, for a composite type, a plain object
 // shaped `{ input: AudioNode, output: AudioNode, ...anythingElse }` — the
 // `...anythingElse` lets a type also expose its individual internal nodes
-// for NodeTypes.applyParam() to reach (e.g. EQ's `.low`/`.mid`/`.high`).
+// for EffectCatalog.applyParam() to reach (e.g. EQ's `.low`/`.mid`/`.high`).
 // See the comments at getNodeInput()/getNodeOutput() and inside
 // buildGraph()'s deferred rewire for exactly where this matters.
 //
@@ -103,13 +101,6 @@
   // what's wired into the live graph right now (or is empty, between
   // rebuilds/before the first one).
   var nodeInstances = {};
-
-  // Map of type name -> factory function (audioContext, params) => AudioNode.
-  // Empty for now; AE-5+ populate this via registerNodeType(). buildGraph()
-  // must still work correctly against an empty registry as long as the
-  // model passed in is also empty (an empty model never looks anything up
-  // here).
-  var nodeFactories = {};
 
   // The specific node that AudioEngine.sourceNode is currently connected to
   // as its first (and only) downstream hop managed by buildGraph() — either
@@ -176,6 +167,18 @@
   var pendingRewireTimer = null;
   var pendingRewireState = null;
 
+  // EffectCatalog owns effect-specific teardown. Cleanup stays best-effort,
+  // as it was when instances exposed dispose() directly, but dispatching only
+  // once through the catalog prevents adapter resources from being disposed
+  // twice when the catalog definition delegates to instance.dispose().
+  function disposeEffect(type, instance) {
+    if (!instance || !window.EffectCatalog ||
+        typeof window.EffectCatalog.dispose !== 'function') {
+      return;
+    }
+    try { window.EffectCatalog.dispose(type, instance); } catch (err) { /* best-effort release */ }
+  }
+
   function disposeStagedNodes(model, resolvedNodes, oldNodeInstances) {
     model.forEach(function (entry, index) {
       var staged = resolvedNodes[index];
@@ -183,9 +186,7 @@
         return;
       }
       try { getNodeOutput(staged).disconnect(); } catch (err) { /* never connected/already gone */ }
-      if (staged && typeof staged.dispose === 'function') {
-        try { staged.dispose(); } catch (err) { /* best-effort release */ }
-      }
+      disposeEffect(entry.type, staged);
     });
   }
 
@@ -324,7 +325,7 @@
    *     // inside rq3's absolute never-exceed -3 dBFS headroom.
    *   });
    *
-   * The limiter is configured exactly like src/node-limiter.js's factory
+   * The limiter is configured exactly like src/node-limiter.js's catalog create
    * defaults (ceiling -1 dB, ratio 20:1, attack 0, hard knee, 50 ms
    * release) so the measurement exercises the same DSP the live graph
    * uses; the attenuator gain is the SAME OUTPUT_ATTENUATOR_LINEAR
@@ -357,7 +358,7 @@
         var sourceGain = ctx.createGain();
         sourceGain.gain.value = Math.pow(10, VERIFY_TEST_INPUT_DBFS / 20);
 
-        // Stock safety limiter (src/node-limiter.js factory defaults).
+        // Stock safety limiter (src/node-limiter.js catalog defaults).
         var limiter = ctx.createDynamicsCompressor();
         limiter.threshold.value = -1;
         limiter.ratio.value = 20;
@@ -396,29 +397,6 @@
         resolve(null);
       }
     });
-  }
-
-  /**
-   * Register a node factory under a type name, for later use by
-   * buildGraph() when a model entry has a matching `type`.
-   *
-   * No caller populates this yet in AE-2 — later tasks (AE-5: Gain, AE-6:
-   * Compressor, AE-7: EQ, AE-8: Delay, AE-9: Reverb, AE-10: Limiter) will
-   * each call this once to register their node type. The function must
-   * exist and work correctly now so those tasks have a stable contract to
-   * build against.
-   *
-   * @param {string} type - unique node type name, e.g. "gain".
-   * @param {(audioContext: AudioContext, params: Object) => AudioNode} factory
-   */
-  function registerNodeType(type, factory) {
-    if (!type || typeof type !== 'string') {
-      throw new Error('AudioGraph.registerNodeType: type must be a non-empty string.');
-    }
-    if (typeof factory !== 'function') {
-      throw new Error('AudioGraph.registerNodeType: factory must be a function.');
-    }
-    nodeFactories[type] = factory;
   }
 
   /**
@@ -466,8 +444,8 @@
    * through buildGraph() — that would duck the shared chain gate and tear
    * down/rebuild the whole chain on every single `input` event fired while
    * dragging. The live-audio side of a param tweak is applied separately,
-   * via a direct AudioParam write (see NodeTypes.applyParam() in
-   * src/node-types.js and src/param-controls.js) — this function only
+   * via EffectCatalog.applyParam() (see src/effect-catalog.js and
+   * src/chain-editing.js) — this function only
    * keeps currentModel's bookkeeping correct for the next getModel()/
    * preset-save call.
    *
@@ -489,8 +467,8 @@
   }
 
   /**
-   * AE-7 addendum: a factory registered via registerNodeType() may now
-   * return EITHER a plain AudioNode (the original contract — Gain and
+   * AE-7 addendum: EffectCatalog.create() may return EITHER a plain
+   * AudioNode (the original shape — Gain and
    * Compressor both still do exactly this, unchanged) OR a plain JS object
    * shaped `{ input: AudioNode, output: AudioNode, ...anythingElse }` for a
    * COMPOSITE type built from more than one internal AudioNode (EQ, the
@@ -567,8 +545,9 @@
    *   Phase 1 (synchronous, immediate): resolve every model entry to an
    *   AudioNode object — reusing the existing instance if its id already
    *   exists (preserving internal DSP state, e.g. a compressor's envelope or
-   *   a delay's buffer contents, across a pure reorder), or calling its
-   *   registered factory for a new id. This never touches the live graph
+   *   a delay's buffer contents, across a pure reorder), or asking
+   *   EffectCatalog to create an instance for a new id. This never touches
+   *   the live graph
    *   (no .connect()/.disconnect() here), so it's safe to do before any
    *   ducking — and it means a bad model (unknown type) throws
    *   SYNCHRONOUSLY, right here, with the old chain completely untouched.
@@ -615,7 +594,7 @@
    * @param {{signal?: AbortSignal}=} options
    * @returns {Promise<{committed: boolean, canceled?: boolean, error?: Error,
    *   rollback?: {attempted: boolean, succeeded: boolean, error?: Error}}>}
-   *   resolves after the deferred rewire. Phase-1 validation/factory errors
+   *   resolves after the deferred rewire. Phase-1 validation/creation errors
    *   still throw synchronously before the live graph is touched.
    */
   function buildGraph(model, options) {
@@ -656,8 +635,8 @@
 
     // ---- Phase 1 (SYNCHRONOUS, happens immediately, before any ducking) ----
     // Resolve every model entry to an AudioNode object RIGHT NOW: reuse the
-    // existing instance if this id already exists AS THE SAME TYPE, or call
-    // its registered factory to create a fresh one if the id is new — or
+    // existing instance if this id already exists AS THE SAME TYPE, or ask
+    // EffectCatalog to create a fresh one if the id is new — or
     // has changed type. Creating a node object does NOT touch the live
     // audio graph (no .connect() happens here) so this is safe to do
     // before any muting, and it means a bad model (unknown type) throws
@@ -672,7 +651,7 @@
     // the type each live instance was factoried for, never a stale guess.
     // If the two ever drifted anyway, a missing entry here yields
     // undefined, which equals no model entry's type string and falls
-    // through to the factory — the safe direction, never a wrong reuse.
+    // through to catalog creation — the safe direction, never a wrong reuse.
     var oldModelTypes = {};
     currentModel.forEach(function (entry) {
       oldModelTypes[entry.id] = entry.type;
@@ -689,8 +668,8 @@
         // whose type changed would RELABEL a physically wrong node: worst
         // case a GainNode left standing in for the required terminal
         // limiter while the model and every tool result claim a limiter is
-        // present. A type-changed id therefore falls through to the factory
-        // path below (fresh instance, entry params applied at creation),
+        // present. A type-changed id therefore falls through to the catalog
+        // creation path below (fresh instance, entry params applied at creation),
         // and Phase 2's teardown then treats its old instance exactly like
         // any dropped node — disconnected, never carried into the new
         // nodeInstances map. Same id + same type remains a genuine reuse:
@@ -703,30 +682,35 @@
         ) {
           return oldNodeInstances[entry.id];
         }
-        var factory = nodeFactories[entry.type];
-        if (!factory) {
+        var catalog = window.EffectCatalog;
+        if (!catalog || typeof catalog.create !== 'function' ||
+            typeof catalog.hasType !== 'function') {
           throw new Error(
-            'AudioGraph.buildGraph: unknown node type "' + entry.type + '" ' +
-            '(id "' + entry.id + '"). Register it first with AudioGraph.registerNodeType().'
+            'AudioGraph.buildGraph: EffectCatalog is unavailable; cannot create effect type "' +
+            entry.type + '" (id "' + entry.id + '").'
           );
         }
-        var fresh = factory(audioContext, entry.params || {});
+        if (!catalog.hasType(entry.type)) {
+          throw new Error(
+            'AudioGraph.buildGraph: unknown effect type "' + entry.type + '" ' +
+            '(id "' + entry.id + '"). Register it with EffectCatalog.register().'
+          );
+        }
+        var fresh = catalog.create(entry.type, audioContext, entry.params || {});
         // Created-but-never-committed instances are this staged build's
         // disposal responsibility. A Tone-backed composite holds worklet
         // clocks and internal nodes that a plain disconnect never releases.
-        createdThisBuild.push(fresh);
+        createdThisBuild.push({ type: entry.type, instance: fresh });
         return fresh;
       });
     } catch (phase1Err) {
-      // A mid-map throw (e.g. an unknown type past the first factory
-      // call) leaves this build's earlier creations orphaned — they were
+      // A mid-map throw (e.g. an unknown type past the first catalog
+      // creation call) leaves this build's earlier creations orphaned — they were
       // never connected (no .connect() runs in Phase 1) but a Tone node
       // still owns live resources. Release them, then rethrow: the live
       // chain is untouched, exactly as before.
-      createdThisBuild.forEach(function (node) {
-        if (node && typeof node.dispose === 'function') {
-          try { node.dispose(); } catch (e) { /* already gone */ }
-        }
+      createdThisBuild.forEach(function (created) {
+        disposeEffect(created.type, created.instance);
       });
       throw phase1Err;
     }
@@ -809,16 +793,14 @@
             // change from before.
             //
             // Adapter-backed instances (src/tone-adapter.js composites) also get
-            // dispose() called here when their id is NOT carried forward: a Tone
-            // node keeps internal nodes and a JS-tick clock alive after a mere
+            // disposed through EffectCatalog when their id is NOT carried forward:
+            // a Tone node keeps internal nodes and a JS-tick clock alive after a mere
             // disconnect, so dropped instances must be explicitly released.
             // Carried-forward identity is decided by object identity — resolved
             // nodes for reuse ARE the old instance objects (Phase 1) — which also
-            // covers the id-same-type-changed case (fresh factory instance, old
-            // instance dropped). Plain AudioNodes and native composites have no
-            // dispose(): the typeof guard makes this a no-op for every one of
-            // them, so existing types' teardown behavior is byte-for-byte what
-            // it was before this hook existed.
+            // covers the id-same-type-changed case (fresh catalog instance, old
+            // instance dropped). Catalog definitions without a dispose hook are
+            // a no-op, so native nodes keep their existing teardown behavior.
             var carriedForward = {};
             model.forEach(function (entry, i) {
               if (resolvedNodes[i] === oldNodeInstances[entry.id]) {
@@ -844,7 +826,7 @@
             // two different AudioNode objects. `nodeInstances`/`newNodeInstances`
             // still store the ORIGINAL (possibly composite) value per id — never
             // just its .input or .output — so AudioGraph.getNodeInstance(id)
-            // keeps returning something NodeTypes.applyParam can reach every
+            // keeps returning something EffectCatalog.applyParam can reach every
             // internal piece of (e.g. EQ's .low/.mid/.high — see src/node-eq.js).
             var newNodeInstances = {};
             var newFirstNode = null;
@@ -908,8 +890,8 @@
             // for the rollback path below.
             Object.keys(oldNodeInstances).forEach(function (id) {
               var old = oldNodeInstances[id];
-              if (!carriedForward[id] && old && typeof old.dispose === 'function') {
-                try { old.dispose(); } catch (e) { /* best-effort release */ }
+              if (!carriedForward[id]) {
+                disposeEffect(oldModelTypes[id], old);
               }
             });
             resolve({ committed: true });
@@ -966,7 +948,6 @@
   }
 
   window.AudioGraph = {
-    registerNodeType: registerNodeType,
     getModel: getModel,
     buildGraph: buildGraph,
     getChainGate: getChainGate,

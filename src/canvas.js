@@ -6,7 +6,7 @@
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single
 // `window.X` export pattern as the rest of this project. Depends on
-// window.NodeTypes (src/node-types.js), window.ParamControls
+// window.EffectCatalog (src/effect-catalog.js), window.ParamControls
 // (src/param-controls.js), window.AudioGraph (src/audio-graph.js), and
 // window.AudioEngine (src/audio-engine.js) — all already loaded by the time
 // this file runs, per index.html's script order. (SortableJS is RETIRED —
@@ -1399,6 +1399,10 @@
    *  place ChainEditing repaints an accepted model, so the strip updates
    *  on every source (human/agent/preset/startup/undo), not just a human
    *  commit. */
+  function effectLabel(type) {
+    return window.EffectCatalog.getLabel(type) || type;
+  }
+
   function renderSignalOrderStrip() {
     if (!signalOrderEl) {
       return;
@@ -1427,14 +1431,7 @@
       addArrow();
       var node = nodesById[id];
       var type = node && node.type;
-      var label = type;
-      try {
-        if (window.NodeTypes && typeof window.NodeTypes.getLabel === 'function') {
-          label = window.NodeTypes.getLabel(type) || type;
-        }
-      } catch (err) {
-        /* stripped harness — the type key is the fallback label */
-      }
+      var label = effectLabel(type);
       var isTerminalLimiter = type === 'limiter' && index === ids.length - 1;
       addStep(isTerminalLimiter ? label + ' · locked last' : label,
         isTerminalLimiter ? 'signal-order-lock' : null);
@@ -1444,7 +1441,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Palette (Part B) — one chip per NodeTypes.getAllTypes() entry, built
+  // Palette (Part B) — one chip per EffectCatalog.getAllTypes() entry, built
   // once at load time. Populated dynamically, never a hardcoded type list:
   // as AE-6 through AE-10 each register a new type (same one-call pattern
   // AE-5's src/node-gain.js already uses), this loop picks them up
@@ -1455,7 +1452,7 @@
   // carries its 3-letter code alongside the family color, so color is
   // never the only signal. 2026-08-31 (user direction): the code is the
   // first three letters of the module's DISPLAY label, uppercased —
-  // derived from the registry's label (single source, no hardcoded map:
+  // derived from the catalog's label (single source, no hardcoded map:
   // a future type codes itself), spaces skipped so "Noise Gate" reads
   // NOI. VIS-4: familyInitials() is the single shared source for BOTH
   // surfaces — palette chips (VIS-3) and node cards (VIS-4) render from
@@ -1468,20 +1465,13 @@
    * of the module's display label, uppercased (spaces and punctuation
    * skipped); a type with no label falls back to its own type key — the
    * same no-hardcoded-type-list discipline as renderPalette()'s
-   * registry-driven loop.
+   * catalog-driven loop.
    *
    * @param {string} type
    * @returns {string} 3-letter silkscreen code (GAIN, COM, DEL, NOI...)
    */
   function familyInitials(type) {
-    var label = type;
-    try {
-      if (window.NodeTypes && typeof window.NodeTypes.getLabel === 'function') {
-        label = window.NodeTypes.getLabel(type) || type;
-      }
-    } catch (err) {
-      /* stripped harness — the type key is the fallback label */
-    }
+    var label = effectLabel(type);
     return String(label).replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || String(type).slice(0, 3).toUpperCase();
   }
 
@@ -1505,8 +1495,8 @@
    */
   function canonicalParamValue(type, paramId, value) {
     try {
-      if (window.NodeTypes && typeof window.NodeTypes.getParamSpec === 'function') {
-        var specs = window.NodeTypes.getParamSpec(type);
+      if (window.EffectCatalog && typeof window.EffectCatalog.getParamSpec === 'function') {
+        var specs = window.EffectCatalog.getParamSpec(type);
         if (specs) {
           for (var i = 0; i < specs.length; i++) {
             var spec = specs[i];
@@ -1537,7 +1527,7 @@
   // ---------------------------------------------------------------------
   // PALETTE GROUPS (refinement entry 3, critique P2-3: the palette went
   // 6 → 10 flat chips with no chunking at the add-a-node decision point).
-  // Presentation seam ONLY — the registry stays the single source of what
+  // Presentation seam ONLY — the catalog stays the single source of what
   // renders (renderPalette still iterates getAllTypes()); these lookups
   // only decide which silkscreen group header a chip rides under, in
   // operator (non-engineer) language derived from README.md's own
@@ -1636,8 +1626,7 @@
 
   /**
    * The display label for a group id (PALETTE_GROUPS first, then the
-   * fallback group — never throws, same defensive register as
-   * NodeTypes.getLabel).
+   * fallback group — never throws.
    * @param {string} id
    * @returns {string}
    */
@@ -1651,40 +1640,21 @@
   }
 
   // ---------------------------------------------------------------------
-  // EXPERIMENTAL TYPES (cycle 3) — the experimental status is declared at
-  // the type's OWN registration (`experimental: true` in
-  // NodeTypes.register — node-autotune.js, autotune only, per the
-  // cycle-3 scope "experimental badge on autotune only") and read through
-  // NodeTypes.isExperimental(): ONE source of truth shared with
-  // mcp-tools.js's agent capabilities readout (MCP-1), so the visible
-  // badge and the agent-facing disclosure can never drift. The map below
-  // is only the guarded FALLBACK for a registry that predates the
-  // isExperimental API (a bare harness with an old node-types.js); it
-  // must mirror the registrations and is drift-checked by
-  // isExperimentalType's live-first lookup below.
+  // EXPERIMENTAL TYPES (cycle 3) — the experimental status is declared by
+  // the type's own EffectCatalog registration (`experimental: true` in
+  // node-autotune.js, autotune only, per the cycle-3 scope "experimental
+  // badge on autotune only") and read through EffectCatalog.isExperimental():
+  // one source of truth shared with mcp-tools.js's agent capabilities readout
+  // (MCP-1), so the visible badge and the agent-facing disclosure cannot drift.
   // ---------------------------------------------------------------------
-  var EXPERIMENTAL_TYPES = {
-    autotune: true
-  };
-
   /**
    * Does this type render the experimental badge? (Data source for both
-   * the card badge and the chip badge/aria status below.) The LIVE
-   * registry wins whenever it exposes isExperimental (MCP-1); the static
-   * map stands only as the pre-API fallback.
+   * the card badge and the chip badge/aria status below.)
    * @param {string} type
    * @returns {boolean}
    */
   function isExperimentalType(type) {
-    try {
-      if (window.NodeTypes && typeof window.NodeTypes.isExperimental === 'function') {
-        return window.NodeTypes.isExperimental(type);
-      }
-    } catch (err) {
-      // Damaged registry object — the static fallback below stands.
-    }
-    return Object.prototype.hasOwnProperty.call(EXPERIMENTAL_TYPES, type) &&
-      !!EXPERIMENTAL_TYPES[type];
+    return window.EffectCatalog.isExperimental(type);
   }
 
   /**
@@ -1710,18 +1680,18 @@
     var badge = document.createElement('span');
     badge.className = 'node-experimental-badge';
     badge.textContent = compact ? 'EXP' : 'Experimental';
-    badge.title = window.NodeTypes.getLabel(type) +
+    badge.title = effectLabel(type) +
       ' is experimental — new DSP, still under audio-quality review.';
     return badge;
   }
 
   function renderPalette() {
     paletteListEl.innerHTML = '';
-    var types = window.NodeTypes.getAllTypes();
+    var types = window.EffectCatalog.getAllTypes();
 
-    // Refinement entry 3 (critique P2-3): bucket the registry's types by
+    // Refinement entry 3 (critique P2-3): bucket the catalog's types by
     // group, preserving REGISTRATION ORDER within each bucket (the
-    // registry stays the source of chip order; the group map only decides
+    // catalog stays the source of chip order; the group map only decides
     // which header a chip rides under). Group order is the declared
     // PALETTE_GROUPS order, with the fallback group appended last and
     // rendered only if some type actually fell into it — an empty group
@@ -1776,14 +1746,14 @@
         // attr(data-initials), never a second copy in the DOM text).
         chip.setAttribute('data-family', type);
         chip.setAttribute('data-initials', familyInitials(type));
-        chip.textContent = window.NodeTypes.getLabel(type);
+        chip.textContent = effectLabel(type);
         // R2-2 action-phrase name; UI-2 (cycle 3): an experimental type
         // appends its status, so a screen-reader user hears it BEFORE the
         // node enters the chain (the chip's visible 'EXP' tag is the
         // sighted twin of this suffix — see createExperimentalBadge).
         chip.setAttribute(
           'aria-label',
-          'Add ' + window.NodeTypes.getLabel(type) + ' to chain' +
+          'Add ' + effectLabel(type) + ' to chain' +
             (isExperimentalType(type) ? ' (experimental)' : ''));
         // UI-2: the chip-side experimental badge (autotune only) — compact
         // 'EXP' silkscreen abbreviation after the visible label, same single
@@ -1830,7 +1800,7 @@
   // object the SortableJS onAdd handler mints, factored out so the
   // keyboard add path and the drag add path CANNOT drift apart.
   function defaultParamsForType(type) {
-    var paramSpec = window.NodeTypes.getParamSpec(type);
+    var paramSpec = window.EffectCatalog.getParamSpec(type);
     var defaultParams = {};
     paramSpec.forEach(function (spec) {
       defaultParams[spec.id] = spec.default;
@@ -1852,7 +1822,7 @@
    * one transaction. No agent toast class: this is a human action.
    *
    * @param {string} type - the node type to add (from the chip's
-   *   data-node-type, itself from the registry-driven palette loop).
+   *   data-node-type, itself from the catalog-driven palette loop).
    */
   function addNodeType(type) {
     var card = createNodeCard(type, defaultParamsForType(type));
@@ -2009,7 +1979,7 @@
     // family code — the full module name rides as the code's hover
     // tooltip. The section's accessible naming lives on its controls
     // (the collapse/remove buttons' aria-labels carry the module name).
-    code.title = window.NodeTypes.getLabel(type);
+    code.title = effectLabel(type);
     // Hover-preview round (2026-08-31 user direction): hovering the code
     // ALSO pushes the same module name + plain-language blurb the
     // Effects tab's chip hover shows into the display register — a
@@ -2020,7 +1990,7 @@
     // .canvas is pointer-events:none until the engine runs, so these
     // never fire before then.
     code.addEventListener('mouseenter', function () {
-      showRegisterPreview(window.NodeTypes.getLabel(type), paletteTypePreview(type));
+      showRegisterPreview(effectLabel(type), paletteTypePreview(type));
     });
     code.addEventListener('mouseleave', function () {
       hideRegisterPreview();
@@ -2031,7 +2001,7 @@
     rail.appendChild(code);
 
     // UI-2 (cycle 3): the formal experimental badge on the section of
-    // every type in EXPERIMENTAL_TYPES (autotune only, cycle-3 scope) —
+    // every catalog-declared experimental type (autotune only, cycle-3 scope) —
     // a silkscreen tag in the rail under the module label. SR-visible by
     // content (see createExperimentalBadge); title carries the why.
     if (isExperimentalType(type)) {
@@ -2057,7 +2027,7 @@
     collapseBtn.type = 'button';
     collapseBtn.className = 'node-collapse';
     collapseBtn.setAttribute('aria-expanded', 'true');
-    collapseBtn.setAttribute('aria-label', 'Toggle parameters for ' + window.NodeTypes.getLabel(type));
+    collapseBtn.setAttribute('aria-label', 'Toggle parameters for ' + effectLabel(type));
     var chevronMark = document.createElement('span');
     chevronMark.className = 'chevron-mark';
     chevronMark.setAttribute('aria-hidden', 'true');
@@ -2066,7 +2036,7 @@
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'node-remove-btn';
-    removeBtn.setAttribute('aria-label', 'Remove ' + window.NodeTypes.getLabel(type));
+    removeBtn.setAttribute('aria-label', 'Remove ' + effectLabel(type));
     // The × is DRAWN (two crossed bars in CSS), not a text glyph.
     var removeMark = document.createElement('span');
     removeMark.className = 'remove-mark';

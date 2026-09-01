@@ -26,14 +26,13 @@
 //     values, order, and key order are byte-identical to the driver.
 //
 // Registry-driven honesty note: unlike the palette (populated at runtime
-// from NodeTypes.getAllTypes()), this library is NOT type-registry-driven
+// from EffectCatalog.getAllTypes()), this library is NOT catalog-driven
 // — it is fixed, QA-verified CONTENT, not a generated set. The registry
 // governs which node types/params EXIST and validates these chains at
 // load time (every factory Load applies through the same
 // ChainEditing transaction user presets use), but nothing here is
 // derived from the registry at runtime. If a node type or param ever
-// changes incompatibly, these literals must be re-mirrored BY HAND — same
-// discipline as NODE_REGISTRY_SNAPSHOT in src/mcp-tools.js.
+// changes incompatibly, these content literals must be updated deliberately.
 //
 // Consumed by:
 //   - src/presets-ui.js — the preset dropdown's "Factory" <optgroup>, the

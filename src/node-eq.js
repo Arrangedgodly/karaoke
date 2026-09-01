@@ -3,10 +3,9 @@
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Same as src/node-gain.js and src/node-compressor.js,
 // this file doesn't export a new `window.X` namespace of its own — its only
-// job is to CALL INTO the two registries that already exist
-// (window.AudioGraph.registerNodeType from src/audio-graph.js, and
-// window.NodeTypes.register from src/node-types.js), once each, at load
-// time. The IIFE wrapper is kept anyway to match this project's file-level
+// job is to register one complete definition with window.EffectCatalog at
+// load time. The IIFE wrapper is kept anyway to match this project's
+// file-level
 // convention (every src/*.js file is one) even though there's no local state
 // here that actually needs hiding behind a closure.
 //
@@ -33,12 +32,11 @@
 // individually expose all three internal filters so applyParam (below) can
 // reach whichever one a given paramId targets.
 //
-// One `AudioGraph.registerNodeType(type, factory)` call and one
-// `NodeTypes.register(type, {label, paramSpec, applyParam})` call, same as
-// every other node-type file — registering under the permanent, committed
+// One complete EffectCatalog definition, same as every other node-type
+// file — registering under the permanent, committed
 // type name `eq` is enough on its own for "EQ" to appear as a real, usable
 // palette chip (UI-3's palette, src/canvas.js, builds itself dynamically
-// from NodeTypes.getAllTypes()); no other file needs any change for this
+// from EffectCatalog.getAllTypes()); no other file needs any change for this
 // task beyond the audio-graph.js fix above and the new <script> tag in
 // index.html.
 //
@@ -60,12 +58,11 @@
 (function () {
   'use strict';
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> node.
-  // Called by AudioGraph.buildGraph() (src/audio-graph.js) whenever a model
-  // entry has type "eq" and no existing node instance is being reused for
-  // its id. Returns a COMPOSITE value (see file-level comment above) rather
+  // Factory called by AudioGraph.buildGraph() (src/audio-graph.js) whenever
+  // a model entry has type "eq" and no existing node instance is being
+  // reused for its id. Returns a COMPOSITE value (see file-level comment above) rather
   // than a single AudioNode — the first factory in this project to do so.
-  window.AudioGraph.registerNodeType('eq', function (audioContext, params) {
+  function createEffect(audioContext, params) {
     var p = params || {};
 
     var low = audioContext.createBiquadFilter();
@@ -92,10 +89,10 @@
     mid.connect(high);
 
     return { input: low, output: high, low: low, mid: mid, high: high };
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec (rendered
-  // generically by src/param-controls.js) + applyParam (this type's direct,
+  // UI-facing metadata rendered generically by src/param-controls.js, plus
+  // applyParam (this type's direct,
   // no-conversion AudioParam writes for live slider updates, called by
   // param-controls.js on every `input` event — never routed through
   // AudioGraph.buildGraph(), per that file's own comment on why). `applyParam`
@@ -111,13 +108,15 @@
   // `.value =` — the click-safe form the 'host-param-ramps' capability
   // promise describes (the factory's creation-time `.value =` writes above
   // stay direct: a new node has no live signal to protect yet).
-  window.NodeTypes.register('eq', {
+  window.EffectCatalog.register('eq', {
     label: 'EQ',
+    experimental: false,
     paramSpec: [
       { id: 'lowGain', label: 'Low', min: -12, max: 12, default: 0, step: 0.5, unit: 'dB' },
       { id: 'midGain', label: 'Mid', min: -12, max: 12, default: 0, step: 0.5, unit: 'dB' },
       { id: 'highGain', label: 'High', min: -12, max: 12, default: 0, step: 0.5, unit: 'dB' }
     ],
+    create: createEffect,
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'lowGain') window.AudioParamRamp.schedule(nodeInstance.low.gain, value);
       else if (paramId === 'midGain') window.AudioParamRamp.schedule(nodeInstance.mid.gain, value);

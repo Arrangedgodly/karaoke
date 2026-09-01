@@ -15,8 +15,8 @@
 // convention as the other suites: zero dependencies, browser globals
 // stubbed, real source run in vm, "  ok - " per check, exit 0/1):
 //
-//   src/audio-graph.js + node-types.js + the six node files
-//                            (the registry, exactly as index.html loads it)
+//   effect-catalog.js + audio-graph.js + the six node files
+//                            (the catalog, exactly as index.html loads it)
 //   src/default-preset.js    (the seeded default chain)
 //   src/preset-schema.js     (serialization/validation)
 //   src/preset-store.js      (the storage layer under test)
@@ -398,8 +398,8 @@ function createEnv(options) {
   env.sandbox = sandbox;
 
   var sourceFiles = [
+    'src/effect-catalog.js',
     'src/audio-graph.js',
-    'src/node-types.js',
     'src/audio-param-ramp.js', // issue #5: the ramp helper the node applyParam handlers call
     'src/node-gain.js',
     'src/node-compressor.js',

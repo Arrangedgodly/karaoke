@@ -11,7 +11,7 @@
 //      control-shape allocation (knob vs trim vs pads) and the detent
 //      grammar (bipolar params only).
 //   B. DISCRETE PAD COMMITS — string values verbatim down the pipeline
-//      (AudioGraph.updateNodeParams + NodeTypes.applyParam) from a real
+//      (AudioGraph.updateNodeParams + EffectCatalog.applyParam) from a real
 //      pad click, and updateControl moving the pressed pad WITHOUT a
 //      commit or a re-render.
 //   C. DISPLAY REGISTER CONTRACT — built by canvas.js as the canvas
@@ -280,7 +280,6 @@ var fakeInstance = { marker: 'fake-live-node' };
 var windowStub = {
   document: documentStub,
   AudioGraph: {
-    registerNodeType: function () {},
     buildGraph: function (model) { calls.buildGraph.push(snapshotModel(model)); },
     updateNodeParams: function (id, params) {
       calls.updateNodeParams.push({ id: id, params: params });
@@ -322,7 +321,7 @@ function loadSrc(file) {
 
 // Real sources in index.html order (gain + delay carry the knob/trim
 // allocation under test; autotune carries the discrete pad shapes).
-loadSrc('node-types.js');
+loadSrc('effect-catalog.js');
 loadSrc('param-controls.js');
 loadSrc('node-gain.js');
 loadSrc('node-delay.js');
@@ -350,10 +349,10 @@ windowStub.ChainEditing = {
 };
 
 // Record at the REGISTRY BOUNDARY (the committed convention): override
-// NodeTypes.applyParam after load so commits are captured without
+// EffectCatalog.applyParam after load so commits are captured without
 // needing each type's real AudioNode composite — param-controls resolves
-// window.NodeTypes.applyParam at COMMIT time, so the override holds.
-windowStub.NodeTypes.applyParam = function (type, node, paramId, value) {
+// window.EffectCatalog.applyParam at COMMIT time, so the override holds.
+windowStub.EffectCatalog.applyParam = function (type, node, paramId, value) {
   calls.applyParam.push({ type: type, node: node, paramId: paramId, value: value });
 };
 

@@ -77,7 +77,7 @@ function makeHarness(initial) {
       return Promise.resolve({ committed: true });
     }
   };
-  sandbox.NodeTypes = {
+  sandbox.EffectCatalog = {
     getParamSpec: function (type) {
       if (type !== 'autotune') {
         return [];

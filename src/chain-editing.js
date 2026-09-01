@@ -59,7 +59,7 @@
   }
 
   /**
-   * Convert legal numeric discrete enums to the registry's canonical string
+   * Convert legal numeric discrete enums to the catalog's canonical string
    * before a candidate reaches any adapter. PresetSchema deliberately accepts
    * both wire forms, but the accepted model has one form so the graph, board,
    * persistence, tool readback, and Undo snapshots cannot disagree.
@@ -68,8 +68,8 @@
     return cloneModel(model).map(function (entry) {
       var specs = [];
       try {
-        if (window.NodeTypes && typeof window.NodeTypes.getParamSpec === 'function') {
-          specs = window.NodeTypes.getParamSpec(entry.type) || [];
+        if (window.EffectCatalog && typeof window.EffectCatalog.getParamSpec === 'function') {
+          specs = window.EffectCatalog.getParamSpec(entry.type) || [];
         }
       } catch (err) {
         specs = [];
@@ -367,8 +367,8 @@
     if (!(
       window.AudioGraph &&
       typeof window.AudioGraph.getNodeInstance === 'function' &&
-      window.NodeTypes &&
-      typeof window.NodeTypes.applyParam === 'function'
+      window.EffectCatalog &&
+      typeof window.EffectCatalog.applyParam === 'function'
     )) {
       return;
     }
@@ -385,7 +385,7 @@
         return;
       }
       Object.keys(entry.params || {}).forEach(function (param) {
-        window.NodeTypes.applyParam(entry.type, instance, param, entry.params[param]);
+        window.EffectCatalog.applyParam(entry.type, instance, param, entry.params[param]);
       });
     });
   }
@@ -422,14 +422,14 @@
     if (
       liveGraphAvailable() &&
       typeof window.AudioGraph.getNodeInstance === 'function' &&
-      window.NodeTypes &&
-      typeof window.NodeTypes.applyParam === 'function'
+      window.EffectCatalog &&
+      typeof window.EffectCatalog.applyParam === 'function'
     ) {
       var instance = window.AudioGraph.getNodeInstance(change.id);
       if (!instance) {
         throw new Error('ChainEditing: live node "' + change.id + '" is unavailable.');
       }
-      window.NodeTypes.applyParam(change.type, instance, change.param, change.value);
+      window.EffectCatalog.applyParam(change.type, instance, change.param, change.value);
     }
   }
 

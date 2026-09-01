@@ -529,8 +529,8 @@ function createEnv() {
 
   [
     'src/agent-ui.js',
+    'src/effect-catalog.js',
     'src/audio-graph.js',
-    'src/node-types.js',
     'src/audio-param-ramp.js',
     'src/node-gain.js',
     'src/node-compressor.js',

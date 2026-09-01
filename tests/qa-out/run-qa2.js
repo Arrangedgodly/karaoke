@@ -644,7 +644,7 @@ function renderNodeInner(node, b, engine) {
 // Sandbox: REAL src files over the rendering runtime.
 // ===========================================================================
 
-var CORE_FILES = ['src/audio-graph.js', 'src/node-types.js', 'src/audio-param-ramp.js'];
+var CORE_FILES = ['src/effect-catalog.js', 'src/audio-graph.js', 'src/audio-param-ramp.js'];
 var LEGACY_NODE_FILES = [
   'src/node-gain.js', 'src/node-compressor.js', 'src/node-eq.js',
   'src/node-delay.js', 'src/node-reverb.js', 'src/node-limiter.js'

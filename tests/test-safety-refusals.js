@@ -388,8 +388,8 @@ function getTool(sandbox, name) {
 async function main() {
   var sandbox = createSandbox();
   loadSrc(sandbox, 'src/agent-ui.js');
+  loadSrc(sandbox, 'src/effect-catalog.js');
   loadSrc(sandbox, 'src/audio-graph.js');
-  loadSrc(sandbox, 'src/node-types.js');
   loadSrc(sandbox, 'src/audio-param-ramp.js'); // issue #5: the ramp helper the node applyParam handlers call
   loadSrc(sandbox, 'src/node-gain.js');
   loadSrc(sandbox, 'src/node-compressor.js');
@@ -405,7 +405,7 @@ async function main() {
   var AG = sandbox.AudioGraph;
 
   // Count undo pushes by wrapping the REAL AgentUI export (the recorder
-  // technique the issue-#1 test uses for NodeTypes.applyParam).
+  // technique the issue-#1 test uses for EffectCatalog.applyParam).
   var undoPushes = 0;
   var realPushUndo = sandbox.AgentUI.pushUndo;
   sandbox.AgentUI.pushUndo = function (entry) {

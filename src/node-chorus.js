@@ -2,11 +2,8 @@
 //
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Like src/node-distortion.js and src/node-delay.js,
-// this file exports no `window.X` namespace of its own — its only job is
-// to CALL INTO the two registries that already exist
-// (window.AudioGraph.registerNodeType from src/audio-graph.js, and
-// window.NodeTypes.register from src/node-types.js), once each, at load
-// time.
+// this file exports no `window.X` namespace of its own — its only job is to
+// register one complete definition with window.EffectCatalog at load time.
 //
 // CHOR-1 scope (cycle 3, docs/ultron/plan.md): built exactly per the D4
 // research decision (docs/ultron/research/rq4-chorus-topology.md, RQ-4
@@ -57,7 +54,7 @@
 // shape as EQ/Delay/Reverb/Distortion): returns {input, output, ...
 // internal nodes} — buildGraph() connects the composite's .input/.output
 // edges; applyParam reaches the internals by name. No change to
-// audio-graph.js, node-types.js, or any bus/channel code needed.
+// audio-graph.js, effect-catalog.js, or any bus/channel code needed.
 
 (function () {
   'use strict';
@@ -91,11 +88,10 @@
     return { dry: Math.cos(m * Math.PI / 2), wet: Math.sin(m * Math.PI / 2) };
   }
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> node.
-  // Called by AudioGraph.buildGraph() (src/audio-graph.js) whenever a model
-  // entry has type "chorus" and no existing node instance is being reused
+  // Factory called by AudioGraph.buildGraph() (src/audio-graph.js) whenever
+  // a model entry has type "chorus" and no existing node instance is being reused
   // for its id. Returns a COMPOSITE value, same shape as EQ/Delay/Distortion.
-  window.AudioGraph.registerNodeType('chorus', function (audioContext, params) {
+  function createEffect(audioContext, params) {
     var p = params || {};
 
     var depthMs = typeof p.depthMs === 'number' ? p.depthMs : 3;
@@ -186,10 +182,9 @@
       dryGain: dryGain,
       wetGain: wetGain
     };
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec + applyParam,
-  // same shape as every other node-type file. Plain-language labels per the
+  // UI-facing metadata plus applyParam. Plain-language labels per the
   // cycle-3 scope table; ranges per rq4's paramSpec block:
   //   depthMs 0–10 ms, default 3, step 0.5 (DunneAudioKit-style excursion)
   //   rateHz  0.1–8 Hz, default 1.5, step 0.1 (typical vocal 0.5–3 Hz)
@@ -199,13 +194,15 @@
   // AudioParamRamp.schedule() (src/audio-param-ramp.js) — the click-safe
   // form. Baseline delayTime is never touched here (set once at
   // construction, never param-driven).
-  window.NodeTypes.register('chorus', {
+  window.EffectCatalog.register('chorus', {
     label: 'Chorus',
+    experimental: false,
     paramSpec: [
       { id: 'depthMs', label: 'Depth', min: 0, max: 10, default: 3, step: 0.5, unit: 'ms' },
       { id: 'rateHz', label: 'Rate', min: 0.1, max: 8, default: 1.5, step: 0.1, unit: 'Hz' },
       { id: 'mix', label: 'Mix', min: 0, max: 100, default: 30, step: 1, unit: '%' }
     ],
+    create: createEffect,
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'depthMs') {
         // Sign flip = phase opposition; ramp BOTH feeds in one update.

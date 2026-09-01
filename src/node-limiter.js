@@ -3,10 +3,9 @@
 // Loaded as a plain (non-module) <script> — same IIFE pattern as the other
 // files in this project. Same as src/node-gain.js and src/node-compressor.js,
 // this file doesn't export a new `window.X` namespace of its own — its only
-// job is to CALL INTO the two registries that already exist
-// (window.AudioGraph.registerNodeType from src/audio-graph.js, and
-// window.NodeTypes.register from src/node-types.js), once each, at load
-// time. The IIFE wrapper is kept anyway to match this project's file-level
+// job is to register one complete definition with window.EffectCatalog at
+// load time. The IIFE wrapper is kept anyway to match this project's
+// file-level
 // convention (every src/*.js file is one) even though there's no local state
 // here that actually needs hiding behind a closure.
 //
@@ -22,18 +21,15 @@
 //   - one real Web Audio node (a second, differently-configured
 //     `DynamicsCompressorNode` — same underlying node type AE-6 already
 //     uses, just tuned for a completely different job; see below),
-//   - one `AudioGraph.registerNodeType(type, factory)` call — the
-//     (audioContext, params) -> AudioNode factory buildGraph() (src/
-//     audio-graph.js) calls when a model entry's `type` matches,
-//   - one `NodeTypes.register(type, {label, paramSpec, applyParam})` call —
-//     the UI-facing metadata src/param-controls.js reads generically to
-//     render this type's sliders and apply live changes, with zero
-//     per-type code of its own.
+//   - one complete EffectCatalog definition containing the
+//     (audioContext, params) -> AudioNode factory buildGraph() uses when a
+//     model entry's `type` matches, plus the UI-facing metadata and live
+//     parameter behavior src/param-controls.js reads generically.
 //
 // Registering under the permanent, committed type name `limiter` is enough
 // on its own for "Limiter" to appear as a real, usable palette chip — UI-3's
 // palette (src/canvas.js) builds itself dynamically from
-// NodeTypes.getAllTypes(), so no other file needs any change for this task
+// EffectCatalog.getAllTypes(), so no other file needs any change for this task
 // beyond the new <script> tag in index.html.
 //
 // Per docs/ultron/design/px2-node-parameters.md's Limiter section: a second
@@ -79,11 +75,10 @@
 (function () {
   'use strict';
 
-  // AudioGraph's audio-factory registry: (audioContext, params) -> AudioNode.
-  // Called by AudioGraph.buildGraph() (src/audio-graph.js) whenever a model
-  // entry has type "limiter" and no existing node instance is being reused
+  // Factory called by AudioGraph.buildGraph() (src/audio-graph.js) whenever
+  // a model entry has type "limiter" and no existing node instance is being reused
   // for its id.
-  window.AudioGraph.registerNodeType('limiter', function (audioContext, params) {
+  function createEffect(audioContext, params) {
     var p = params || {};
     var node = audioContext.createDynamicsCompressor();
     node.threshold.value = typeof p.ceiling === 'number' ? p.ceiling : -1;
@@ -94,10 +89,10 @@
     node.knee.value = 0; // hard knee — stay transparent until the ceiling, then clamp hard
     node.release.value = (typeof p.release === 'number' ? p.release : 50) / 1000; // ms -> s
     return node;
-  });
+  }
 
-  // NodeTypes' UI-facing metadata registry: label + paramSpec (rendered
-  // generically by src/param-controls.js) + applyParam (this type's direct
+  // UI-facing metadata rendered generically by src/param-controls.js, plus
+  // applyParam (this type's direct
   // AudioParam writes — including the ms->s conversion below — for live
   // slider updates, called by param-controls.js on every `input` event —
   // never routed through AudioGraph.buildGraph(), per that file's own
@@ -108,12 +103,14 @@
   // `.value =` assignments — the click-safe form the 'host-param-ramps'
   // capability promise describes (the factory's creation-time writes stay
   // direct: a new node has no live signal to protect yet).
-  window.NodeTypes.register('limiter', {
+  window.EffectCatalog.register('limiter', {
     label: 'Limiter',
+    experimental: false,
     paramSpec: [
       { id: 'ceiling', label: 'Ceiling', min: -12, max: 0, default: -1, step: 0.5, unit: 'dB' },
       { id: 'release', label: 'Release', min: 10, max: 500, default: 50, step: 10, unit: 'ms' }
     ],
+    create: createEffect,
     applyParam: function (node, paramId, value) {
       if (paramId === 'ceiling') {
         window.AudioParamRamp.schedule(node.threshold, value);
