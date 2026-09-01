@@ -75,3 +75,6 @@ the known environmental flake (reproduced identically at base 4aa6687).
 Status: awaiting-approval; ships as its own PR before the batch PR.
 
 ### BEH-1: APPROVED 2026-09-01. Next: GEN-1 + GAG-1.
+
+### GEN-1: APPROVED 2026-09-01 (user will audition the fx live later).
+Next: GAG-1.
