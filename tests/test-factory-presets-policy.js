@@ -219,6 +219,16 @@ async function main() {
   loadSrc(sandbox, 'src/node-delay.js');
   loadSrc(sandbox, 'src/node-reverb.js');
   loadSrc(sandbox, 'src/node-limiter.js');
+  // 2026-09-01 promotion: the eight promoted presets add six more types
+  // (pitchshift/tremolo/phaser are Tone-backed — adapter first, same as
+  // tests/test-factory-library.js).
+  loadSrc(sandbox, 'src/tone-adapter.js');
+  loadSrc(sandbox, 'src/node-pitchshift.js');
+  loadSrc(sandbox, 'src/node-distortion.js');
+  loadSrc(sandbox, 'src/node-chorus.js');
+  loadSrc(sandbox, 'src/node-tremolo.js');
+  loadSrc(sandbox, 'src/node-phaser.js');
+  loadSrc(sandbox, 'src/node-gate.js');
   loadSrc(sandbox, 'src/default-preset.js');
   loadSrc(sandbox, 'src/factory-library-data.js');
   loadSrc(sandbox, 'src/factory-presets.js');
@@ -261,11 +271,11 @@ async function main() {
   );
 
   // --------------------------------------------------------------------
-  console.log('B. the shipped library: six presets, Classic byte-identical to DEFAULT_PRESET');
+  console.log('B. the shipped library: fourteen presets, Classic byte-identical to DEFAULT_PRESET');
   // --------------------------------------------------------------------
 
   var factory = sandbox.FactoryPresets.list();
-  check(Array.isArray(factory) && factory.length === 6, 'B1: factory library lists six presets');
+  check(Array.isArray(factory) && factory.length === 14, 'B1: factory library lists fourteen presets (six original + eight promoted 2026-09-01)');
   check(
     factory.length > 0 && factory[0].name === 'Classic Karaoke',
     "B1: the first factory preset is 'Classic Karaoke'"

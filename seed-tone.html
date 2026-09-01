@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- Verifier scaffold (cycle 4 Tone round; keep untracked like the other
+     probe scaffolds): seeds the autosave slot with a Tone-heavy chain in
+     the LEGACY bare-preset shape (src/persistence.js migrates it on load —
+     layout falls back to the board default), then hops into the app. -->
+<script>
+  localStorage.setItem('karaoke-autosave-v1', JSON.stringify({
+    schemaVersion: 1,
+    name: '__autosave__',
+    nodes: [
+      { id: 'n1', type: 'gain', params: { gainDb: 0 } },
+      { id: 't1', type: 'pitchshift', params: { pitch: 0, mix: 100 } },
+      { id: 't2', type: 'tremolo', params: { rateHz: 5, depth: 50 } },
+      { id: 't3', type: 'phaser', params: { rateHz: 0.5, depth: 60, baseHz: 350 } },
+      { id: 't4', type: 'bitcrusher', params: { bits: 4, mix: 50 } },
+      { id: 'n6', type: 'limiter', params: { ceiling: -1, release: 50 } }
+    ]
+  }));
+  location.replace('/?cachebust=tone-verify');
+</script>

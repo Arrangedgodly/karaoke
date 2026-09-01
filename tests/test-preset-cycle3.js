@@ -675,8 +675,8 @@ async function main() {
     );
     var factory = sandbox.FactoryPresets.list();
     check(
-      Array.isArray(factory) && factory.length === 6,
-      'G2: the factory library still lists exactly six presets (no cycle-3 showcase yet — see factory-presets.js header)'
+      Array.isArray(factory) && factory.length === 14,
+      'G2: the factory library lists fourteen presets — six original + eight audition-accepted via the wayfinder pipeline on 2026-09-01 (the PRE-1 provenance bar, met by human audition rather than a cycle-3 showcase)'
     );
     check(
       factory.length > 0 && deepEqual(factory[0].nodes, sandbox.DEFAULT_PRESET.nodes),

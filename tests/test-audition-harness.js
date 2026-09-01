@@ -315,9 +315,15 @@ function main() {
         check(s3e.__domCalls.bodyAppend >= 1 &&
           s3e.window.AuditionHarness.session.current() === null,
           'E1: an empty-pen panel renders the no-candidates state without a current candidate');
-        check(!!s3.window.AuditionHarness.session.current(),
-          'E1: the shipped pen\u2019s panel starts on its first candidate (' +
-          (s3.window.AuditionHarness.session.current() || {}).name + ')');
+        // Pen-aware since the 2026-09-01 promotion emptied the shipped pen:
+        // a batch-bearing pen starts on its first candidate; an empty pen
+        // legitimately renders the no-candidates state (checked above).
+        check(pen.length > 0 ? !!s3.window.AuditionHarness.session.current()
+            : s3.window.AuditionHarness.session.current() === null,
+          pen.length > 0
+            ? 'E1: the shipped pen\u2019s panel starts on its first candidate (' +
+              (s3.window.AuditionHarness.session.current() || {}).name + ')'
+            : 'E1: the shipped pen is empty — the panel renders the no-candidates state');
 
         var s4 = createSandbox({ search: '?audition' });
         loadSrc(s4, 'src/audition-candidates.js');
