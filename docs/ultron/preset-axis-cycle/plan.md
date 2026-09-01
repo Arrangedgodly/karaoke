@@ -89,7 +89,7 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
 
 ### Content lane
 
-- **GEN-1 — Genre candidates (6)** *(medium)* — status: `pending`
+- **GEN-1 — Genre candidates (6)** *(medium)* — status: `completed` (user-approved 2026-09-01)
   (unblocked per D1 — RES-1 complete; rap candidate still waits on BEH-1
   per deps)
   Author Metal / Rap-Hip-Hop / R&B-Soul / Country / Dance-EDM / Musicals
