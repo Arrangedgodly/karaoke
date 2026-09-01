@@ -48,9 +48,37 @@ The first small set of candidates run end-to-end through the pipeline to prove
 it before production batches.
 _Avoid_: pilot, MVP presets
 
+**Axis**:
+One of the four public tag dimensions a factory preset draws tags from —
+genre, vibe, use-case, gag — combined freely, never exclusive folders; the
+vocabulary is append-only (a tag is added only when a real request fails to
+match).
+_Avoid_: bucket, category, folder
+
+**Primary tag**:
+The single tag a preset declares for dropdown grouping, chosen at audition.
+_Avoid_: main tag, group
+
+**Technique axis**:
+The internal tag dimension describing what the chain does (hard-tune, lo-fi,
+ambience-long…); used for coverage and dedup only, never user-facing
+grouping.
+_Avoid_: effect tags
+
+**Cleanup**:
+The use-case for mic-repair presets — hiss, plosives, room noise — first-class
+because users request it more fluently than any sound.
+_Avoid_: polish-only, enhancement
+
 ### Agent strategy
 
 **Preset-first**:
 Resolving a user request by loading the closest factory preset and adjusting
 params, before building a chain from scratch.
 _Avoid_: preset matching (names the agent's search step, not the strategy)
+
+**Closeness rule**:
+A request is close enough to a preset when any of its tags matches the
+request's dominant intent — load and tweak; otherwise build fresh. A request
+that matches nothing is a coverage gap.
+_Avoid_: fuzzy matching
