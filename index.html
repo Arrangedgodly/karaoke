@@ -416,6 +416,15 @@
     load only — reopen by reloading with ?dev.
   -->
   <script src="src/mcp-harness.js"></script>
+  <!--
+    PROTOTYPE (throwaway) — wayfinder #29, preset audition harness v0.
+    Activates ONLY when location.search contains 'audition' (same zero-
+    footprint gate as mcp-harness above); three ?variant=A|B|C UIs with a
+    floating switcher. Every load goes through the real
+    ChainCanvas.loadModel path. Placeholder candidates, in-memory verdicts.
+    Lives on a branch until a variant wins — do not fold without a rewrite.
+  -->
+  <script src="src/audition-prototype.js"></script>
   <script src="src/presets-ui.js"></script>
   <!--
     VIS-5 — MIC IN / OUT level meters (window.Meters, src/meters.js):
