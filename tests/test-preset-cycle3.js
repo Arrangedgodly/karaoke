@@ -159,6 +159,7 @@ function createEnv() {
     'src/node-autotune.js',
     'src/preset-schema.js',
     'src/default-preset.js',
+    'src/factory-library-data.js',
     'src/factory-presets.js',
     'src/preset-store.js',
     'src/persistence.js'

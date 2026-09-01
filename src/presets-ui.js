@@ -14,9 +14,13 @@
 // (named, user-managed saved presets), ChainCanvas.getCurrentModel() for
 // Save As, and ChainEditing.apply() for every preset load.
 //
-// PS-4 scope: the dropdown gains two <optgroup> groups — "Factory"
-// (window.FactoryPresets' six shipped presets, first) and "Yours"
-// (PresetStore's user presets). The merge happens HERE, at the dropdown,
+// PS-4 scope (amended by wayfinder #30): the dropdown groups the factory
+// library by each preset's PRIMARY TAG (FactoryPresets.listDetailed() +
+// groupOrder() — use-case first with cleanup before everything, then
+// genre, vibe, gag) and keeps one "Yours" group
+// (PresetStore's user presets). When the metadata surface is absent the
+// factory side degrades to PS-4's single flat "Factory" group. The merge
+// happens HERE, at the dropdown,
 // deliberately NOT inside PresetStore: the store owns exactly one thing
 // (the user's named presets under 'karaoke-presets-v1'), and the factory
 // library is static runtime content that is never persisted — merging at
@@ -554,6 +558,107 @@
   }
 
   /**
+   * Wayfinder #30: build the factory side of the dropdown as one
+   * <optgroup> per PRIMARY TAG, ordered by FactoryPresets.groupOrder()
+   * (cleanup first, then use-case, genre, vibe, gag). Returns the group
+   * ELEMENTS as an array (deliberately not a DocumentFragment — minimal
+   * test sandboxes stub createElement but not createDocumentFragment), or
+   * null when the metadata surface is absent/short (no
+   * listDetailed/groupOrder exports, or the detailed listing disagrees
+   * with list() — old sandboxes, bare test profiles) so the caller falls
+   * back to PS-4's single flat "Factory" group.
+   *
+   * A preset whose primary is not in the group order (data the conformance
+   * test would flag) still renders — in a trailing "Factory" group — so a
+   * metadata bug can never make shipped content unreachable.
+   *
+   * @param {string} [selectName] - the namespaced 'factory:<name>' value to
+   *   mark selected, mirroring refreshPresetSelect's semantics.
+   * @returns {HTMLOptGroupElement[]|null}
+   */
+  function buildFactoryGroups(selectName) {
+    var fp = window.FactoryPresets;
+    if (!fp || typeof fp.listDetailed !== 'function' ||
+        typeof fp.groupOrder !== 'function') {
+      return null;
+    }
+    var detailed = fp.listDetailed();
+    if (detailed.length === 0 || detailed.length !== fp.list().length) {
+      return null;
+    }
+    var order = fp.groupOrder();
+    var byPrimary = {};
+    var unknownPrimary = [];
+    detailed.forEach(function (entry) {
+      if (order.indexOf(entry.primary) !== -1) {
+        (byPrimary[entry.primary] = byPrimary[entry.primary] || []).push(entry);
+      } else {
+        unknownPrimary.push(entry);
+      }
+    });
+
+    var groups = [];
+    order.forEach(function (primary) {
+      var entries = byPrimary[primary];
+      if (!entries || entries.length === 0) {
+        return;
+      }
+      groups.push(makeFactoryGroup(humanizeTag(primary), entries, selectName));
+    });
+    if (unknownPrimary.length > 0) {
+      groups.push(makeFactoryGroup('Factory', unknownPrimary, selectName));
+    }
+    return groups;
+  }
+
+  /**
+   * One factory <optgroup>: label + namespaced options, selection by the
+   * 'factory:<name>' value form.
+   */
+  function makeFactoryGroup(label, entries, selectName) {
+    var group = document.createElement('optgroup');
+    group.label = label;
+    entries.forEach(function (entry) {
+      var opt = document.createElement('option');
+      opt.value = FACTORY_VALUE_PREFIX + entry.name;
+      opt.textContent = entry.name;
+      if (selectName === FACTORY_VALUE_PREFIX + entry.name) {
+        opt.selected = true;
+      }
+      group.appendChild(opt);
+    });
+    return group;
+  }
+
+  /**
+   * Humanize a primary tag for an optgroup label: the value half of
+   * 'axis:value', each word (split on '/', '-', ' ') capitalized —
+   * 'use-case:speech/hosting' -> 'Speech/Hosting', 'vibe:epic/big' ->
+   * 'Epic/Big', 'gag:8-bit' -> '8-Bit'.
+   *
+   * @param {string} tag
+   * @returns {string}
+   */
+  function humanizeTag(tag) {
+    var value = tag.indexOf(':') !== -1 ? tag.slice(tag.indexOf(':') + 1) : tag;
+    var out = '';
+    var capNext = true;
+    for (var i = 0; i < value.length; i++) {
+      var ch = value[i];
+      if (ch === '/' || ch === '-' || ch === ' ') {
+        capNext = true;
+        out += ch;
+      } else if (capNext) {
+        out += ch.toUpperCase();
+        capNext = false;
+      } else {
+        out += ch;
+      }
+    }
+    return out;
+  }
+
+  /**
    * Rebuild #preset-select's <option> list: PS-4's two groups — a
    * "Factory" <optgroup> (window.FactoryPresets' library, first) and a
    * "Yours" <optgroup> (PresetStore.listNames()' user presets). Since
@@ -606,18 +711,28 @@
       return;
     }
 
-    var factoryGroup = document.createElement('optgroup');
-    factoryGroup.label = 'Factory';
-    factory.forEach(function (preset) {
-      var opt = document.createElement('option');
-      opt.value = FACTORY_VALUE_PREFIX + preset.name;
-      opt.textContent = preset.name;
-      if (selectName === FACTORY_VALUE_PREFIX + preset.name) {
-        opt.selected = true;
-      }
-      factoryGroup.appendChild(opt);
-    });
-    presetSelectEl.appendChild(factoryGroup);
+    var factoryGroups = buildFactoryGroups(selectName);
+    if (factoryGroups) {
+      factoryGroups.forEach(function (group) {
+        presetSelectEl.appendChild(group);
+      });
+    } else {
+      // Degrade path — PS-4's single flat "Factory" group, byte-identical
+      // to the pre-#30 behavior (no data module / no listDetailed export:
+      // old sandboxes and bare-test profiles).
+      var factoryGroup = document.createElement('optgroup');
+      factoryGroup.label = 'Factory';
+      factory.forEach(function (preset) {
+        var opt = document.createElement('option');
+        opt.value = FACTORY_VALUE_PREFIX + preset.name;
+        opt.textContent = preset.name;
+        if (selectName === FACTORY_VALUE_PREFIX + preset.name) {
+          opt.selected = true;
+        }
+        factoryGroup.appendChild(opt);
+      });
+      presetSelectEl.appendChild(factoryGroup);
+    }
 
     if (names.length > 0) {
       var userGroup = document.createElement('optgroup');

@@ -383,16 +383,18 @@
   <script src="src/preset-schema.js"></script>
   <script src="src/default-preset.js"></script>
   <!--
-    PS-4 — factory preset library (window.FactoryPresets,
-    src/factory-presets.js): the six shipped starting points (Classic
-    Karaoke + the five QA-3 acceptance chains, content verbatim from
-    docs/ultron/qa/qa3-driver.js). Static runtime content, loaded here
-    right after default-preset.js — BEFORE preset-store.js/presets-ui.js/
-    mcp-tools.js, its three consumers — and never persisted: the preset
-    dropdown merges it at runtime (Factory/Yours optgroups), so a fresh
-    profile sees the full library with zero localStorage seeding and
-    PresetStore's user namespace is untouched.
+    PS-4 + wayfinder #30 — factory preset library: structured CONTENT in
+    src/factory-library-data.js (window.FACTORY_LIBRARY: vocabularies,
+    primary-group order, and the auditioned entries — name, description,
+    tags, primary, provenance, nodes), loaded immediately BEFORE the thin
+    loader src/factory-presets.js (window.FactoryPresets: fresh-copy
+    exports over that data). Conformance against the live registry and
+    schema is enforced by tests/test-factory-library.js. Never persisted:
+    the preset dropdown merges it at runtime (primary-tag optgroups +
+    Yours), so a fresh profile sees the whole library with zero
+    localStorage seeding and PresetStore's user namespace is untouched.
   -->
+  <script src="src/factory-library-data.js"></script>
   <script src="src/factory-presets.js"></script>
   <script src="src/preset-store.js"></script>
   <script src="src/canvas.js"></script>
