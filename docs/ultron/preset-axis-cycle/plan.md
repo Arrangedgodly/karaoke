@@ -110,8 +110,8 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
   `production-log.md`.
 
 - **GAG-1 — Gag + vibe candidates (~10–11)** *(medium)* — status:
-  `awaiting-approval` (branch `gag-1-gag-candidates`, stacked on
-  `gen-1-genre-candidates`)
+  `completed` (user-approved 2026-09-01; branch `gag-1-gag-candidates`,
+  stacked on `gen-1-genre-candidates`)
   (unblocked per D2/D3 — RES-2 complete)
   Re-authored robot/megaphone/8-bit (notes addressed, delta reviewable) +
   helium/darth-vader/monster-demon (distinct per RQ-3) + intimate vibe +
