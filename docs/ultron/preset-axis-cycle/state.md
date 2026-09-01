@@ -32,3 +32,6 @@ Phase: plan. Next: $plan-it-out.
 plan.md written via $plan-it-out: 9 tasks, 4 lanes, 4 milestones, research
 queue RQ-1 (genre idioms, blocking) / RQ-2+RQ-3 (gag re-authoring + new
 gags, informing). Phase gate: user plan approval.
+
+### Plan: APPROVED 2026-09-01 (no targeted changes).
+Phase: deep-research. Next: $deep-research-swarm on RQ-1/RQ-2/RQ-3.
