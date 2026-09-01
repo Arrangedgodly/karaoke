@@ -35,3 +35,15 @@ gags, informing). Phase gate: user plan approval.
 
 ### Plan: APPROVED 2026-09-01 (no targeted changes).
 Phase: deep-research. Next: $deep-research-swarm on RQ-1/RQ-2/RQ-3.
+
+## Deep Research Record (2026-09-01)
+Both tracks complete: research/rq1-genre-idioms.md + research/rq2-gag-reauthoring.md.
+Decisions D1 (six genre sketches, GEN-1 basis), D2 (robot harmony-double /
+megaphone max-legal density 11.97 dB boundary / 8-bit 6-bit+presence),
+D3 (helium +10 thin / vader −4 intercom / monster −10 growl): marked
+COMMITTED-BY-PLAN-AUTHORITY — the user did not answer the individual
+disposition questions; the approved plan already authorizes
+research-informed authoring and the user's ?audition pass (AUD-1) is the
+binding gate on all content. Ring-mod/tremolo-limitation caveat recorded;
+single-knob fallbacks pre-planned in rq2. PEN-1 must verify the ≤-boundary
+semantics for the megaphone budget.
