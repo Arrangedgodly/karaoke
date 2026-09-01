@@ -178,8 +178,6 @@ function createStorage() {
 // ----------------------------------------------------------------------
 function buildPanel() {
   var container = makeElement('div');
-  var select = makeElement('select');
-  container.appendChild(select);
   var current = makeElement('span');
   current.textContent = 'Unsaved chain';
   var dot = makeElement('span');
@@ -187,13 +185,16 @@ function buildPanel() {
   return {
     container: container,
     byId: {
-      // The preset panel (presets-ui.js).
+      // The preset panel (presets-ui.js). Compact-browsing round: the
+      // init guard now requires #preset-list + #build-panel-presets
+      // instead of the old #preset-select/#load-preset-btn/
+      // #delete-preset-btn trio — this stub exists only so that guard
+      // doesn't bail and break the unrelated read-tool-purity checks.
       'save-preset-btn': makeElement('button'),
       'current-preset-name': current,
       'unsaved-indicator': dot,
-      'preset-select': select,
-      'load-preset-btn': makeElement('button'),
-      'delete-preset-btn': makeElement('button'),
+      'preset-list': makeElement('div'),
+      'build-panel-presets': container,
       // The canvas markup (src/canvas.js refuses to wire up without it).
       'palette-list': makeElement('ul'),
       'chain-list': makeElement('ul'),

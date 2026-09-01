@@ -214,25 +214,32 @@ check(
   'start-button', 'input-device-select', 'status', 'status-dot', 'status-text',
   'start-hint', 'readout-sample-rate', 'readout-latency', 'readout-node-count',
   'chain-layout', 'palette-list', 'chain-canvas', 'chain-list', 'empty-hint',
-  'save-preset-btn', 'preset-select', 'load-preset-btn', 'delete-preset-btn',
+  'save-preset-btn', 'preset-search-input', 'preset-list',
   'current-preset-name', 'unsaved-indicator'
 ].forEach(function (id) {
   check(byId(id) !== null, 'wiring id survives: #' + id);
 });
 
-// The voice deck's three zones, in STACKED order, as its direct children
-// (Guided Patchbay round: the old .palette | .canvas-panel | .presets
-// three-column grid is replaced by three stacked zones — the chain face
-// with its fixed Voice In/Out rails, the signal-order strip, and the
-// two-tab build panel that absorbed both the old palette and presets
-// zones).
+// The voice deck's direct children (left-sidebar round, 2026-08-31 user
+// direction: a bottom placement for .build shipped and was reverted —
+// .build is back to a real column, FIRST child now, with .canvas-panel +
+// the signal-order strip wrapped together into .voice-deck-face as its
+// sibling, so .build sits beside that PAIR rather than beside just the
+// board. .layout itself runs as a row at >=901px and reverts to a plain
+// stacked column below that — see the flex-direction check further down).
 var zones = layout ? layout.children : [];
 check(
-  zones.length === 3 &&
-    hasClass(zones[0], 'canvas-panel') && hasClass(zones[0], 'panel') &&
-    hasClass(zones[1], 'signal-order') && hasClass(zones[1], 'panel') &&
-    hasClass(zones[2], 'build') && hasClass(zones[2], 'panel'),
-  'voice deck zones in order: .canvas-panel | .signal-order | .build (stacked, not a grid)'
+  zones.length === 2 &&
+    hasClass(zones[0], 'build') && hasClass(zones[0], 'panel') &&
+    hasClass(zones[1], 'voice-deck-face'),
+  'voice deck top-level children in order: .build | .voice-deck-face'
+);
+var faceZones = zones[1] ? zones[1].children : [];
+check(
+  faceZones.length === 2 &&
+    hasClass(faceZones[0], 'canvas-panel') && hasClass(faceZones[0], 'panel') &&
+    hasClass(faceZones[1], 'signal-order') && hasClass(faceZones[1], 'panel'),
+  '.voice-deck-face wraps [.canvas-panel, .signal-order] in order — the board and the strip stay stacked together beside .build'
 );
 
 // The board-frame flanks the scrolling .canvas with two fixed rails, each
@@ -498,9 +505,13 @@ check(
 check(
   canvasPanelRule && cssDecl(canvasPanelRule, 'border-bottom') === '1px solid var(--pm-groove-cut)' &&
     signalOrderRule && cssDecl(signalOrderRule, 'border-bottom') === '1px solid var(--pm-groove-cut)' &&
-    signalOrderRule && cssDecl(signalOrderRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)' &&
-    buildRule && cssDecl(buildRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)',
-  'zone separators are groove pairs (cut then lip, top to bottom now — the stacked twin of the sections\' own grooves)'
+    signalOrderRule && cssDecl(signalOrderRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)',
+  '.voice-deck-face zone separators are HORIZONTAL groove pairs (cut then lip, top to bottom — the stacked twin of the sections\' own grooves): canvas-panel -> signal-order'
+);
+check(
+  buildRule && cssDecl(buildRule, 'border-right') === '1px solid var(--pm-groove-cut)' &&
+    cssDecl(buildRule, 'box-shadow') === 'inset -1px 0 0 var(--pm-groove-lip)',
+  'left-sidebar round: .build\'s own separator from the board is a VERTICAL groove pair (cut + lip both on .build\'s right edge, the same self-contained pattern .io-rail-in/.io-rail-out already use) — .build sits BESIDE the board now, not above it'
 );
 
 // The hatch: the canvas face's exact gradient, now on both the strip and
@@ -528,12 +539,15 @@ check(
 );
 
 // ----------------------------------------------------------------------
-console.log('G. viewport law — the deck wraps below 900px; the voice deck always stacks');
+console.log('G. viewport law — the deck wraps below 900px; the voice deck runs as a row only at >=901px');
 
-// One 900px media block remains — the system deck's own etch-wrap
-// (Guided Patchbay round: the voice deck's three zones are ALWAYS
-// stacked now, so there is no separate narrow-viewport collapse to
-// author or test — "below 900px the zones stack" is true unconditionally).
+// One 900px media block remains — the system deck's own etch-wrap. The
+// voice deck's OWN narrow-viewport collapse is back (left-sidebar round,
+// 2026-08-31 user direction): .layout is a plain stacked column at its
+// base (unscoped) rule, and only becomes a row — .build beside
+// .voice-deck-face — inside the existing @media (min-width: 901px) block,
+// so "below 901px the zones stack" holds again, this time by the
+// mobile-first default rather than a dedicated collapse rule.
 function mediaBlockAfterIndex(idx) {
   var open = RAW_CSS.indexOf('{', idx);
   var depth = 1;
@@ -575,7 +589,52 @@ var layoutRule = cssRule('.layout');
 check(
   layoutRule && cssDecl(layoutRule, 'display') === 'flex' &&
     cssDecl(layoutRule, 'flex-direction') === 'column',
-  '.layout is UNCONDITIONALLY a flex column (canvas-panel -> signal-order -> build) — the zones were never side-by-side, so there is no width to stack them below'
+  '.layout\'s BASE (mobile-first, unscoped) rule is a flex column — below 901px .build stacks above .voice-deck-face, same as every other zone pairing on this page'
+);
+
+// Left-sidebar round: find the SPECIFIC @media (min-width: 901px) block
+// that carries .layout's row override — this file (main.css) has several
+// separate blocks sharing that exact condition text (one per feature
+// area), so a plain RAW_CSS.indexOf('@media (min-width: 901px)') would
+// only ever find the FIRST one, which may not be the one that matters
+// here. Scans every same-condition block and returns the body of the
+// first one containing `selector`.
+function cssRuleInMedia(mediaCondition, selector) {
+  var marker = '@media (' + mediaCondition + ') {';
+  var searchFrom = 0;
+  while (true) {
+    var atIdx = RAW_CSS.indexOf(marker, searchFrom);
+    if (atIdx === -1) { return null; }
+    var block = mediaBlockAfterIndex(atIdx);
+    var selIdx = block.indexOf('\n  ' + selector + ' {');
+    if (selIdx !== -1) {
+      var selOpen = block.indexOf('{', selIdx);
+      var selDepth = 1;
+      var j = selOpen + 1;
+      while (j < block.length && selDepth > 0) {
+        if (block[j] === '{') { selDepth += 1; }
+        else if (block[j] === '}') { selDepth -= 1; }
+        j += 1;
+      }
+      if (selDepth === 0) {
+        return block.slice(selOpen + 1, j - 1);
+      }
+    }
+    searchFrom = atIdx + marker.length;
+  }
+}
+// .layout.voice-deck, not bare .layout: this rule sits EARLIER in the
+// source than the unscoped base .layout rule this test just checked
+// above, so at equal specificity a bare-.layout media rule would LOSE
+// every shared property (flex-direction, min-height) to that later base
+// rule regardless of whether the media query matches — a real bug this
+// round's own implementation surfaced and fixed via the same specificity
+// bump the .preset-search sticky-input fix already used this session.
+var layoutWideRule = cssRuleInMedia('min-width: 901px', '.layout.voice-deck');
+check(
+  layoutWideRule && cssDecl(layoutWideRule, 'flex-direction') === 'row' &&
+    cssDecl(layoutWideRule, 'min-height') === '0',
+  'at 901px+ .layout.voice-deck becomes a ROW with min-height: 0 (the specificity bump that actually wins over the later base rule) — .build (a real column again, collapsible) beside .voice-deck-face (the board + signal-order strip, still stacked together)'
 );
 
 // ----------------------------------------------------------------------

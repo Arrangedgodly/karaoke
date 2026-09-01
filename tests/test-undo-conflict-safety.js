@@ -368,6 +368,23 @@ function findByIdIn(el, id) {
   });
 }
 
+// Compact-browsing round: find preset `name`'s own row inside the
+// #preset-list root, then that row's .preset-row-delete button (there is
+// no shared #delete-preset-btn to click anymore — every user row carries
+// its own).
+function findPresetRowDeleteBtn(listEl, name) {
+  var row = findIn(listEl, function (node) {
+    return classList(node).indexOf('preset-row') !== -1 &&
+      typeof node.getAttribute === 'function' && node.getAttribute('data-preset-name') === name;
+  });
+  if (!row) {
+    return null;
+  }
+  return findIn(row, function (node) {
+    return classList(node).indexOf('preset-row-delete') !== -1;
+  });
+}
+
 // Depth-first search over an element's subtree.
 function findIn(el, predicate) {
   if (predicate(el)) {
@@ -398,6 +415,12 @@ function createEnv() {
     sortables: []
   };
 
+  // Compact-browsing round: presets-ui.js no longer anchors its naming
+  // row / quiet note to #preset-select's .parentNode (that element is
+  // gone) — it anchors directly to #build-panel-presets, so presetHost
+  // now plays THAT role (registered as 'build-panel-presets' below) as
+  // well as still being the subtree findByIdIn() searches for the
+  // dynamically-appended naming row / note.
   var byId = {
     'palette-list': makeElement('ul'),
     'chain-list': makeElement('ul'),
@@ -406,14 +429,12 @@ function createEnv() {
     'save-preset-btn': makeElement('button'),
     'current-preset-name': makeElement('span'),
     'unsaved-indicator': makeElement('span'),
-    'preset-select': makeElement('select'),
-    'load-preset-btn': makeElement('button'),
-    'delete-preset-btn': makeElement('button')
+    'preset-list': makeElement('div')
   };
   byId['current-preset-name'].textContent = 'Unsaved chain';
   byId['unsaved-indicator'].style.display = 'none';
   var presetHost = makeElement('div');
-  presetHost.appendChild(byId['preset-select']);
+  byId['build-panel-presets'] = presetHost;
   env.presetHost = presetHost;
   env.byId = byId;
 
@@ -953,15 +974,15 @@ async function main() {
         caseLabel + ' seed: agent save_preset overwrote "Del Target"'
       );
 
-      // The HUMAN deletes the preset through the real Delete handler.
+      // The HUMAN deletes the preset through the real Delete handler —
+      // compact-browsing round: that's now "Del Target"'s OWN row button,
+      // not a shared button acting on a dropdown's selection.
       sandbox.PresetsUI.refreshPresetSelect('Del Target');
-      env.byId['preset-select'].children.forEach(function (opt) {
-        opt.selected = opt.value === 'Del Target';
-      });
+      var deleteBtn = findPresetRowDeleteBtn(env.byId['preset-list'], 'Del Target');
       env.confirmResponse = true;
-      // R2-3: two-step Delete — arm, then confirm. No browser confirm().
-      env.byId['delete-preset-btn'].__fire('click');
-      env.byId['delete-preset-btn'].__fire('click');
+      // R2-3, generalized: two-step Delete — arm, then confirm. No browser confirm().
+      deleteBtn.__fire('click');
+      deleteBtn.__fire('click');
       return { env: env, sandbox: sandbox };
     };
 

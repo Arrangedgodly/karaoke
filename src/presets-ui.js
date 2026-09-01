@@ -57,6 +57,35 @@
 // The surface ships zero alert/confirm/prompt calls (suite-enforced by
 // tests/test-preset-persistence-honesty.js section M).
 //
+// Compact-browsing round: the factory-only card grid (#preset-cards) and
+// the #preset-select dropdown+Load/Delete pair (the ONLY way user presets
+// could be browsed) are both retired in favor of ONE searchable, scrollable
+// row list (#preset-list, fed by renderPresetList()) — a real present-day
+// defect, not a future one: at just the 6 shipped factory presets the old
+// card grid already wrapped awkwardly with a card clipped off-screen, and
+// the real "browse everything" surface was a cramped native <select> below
+// the fold. renderPresetList(filterText) is now the single render path for
+// initial load, every #preset-search-input keystroke, and every
+// refreshPresetSelect() call (name kept — src/mcp-tools.js depends on it —
+// but it now delegates here instead of rebuilding <option>s). Each preset
+// is a row: a .preset-row-load button (name + a family-tag row, and for
+// FACTORY rows only — PresetStore carries no description field for user
+// presets, a deliberate v1 scope cut — a .preset-row-preview description
+// that visually collapses at rest and reveals on hover/focus, borrowing
+// .chip-preview's transition from the Effects tab's palette chips but
+// deliberately NOT aria-hidden: today's cards always announce their
+// description as part of the button's accessible name, and that contract
+// must not silently regress just because the visual treatment is
+// borrowed) plus, for USER rows only, a sibling .preset-row-delete button.
+// Delete's two-step arm (armDeleteButton/disarmDeleteButton below) is the
+// same arm-relabel-to-"DELETE?"-with-an-edge-red-bezel/5s-window/no-
+// confirm() contract R2-3 established, generalized off a single constant
+// button to a mutable "currently armed" reference so arming any row's
+// delete auto-disarms whatever else was armed (only one thing is ever
+// mid-delete) — renderPresetList() itself unconditionally disarms first,
+// so a re-render (including one triggered by typing a search) can never
+// leave a stale armed reference pointing at a detached node.
+//
 // This file owns two independent bits of state, both purely DOM-display
 // concerns — neither is persisted anywhere, and both reset to their
 // initial "nothing loaded/saved yet" values on every page load:
@@ -75,15 +104,16 @@
   var currentPresetNameEl = document.getElementById('current-preset-name');
   var unsavedIndicatorEl = document.getElementById('unsaved-indicator');
   var saveBtn = document.getElementById('save-preset-btn');
-  var presetSelectEl = document.getElementById('preset-select');
-  var loadBtn = document.getElementById('load-preset-btn');
-  var deleteBtn = document.getElementById('delete-preset-btn');
-  // Guided Patchbay round: the Presets tab's curated browse cards (JS-built
-  // below by renderPresetCards()). Optional — a harness/markup without it
-  // simply never renders cards; the dropdown+Load path is unaffected.
-  var presetCardsEl = document.getElementById('preset-cards');
+  // Compact-browsing round: the dropdown+Load/Delete pair and the
+  // factory-only card grid are both retired in favor of ONE searchable,
+  // scrollable row list — see renderPresetList() below. #build-panel-presets
+  // itself is the naming-row/note anchor now that #preset-select (whose
+  // .parentNode used to serve that purpose) is gone.
+  var presetSearchInputEl = document.getElementById('preset-search-input');
+  var presetListEl = document.getElementById('preset-list');
+  var presetsPanelRootEl = document.getElementById('build-panel-presets');
 
-  if (!presetsPanelEl || !currentPresetNameEl || !presetSelectEl || !loadBtn || !deleteBtn) {
+  if (!presetsPanelEl || !currentPresetNameEl || !presetListEl || !presetsPanelRootEl) {
     // Presets panel markup isn't present (e.g. not yet built, or
     // restructured again by a later task) — nothing to wire up.
     return;
@@ -118,12 +148,28 @@
   var namingCancelBtnEl = null;
   var namingRowOpen = false;
 
-  // R2-3: the two-step Delete arm state — the armed flag, the relabelled
-  // button text, and the 5 s window that disarms it again.
+  // R2-3, generalized by the compact-browsing round: the two-step Delete
+  // arm state — which row's delete button is currently armed (null when
+  // none is), and the 5 s window that disarms it again. One button used to
+  // be the only Delete button on the panel; now every user preset row has
+  // its own, so the armed reference is a mutable pointer rather than a
+  // single constant — arming any row's button auto-disarms whatever else
+  // was armed (see armDeleteButton), keeping the same "only one thing is
+  // ever mid-delete" contract with N possible buttons instead of one.
   var DELETE_ARM_LABEL = 'DELETE?';
   var DELETE_ARM_WINDOW_MS = 5000;
-  var deleteArmed = false;
+  var armedDeleteBtn = null;
+  var armedDeleteName = null;
   var deleteArmTimer = null;
+
+  // Compact-browsing round: remembers the last preset name/kind passed to
+  // refreshPresetSelect(selectName) (in the dropdown/optgroup vocabulary —
+  // a plain user name, or 'factory:<name>') so the matching row can be
+  // highlighted .preset-row-active — and so that identity SURVIVES a
+  // search-only re-render (typing in #preset-search-input calls
+  // renderPresetList() directly, without going through
+  // refreshPresetSelect(), so it must not reset which row reads as active).
+  var lastActivePresetKey = null;
 
   /**
    * R2-3: lazily build the inline Save As naming row and append it to
@@ -141,7 +187,7 @@
     if (namingRowEl) {
       return;
     }
-    var host = presetSelectEl.parentNode;
+    var host = presetsPanelRootEl;
     if (!host || typeof host.appendChild !== 'function') {
       return;
     }
@@ -317,47 +363,59 @@
   }
 
   /**
-   * R2-3: disarm the two-step Delete — restore the plain label and
-   * bezel, cancel the expiry window. Idempotent.
+   * R2-3, generalized: disarm the two-step Delete — restore whichever
+   * row's button is currently armed to its plain "Delete" label and
+   * bezel, cancel the expiry window. Idempotent (a no-op when nothing is
+   * armed), and safe to call against a button whose row was since removed
+   * from the DOM by a re-render (setting textContent/className on a
+   * detached node is harmless).
    */
-  function disarmDelete() {
-    if (!deleteArmed) {
+  function disarmDeleteButton() {
+    if (!armedDeleteBtn) {
       return;
     }
-    deleteArmed = false;
+    var btn = armedDeleteBtn;
+    armedDeleteBtn = null;
+    armedDeleteName = null;
     if (deleteArmTimer) {
       window.clearTimeout(deleteArmTimer);
       deleteArmTimer = null;
     }
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.className = 'control';
-    if (typeof deleteBtn.setAttribute === 'function') {
-      deleteBtn.setAttribute('aria-live', 'off');
+    btn.textContent = 'Delete';
+    btn.className = 'preset-row-delete';
+    if (typeof btn.setAttribute === 'function') {
+      btn.setAttribute('aria-live', 'off');
     }
   }
 
   /**
-   * R2-3: arm the two-step Delete — the button relabels to DELETE? with
-   * the safety-edge-red bezel (an EDGE, never the Bypass-only red fill),
-   * and a 5 s window holds the armed state. Anything else — the window
-   * expiring, a press elsewhere, Escape — disarms (see the document
-   * listeners wired once below).
+   * R2-3, generalized: arm one row's two-step Delete button — it relabels
+   * to DELETE? with the safety-edge-red bezel (an EDGE, never the
+   * Bypass-only red fill), and a 5 s window holds the armed state.
+   * Disarms whatever else was armed first, so only one row is EVER
+   * mid-delete at a time (arming a second row's button is not a bug —
+   * it is how you change your mind about which one you're deleting).
+   * Anything else — the window expiring, a press elsewhere, Escape, or a
+   * fresh render (a search keystroke) — disarms (see the document
+   * listeners wired once below, and renderPresetList()'s own call).
+   *
+   * @param {HTMLElement} btn
+   * @param {string} name
    */
-  function armDelete() {
-    deleteArmed = true;
-    deleteBtn.textContent = DELETE_ARM_LABEL;
-    deleteBtn.className = 'control danger-arm';
-    if (typeof deleteBtn.setAttribute === 'function') {
+  function armDeleteButton(btn, name) {
+    disarmDeleteButton();
+    armedDeleteBtn = btn;
+    armedDeleteName = name;
+    btn.textContent = DELETE_ARM_LABEL;
+    btn.className = 'preset-row-delete danger-arm';
+    if (typeof btn.setAttribute === 'function') {
       // The relabel is the whole signal — announce it, since styling
       // never carries the meaning alone.
-      deleteBtn.setAttribute('aria-live', 'polite');
-    }
-    if (deleteArmTimer) {
-      window.clearTimeout(deleteArmTimer);
+      btn.setAttribute('aria-live', 'polite');
     }
     deleteArmTimer = window.setTimeout(function () {
       deleteArmTimer = null;
-      disarmDelete();
+      disarmDeleteButton();
     }, DELETE_ARM_WINDOW_MS);
   }
 
@@ -457,63 +515,298 @@
   }
 
   /**
-   * Guided Patchbay: the Presets tab's curated browse cards — one per
-   * factory preset, name + description (FactoryPresets.describeAll(),
-   * additive and separate from list()'s policy-relevant shape) + a
-   * family-tag row, clicking through loadFactoryPreset(). Rendered ONCE
-   * at script-init time (the factory library is static content, same
-   * render-once contract renderPalette() has for the registry). Guarded:
-   * missing #preset-cards markup, a missing/damaged FactoryPresets, or a
-   * missing describeAll() all degrade to a silently empty (or
-   * description-less) card set — never a thrown error.
+   * The USER-preset twin of loadFactoryPreset() — resolves a saved preset
+   * by name from window.PresetStore and submits it through the same
+   * applyLoadedPreset() -> ChainEditing.apply() transaction every other
+   * load uses. Previously this body lived inline in the Load button's
+   * non-factory branch; now every user row's own click handler calls it
+   * directly (there is no separate Load button to click through anymore).
+   *
+   * @param {string} name
    */
-  function renderPresetCards() {
-    if (!presetCardsEl) {
+  function loadUserPreset(name) {
+    var result = window.PresetStore.load(name);
+    if (!result) {
+      // Defensive — a row only ever lists names the store itself reported,
+      // so this needs the store to have changed since the last render
+      // (e.g. another tab removed it). Same quiet-note refusal as every
+      // other guard in this file.
+      showPresetNote('Could not load that preset — it may have been removed.');
       return;
     }
-    presetCardsEl.innerHTML = '';
+    applyLoadedPreset(result);
+  }
+
+  /**
+   * One preset row: a .preset-row-load button (name, then — FACTORY rows
+   * only — a hover/focus-revealed description, then a hidden family-tag
+   * row) and, for USER rows only, a sibling .preset-row-delete button.
+   * Two real sibling <button>s (never a button nested inside a button —
+   * invalid markup and unreachable to assistive tech) inside one
+   * non-interactive wrapping <div>, so both stay independently focusable
+   * and keyboard-operable with zero custom key handling, the same way the
+   * Effects tab's node-chips already are.
+   *
+   * @param {string} name
+   * @param {Array<{type: string}>} nodes
+   * @param {'factory'|'user'} kind
+   * @param {string} [description] - factory rows only.
+   * @param {boolean} isActive - highlight as the currently-loaded preset.
+   * @returns {HTMLElement}
+   */
+  function buildPresetRow(name, nodes, kind, description, isActive) {
+    var row = document.createElement('div');
+    row.className = 'preset-row' + (isActive ? ' preset-row-active' : '');
+    row.setAttribute('data-preset-name', name);
+    row.setAttribute('data-preset-kind', kind);
+
+    var loadBtnEl = document.createElement('button');
+    loadBtnEl.type = 'button';
+    loadBtnEl.className = 'preset-row-load';
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'preset-row-name';
+    nameEl.textContent = name;
+    loadBtnEl.appendChild(nameEl);
+
+    if (description) {
+      // Reuses .chip-preview's collapse-at-rest/reveal-on-hover-or-focus
+      // CSS transition (styles/main.css) — but deliberately WITHOUT
+      // .chip-preview's aria-hidden: today's factory cards always surface
+      // their description as real button content, and that contract must
+      // not silently regress just because the visual treatment is
+      // borrowed from a place that intentionally hides its own preview
+      // text from assistive tech.
+      var previewEl = document.createElement('span');
+      previewEl.className = 'preset-row-preview';
+      previewEl.textContent = description;
+      loadBtnEl.appendChild(previewEl);
+    }
+
+    var tagsEl = document.createElement('span');
+    tagsEl.className = 'preset-row-tags';
+    tagsEl.setAttribute('aria-hidden', 'true');
+    tagsEl.textContent = nodeFamilyTags(nodes);
+    loadBtnEl.appendChild(tagsEl);
+
+    loadBtnEl.addEventListener('click', function () {
+      if (kind === 'factory') {
+        loadFactoryPreset(name);
+      } else {
+        loadUserPreset(name);
+      }
+    });
+    row.appendChild(loadBtnEl);
+
+    if (kind === 'user') {
+      var deleteBtnEl = document.createElement('button');
+      deleteBtnEl.type = 'button';
+      deleteBtnEl.className = 'preset-row-delete';
+      deleteBtnEl.textContent = 'Delete';
+      deleteBtnEl.addEventListener('click', function () {
+        // R2-3, generalized: first click on an unarmed (or differently
+        // armed) row's button ARMS this one instead — no browser
+        // confirm() anywhere. A second click on the SAME already-armed
+        // button, within the window, confirms.
+        if (armedDeleteBtn !== deleteBtnEl) {
+          armDeleteButton(deleteBtnEl, name);
+          return;
+        }
+        disarmDeleteButton();
+
+        // Issue #8: a delete that could not be persisted throws the typed
+        // StorageError — the preset is STILL stored, so it must not
+        // vanish from the list. Reconcile from the store (what it
+        // truthfully still contains) and say so through the quiet note;
+        // the current-preset display is left untouched either way.
+        try {
+          window.PresetStore.remove(name);
+        } catch (err) {
+          console.error('Presets panel: Delete "' + name + '" failed — it is still saved', err);
+          showPresetNote('Could not delete "' + name + '" — it is still saved (storage failure)');
+          refreshPresetSelect();
+          return;
+        }
+        refreshPresetSelect();
+
+        // Deleting a saved preset never touches the live chain itself —
+        // only reset the "currently loaded" display if the preset just
+        // removed was the one being displayed as current.
+        if (currentPresetName === name) {
+          setCurrentPreset(null);
+        }
+        // Issue #6: a HUMAN delete — bump the state revision so a stale
+        // agent save_preset Undo entry (whose restore re-saves or removes
+        // stored content) can no longer auto-apply over the human's newer
+        // store state.
+        noteHumanEditGuarded();
+      });
+      row.appendChild(deleteBtnEl);
+    }
+
+    return row;
+  }
+
+  /**
+   * Compact-browsing v2: the fixed display order for factory categories
+   * (describeAll()'s `category` field) — anything present in the data but
+   * not listed here still renders, just after these, alphabetically last,
+   * rather than being silently dropped (the same no-silent-drop discipline
+   * canvas.js's paletteGroupLabel()/familyInitials() already follow).
+   */
+  var PRESET_CATEGORY_ORDER = ['Karaoke', 'Music', 'Novelty', 'Speech'];
+
+  /**
+   * Compact-browsing round: the ONE render path for the Presets tab's
+   * browse surface — initial load, every #preset-search-input keystroke,
+   * and every refreshPresetSelect() call (below) all funnel through this.
+   * Merges factoryPresets() + window.PresetStore.listNames() into TWO
+   * groups ("Factory" then "Yours", real non-interactive <h3>s — the
+   * Effects tab's .palette-group-label vocabulary, reused verbatim);
+   * within "Factory", v2 sub-groups by describeAll()'s `category` field
+   * (PRESET_CATEGORY_ORDER above) under <h4 class="preset-category-label">
+   * sub-headers — "Yours" stays flat, since user-saved presets carry no
+   * category data (a deliberate v1 scope cut, same discipline already
+   * applied to user rows carrying no description). Filters everything by
+   * a live case-insensitive substring match against a preset's name PLUS
+   * its own nodes' TYPE strings — not nodeFamilyTags()'s 3-letter rail
+   * codes, which "reverb" can't substring-match — so "reverb" surfaces
+   * every reverb-heavy preset, not just literal name matches — PLUS its
+   * category, so "novelty"/"karaoke" also filter. Renders a .preset-row
+   * per surviving entry via buildPresetRow().
+   *
+   * Unconditionally disarms any in-progress two-step Delete first — a
+   * re-render (this function wipes and rebuilds #preset-list every call)
+   * would otherwise leave armedDeleteBtn pointing at a detached node.
+   *
+   * Empty states (styles/main.css .preset-list-empty, the panel's shared
+   * quiet muted-print tier): "No presets yet" when the merged UNFILTERED
+   * library is genuinely empty (both FactoryPresets and PresetStore); a
+   * "No presets match…" line when a search simply matched nothing.
+   *
+   * @param {string} [filterText]
+   */
+  function renderPresetList(filterText) {
+    disarmDeleteButton();
+
+    if (!presetListEl) {
+      return;
+    }
+    presetListEl.innerHTML = '';
+
+    var filterNorm = (filterText || '').trim().toLowerCase();
     var descriptions = {};
+    var categories = {};
     try {
       if (window.FactoryPresets && typeof window.FactoryPresets.describeAll === 'function') {
         window.FactoryPresets.describeAll().forEach(function (entry) {
           if (entry && typeof entry.name === 'string') {
             descriptions[entry.name] = entry.description || '';
+            categories[entry.name] = entry.category || '';
           }
         });
       }
     } catch (err) {
-      /* degrade to description-less cards below */
+      /* degrade to description-less, uncategorized rows below */
     }
 
-    factoryPresets().forEach(function (preset) {
-      var card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'preset-card';
-      card.setAttribute('data-preset-name', preset.name);
-      card.setAttribute('aria-label', 'Load ' + preset.name + ' preset');
+    var factory = factoryPresets();
+    var userNames = window.PresetStore.listNames();
 
-      var title = document.createElement('strong');
-      title.textContent = preset.name;
-      card.appendChild(title);
-
-      var description = descriptions[preset.name];
-      if (description) {
-        var small = document.createElement('small');
-        small.textContent = description;
-        card.appendChild(small);
+    function matches(name, nodes, category) {
+      if (!filterNorm) {
+        return true;
       }
+      // Match against the node TYPE strings ('reverb', 'compressor', …),
+      // not nodeFamilyTags()'s 3-letter rail codes ('REV', 'COM') — a
+      // search for "reverb" must find every reverb-heavy preset, and a
+      // substring match against an abbreviation can't do that.
+      var typeWords = nodes.map(function (n) { return n.type; }).join(' ');
+      var haystack = (name + ' ' + typeWords + ' ' + (category || '')).toLowerCase();
+      return haystack.indexOf(filterNorm) !== -1;
+    }
 
-      var tags = document.createElement('span');
-      tags.className = 'preset-card-tags';
-      tags.setAttribute('aria-hidden', 'true');
-      tags.textContent = nodeFamilyTags(preset.nodes);
-      card.appendChild(tags);
-
-      card.addEventListener('click', function () {
-        loadFactoryPreset(preset.name);
-      });
-      presetCardsEl.appendChild(card);
+    var visibleFactory = factory.filter(function (preset) {
+      return matches(preset.name, preset.nodes, categories[preset.name]);
     });
+    var visibleUser = [];
+    userNames.forEach(function (name) {
+      var stored = window.PresetStore.load(name);
+      var nodes = stored ? stored.nodes : [];
+      if (matches(name, nodes, '')) {
+        visibleUser.push({ name: name, nodes: nodes });
+      }
+    });
+
+    if (factory.length === 0 && userNames.length === 0) {
+      var emptyAll = document.createElement('p');
+      emptyAll.className = 'preset-list-empty';
+      emptyAll.textContent = 'No presets yet';
+      presetListEl.appendChild(emptyAll);
+      return;
+    }
+
+    if (visibleFactory.length === 0 && visibleUser.length === 0) {
+      var emptyFiltered = document.createElement('p');
+      emptyFiltered.className = 'preset-list-empty';
+      emptyFiltered.textContent = 'No presets match “' + (filterText || '') + '”';
+      presetListEl.appendChild(emptyFiltered);
+      return;
+    }
+
+    if (visibleFactory.length > 0) {
+      var factoryLabel = document.createElement('h3');
+      factoryLabel.className = 'preset-group-label';
+      factoryLabel.textContent = 'Factory';
+      presetListEl.appendChild(factoryLabel);
+
+      // Bucket by category, in PRESET_CATEGORY_ORDER, unrecognized
+      // categories last (sorted, never silently dropped).
+      var buckets = {};
+      var bucketOrder = [];
+      visibleFactory.forEach(function (preset) {
+        var cat = categories[preset.name] || 'Other';
+        if (!buckets[cat]) {
+          buckets[cat] = [];
+          bucketOrder.push(cat);
+        }
+        buckets[cat].push(preset);
+      });
+      bucketOrder.sort(function (a, b) {
+        var ai = PRESET_CATEGORY_ORDER.indexOf(a);
+        var bi = PRESET_CATEGORY_ORDER.indexOf(b);
+        if (ai === -1 && bi === -1) { return a.localeCompare(b); }
+        if (ai === -1) { return 1; }
+        if (bi === -1) { return -1; }
+        return ai - bi;
+      });
+
+      bucketOrder.forEach(function (cat) {
+        var catLabel = document.createElement('h4');
+        catLabel.className = 'preset-category-label';
+        catLabel.textContent = cat;
+        presetListEl.appendChild(catLabel);
+        buckets[cat].forEach(function (preset) {
+          var isActive = lastActivePresetKey === FACTORY_VALUE_PREFIX + preset.name;
+          presetListEl.appendChild(
+            buildPresetRow(preset.name, preset.nodes, 'factory', descriptions[preset.name], isActive)
+          );
+        });
+      });
+    }
+
+    if (visibleUser.length > 0) {
+      var userLabel = document.createElement('h3');
+      userLabel.className = 'preset-group-label';
+      userLabel.textContent = 'Yours';
+      presetListEl.appendChild(userLabel);
+      visibleUser.forEach(function (entry) {
+        var isActive = lastActivePresetKey === entry.name;
+        presetListEl.appendChild(
+          buildPresetRow(entry.name, entry.nodes, 'user', null, isActive)
+        );
+      });
+    }
   }
 
   /**
@@ -532,7 +825,7 @@
    * @param {string} text
    */
   function showPresetNote(text) {
-    var host = presetSelectEl.parentNode;
+    var host = presetsPanelRootEl;
     if (!host || typeof host.appendChild !== 'function') {
       return;
     }
@@ -554,85 +847,30 @@
   }
 
   /**
-   * Rebuild #preset-select's <option> list: PS-4's two groups — a
-   * "Factory" <optgroup> (window.FactoryPresets' library, first) and a
-   * "Yours" <optgroup> (PresetStore.listNames()' user presets). Since
-   * issue #11 listNames() is a pure read (the PS-3-era fresh-profile
-   * seeding was removed — it duplicated the factory Classic Karaoke),
-   * so a fresh profile shows ONLY the factory group until the first
-   * explicit save; the "-- no presets --" placeholder below now covers
-   * the genuinely empty-store case (reachable only when the factory
-   * library is also absent).
+   * Rebuild the Presets tab's browse list (name kept — src/mcp-tools.js
+   * calls this by name after every agent-driven store change, per its own
+   * "presetsUiRefreshPresetSelect" comment — treated as an opaque
+   * refresh-the-human-panel call, so the exact rendering underneath is
+   * free to change). Delegates to renderPresetList(), reading
+   * #preset-search-input's CURRENT value so a save/delete/load never
+   * clobbers whatever the operator was mid-typing into the search box.
    *
-   * Degrade path: when the factory library is empty/absent (script failed
-   * to load, or a bare test sandbox), the dropdown renders PS-3's flat
-   * user list unchanged — the panel stays usable and old sandboxes see
-   * byte-identical behavior.
+   * Selection: a USER preset matches `selectName` by its plain name; a
+   * FACTORY preset matches only the namespaced 'factory:<name>' form
+   * (unchanged convention from the old dropdown's option values) — that
+   * keeps refreshPresetSelect('Warm Ballad') deterministic when a user
+   * preset shares a factory name, highlighting the just-saved USER row,
+   * never the factory look-alike. When provided, `selectName` is also
+   * remembered (lastActivePresetKey) so the highlight survives later
+   * search-only re-renders that don't pass one.
    *
-   * Selection: a USER option matches `selectName` by its plain name; a
-   * FACTORY option matches only the namespaced 'factory:<name>' form.
-   * That keeps refreshPresetSelect('Warm Ballad') deterministic when a
-   * user preset shares a factory name — the just-saved USER entry is the
-   * one selected, never the factory look-alike.
-   *
-   * @param {string} [selectName] - if provided and present in a group,
-   *   that option is marked selected; otherwise the browser's own default
-   *   (first option) applies.
+   * @param {string} [selectName]
    */
   function refreshPresetSelect(selectName) {
-    var names = window.PresetStore.listNames();
-    var factory = factoryPresets();
-    presetSelectEl.innerHTML = '';
-
-    if (names.length === 0 && factory.length === 0) {
-      var emptyOpt = document.createElement('option');
-      emptyOpt.value = '';
-      emptyOpt.textContent = '-- no presets --';
-      presetSelectEl.appendChild(emptyOpt);
-      return;
+    if (typeof selectName !== 'undefined') {
+      lastActivePresetKey = selectName;
     }
-
-    if (factory.length === 0) {
-      // Degrade path — PS-3's flat user list, byte-identical behavior.
-      names.forEach(function (name) {
-        var opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        if (name === selectName) {
-          opt.selected = true;
-        }
-        presetSelectEl.appendChild(opt);
-      });
-      return;
-    }
-
-    var factoryGroup = document.createElement('optgroup');
-    factoryGroup.label = 'Factory';
-    factory.forEach(function (preset) {
-      var opt = document.createElement('option');
-      opt.value = FACTORY_VALUE_PREFIX + preset.name;
-      opt.textContent = preset.name;
-      if (selectName === FACTORY_VALUE_PREFIX + preset.name) {
-        opt.selected = true;
-      }
-      factoryGroup.appendChild(opt);
-    });
-    presetSelectEl.appendChild(factoryGroup);
-
-    if (names.length > 0) {
-      var userGroup = document.createElement('optgroup');
-      userGroup.label = 'Yours';
-      names.forEach(function (name) {
-        var opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        if (name === selectName) {
-          opt.selected = true;
-        }
-        userGroup.appendChild(opt);
-      });
-      presetSelectEl.appendChild(userGroup);
-    }
+    renderPresetList(presetSearchInputEl ? presetSearchInputEl.value : '');
   }
 
   /**
@@ -715,130 +953,54 @@
     openNamingRow();
   });
 
-  loadBtn.addEventListener('click', function () {
-    var value = presetSelectEl.value;
-    if (!value) {
-      return;
-    }
+  // Compact-browsing round: Load and Delete are no longer shared buttons
+  // acting on a dropdown's selection — every row carries its own Load
+  // (buildPresetRow's .preset-row-load click handler, which calls
+  // loadFactoryPreset()/loadUserPreset()) and, for user rows, its own
+  // Delete (buildPresetRow's .preset-row-delete click handler, which
+  // carries the SAME #8/PS-4/#6 consequences the old shared Delete button
+  // had). Live search-as-you-type re-renders the whole list on every
+  // keystroke — cheap at the preset counts this panel deals with, and it
+  // is what keeps a search-driven re-render from ever leaving a stale
+  // .preset-row-active highlight or an armed-but-now-hidden Delete button
+  // around (renderPresetList() disarms unconditionally on every call).
+  if (presetSearchInputEl) {
+    presetSearchInputEl.addEventListener('input', function () {
+      renderPresetList(presetSearchInputEl.value);
+    });
+  }
 
-    // PS-4: factory selections resolve from window.FactoryPresets — the
-    // user store is never consulted — then apply through loadFactoryPreset()
-    // (defensive refusal + applyLoadedPreset() -> the SAME ChainEditing
-    // transaction a user-preset Load uses), with the same clean display
-    // state (name shown, unsaved dot hidden). This is also the Presets
-    // tab's card click path — one factory-load code path, not two.
-    if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
-      loadFactoryPreset(value.slice(FACTORY_VALUE_PREFIX.length));
-      return;
-    }
-
-    var name = value;
-    var result = window.PresetStore.load(name);
-    if (!result) {
-      // Defensive — shouldn't normally happen since the dropdown only ever
-      // lists names PresetStore itself reported as saved, but guards
-      // against e.g. another tab having removed it out from under us.
-      // Refinement entry 5 (P3-5): the quiet note, same as the factory
-      // guard above — no browser dialog anywhere on the surface.
-      showPresetNote('Could not load that preset — it may have been removed.');
-      return;
-    }
-
-    // ChainEditing updates the accepted graph, board, and autosave baseline
-    // as one transaction — nothing extra is needed here.
-    applyLoadedPreset(result);
-  });
-
-  // R2-3: Delete is two-step in-panel — no browser confirm(). The first
-  // click arms the button (relabel + safety-edge bezel + a 5 s window,
-  // see armDelete/disarmDelete); the second click inside the window
-  // deletes. Everything from the name check onward is the old
-  // confirm()-path body, unchanged in its #8/PS-4/#6 consequences.
-  deleteBtn.addEventListener('click', function () {
-    var value = presetSelectEl.value;
-    if (!value) {
-      return;
-    }
-
-    // PS-4: factory entries are load-only shipped content, not user data —
-    // a quiet inline refusal (no store.remove, the dropdown selection
-    // left exactly as it was).
-    if (value.indexOf(FACTORY_VALUE_PREFIX) === 0) {
-      showPresetNote("Factory presets can't be deleted");
-      return;
-    }
-
-    if (!deleteArmed) {
-      armDelete();
-      return;
-    }
-    disarmDelete();
-
-    var name = value;
-
-    // Issue #8: a delete that could not be persisted throws the typed
-    // StorageError — the preset is STILL stored, so it must not vanish
-    // from the list. Reconcile the dropdown from the store (what it
-    // truthfully still contains) and say so through the quiet note; the
-    // current-preset display is left untouched either way.
-    try {
-      window.PresetStore.remove(name);
-    } catch (err) {
-      console.error('Presets panel: Delete "' + name + '" failed — it is still saved', err);
-      showPresetNote('Could not delete "' + name + '" — it is still saved (storage failure)');
-      refreshPresetSelect();
-      return;
-    }
-    refreshPresetSelect();
-
-    // Deleting a saved preset never touches the live chain itself — only
-    // reset the "currently loaded" display if the preset just removed was
-    // the one being displayed as current.
-    if (currentPresetName === name) {
-      setCurrentPreset(null);
-    }
-    // Issue #6: a HUMAN delete — bump the state revision so a stale
-    // agent save_preset Undo entry (whose restore re-saves or removes
-    // stored content) can no longer auto-apply over the human's newer
-    // store state.
-    noteHumanEditGuarded();
-  });
-
-  // R2-3: the disarm observers for the two-step Delete — a press
-  // anywhere that is not the Delete button itself, or an Escape, folds
-  // the arm back to the plain label. Guarded so a page (or bare test
-  // sandbox) without document-level listeners simply keeps the 5 s
-  // window as the disarm path.
+  // R2-3, generalized: the disarm observers for the two-step Delete — a
+  // press anywhere that is not the currently-armed row's own button, or
+  // an Escape, folds the arm back to the plain label. Guarded so a page
+  // (or bare test sandbox) without document-level listeners simply keeps
+  // the 5 s window as the disarm path.
   if (typeof document.addEventListener === 'function') {
     document.addEventListener('pointerdown', function (event) {
-      if (!deleteArmed) {
+      if (!armedDeleteBtn) {
         return;
       }
       var node = event.target;
       while (node) {
-        if (node === deleteBtn) {
+        if (node === armedDeleteBtn) {
           return; // the confirming click itself — not an "elsewhere" press
         }
         node = node.parentNode;
       }
-      disarmDelete();
+      disarmDeleteButton();
     });
     document.addEventListener('keydown', function (event) {
-      if (deleteArmed && event.key === 'Escape') {
-        disarmDelete();
+      if (armedDeleteBtn && event.key === 'Escape') {
+        disarmDeleteButton();
       }
     });
   }
 
-  // Populate the dropdown once at script-init time. On a fresh profile
+  // Populate the browse list once at script-init time. On a fresh profile
   // this shows the factory library only — PresetStore.listNames() is a
-  // pure read since issue #11 (no fresh-profile seeding; the user
-  // "Yours" group fills with the first explicit Save As).
+  // pure read since issue #11 (no fresh-profile seeding; the "Yours"
+  // group fills with the first explicit Save As).
   refreshPresetSelect();
-  // Guided Patchbay: the curated browse cards render once too — the
-  // factory library is static content, same render-once contract as the
-  // dropdown's Factory optgroup above.
-  renderPresetCards();
 
   // VIS-3: the full preset-display write path is exported, not just
   // markModified. src/mcp-tools.js (save_preset + the MC-5 undo restores)

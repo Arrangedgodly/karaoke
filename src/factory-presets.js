@@ -78,6 +78,7 @@
       // [-12, -3] dB limiter range. Every other param is the original PX-3
       // value.
       name: 'Classic Karaoke',
+      category: 'Karaoke',
       description: 'The all-purpose starting point: gentle leveling, a warm-neutral EQ, a short slap-back delay, and a light room reverb.',
       nodes: [
         { id: 'n1', type: 'gain',       params: { gainDb: 0 } },
@@ -92,6 +93,7 @@
       // QA-3 CHAINS[1] verbatim (name adjusted to the library's friendly
       // name). Warm ballad: gentle compression, low warmth, light hall.
       name: 'Warm Ballad',
+      category: 'Music',
       description: 'Gentle compression, a touch of low-end warmth, and a light hall reverb for slow, close-up songs.',
       nodes: [
         { id: 'qa-g1', type: 'gain', params: { gainDb: 1 } },
@@ -105,6 +107,7 @@
       // QA-3 CHAINS[2] verbatim. Rock shout: stronger compression,
       // top-end bite, short slap, dry.
       name: 'Rock Night',
+      category: 'Music',
       description: 'Stronger compression and top-end bite with a short, dry slap delay — built to cut through a loud room.',
       nodes: [
         { id: 'qa-g2', type: 'gain', params: { gainDb: 0 } },
@@ -118,6 +121,7 @@
       // QA-3 CHAINS[3] verbatim. Phone-filter gag: band-limited, slightly
       // crushed, intelligible.
       name: 'Phone Call Gag',
+      category: 'Novelty',
       description: 'Band-limited and lightly crushed for the classic "calling from a phone" bit — still fully intelligible.',
       nodes: [
         { id: 'qa-e3', type: 'eq', params: { lowGain: -10, midGain: 2, highGain: -8 } },
@@ -129,6 +133,7 @@
       // QA-3 CHAINS[4] verbatim. Big-room epic: long reverb, wide delay,
       // vocal up front.
       name: 'Big Room',
+      category: 'Music',
       description: 'Long reverb and a wide delay for an epic, arena-sized space, with the vocal still riding up front.',
       nodes: [
         { id: 'qa-g4', type: 'gain', params: { gainDb: 1 } },
@@ -143,6 +148,7 @@
       // QA-3 CHAINS[5] verbatim. Clean speech: light leveling, no audible
       // effects.
       name: 'Clean Speech',
+      category: 'Speech',
       description: 'Light leveling with no audible coloring — for hosting, announcements, or anywhere the voice should just sound like itself.',
       nodes: [
         { id: 'qa-e5', type: 'eq', params: { lowGain: -1, midGain: 0, highGain: -1 } },
@@ -177,19 +183,22 @@
   }
 
   /**
-   * ADDITIVE, UI-only export for the Presets tab's curated browse cards.
-   * Returns just {name, description} — never `nodes` — so this can never
+   * ADDITIVE, UI-only export for the Presets tab's browse list. Returns
+   * {name, description, category} — never `nodes` — so this can never
    * become a second load-path or drift from list()'s policy-relevant
    * shape. list() itself is untouched by this addition: existing
    * consumers (the preset dropdown, mcp-tools.js's list_presets/
    * get_preset, tests/test-preset-tools.js's strict {name, nodes}
-   * deepEqual) see zero change.
+   * deepEqual) see zero change. `category` (compact-browsing v2 round) is
+   * a lightweight browsing aid grouping the six presets by their own
+   * described use case (Karaoke/Music/Novelty/Speech) — not a rigorous
+   * taxonomy, and never persisted or consumed by any WebMCP tool.
    *
-   * @returns {Array<{name: string, description: string}>}
+   * @returns {Array<{name: string, description: string, category: string}>}
    */
   function describeAll() {
     return FACTORY_PRESETS.map(function (preset) {
-      return { name: preset.name, description: preset.description };
+      return { name: preset.name, description: preset.description, category: preset.category };
     });
   }
 

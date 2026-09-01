@@ -267,16 +267,17 @@ function createStorageStub() {
 }
 
 // ----------------------------------------------------------------------
-// The preset panel DOM (#save-preset-btn/#preset-select/#load-preset-btn/
-// #delete-preset-btn/#current-preset-name/#unsaved-indicator), with the
-// same initial display states index.html ships: "Unsaved chain" text and
-// a hidden unsaved dot. The <select> lives in a container so the lazily
-// created .preset-note line has a parent to anchor to.
+// The preset panel DOM (#save-preset-btn/#preset-list/#current-preset-name/
+// #unsaved-indicator), with the same initial display states index.html
+// ships: "Unsaved chain" text and a hidden unsaved dot. Compact-browsing
+// round: #preset-select/#load-preset-btn/#delete-preset-btn are gone —
+// every preset is a row inside #preset-list (see renderPresetRow* helpers
+// below), and `container` (registered as 'build-panel-presets') is the
+// real anchor src/presets-ui.js's ensureNamingRow()/showPresetNote() use,
+// exactly where #preset-select's .parentNode used to serve that role.
 // ----------------------------------------------------------------------
 function buildPanel() {
   var container = makeElement('div');
-  var select = makeElement('select');
-  container.appendChild(select);
   var current = makeElement('span');
   current.textContent = 'Unsaved chain';
   var dot = makeElement('span');
@@ -285,9 +286,8 @@ function buildPanel() {
     'save-preset-btn': makeElement('button'),
     'current-preset-name': current,
     'unsaved-indicator': dot,
-    'preset-select': select,
-    'load-preset-btn': makeElement('button'),
-    'delete-preset-btn': makeElement('button')
+    'preset-list': makeElement('div'),
+    'build-panel-presets': container
   };
   return { container: container, byId: byId };
 }
@@ -497,10 +497,58 @@ function getTool(sandbox, name) {
 // before/after snapshot of exactly the things a phantom success would
 // have touched.
 // ----------------------------------------------------------------------
+// The names currently browsable in #preset-list, in render order (the
+// direct twin of the old dropdown's <option> values — kept under the same
+// name since every "is this preset listed?" check downstream only cares
+// about the name set, not which widget shape carries it).
 function optionValues(env) {
-  return env.panel.byId['preset-select'].children.map(function (opt) {
-    return opt.value;
+  return env.panel.byId['preset-list'].children
+    .filter(function (child) {
+      return String(child.className).split(/\s+/).indexOf('preset-row') !== -1;
+    })
+    .map(function (child) {
+      return child.getAttribute('data-preset-name');
+    });
+}
+
+// Compact-browsing round: find `name`'s own .preset-row (or null) — the
+// replacement for "select the matching <option>", since every row is now
+// its own independently clickable unit rather than a dropdown entry.
+function findPresetRow(env, name) {
+  var rows = env.panel.byId['preset-list'].children.filter(function (child) {
+    return String(child.className).split(/\s+/).indexOf('preset-row') !== -1;
   });
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].getAttribute('data-preset-name') === name) {
+      return rows[i];
+    }
+  }
+  return null;
+}
+
+function findRowChildByClass(row, cls) {
+  if (!row) {
+    return null;
+  }
+  var found = null;
+  row.children.forEach(function (child) {
+    if (!found && String(child.className).split(/\s+/).indexOf(cls) !== -1) {
+      found = child;
+    }
+  });
+  return found;
+}
+
+// `name`'s own Load button — clicking it is the direct twin of "select
+// this option, then press Load" in the old dropdown+button UI.
+function findPresetRowLoadBtn(env, name) {
+  return findRowChildByClass(findPresetRow(env, name), 'preset-row-load');
+}
+
+// `name`'s own (user-rows-only) Delete button — the direct twin of
+// "select this option, then press Delete" in the old shared-button UI.
+function findPresetRowDeleteBtn(env, name) {
+  return findRowChildByClass(findPresetRow(env, name), 'preset-row-delete');
 }
 
 function snapshot(env) {
@@ -908,13 +956,11 @@ async function main() {
       optionValues(env).indexOf('Happy Path') !== -1,
       'H1: the selector now lists "Happy Path"'
     );
-    var selectedOpt = null;
-    env.panel.byId['preset-select'].children.forEach(function (opt) {
-      if (opt.selected && opt.value === 'Happy Path') {
-        selectedOpt = opt;
-      }
-    });
-    check(!!selectedOpt, 'H1: the "Happy Path" option is the SELECTED one');
+    var activeRow = findPresetRow(env, 'Happy Path');
+    check(
+      !!activeRow && String(activeRow.className).split(/\s+/).indexOf('preset-row-active') !== -1,
+      'H1: the "Happy Path" row is marked ACTIVE (the currently-loaded preset)'
+    );
     check(
       env.panel.byId['current-preset-name'].textContent === 'Happy Path',
       'H1: the current-preset display shows "Happy Path"'
@@ -976,15 +1022,16 @@ async function main() {
     env.storage.fault.setItemError = namedError('QuotaExceededError', 'The quota has been exceeded.');
 
     env.confirmResponse = true;
-    // R2-3: two-step in-panel Delete — first click ARMS (relabel to
-    // "DELETE?"), second click confirms. No confirm() anywhere.
-    env.panel.byId['delete-preset-btn'].__fire('click'); // arm
-    var deleteBtnEl = env.panel.byId['delete-preset-btn'];
+    // R2-3, generalized: two-step in-panel Delete on "Baseline"'s OWN row
+    // button — first click ARMS (relabel to "DELETE?"), second click
+    // confirms. No confirm() anywhere.
+    var deleteBtnEl = findPresetRowDeleteBtn(env, 'Baseline');
+    deleteBtnEl.__fire('click'); // arm
     check(
       deleteBtnEl.textContent === 'DELETE?',
       'I1: the first Delete click ARMS the button (relabelled "DELETE?")'
     );
-    env.panel.byId['delete-preset-btn'].__fire('click'); // confirm
+    deleteBtnEl.__fire('click'); // confirm
     check(env.confirmCalls === 0, 'I1: window.confirm was NEVER called (two-step in-panel)');
     var note = noteElement(env);
     check(
@@ -1002,13 +1049,15 @@ async function main() {
       'I1: "Baseline" is still in storage'
     );
 
-    // Healthy delete still works end-to-end. Re-select 'Baseline' first:
-    // the failed delete's refresh left the dropdown at its default
-    // selection ('Classic Karaoke').
+    // Healthy delete still works end-to-end. The failed delete's own
+    // refreshPresetSelect() recovery call rebuilt #preset-list from
+    // scratch, so "Baseline"'s row is a fresh element — re-fetch it
+    // rather than reusing the (now detached) armed button from above.
     env.storage.fault.setItemError = null;
     sandbox.PresetsUI.refreshPresetSelect('Baseline');
-    env.panel.byId['delete-preset-btn'].__fire('click'); // arm
-    env.panel.byId['delete-preset-btn'].__fire('click'); // confirm
+    var deleteBtnEl2 = findPresetRowDeleteBtn(env, 'Baseline');
+    deleteBtnEl2.__fire('click'); // arm
+    deleteBtnEl2.__fire('click'); // confirm
     check(
       optionValues(env).indexOf('Baseline') === -1 &&
         storedNames(env).indexOf('Baseline') === -1,
@@ -1227,11 +1276,14 @@ async function main() {
     }
     var modelBefore = liveChainIds();
 
-    // The user-preset guard: "Baseline" is listed and selected, but the
-    // store loses it behind the UI's back — exactly another tab having
-    // removed it out from under us (the guard's own comment scenario).
+    // The user-preset guard: "Baseline" has its own row (already rendered
+    // by freshSeededEnv's refreshPresetSelect above), but the store loses
+    // it behind the UI's back — exactly another tab having removed it out
+    // from under us (the guard's own comment scenario). Compact-browsing
+    // round: clicking the row's OWN Load button is the direct twin of the
+    // old "select this option, press Load".
     delete env.storage.__box[STORAGE_KEY];
-    env.panel.byId['load-preset-btn'].__fire('click');
+    findPresetRowLoadBtn(env, 'Baseline').__fire('click');
     var note = noteElement(env);
     check(
       !!note && note.style.display !== 'none' &&
@@ -1246,9 +1298,12 @@ async function main() {
     );
     check(liveChainIds() === modelBefore, 'L1: the live chain was NOT replaced');
 
-    // The factory guard: the dropdown lists a factory entry whose name the
+    // The factory guard: #preset-list carries a factory row whose name the
     // library no longer reports (it changed mid-session — the guard's own
-    // comment scenario).
+    // comment scenario). window.FactoryPresets is never loaded by this
+    // file's sourceFiles list, so presets-ui.js's own guarded factoryPresets()
+    // degrades to [] until this stub is installed — this test IS what
+    // introduces the "Factory" group into #preset-list for the first time.
     var factoryStub = {
       payload: [{ name: 'Warm Ballad', nodes: [] }],
       list: function () {
@@ -1257,18 +1312,14 @@ async function main() {
     };
     sandbox.FactoryPresets = factoryStub;
     sandbox.PresetsUI.refreshPresetSelect('factory:Warm Ballad');
-    var groupEl = env.panel.byId['preset-select'].children[0];
+    var warmBalladRow = findPresetRow(env, 'Warm Ballad');
     check(
-      String(groupEl.tagName).toLowerCase() === 'optgroup' && groupEl.label === 'Factory' &&
-        groupEl.children.length === 1 && groupEl.children[0].selected === true,
-      'L2 setup: the factory group rendered with "Warm Ballad" listed+selected'
+      !!warmBalladRow && warmBalladRow.getAttribute('data-preset-kind') === 'factory' &&
+        String(warmBalladRow.className).split(/\s+/).indexOf('preset-row-active') !== -1,
+      'L2 setup: "Warm Ballad" rendered as a FACTORY row, marked ACTIVE'
     );
-    // The stub select computes .value from DIRECT children only — surface
-    // the nested selection the way a real <select> would.
-    groupEl.selected = true;
-    groupEl.__value = 'factory:Warm Ballad';
     factoryStub.payload = []; // the library changed mid-session
-    env.panel.byId['load-preset-btn'].__fire('click');
+    findPresetRowLoadBtn(env, 'Warm Ballad').__fire('click');
     note = noteElement(env);
     check(
       !!note && note.style.display !== 'none' &&
@@ -1290,9 +1341,6 @@ async function main() {
       nodes: [{ id: 'warm-limiter', type: 'limiter', params: { ceiling: -6, release: 150 } }]
     }];
     sandbox.PresetsUI.refreshPresetSelect('factory:Warm Ballad');
-    groupEl = env.panel.byId['preset-select'].children[0];
-    groupEl.selected = true;
-    groupEl.__value = 'factory:Warm Ballad';
     var presetApplyRequest = null;
     sandbox.ChainEditing = {
       apply: function (request) {
@@ -1304,7 +1352,7 @@ async function main() {
       }
     };
     modelBefore = liveChainIds();
-    env.panel.byId['load-preset-btn'].__fire('click');
+    findPresetRowLoadBtn(env, 'Warm Ballad').__fire('click');
     await Promise.resolve();
     check(
       presetApplyRequest && presetApplyRequest.source === 'preset' &&

@@ -242,23 +242,26 @@
 
   /**
    * MC-4: create (once) the .safe-output-note disclosure element next to
-   * the OUT anchor in the canvas panel — the rq3-mandated UI note
-   * "Safe output: ON, ceiling -6 dBFS". Created from JS in the same spirit
-   * as src/agent-ui.js's components (never hardcoded in index.html), so
-   * the note cannot exist without the attenuator feature that justifies
-   * it. Idempotent; silently skipped when there is no DOM (e.g. a Node
-   * test harness) or no canvas panel — the note is disclosure, not
-   * function, and must never be able to throw into the audio path. The
-   * text is DERIVED from OUTPUT_CEILING_DBFS so the note and the actual
-   * ceiling can never drift apart.
+   * the OUT anchor — the rq3-mandated UI note "Safe output: ON, ceiling
+   * -6 dBFS". Created from JS in the same spirit as src/agent-ui.js's
+   * components (never hardcoded in index.html), so the note cannot exist
+   * without the attenuator feature that justifies it. Idempotent; silently
+   * skipped when there is no DOM (e.g. a Node test harness) or no Voice
+   * Out rail — the note is disclosure, not function, and must never be
+   * able to throw into the audio path. The text is DERIVED from
+   * OUTPUT_CEILING_DBFS so the note and the actual ceiling can never
+   * drift apart.
    */
   function ensureSafeOutputNote() {
     try {
       if (document.getElementById('safe-output-note')) {
         return;
       }
-      var canvasEl = document.getElementById('chain-canvas');
-      if (!canvasEl) {
+      // Guided Patchbay round: the note rides the Voice Out RAIL, next to
+      // the real OUT jack — a discreet caption on the output, not text
+      // sitting in the scrolling board face it used to occupy.
+      var rail = document.querySelector('.io-rail-out');
+      if (!rail) {
         return;
       }
       var note = document.createElement('div');
@@ -267,15 +270,7 @@
       note.setAttribute('role', 'note');
       note.textContent =
         'Safe output: ON, ceiling ' + OUTPUT_CEILING_DBFS + ' dBFS';
-      // 2026-08-31 cord round: the in-flow OUT anchor is retired — the
-      // note rides the pinned BASE PLATE next to the OUT meter unit (the
-      // operator's output ground truth), never inside the scrolling face.
-      var footer = document.querySelector('.canvas-footer');
-      if (footer) {
-        footer.appendChild(note);
-      } else {
-        canvasEl.appendChild(note);
-      }
+      rail.appendChild(note);
     } catch (err) {
       // No DOM here (e.g. a bare Node harness) — purely cosmetic, never fatal.
     }

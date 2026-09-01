@@ -199,8 +199,6 @@ function createStorage() {
 
 function buildPanel() {
   var container = makeElement('div');
-  var select = makeElement('select');
-  container.appendChild(select);
   var current = makeElement('span');
   current.textContent = 'Unsaved chain';
   var dot = makeElement('span');
@@ -211,9 +209,13 @@ function buildPanel() {
       'save-preset-btn': makeElement('button'),
       'current-preset-name': current,
       'unsaved-indicator': dot,
-      'preset-select': select,
-      'load-preset-btn': makeElement('button'),
-      'delete-preset-btn': makeElement('button'),
+      // Compact-browsing round: presets-ui.js's init guard now requires
+      // #preset-list + #build-panel-presets instead of the old
+      // #preset-select/#load-preset-btn/#delete-preset-btn trio — this
+      // stub DOM exists only so that guard doesn't bail and break the
+      // unrelated get_preset/load_preset tools this file actually tests.
+      'preset-list': makeElement('div'),
+      'build-panel-presets': container,
       'palette-list': makeElement('ul'),
       'chain-list': makeElement('ul'),
       'empty-hint': makeElement('p'),
