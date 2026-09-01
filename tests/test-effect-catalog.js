@@ -250,6 +250,32 @@ check(
   'D11: behavioral calls report unknown effect types instead of substituting one'
 );
 
+console.log('E. parameter ids remain data keys');
+
+var protoCalls = { create: [], apply: [], dispose: [] };
+var protoDefinition = numericDefinition('Prototype key', protoCalls, false);
+protoDefinition.paramSpec[0].id = '__proto__';
+catalog.register('prototype-key', protoDefinition);
+
+var protoDefaults = catalog.getDefaults('prototype-key');
+var protoNormalized = catalog.normalizeParams('prototype-key', {});
+var protoInstance = catalog.create('prototype-key', audioContext, {});
+check(
+  Object.prototype.hasOwnProperty.call(protoDefaults, '__proto__') &&
+    protoDefaults.__proto__ === 40,
+  'E1: getDefaults() preserves __proto__ as an own data property'
+);
+check(
+  Object.prototype.hasOwnProperty.call(protoNormalized, '__proto__') &&
+    protoNormalized.__proto__ === 40,
+  'E2: normalizeParams() preserves __proto__ as an own data property'
+);
+check(
+  Object.prototype.hasOwnProperty.call(protoCalls.create[0].params, '__proto__') &&
+    protoCalls.create[0].params.__proto__ === 40 && protoInstance === protoCalls.create[0].instance,
+  'E3: create() receives the accepted __proto__ parameter and its default'
+);
+
 if (failures.length > 0) {
   console.error('\nEffectCatalog contract: ' + failures.length + ' failure(s)');
   failures.forEach(function (failure) {

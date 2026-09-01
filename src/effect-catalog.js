@@ -17,6 +17,15 @@
     return typeof value === 'number' && isFinite(value);
   }
 
+  function setOwn(object, key, value) {
+    Object.defineProperty(object, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  }
+
   function cloneParam(param) {
     var copy = {};
     Object.keys(param).forEach(function (key) {
@@ -185,7 +194,7 @@
       return defaults;
     }
     definitions[type].paramSpec.forEach(function (param) {
-      defaults[param.id] = param.default;
+      setOwn(defaults, param.id, param.default);
     });
     return defaults;
   }
@@ -232,7 +241,7 @@
       var value = hasOwn(supplied, param.id) && supplied[param.id] !== undefined
         ? supplied[param.id]
         : param.default;
-      normalized[param.id] = validateValue(type, param, value, 'normalizeParams');
+      setOwn(normalized, param.id, validateValue(type, param, value, 'normalizeParams'));
     });
     return normalized;
   }
