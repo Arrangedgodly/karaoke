@@ -314,6 +314,25 @@ async function main() {
   );
   check(catalog.isExperimental('echo'), 'C3: experimental flag flows to EffectCatalog');
   check(!catalog.isExperimental('gain') && !catalog.isExperimental('probe'), 'C3: absent flag means not experimental');
+  check(
+    catalog.getLatencySeconds('echo') === 0 && catalog.getLatencySeconds('probe') === 0,
+    'C4: latencySeconds defaults to 0 when a Tone-backed type declares none'
+  );
+
+  TA.register('granular-echo', {
+    label: 'Granular Echo',
+    latencySeconds: 0.1,
+    paramSpec: [
+      { id: 'amount', label: 'Amount', min: 0, max: 100, default: 40, step: 1, unit: '%' }
+    ],
+    create: function () {
+      return makeFakeToneNode();
+    }
+  });
+  check(
+    catalog.getLatencySeconds('granular-echo') === 0.1,
+    'C5: a declared latencySeconds flows from ToneAdapter.register into EffectCatalog'
+  );
 
   // --------------------------------------------------------------------
   console.log('D. applyParam dispatch + paramSpec hygiene');

@@ -244,26 +244,16 @@ check(
   '.voice-deck-face wraps [.canvas-panel, .signal-order, .effects-panel] in order — Effects docks under the board+strip, beside .presets-panel'
 );
 
-// The board-frame flanks the scrolling .canvas with two fixed rails, each
-// hosting a real .anchor (MIC IN restored to a real markup element, OUT
-// restored from its 2026-08-31 footer-mirror retirement).
-var boardFrame = descendants(tree, function (n) { return hasClass(n, 'board-frame'); })[0] || null;
-check(
-  !!boardFrame && boardFrame.children.length === 3 &&
-    hasClass(boardFrame.children[0], 'io-rail-in') &&
-    hasClass(boardFrame.children[2], 'io-rail-out'),
-  '.board-frame wraps [Voice In rail, .canvas, Voice Out rail] — the rails are FLEX SIBLINGS of the scrolling face, not children inside it'
-);
-var inRailAnchor = boardFrame && childByClass(boardFrame.children[0], 'anchor');
-var outRailAnchor = boardFrame && childByClass(boardFrame.children[2], 'anchor');
-check(
-  !!inRailAnchor && inRailAnchor.children.length === 0 &&
-    !!outRailAnchor && outRailAnchor.children.length === 0,
-  'both rails carry a real, empty .anchor element (src/meters.js matches by exact text "MIC IN" / "OUT" at runtime — static markup carries no text node in this parser, so an empty anchor node is the correct pin)'
-);
+// Board redesign (2026-09-01): the .board-frame + .io-rail-in/-out +
+// .anchor markup is retired along with the free board it flanked — both
+// meters now mount as their own panel-level strips at runtime
+// (src/meters.js's buildFooterUnit), never static markup, so there is
+// nothing left to pin here structurally.
 
 // The canvas markup itself: just the flow list + the state hint (the
-// anchor/arrow pair moved out to the rails — see .board-frame above).
+// chain-arrow connectors are JS-inserted at runtime by renderChainArrows,
+// never static markup, and the meter strips mount as .canvas-panel's own
+// flex siblings of this element — see src/meters.js — not inside it).
 var canvasEl = byId('chain-canvas');
 var flowTags = canvasEl ? descendants(canvasEl, function () { return true; }).map(function (n) {
   return n.tag + (n.attrs.class ? '.' + n.attrs.class.split(/\s+/)[0] : '');
@@ -271,7 +261,7 @@ var flowTags = canvasEl ? descendants(canvasEl, function () { return true; }).ma
 check(
   canvasEl !== null &&
     JSON.stringify(flowTags) === JSON.stringify(['div.chain-list', 'div.empty-hint']),
-  'canvas internals: chain-list → empty-hint only (MIC IN / OUT anchors live in the board-frame rails now, not in-flow)'
+  'canvas internals: chain-list → empty-hint only (no static MIC IN / OUT markup, no in-flow anchors)'
 );
 
 // ----------------------------------------------------------------------
@@ -665,7 +655,8 @@ check(
 );
 [
   'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter',
-  'distortion', 'chorus', 'gate', 'autotune'
+  'distortion', 'chorus', 'gate', 'autotune',
+  'phaser', 'tremolo', 'pitchshift', 'bitcrusher'
 ].forEach(function (fam) {
   var rule = cssRule(".node-chip[data-family='" + fam + "']");
   check(
@@ -673,11 +664,12 @@ check(
     'chip family mark maps to the saturated --family-' + fam + ' token (the arcs\' own color)'
   );
 });
-var chosenRule = cssRule('.node-chip.sortable-chosen');
-check(
-  chosenRule && cssDecl(chosenRule, 'border-color') === 'var(--pm-accent)',
-  'the drag-origin chip bezel is the signal orange (SortableJS wiring untouched)'
-);
+// .node-chip.sortable-chosen (and its .sortable-drag/.sortable-ghost
+// siblings) removed as dead CSS (2026-09-01): SortableJS has been fully
+// retired since 2026-08-31 — nothing in canvas.js has applied these
+// classes since, and the board redesign's own drag-to-reorder is a
+// hand-rolled gesture with its own .reorder-chosen class (see
+// styles/main.css's board-redesign block).
 
 // ----------------------------------------------------------------------
 console.log('');

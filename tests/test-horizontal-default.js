@@ -1,25 +1,27 @@
-// tests/test-horizontal-default.js — the 2026-08-31 horizontal-default
-// round's board contract.
+// tests/test-horizontal-default.js — the board's condensed-width contract.
 //
-// The board's DEFAULT reading is now HORIZONTAL: condensed portrait
-// sections in a left-to-right row (src/canvas.js + styles/main.css). The
-// vertical stacked reading survives as the FLIPPED mode (the FLOW toggle
-// reverses it) and keeps its own coverage in test-board-positioning-few2
-// / test-cord-layer-few3 / test-cord-editing-few4, which stub an explicit
-// stored vertical preference. This file pins the NEW default end to end:
+// The board's ONLY reading is a horizontal row of condensed cards
+// (src/canvas.js + styles/main.css); vertical flow and free x/y
+// positioning were both retired (2026-08-31, then the free board itself
+// on 2026-09-01 — see canvas.js's own board-redesign comment). This file
+// pins the surviving per-card WIDTH contract end to end — order is no
+// longer a layout concern at all, since DOM order IS chain order (PD-4)
+// and a card's only remaining layout fact is its own width:
 //
-//   H1  the board boots horizontal — the ONLY reading (vertical flow was
-//       retired 2026-08-31); no FLOW toggle exists anywhere in the chrome
-//   H2  absent layout -> the incumbent ROW (x accumulates widths, y fixed)
-//   H3  every card paints the FLOOR width (176px — the single-stack default)
-//   H4  the board extent maintains minWidth (the row's right edge)
+//   H1  the board carries .flow-horizontal (the one reading, permanent
+//       class) and the FLOW toggle is gone from the chrome
+//   H2  absent layout -> cards render in the model's own order, no
+//       card has a manual width on record
+//   H3  every card paints the default/floor width (a layout-less host
+//       measures nothing, so every card takes CARD_W_DEFAULT_PX)
 //   H5  a saved per-card width `w` is honored and clamped
-//   H6  the corner resize grip adjusts `w` live, snap-quantized, clamped,
-//       and persists exactly once on gesture end
-//   H7  legacy vertical entries load horizontal (the retirement migration)
+//   H6  the corner resize grip adjusts a card's width live,
+//       snap-quantized, clamped, and persists exactly once on gesture end
+//   H7  a legacy (pre-redesign) x/y/flow-shaped entry carries no `w` and
+//       is simply ignored, not migrated — every card falls back to its
+//       default width instead of crashing on the unrecognized shape
 //
-// Zero-dependency, plain `node`, browser globals stubbed — same harness
-// shape as test-board-positioning-few2.js.
+// Zero-dependency, plain `node`, browser globals stubbed.
 
 'use strict';
 
@@ -252,8 +254,8 @@ check(
 );
 
 check(
-  CC.CARD_W_DEFAULT_PX === 128 && CC.CARD_W_MIN_PX === 96 && CC.CARD_W_MAX_PX === 384,
-  'H1b: the width contract exports (fallback default 128 for layout-less hosts, resize floor 96, ceiling 384 — real browsers hug each card\'s measured content)'
+  CC.CARD_W_DEFAULT_PX === 208 && CC.CARD_W_MIN_PX === 208 && CC.CARD_W_MAX_PX === 384,
+  'H1b: the width contract exports (default/floor 208 — the header band\'s own minimum with the new bypass button, default and floor now equal, ceiling 384 — real browsers hug each card\'s measured content)'
 );
 check(
   queryAll(canvasPanelEl, '.flow-toggle').length === 0,
@@ -262,37 +264,32 @@ check(
 
 CC.renderModel(model3());
 check(
-  JSON.stringify(CC.currentLayout()) === JSON.stringify({
-    n1: { x: 0, y: 16, scale: 1, flow: 'horizontal' },
-    n2: { x: 144, y: 16, scale: 1, flow: 'horizontal' },
-    n3: { x: 288, y: 16, scale: 1, flow: 'horizontal' }
-  }),
-  'H2: absent layout -> the incumbent ROW (x accumulates card+pitch at the 176 floor + 16, y fixed at the grid edge)'
+  cards().map(function (c) { return c.attrs['data-node-id']; }).join(',') === 'n1,n2,n3',
+  'H2: absent layout -> cards render in the model\'s own order (DOM order IS chain order now, no seat math)'
+);
+check(
+  JSON.stringify(CC.currentLayout()) === JSON.stringify({}),
+  'H2b: no card has a manual width on record -> currentLayout() is empty (every card takes its content-hug/default)'
 );
 
 check(
-  cardById('n1').style.width === '128px' &&
-    cardById('n2').style.width === '128px' &&
-    cardById('n3').style.transform === 'translate(288px, 16px)',
-  'H3: every card paints the floor width + its translate seat'
-);
-
-check(
-  chainListEl.style.minWidth === '432px' && chainListEl.style.minHeight === '176px',
-  'H4: the board extent maintains minWidth (row right edge 288+144) alongside minHeight'
+  cardById('n1').style.width === '208px' &&
+    cardById('n2').style.width === '208px' &&
+    cardById('n3').style.width === '208px',
+  'H3: every card paints the default/floor width (a layout-less host measures nothing, so every card takes CARD_W_DEFAULT_PX)'
 );
 
 // ----------------------------------------------------------------------
 
 CC.renderModel(model3(), {
-  n1: { x: 0, y: 16, w: 320, flow: 'horizontal' },
-  n2: { x: 0, y: 16, w: 5000, flow: 'horizontal' },
-  n3: { x: 0, y: 16, flow: 'horizontal' }
+  n1: { w: 320 },
+  n2: { w: 5000 },
+  n3: {}
 });
 check(
   cardById('n1').style.width === '320px' &&
     cardById('n2').style.width === '384px' &&
-    cardById('n3').style.width === '128px',
+    cardById('n3').style.width === '208px',
   'H5: a saved width is honored, an out-of-range one clamps, a missing one takes the floor default'
 );
 
@@ -320,15 +317,22 @@ check(
 
 // ----------------------------------------------------------------------
 
-// Retirement migration: vertical flow no longer exists, so whatever a
-// legacy payload claims, every entry loads horizontal.
+// Retirement migration: a pre-board-redesign entry's x/y/flow fields
+// carry no `w` at all, so they're simply ignored (not migrated to
+// anything) rather than crashing on the unrecognized shape — every card
+// falls back to its default width. freshSeats:true rules out the
+// (separately-covered, H5/H6) carry-forward path so this isolates
+// exactly the legacy-shape behavior, not leftover state from earlier
+// checks in this same file.
 CC.renderModel(model3(), {
   n1: { x: 16, y: 0, flow: 'vertical' },
   n2: { x: 16, y: 160 }
-});
+}, { freshSeats: true });
 check(
-  CC.currentLayout().n1.flow === 'horizontal' && CC.currentLayout().n2.flow === 'horizontal',
-  'H7: legacy vertical entries load horizontal (the retirement migration)'
+  JSON.stringify(CC.currentLayout()) === JSON.stringify({}) &&
+    cardById('n1').style.width === '208px' &&
+    cardById('n2').style.width === '208px',
+  'H7: a legacy x/y/flow-shaped entry carries no `w` and is ignored -- every card falls back to its default width, not a crash'
 );
 
 // ----------------------------------------------------------------------

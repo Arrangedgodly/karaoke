@@ -121,8 +121,11 @@
    * Register one complete Tone-backed effect definition.
    *
    * @param {string} type - unique effect type name.
-   * @param {{label: string, paramSpec: Array<Object>, create: Function, experimental?: boolean}} config
-   *   - label / paramSpec / experimental: catalog metadata. paramSpec
+   * @param {{label: string, paramSpec: Array<Object>, create: Function, experimental?: boolean, latencySeconds?: number}} config
+   *   - label / paramSpec / experimental / latencySeconds: catalog
+   *     metadata. latencySeconds is the effect's own declared added
+   *     latency (e.g. pitchshift's fixed granular-window delay) — omit it
+   *     when the effect adds none; EffectCatalog defaults it to 0. paramSpec
    *     entries are the standard
    *     {id, label, min, max, default, step, unit} descriptors and may
    *     additionally carry `set: (toneNode, value, composite) => void` —
@@ -188,6 +191,7 @@
       label: config.label,
       paramSpec: cleanSpec,
       experimental: !!config.experimental,
+      latencySeconds: config.latencySeconds,
       create: factory,
       applyParam: function (composite, paramId, value) {
         if (!composite || !composite.tone) {

@@ -217,6 +217,10 @@
   window.EffectCatalog.register('gate', {
     label: 'Noise Gate',
     experimental: false,
+    // Matches LOOKAHEAD_S in src/gate-worklet.js — the fixed 5 ms ring
+    // delay every sample rides regardless of param settings. Read by
+    // src/status-readouts.js's LATENCY readout.
+    latencySeconds: 0.005,
     paramSpec: [
       { id: 'threshold', label: 'Threshold', min: -80, max: 0, default: -50, step: 1, unit: 'dB' },
       { id: 'attack', label: 'Attack', min: 0.001, max: 0.5, default: 0.005, step: 0.001, unit: 's' },

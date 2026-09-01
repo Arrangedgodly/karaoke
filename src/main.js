@@ -766,11 +766,15 @@ console.log('App scaffold loaded');
           // values — RATE from context.sampleRate, LATENCY from
           // baseLatency+outputLatency (the context-REPORTED estimate —
           // a different figure from cycle-1 QA-4's slow-mo measured
-          // ~12 ms, not a replacement for it), and NODES, refreshed at
-          // 1 Hz off ChainCanvas's live model. window.AudioEngine's
-          // audioContext GETTER is the real access path here (same one
-          // isEngineLive() above reads) — never the Start result object,
-          // which could go stale if the context is ever recreated. See
+          // ~12 ms, not a replacement for it) PLUS the live chain's own
+          // declared added latency (EffectCatalog.getLatencySeconds() per
+          // node, zeroed while Bypass is engaged), and NODES — LATENCY and
+          // NODES both refreshed at 1 Hz off ChainCanvas's live model, so
+          // adding/removing an effect or toggling Bypass adjusts the
+          // readout within a second. window.AudioEngine's audioContext
+          // GETTER is the real access path here (same one isEngineLive()
+          // above reads) — never the Start result object, which could go
+          // stale if the context is ever recreated. See
           // src/status-readouts.js.
           if (window.StatusReadouts) {
             window.StatusReadouts.onEngineStarted(window.AudioEngine.audioContext);

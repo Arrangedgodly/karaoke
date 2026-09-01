@@ -273,6 +273,10 @@
     // registration — the single source canvas.js's badge and mcp-tools.js's
     // capabilities readout both read via EffectCatalog.isExperimental().
     experimental: true,
+    // Matches DELAY_S in src/autotune-worklet.js — the fixed 20 ms
+    // algorithmic delay on both the wet and dry legs (L2), independent of
+    // Retune/Mix. Read by src/status-readouts.js's LATENCY readout.
+    latencySeconds: 0.020,
     paramSpec: [
       { id: 'key', label: 'Key', values: KEY_NAMES.slice(), default: DEFAULT_KEY },
       { id: 'scale', label: 'Scale', values: SCALE_NAMES.slice(), default: DEFAULT_SCALE },

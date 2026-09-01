@@ -17,10 +17,11 @@
 //   - Granular shifting is NOT formant-preserving: large shifts change
 //     the voice's character (the "chipmunk"/"deep" trade). ±12 st is the
 //     full musical range; the guide keeps suggestions inside ±7.
-//   - The engine adds latency (~windowSize) even at pitch 0 with Mix
-//     100%. That is inherent to the effect class, not a defect — worth
-//     remembering when stacking it with autotune (which declares its own
-//     20 ms). Promoted out of experimental by owner sign-off 2026-08-31.
+//   - The engine adds latency (~windowSize, declared below as
+//     latencySeconds) even at pitch 0 with Mix 100%. That is inherent to
+//     the effect class, not a defect — worth remembering when stacking it
+//     with autotune (which declares its own 20 ms). Promoted out of
+//     experimental by owner sign-off 2026-08-31.
 //
 // Params (the public contract — mcp-tools.js validates against these,
 // presets persist them, the sound-design guide references them):
@@ -34,6 +35,11 @@
 
   window.ToneAdapter.register('pitchshift', {
     label: 'Pitch Shift',
+    // Tone.PitchShift's windowSize stays at its 0.1 s (100 ms) default —
+    // not exposed as a param — so the added latency the file header
+    // describes is this fixed figure. Read by src/status-readouts.js's
+    // LATENCY readout.
+    latencySeconds: 0.1,
     paramSpec: [
       {
         id: 'pitch',

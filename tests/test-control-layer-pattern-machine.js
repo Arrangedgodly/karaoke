@@ -923,13 +923,14 @@ check(
   'the display ladder is two tiers exactly (' + VALUE_TIER + ' values / ' + REGISTER_TIER + ' register), nothing in between'
 );
 
-// F2. Family-colored arcs: the ten data-family rules are the ONE
+// F2. Family-colored arcs: the fourteen data-family rules are the ONE
 // derivation site — each sets --knob-arc from the rq5 --family-* token
 // (the palette flank's own vocabulary; never raw hex, never a per-control
 // class) and .knob-ring consumes it instead of the system accent.
 var FAMILIES = [
   'gain', 'compressor', 'eq', 'delay', 'reverb', 'limiter',
-  'distortion', 'chorus', 'gate', 'autotune'
+  'distortion', 'chorus', 'gate', 'autotune',
+  'phaser', 'tremolo', 'pitchshift', 'bitcrusher'
 ];
 var arcDerivationsOk = true;
 var arcTokenSourcesOk = true;
@@ -950,7 +951,7 @@ FAMILIES.forEach(function (fam) {
 });
 check(
   arcDerivationsOk,
-  'all ten .node-card[data-family] rules derive --knob-arc from their rq5 --family-* token (one source, no raw hex)'
+  'all fourteen .node-card[data-family] rules derive --knob-arc from their rq5 --family-* token (one source, no raw hex)'
 );
 check(
   arcTokenSourcesOk,

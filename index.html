@@ -178,38 +178,37 @@
 
   <!--
     ================================================================
-    GUIDED PATCHBAY (2026-08-31 board round, replacing UI-3's three-
-    column palette/canvas/presets grid): the free board — movable
-    knob-cards, drag/resize, cable-based reordering — is UNCHANGED (still
-    src/canvas.js + src/param-controls.js + the Pattern Machine block of
-    styles/main.css). What changed is everything around it:
+    BOARD REDESIGN (2026-09-01, user direction — "get rid of the
+    free-form patch-cable idea... focus on the chain being easily
+    drag-and-drop for reordering plugins, much like Ableton's workflow"):
+    the free 2D board — x/y seats, patch cords, MIC IN / OUT jack
+    anchors — is RETIRED. The chain is now a plain ordered ROW
+    (src/canvas.js + styles/main.css's .chain-list, normal flex flow):
+    DOM order alone decides visual position (PD-4's own invariant, with
+    nothing left to keep in sync against), a card is picked up by its
+    rail/handle and dropped at a new slot to reorder (mouse, with an
+    Alt+ArrowLeft/Right keyboard equivalent — see canvas.js's
+    onReorderKeyboardMove), and a small drawn chevron between adjacent
+    cards (renderChainArrows()) carries the signal-flow legibility the
+    cords used to, with zero cable art. MIC IN / OUT jack icons are gone
+    entirely; both level meters now mount as their own panel-level
+    strips (src/meters.js's buildFooterUnit) — one above the scrolling
+    row of cards, one below — independent of any anchor markup.
 
-    - .board-frame flanks the scrolling .canvas with two fixed rails,
-      each hosting a real .anchor ("MIC IN" / "OUT" — VIS-5/FEW-3's exact
-      text-match contract, unchanged) so src/meters.js mounts a live
-      meter in each rail with zero code changes there. The OUT anchor is
-      RESTORED here (it was retired to a footer-mirror fallback in the
-      2026-08-31 cord round; that fallback self-skips once a real anchor
-      exists). src/canvas.js's micOutPoint()/outInPoint() read these
-      rails' own rendered position for the cord's start/end — see that
-      file.
-    - .signal-order is a new sibling panel, JS-built by src/canvas.js
-      (called alongside renderCords()), showing the full
+    - .signal-order is a sibling panel, JS-built by src/canvas.js (called
+      alongside renderChainArrows()), showing the full
       "mic -> ... -> Limiter -> Safe out" order in one line.
-    - .build replaces BOTH .panel.palette and .panel.presets with one
-      two-tab panel: Effects (#palette-list, renderPalette() output
-      verbatim, unchanged add-node wiring) and Presets (curated factory
-      cards + the real Save As/Load/Delete controls, relocated here with
-      every id unchanged so src/mcp-tools.js's direct getElementById
-      reads keep working).
+    - The Effects panel (#palette-list, renderPalette() output verbatim,
+      unchanged add-node wiring) sits under the board, independently
+      collapsible from Presets.
 
     The whole region starts visually gated (`engine-not-started` class —
     the hatch + recede grammar in main.css) until AudioEngine.start()
     succeeds; src/canvas.js's onEngineStarted() removes the class, flips
-    the empty-hint copy, and wakes the display register, while its
-    onSort/remove handlers separately guard on
+    the empty-hint copy, and wakes the display register, while the
+    reorder/remove handlers separately guard on
     window.AudioEngine.isStarted before ever calling AudioGraph.build
-    Graph(), so no drag completed before Start can throw either way.
+    Graph(), so no gesture completed before Start can throw either way.
     ================================================================
   -->
   <!-- VOICE DECK (item 1b): #chain-layout re-cast as the lower slab —
@@ -286,35 +285,28 @@
 
     <div class="voice-deck-face">
       <div class="panel canvas-panel">
-        <div class="board-frame">
-          <aside class="io-rail io-rail-in">
-            <h3 class="io-rail-label">Voice In</h3>
-            <div class="anchor">MIC IN</div>
-          </aside>
-
-          <div class="canvas" id="chain-canvas">
-            <div class="chain-list" id="chain-list"></div>
-            <!--
-              Refinement entry 2: the empty-hint is STATE-AWARE. This static
-              default is the PRE-START copy — the palette is pointer-locked
-              until Start succeeds, so teaching the add verb here would be an
-              invitation the gated surface cannot honor (critique P2).
-              src/canvas.js's onEngineStarted() flips this element to the
-              working add verbs ("Click an effect to add it to the chain",
-              verbatim — palette drag is retired; click and keyboard are the
-              add paths) at the exact transition where adding becomes
-              possible; styles/main.css retires the dashed drop-target
-              affordance while the engine-not-started gate holds.
-            -->
-            <div class="empty-hint" id="empty-hint">Press Start to power on</div>
-            <!-- cord-layer SVG is appended here at runtime by
-                 src/canvas.js#buildCordLayer(), always as the LAST child. -->
-          </div>
-
-          <aside class="io-rail io-rail-out">
-            <h3 class="io-rail-label">Voice Out</h3>
-            <div class="anchor">OUT</div>
-          </aside>
+        <!-- The MIC IN / OUT meter strips mount here at runtime by
+             src/meters.js#buildFooterUnit() — IN immediately BEFORE
+             #chain-canvas, OUT immediately after; .canvas-panel is a
+             flex column, so DOM position alone decides visual position. -->
+        <div class="canvas" id="chain-canvas">
+          <div class="chain-list" id="chain-list"></div>
+          <!--
+            Refinement entry 2: the empty-hint is STATE-AWARE. This static
+            default is the PRE-START copy — the palette is pointer-locked
+            until Start succeeds, so teaching the add verb here would be an
+            invitation the gated surface cannot honor (critique P2).
+            src/canvas.js's onEngineStarted() flips this element to the
+            working add verbs ("Click an effect to add it to the chain",
+            verbatim — palette drag is retired; click and keyboard are the
+            add paths) at the exact transition where adding becomes
+            possible; styles/main.css retires the dashed drop-target
+            affordance while the engine-not-started gate holds.
+          -->
+          <div class="empty-hint" id="empty-hint">Press Start to power on</div>
+          <!-- .chain-arrow connectors are inserted here at runtime by
+               src/canvas.js#renderChainArrows(), one before every card
+               after the first, rebuilt from scratch on every order change. -->
         </div>
       </div>
 
@@ -519,13 +511,17 @@
     FEW-2 — status readout wiring (window.StatusReadouts,
     src/status-readouts.js): feeds the VIS-2 readout slots in the topbar
     (#readout-sample-rate / #readout-latency / #readout-node-count)
-    their real values — RATE and LATENCY once per engine start (off
-    AudioEngine's live AudioContext; latency is the context-REPORTED
-    base+output estimate), NODES at 1 Hz off ChainCanvas's live model.
-    Entirely hook-driven: nothing runs until src/main.js's Start success
-    handler calls StatusReadouts.onEngineStarted(), so its only ordering
-    constraint is the house one — before main.js. Guarded consumer: a
-    missing topbar element or a bad argument leaves it a harmless no-op.
+    their real values — RATE once per engine start (off AudioEngine's live
+    AudioContext); LATENCY is the context-REPORTED base+output estimate
+    PLUS the live chain's own declared added latency (each registered
+    effect's EffectCatalog.getLatencySeconds(), zeroed while Bypass is
+    engaged), refreshed at 1 Hz alongside NODES off ChainCanvas's live
+    model so adding/removing an effect or toggling Bypass moves the
+    readout within a second. Entirely hook-driven: nothing runs until
+    src/main.js's Start success handler calls
+    StatusReadouts.onEngineStarted(), so its only ordering constraint is
+    the house one — before main.js. Guarded consumer: a missing topbar
+    element or a bad argument leaves it a harmless no-op.
   -->
   <script src="src/status-readouts.js"></script>
   <script src="src/main.js"></script>
