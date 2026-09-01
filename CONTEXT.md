@@ -137,3 +137,10 @@ A request is close enough to a preset when any of its tags matches the
 request's dominant intent — load and tweak; otherwise build fresh. A request
 that matches nothing is a coverage gap.
 _Avoid_: fuzzy matching
+
+### Persistence
+
+**Recovery snapshot**:
+The last autosaved model and layout kept available when startup cannot make
+that chain live. It is not a backup; the next accepted edit replaces it.
+_Avoid_: backup, recovery slot, recovered chain
