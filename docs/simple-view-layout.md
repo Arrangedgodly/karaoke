@@ -39,11 +39,13 @@ Why A won:
    column never moves while Previous/Next steps the filtered results
    beside it.
 
-Known costs, accepted: at very wide desktops the stage runs sparse
-(honest — Simple has nothing more to say), and on mobile the transport
-sits at the top of the stack rather than at thumb height (C's one
-genuine win; if field use contradicts the pick, C is the runner-up and
-the mobile stacking is the first thing to revisit).
+Known costs, accepted: on mobile the transport sits at the top of the
+stack rather than at thumb height (C's one genuine win; if field use
+contradicts the pick, C is the runner-up and the mobile stacking is the
+first thing to revisit). The stage's original sparseness at wide
+desktops was answered by owner direction (2026-09-01) with the composed
+stage below — description, device strip, richer summary rows — rather
+than accepted.
 
 ## Desktop (≥901px), top to bottom
 
@@ -62,15 +64,23 @@ the mobile stacking is the first thing to revisit).
   - **Right — the stage** (the board's seat): **MIC IN meter strip →
     Current sound → OUT meter strip**, the stage filling the height the
     board fills in Advanced.
-- **Current sound stage**, top to bottom: the kicker "Current sound";
-  the name — the preset's name, or "Custom sound" when the live chain
-  matches no preset — with the unsaved marker and **"Save this sound"
-  beside the name** whenever the sound is unsaved or custom (never in
-  the secondary menu — settled); the **effect summary**, one row per
-  effect in the live chain, plain phrase first and technical name
-  quietly after ("Evens out loudness · Compressor"), read-only, no
-  values; then **Previous / Next** centered under the summary with an
-  *n of m* position readout over the filtered factory list.
+- **Current sound stage** — a single composed column, capped to a
+  reading measure (~640px) and centered in the board's seat, vertically
+  centered when content runs short. Top to bottom: the kicker "Current
+  sound"; the name — the preset's name, or "Custom sound" when the live
+  chain matches no preset — with the unsaved marker and **"Save this
+  sound" beside the name** whenever the sound is unsaved or custom
+  (never in the secondary menu — settled); the sound's own one-line
+  description (the preset's prose; a save invitation for a custom
+  sound); the **device strip** — one key per device in the live chain,
+  each carrying its family legend square and separated by chevrons
+  (the glossary's permitted read-only "names the devices a preset
+  uses"; no construction controls); the **effect summary**, one row per
+  effect, plain phrase first with a family tick down the row's left
+  edge and the technical name quietly after in its family's ink
+  ("Evens out loudness · `Compressor`"), read-only, no values; then
+  **Previous / Next** centered under the summary with an *n of m*
+  position readout over the filtered factory list.
 - **What Simple does not show here** (settled, restated for layout
   consequences): no board cards, no Effects/palette panel, no
   signal-order strip — the effect summary is the chain's Simple
@@ -84,7 +94,8 @@ Zones stack, the deck stays sticky at top, the page keeps its scroll
 
 1. System deck (wrapped rows, as today — Bypass never leaves view)
 2. MIC IN meter strip
-3. Current sound stage (name + Save + effect summary + Previous/Next)
+3. Current sound stage (name + Save + description + device strip +
+   effect summary + Previous/Next)
 4. OUT meter strip
 5. Sounds library — the scrolling tail; filters, search, cards full-width
 
