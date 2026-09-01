@@ -202,14 +202,17 @@ reserved for system states: register marks, the global focus ring, the
 live-control blink, pressed pads, the chosen-drag groove lip, and Start.
 Family color appears twice, in two vocabularies: desaturated silkscreen
 inks for rail print, saturated rq5 tokens for knob arcs and palette
-legend squares.
+legend squares. 2026-09-01 (owner direction, "for fun"): the
+signal-order strip's plugin names join the rail-print vocabulary — each
+step prints in its family's desaturated ink, extending the lock ink the
+terminal limiter already carried.
 
 **Key Characteristics:**
 - One instrument, two decks, three printed zones — machined grooves and one deck seam, no floating panels, no border-radius islands.
 - Single Face Chassis: display register on the top edge, sections as print zones, jack-print anchors, VU corner + flow switch on the base plate.
 - Encoder field: 54px knobs (family-colored arcs), pad radio-groups, trim slots; the display register answers the touched control.
 - Free board: snap-grid positioning, patch cords that EDIT order but never gate audio; DOM order is always chain order. No arrange/tidy key — the board is a free canvas (retired 2026-08-31).
-- One signal orange for system states only; family color on the arc alone; BYPASS's split-role red outranks everything on the deck.
+- One signal orange for system states only; family color on the arcs, the legend squares, the rail print, and the signal-order strip's names (2026-09-01 fun round); BYPASS's split-role red outranks everything on the deck.
 - Two-register type (silkscreen sans / dot-matrix mono tabular), 12px/13.6px value ladder, 11px floor.
 - One global disabled grammar — diagonal hatch + recede — for exactly two states (pre-Start gate, emergency-bypassed chain). A bypassed effect uses its local IN/BYP key, a struck family code, and a receded encoder field instead.
 
