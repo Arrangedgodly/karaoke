@@ -181,3 +181,138 @@ cells.
    right); Metal technique:ambience-short (near-slap, dry-ish live
    rule); Country vibe:natural (the genre's honest/radio-mix character
    over a second bright-tagged rock clone).
+
+## GAG-1 — Six gag candidates authored into the pen
+
+- Status: `awaiting-approval` (content lane; dep RES-2 satisfied — D2/D3
+  dispositions). Branch `gag-1-gag-candidates` (stacked OFF
+  `gen-1-genre-candidates` so the pen PR stacks cleanly; pen + docs only).
+
+### What landed in the pen (src/audition-candidates.js)
+
+Six entries appended after the GEN-1 genre entries, authored exactly from
+the RQ-2/RQ-3 record (research/rq2-gag-reauthoring.md, D2/D3): the three
+re-auditioned gags answering their 2026-09-01 notes, plus the three
+never-authored cells. No sketch value needed touching — the step-grid
+audit passed for every param (unlike GEN-1's delay 375→380 adjustment).
+
+| # | Entry | Cell (primary) | Chain shape | Budget (of +12) | Margin |
+|---|-------|----------------|-------------|-----------------|--------|
+| 1 | Robot Usher (re-author) | gag:robot | eq(−6/+4/0) → pitch(+3/45) → chorus(1.5ms/6Hz/30) → crush(6/30) → trem(12Hz/65) → lim(−6/60) | 0.57·6 = **3.42 dB** | 8.58 dB |
+| 2 | Megaphone Rally (re-author) | gag:megaphone | eq(−12/+9/+3) → dist(0.5/0.45/0) → comp(−18/12/2ms/0.08) → lim(−3/50) | 0.57·18 + 0.57·3 = **11.97 dB** | 0.03 dB |
+| 3 | 8-Bit Encore (re-author) | gag:8-bit | eq(−2/+1/+3) → crush(6/55) → trem(4Hz/25) → lim(−6/80) | 0.57·6 = **3.42 dB** | 8.58 dB |
+| 4 | Helium Hangout | gag:helium | eq(−9/−1/+2) → pitch(+10/100) → lim(−6/100) | 0.57·6 = **3.42 dB** | 8.58 dB |
+| 5 | Dark Helmet Baritone | gag:darth-vader | pitch(−4/100) → eq(−6/+4/−7) → dist(0.18/0.22/−12) → lim(−6/90) | 0.57·6 = **3.42 dB** | 8.58 dB |
+| 6 | Demon Growl | gag:monster/demon | pitch(−10/100) → eq(+5/+2/−2) → dist(0.6/0.18/−8) → lim(−6/80) | 0.57·6 = **3.42 dB** | 8.58 dB |
+
+Every budget number above is ENGINE-computed, not hand-claimed: a
+disposable vm-harness check (same technique as
+tests/test-factory-presets-policy.js — set_chain + the +12 dB probe that
+makes the engine itemize its own budget breakdown) printed, per entry:
+
+- `Robot Usher: ru-l1 makeup |−6|·0.57 = +3.42 → 3.42 dB` (the pitch/
+  chorus/crush/trem stages are level-neutral by catalog design)
+- `Megaphone Rally: mr-c1 +10.26 (|−18|·0.57), mr-l1 +1.71 (|−3|·0.57) → 11.97 dB`
+- `8-Bit Encore: eb-l1 +3.42 → 3.42 dB`
+- `Helium Hangout: hh-l1 +3.42 → 3.42 dB`
+- `Dark Helmet Baritone: dv-l1 +3.42 → 3.42 dB`
+- `Demon Growl: mg-l1 +3.42 → 3.42 dB`
+
+### Megaphone boundary finding (pre-answers PEN-1's flagged check)
+
+The real engine treats the +12 dB cap as INCLUSIVE:
+
+1. The authored 11.97 dB chain resolves `set_chain applied:true`
+   (margin 0.03 dB).
+2. A probe variant pushed to EXACTLY 12.00 dB (one +0.03 dB gain node
+   upstream of the terminal limiter) still resolves `applied:true` —
+   the violation predicate is `estimatedDb > 12`, not `>=`.
+3. 12.01 dB rejects with code `gain-budget-12db` (the probe's rejection
+   breakdown is what the budget numbers above were extracted from).
+4. The EQ boundaries hold the same way: boost sum +12 (9+3) sits exactly
+   at eq-boost-sum's cap (predicate `>`), per-band mid +9 exactly at the
+   agent range max, one band ≥ +6 — all accepted.
+
+No back-off was needed; PEN-1 should still re-verify in its committed
+conformance pass (this was a disposable at-authoring check, not the
+committed test).
+
+### Note-to-delta mapping (D2 — the "why" per rejection note)
+
+1. **Robot** ("too buzzy not robotic enough"): distortion REMOVED (the
+   static "buzzy" core); robot read carried by the harmony double
+   (pitchshift +3/mix 45 — W&M VIHAR 2017 §2.2's robot recipe) + AM
+   voice breaks (tremolo 12 Hz/65 — §4.2's most separating feature;
+   30 Hz ring mod is unreachable, tremolo caps at 14 Hz) + moving comb
+   (chorus 1.5 ms); bitcrusher 4/70 → 6/30.
+2. **Megaphone** ("not as loud as expected"): loudness from presence +
+   density, not level — distortion output −10 → 0 (buys back the 10 dB
+   the rejected chain discarded), eq −6/+5/+3 → −12/+9/+3 (horn band-pass
+   at the per-band legal max), compressor −14/6/4ms/0.12 → −18/12/2ms/0.08
+   (max-legal density), ceiling −6 → −3 (policy max).
+3. **8-Bit** ("too crushed and hard to hear"): melody intelligibility —
+   bits 3 → 6 (quantization SNR 19.8 → 37.9 dB), mix 80 → 55 (dry core
+   carries the tune), tremolo 6/40 → 4/25, ADDED pre-crush presence EQ
+   (pre-emphasis into the quantizer; a post-crush boost would lift the
+   noise floor with the signal).
+
+### Supersession (recorded in the pen header + entry comments)
+
+The #31 seed entries "Robot Usher" (cell 4), "8-Bit Encore" (cell 5) and
+"Megaphone Rally" (cell 7) were REMOVED in the same edit: the GAG-1
+entries are their re-authors, and two same-named entries would break the
+audition session's name-keyed verdict recording (same rule as GEN-1's
+Hard-Tune supersession). Pen after this edit: 8 seed + 6 GEN-1 + 6 GAG-1
+= 20 entries, no duplicate names, no double-covered cells. (The task
+brief's "17 + 6 = 23" assumed pure appending; the no-duplicate-names
+rule wins — count verified 20 by the harness.)
+
+### Validation (disposable script, run at authoring — NOT committed;
+### PEN-1 owns the committed conformance pass at PR time)
+
+- A. 20 pen entries; the six GAG-1 entries are the tail in order; all
+  pending-shaped (verdict 'pending', auditionDate null), library-shaped;
+  every tag a legal frozen-vocabulary value; every primary among its tags
+  and a legal dropdown group; no duplicate names; each superseded seed
+  draft gone (its name appears exactly once).
+- B. Every node type live-registered; EffectCatalog.normalizeParams
+  accepts every node and returns EXACTLY the authored param set (nothing
+  unknown, no defaults silently filled); every param on its catalog step
+  grid (numeric (v−min)/step integral; discrete values exact); node ids
+  unique per chain; ≤16 nodes; compressor+limiter ≤2 per chain.
+- C. PresetSchema round-trip clean for all six (serialize → JSON →
+  parse → deserialize → nodes deep-equal).
+- D. The REAL policy engine accepts all 20 pen entries' exact nodes
+  (set_chain applied:true); budget probe per entry as itemized above,
+  all ≤ +12; megaphone boundary characterized (inclusive — see above).
+- Full suite `node tests/run.js`: 35/36 files green (2944 checks ok);
+  the only failure is tests/test-autotune-node.js's two CPU-p99 checks
+  ("vocal-like p99 CPU 452.7% of quantum", "440 Hz p99 209.9%") — the
+  KNOWN environmental flake, same file, same two checks, and the same
+  35/36 + 2944 totals as the GEN-1 and BEH-1 records (which reproduced
+  it identically at their base commits). No engine code touched by this
+  branch.
+
+### Decisions recorded (flag for review if disputed)
+
+1. Removing (not renaming) the three #31 drafts: name-keyed verdict
+   recording cannot hold duplicates — the Hard-Tune precedent applied
+   three more times.
+2. Batch scoped to the SIX D2/D3 chains. The plan's "~10–11" estimate
+   (which also named an intimate-vibe cell) predates D2/D3 committing to
+   exactly these six; the record's implementation-consequences list says
+   "author the six candidates exactly as the preset-shape blocks". The
+   intimate-vibe cell and any remaining inventory gaps are LOOP-1's
+   next-batch inputs per the ongoing-batches directive.
+3. Megaphone carries no technique tag (the record's explicit call: none
+   of the frozen values fits; adding one speculatively is forbidden —
+   vocabulary is append-only). Robot's technique tag moved lo-fi →
+   modulated/wide with the chain's character (modulation now carries the
+   read; bitcrush is a 30 %-mix texture).
+4. Descriptions are the record's #28-checklist texts verbatim; names
+   adopted as-is from the record's working names (Helium Hangout / Dark
+   Helmet Baritone / Demon Growl — house-style, distinct from the
+   covered neighbors' names).
+5. Authoring dated 2026-09-01 to match the cycle's internal timeline
+   (the seed batch, GEN-1, and the research dispositions all carry that
+   date).

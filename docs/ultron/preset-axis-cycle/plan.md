@@ -109,12 +109,22 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
   p99 flake (reproduced identically at base). Per-entry budget table in
   `production-log.md`.
 
-- **GAG-1 — Gag + vibe candidates (~10–11)** *(medium)* — status: `pending`
+- **GAG-1 — Gag + vibe candidates (~10–11)** *(medium)* — status:
+  `awaiting-approval` (branch `gag-1-gag-candidates`, stacked on
+  `gen-1-genre-candidates`)
   (unblocked per D2/D3 — RES-2 complete)
   Re-authored robot/megaphone/8-bit (notes addressed, delta reviewable) +
   helium/darth-vader/monster-demon (distinct per RQ-3) + intimate vibe +
   any remaining uncovered cells from the inventory. Deps: RES-2.
   Authoring source: `research/rq2-gag-reauthoring.md` (D2/D3).
+  Landed scope: the SIX D2/D3 chains (the record's authoring instruction —
+  the "~10–11" estimate predates D2/D3 committing to six; the intimate-vibe
+  cell and any remaining inventory gaps are LOOP-1's next-batch inputs, per
+  the ongoing-batches directive). The three re-authors supersede the #31
+  cell-4/5/7 drafts (removed in the same edit, Hard-Tune rule); pen now
+  20 entries, no duplicate names. Budgets engine-computed 3.42–11.97 dB;
+  megaphone boundary verified inclusive through the real engine (see
+  production-log GAG-1). Suite 35/36 — the known autotune CPU-p99 flake.
 
 - **PEN-1 — Policy check + pen PR** *(small)* — status: `blocked` (GEN-1, GAG-1)
   All candidates policy-validated (schema round-trip, catalog param ranges,
@@ -123,6 +133,10 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
   Acceptance: conformance checks pass for every candidate; PR up.
   Deps: GEN-1, GAG-1. Note (from D2/D3): must verify the gain-budget ≤
   boundary is inclusive — megaphone sits at 11.97 dB, 0.03 dB margin.
+  GAG-1 pre-answer (real engine, disposable probe): the cap IS inclusive —
+  11.97 applied:true, a pushed-to-exactly-12.00 variant still applied:true,
+  12.01 rejects as gain-budget-12db; PEN-1 still re-verifies in the
+  committed conformance pass.
 
 ### Audition/promotion lane (user-owned steps)
 

@@ -10,19 +10,23 @@ off (Q1–Q7 approved as recommended + the user's ongoing-batches directive).
 Awaiting final record confirmation, then `$plan-it-out`.
 
 ## Active Task
-**GEN-1 (six genre candidates) — status `awaiting-approval`** on branch
-`gen-1-genre-candidates` (PR-only pipeline; coordinator handles push/PR).
-Six pen entries authored from the RQ-1 sketches (D1): Metal Mayhem
-9.69 dB · Hard-Tune Hotline re-author 10.83 dB (autotune-first, OQ-4 =
-C/Chromatic/5 ms/mix 100; supersedes the #31 cell-1 draft, removed in
-the same edit) · Slow Jam Silk 11.26 dB · Nashville Nights 10.83 dB ·
-Club Anthem 10.83 dB (throw 380 ms — 375 is off the delay step grid) ·
-West End Nights 10.83 dB. Disposable policy check: all six
-set_chain-applied + schema round-trip clean, budgets engine-computed;
-suite 35/36 (the one fail is the known autotune CPU p99 environmental
-flake — identical at the base commit). Per-entry budget table +
-decisions in [production-log.md](production-log.md). Next unblocked:
-GAG-1.
+**GAG-1 (six gag candidates) — status `awaiting-approval`** on branch
+`gag-1-gag-candidates` (stacked on `gen-1-genre-candidates`; PR-only
+pipeline; coordinator handles push/PR). Six pen entries authored from the
+RQ-2/RQ-3 record (D2/D3): Robot Usher re-author 3.42 dB (distortion
+dropped — harmony double + comb + voice-break AM carry the robot read) ·
+Megaphone Rally re-author **11.97 dB** (max-legal density; boundary
+verified INCLUSIVE by the real engine — exactly 12.00 still applies,
+12.01 rejects) · 8-Bit Encore re-author 3.42 dB (6 bits/mix 55,
+pre-crush presence) · Helium Hangout 3.42 (+10, thin) · Dark Helmet
+Baritone 3.42 (−4, dry intercom) · Demon Growl 3.42 (−10, growl). The
+three re-authors supersede #31 cells 4/5/7 (drafts removed in the same
+edit); pen = 20 entries, no dup names. Disposable policy check: all 20
+set_chain-applied + grid/schema clean, budgets engine-computed; suite
+35/36 (the one fail is the known autotune CPU p99 environmental flake —
+same file/checks/totals as the GEN-1 and BEH-1 records). Per-entry
+budget table + boundary finding in [production-log.md](production-log.md).
+Next unblocked: PEN-1 (GEN-1 + GAG-1 both in).
 
 ## Approvals
 - Town-hall clusters: Q1 full-coverage batch (~16–17 candidates incl. 3
@@ -78,3 +82,8 @@ Status: awaiting-approval; ships as its own PR before the batch PR.
 
 ### GEN-1: APPROVED 2026-09-01 (user will audition the fx live later).
 Next: GAG-1.
+
+### GAG-1: landed 2026-09-01, status `awaiting-approval` (branch
+`gag-1-gag-candidates`, stacked on `gen-1-genre-candidates`). Six
+D2/D3 chains in the pen; megaphone boundary pre-answered for PEN-1
+(inclusive). Next: PEN-1.
