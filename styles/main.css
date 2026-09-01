@@ -397,17 +397,29 @@ body {
   }
 
   /* The Effects panel: the SAME disclosure pattern as Presets, but on
-     the HEIGHT axis (it docks under the board, not beside it) — a fixed
-     flex-basis expanded, shrinking to a thin horizontal strip collapsed.
-     Unlike the sidebar rail, the label stays horizontal when collapsed:
-     a wide, short strip has room for normal text, so there is no narrow-
-     rail rotation trick needed here. */
+     the HEIGHT axis (it docks under the board, not beside it), shrinking
+     to a thin horizontal strip collapsed. Unlike the sidebar rail, the
+     label stays horizontal when collapsed: a wide, short strip has room
+     for normal text, so there is no narrow-rail rotation trick needed
+     here. Expanded, it is CONTENT-SIZED (flex-basis: auto, flex-shrink:
+     0) rather than a fixed height — a fixed 260px clipped the 4-category
+     grid into its own scrollbar at anything narrower than a very wide
+     board (measured: content needs ~238px, but 260px minus the panel
+     head/padding overhead only left ~187px of it usable), against the
+     user's explicit ask to see and choose every effect with no
+     scrolling. max-height is a generous SAFETY cap only (content still
+     grows the panel freely up to it) — .effects-panel-content's own
+     overflow-y:auto is the fallback if a much larger future effect
+     library ever actually exceeds it, not a scrollbar this content
+     should ever reach today. */
   .effects-panel {
-    flex: 0 0 260px;
+    flex: 0 0 auto;
+    max-height: 60vh;
   }
 
   .effects-panel.collapsed {
     flex-basis: 40px;
+    max-height: 40px;
   }
 
   .effects-panel.collapsed .effects-panel-content {
@@ -2882,6 +2894,13 @@ select.control {
 .presets-panel-content,
 .effects-panel-content {
   flex: 1 1 auto;
+  /* The scrollbar (when content overflows) lives INSIDE .panel's own
+     right padding, eating it — content ends up flush against the
+     scrollbar track with none of the breathing room the left edge gets.
+     This extra padding sits beyond that, so scrolled content keeps the
+     SAME gap from the scrollbar that it has from the panel's left edge,
+     instead of being cut off by it. */
+  padding-right: 0.9rem;
 }
 
 /* Effects panel: #palette-list fills the content region exactly as it
