@@ -2415,7 +2415,55 @@ select.control {
   display: none;
 }
 
-/* --- Header-zone controls (fold chevron, eject ×) ---------------------- */
+/* --- Header-zone controls (effect bypass, fold chevron, eject ×) ------- */
+
+/* Per-effect bypass stays visually below the red emergency Bypass key.
+   IN/BYP text carries the state without borrowing the safety color or the
+   global hatch treatment. Parameters remain interactive while bypassed so
+   the operator can tune the effect before returning it to the signal path. */
+.node-bypass {
+  flex: none;
+  position: relative;
+  min-width: 2rem;
+  height: 1rem;
+  padding: 0 0.2rem;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 3px;
+  background: var(--pm-chassis);
+  color: var(--pm-print);
+  font-family: var(--font-readout);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.node-bypass:hover,
+.node-bypass:active {
+  color: var(--pm-print-hi);
+  border-color: var(--pm-print);
+}
+
+.node-bypass[aria-pressed='true'] {
+  background: var(--pm-print-dim);
+  border-color: var(--pm-print);
+  color: var(--pm-chassis);
+}
+
+.node-bypass:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.node-card.node-bypassed .section-main {
+  opacity: 0.42;
+}
+
+.node-card.node-bypassed .section-code {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
 
 /* The chevron: a drawn mark (a square's two edges) rotating to point
    right when folded — the disclosure convention, as geometry. */
@@ -2462,6 +2510,7 @@ select.control {
    24px pointer floor — this invisible ::before restores it (visual box
    1.15rem, hit box ~25px). */
 .node-collapse::before,
+.node-bypass::before,
 .node-remove-btn::before {
   content: '';
   position: absolute;
@@ -2473,8 +2522,13 @@ select.control {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .node-collapse {
+  .node-collapse,
+  .node-bypass {
     transition: border-color 150ms ease, color 150ms ease;
+  }
+
+  .node-card .section-main {
+    transition: opacity 150ms ease;
   }
 }
 

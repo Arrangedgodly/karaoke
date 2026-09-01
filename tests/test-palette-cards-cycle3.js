@@ -21,7 +21,7 @@
 //      (buildGraph + autosave + markModified + noteHumanEdit), and the
 //      keyboard-add placement policy keeps a terminal limiter terminal.
 //   E. CARDS: per new type — family edge hooks, header anatomy (grip
-//      aria-hidden, label, collapse + remove aria-labels), params
+//      aria-hidden, label, bypass + collapse + remove aria-labels), params
 //      wrapped for the VIS-7 collapse (one row per paramSpec entry,
 //      autotune's Key/Scale as UI-1 <select>s with 12/3 options), and
 //      the inherited collapse toggle flipping .collapsed + aria-expanded.
@@ -660,8 +660,17 @@ NEW_TYPES.forEach(function (t) {
 
   var foot = sectionFoot(card);
   var footButtons = foot.children;
-  var collapseBtn = footButtons[0];
-  var removeBtn = footButtons[1];
+  var bypassBtn = footButtons[0];
+  var collapseBtn = footButtons[1];
+  var removeBtn = footButtons[2];
+  check(
+    bypassBtn.tagName === 'BUTTON' &&
+      bypassBtn.className === 'node-bypass' &&
+      bypassBtn.textContent === 'IN' &&
+      bypassBtn.attrs['aria-pressed'] === 'false' &&
+      bypassBtn.attrs['aria-label'] === 'Bypass ' + t.label + ' effect',
+    t.type + ' bypass button starts in the signal path with an accessible toggle state'
+  );
   check(
     collapseBtn.tagName === 'BUTTON' &&
       collapseBtn.className === 'node-collapse' &&
@@ -751,6 +760,38 @@ NEW_TYPES.forEach(function (t) {
     t.type + ' collapse toggle re-expands the card'
   );
 });
+
+function firstCardForType(type) {
+  return cards().filter(function (card) {
+    return card.attrs['data-family'] === type;
+  })[0];
+}
+
+var bypassTarget = firstCardForType('distortion');
+var bypassRequestCount = seamRequests.length;
+sectionFoot(bypassTarget).children[0].fire('click');
+var bypassedDistortion = firstCardForType('distortion');
+var bypassedButton = sectionFoot(bypassedDistortion).children[0];
+check(
+  seamRequests.length === bypassRequestCount + 1 &&
+    seamRequests[seamRequests.length - 1].forceStructural === true &&
+    windowStub.ChainCanvas.getCurrentModel()[0].bypassed === true,
+  'distortion bypass commits one structural candidate while retaining the node'
+);
+check(
+  bypassedDistortion.classList.contains('node-bypassed') &&
+    bypassedDistortion.attrs['data-bypassed'] === 'true' &&
+    bypassedButton.textContent === 'BYP' &&
+    bypassedButton.attrs['aria-pressed'] === 'true',
+  'accepted bypass renders the card and toggle in the BYP state'
+);
+bypassedButton.fire('click');
+check(
+  !Object.prototype.hasOwnProperty.call(windowStub.ChainCanvas.getCurrentModel()[0], 'bypassed') &&
+    !firstCardForType('distortion').classList.contains('node-bypassed') &&
+    sectionFoot(firstCardForType('distortion')).children[0].textContent === 'IN',
+  're-enable returns the same node to IN and removes the optional bypass flag'
+);
 
 // Autotune specifics: Key/Scale rows are the UI-1 discrete pad groups
 // with the full 12-key / 3-scale sets, at registered defaults.

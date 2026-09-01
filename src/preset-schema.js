@@ -22,7 +22,7 @@
 // against.
 //
 // `nodes` here is deliberately just the wire format for
-// AudioGraph.getModel()'s `{id, type, params}[]` shape (src/audio-graph.js) —
+// AudioGraph.getModel()'s `{id, type, params, bypassed?}[]` shape (src/audio-graph.js) —
 // see that file's own getModel()/buildGraph() comments for why the model is
 // shaped the way it is. serialize()/deserialize() add exactly two things on
 // top of the bare model: a `schemaVersion` tag (so a future shape change can
@@ -222,7 +222,7 @@
    * snapshot.
    *
    * @param {string} name - the preset's display name (non-empty string).
-   * @param {Array<{id: string, type: string, params: Object}>} model - exactly
+   * @param {Array<{id: string, type: string, params: Object, bypassed?: boolean}>} model - exactly
    *   the shape AudioGraph.getModel() returns.
    * @returns {{schemaVersion: number, name: string, nodes: Array<{id: string, type: string, params: Object}>}}
    */
@@ -237,11 +237,15 @@
       schemaVersion: CURRENT_VERSION,
       name: name,
       nodes: model.map(function (entry) {
-        return {
+        var copy = {
           id: entry.id,
           type: entry.type,
-          params: copyParams(entry.params),
+          params: copyParams(entry.params)
         };
+        if (entry.bypassed === true) {
+          copy.bypassed = true;
+        }
+        return copy;
       }),
     };
   }
@@ -261,7 +265,8 @@
    *   - data.name isn't a non-empty string
    *   - data.nodes isn't an array
    *   - any data.nodes[i] isn't an object, or is missing a string `id`, is
-   *     missing a string `type`, or has a `params` that isn't a plain object
+   *     missing a string `type`, has a `params` that isn't a plain object,
+   *     or has a `bypassed` value that isn't boolean
    *     when present
    * A missing/undefined `params` on a node entry is explicitly NOT an error
    * — it's treated as `{}`. That's a common, legitimate case (e.g. a node
@@ -315,17 +320,24 @@
       if (entry.params !== undefined && !isPlainObject(entry.params)) {
         throw new Error('PresetSchema.deserialize: data.nodes[' + i + '].params must be a plain object when present.');
       }
+      if (entry.bypassed !== undefined && typeof entry.bypassed !== 'boolean') {
+        throw new Error('PresetSchema.deserialize: data.nodes[' + i + '].bypassed must be a boolean when present.');
+      }
       // Catalog-backed param validation (no-op for an unknown type).
       validateEntryParams(entry, i, 'data.nodes');
     });
     return {
       name: data.name,
       nodes: data.nodes.map(function (entry) {
-        return {
+        var copy = {
           id: entry.id,
           type: entry.type,
-          params: copyParams(entry.params),
+          params: copyParams(entry.params)
         };
+        if (entry.bypassed === true) {
+          copy.bypassed = true;
+        }
+        return copy;
       }),
     };
   }

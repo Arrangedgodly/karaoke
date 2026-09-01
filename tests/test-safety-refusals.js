@@ -588,6 +588,22 @@ async function main() {
   );
   untouched(snapB3, 'B3');
 
+  // (5) A limiter card may be bypassed by the human, but an agent cannot
+  // submit a chain that routes around the required safety limiter.
+  var snapB5 = snapshot();
+  var nodesWithBypassedLimiter = sandbox.ChainCanvas.getCurrentModel();
+  nodesWithBypassedLimiter[nodesWithBypassedLimiter.length - 1].bypassed = true;
+  var resB5 = await getTool(sandbox, 'set_chain').execute({
+    chain: { schemaVersion: 1, name: 'bypassed limiter', nodes: nodesWithBypassedLimiter }
+  });
+  await settle();
+  check(
+    !!resB5 && resB5.error === true && resB5.code === 'limiter-required-terminal' &&
+      /bypassed/.test(resB5.reason || ''),
+    'B4: set_chain refuses a bypassed terminal limiter'
+  );
+  untouched(snapB5, 'B4');
+
   // --------------------------------------------------------------------
   console.log('C. an unsafe limiter ceiling is refused, not clamped');
   // --------------------------------------------------------------------
