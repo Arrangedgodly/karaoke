@@ -208,6 +208,19 @@
     return hasOwn(definitions, type) && definitions[type].experimental;
   }
 
+  // Cycle-4 BEH-1 (autotune-first): the ONE definition of the default
+  // insert position for a freshly added node. Both add paths ask the
+  // catalog — the palette chip/keyboard add (src/canvas.js addNodeType)
+  // and the agent add_node omitted-position default (src/mcp-tools.js
+  // planAddNode) — so the rule cannot drift between the human and agent
+  // surfaces. Autotune tunes pitch, so it defaults to the FRONT of the
+  // chain, before any other effect touches the signal. Explicit intent
+  // still wins: an add_node position argument and any later reorder
+  // place the node wherever the operator asks.
+  function insertsAtFront(type) {
+    return type === 'autotune';
+  }
+
   function requireDefinition(type, operation) {
     if (!hasOwn(definitions, type)) {
       throw new Error("EffectCatalog." + operation + ": unknown effect type '" + type + "'.");
@@ -297,6 +310,7 @@
     getDefault: getDefault,
     getDefaults: getDefaults,
     isExperimental: isExperimental,
+    insertsAtFront: insertsAtFront,
     normalizeParams: normalizeParams,
     create: create,
     applyParam: applyParam,

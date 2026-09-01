@@ -43,7 +43,7 @@ trail.
 
 ### Behavior lane
 
-- **BEH-1 — Autotune-first insert rule** *(medium)* — status: `pending`
+- **BEH-1 — Autotune-first insert rule** *(medium)* — status: `awaiting-approval`
   OQ-3 semantics resolved at build: palette chip + agent `add_node` insert
   autotune at chain FRONT (before all non-anchor nodes; terminal limiter
   policy untouched; user reorder afterwards unchanged). Touches the add
@@ -52,7 +52,12 @@ trail.
   both paths; drag-reorder still free; existing insert semantics for all
   other types unchanged; suite green. Ships as its own PR BEFORE the batch
   PR (the Hard-Tune candidate depends on it). Deps: none. Parallel with
-  RES-1/RES-2.
+  RES-1/RES-2. Evidence: branch `beh-1-autotune-first` — the rule defined
+  once as `EffectCatalog.insertsAtFront` and consumed by `addNodeType()`
+  (palette) and `planAddNode()` (agent omitted-position default); suite
+  37/38 (the one failing file is the known autotune CPU p99 environmental
+  flake — reproduced identically at the base commit); entry in
+  `production-log.md`.
 
 ### Content lane
 

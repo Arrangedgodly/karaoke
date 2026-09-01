@@ -1815,11 +1815,15 @@
    * except a terminal limiter must stay terminal (the default preset's
    * safe-output invariant), so the card is inserted immediately BEFORE a
    * limiter that currently occupies the last position. With no terminal
-   * limiter (or an empty chain) it appends at the end. Commits through
-   * commitStructuralChange() — the SAME ChainEditing adapter the cord and
-   * removal gestures use — so graph acceptance, autosave (PS-2), the
-   * unsaved dot (PS-3), and the human-edit revision bump (Issue #6) stay
-   * one transaction. No agent toast class: this is a human action.
+   * limiter (or an empty chain) it appends at the end. BEH-1 (cycle 4)
+   * exception: autotune defaults to the FRONT of the chain (the
+   * EffectCatalog.insertsAtFront rule — tuning happens before any other
+   * effect touches the signal); the user can still move it afterwards.
+   * Commits through commitStructuralChange() — the SAME ChainEditing
+   * adapter the cord and removal gestures use — so graph acceptance,
+   * autosave (PS-2), the unsaved dot (PS-3), and the human-edit revision
+   * bump (Issue #6) stay one transaction. No agent toast class: this is a
+   * human action.
    *
    * @param {string} type - the node type to add (from the chip's
    *   data-node-type, itself from the catalog-driven palette loop).
@@ -1827,8 +1831,19 @@
   function addNodeType(type) {
     var card = createNodeCard(type, defaultParamsForType(type));
     var cards = chainListEl.querySelectorAll('.node-card');
+    var firstCard = cards.length > 0 ? cards[0] : null;
     var lastCard = cards.length > 0 ? cards[cards.length - 1] : null;
-    if (lastCard &&
+    // BEH-1: the autotune-first rule is catalog-owned; a missing catalog
+    // method (old harnesses) falls through to the append placement.
+    var frontInsert =
+      window.EffectCatalog &&
+      typeof window.EffectCatalog.insertsAtFront === 'function' &&
+      window.EffectCatalog.insertsAtFront(type);
+    if (frontInsert && firstCard) {
+      // Autotune-first: before every card (still upstream of a terminal
+      // limiter, which stays terminal).
+      chainListEl.insertBefore(card, firstCard);
+    } else if (lastCard &&
         lastCard.getAttribute('data-family') === 'limiter') {
       // Keep the terminal limiter terminal: insert just before it.
       chainListEl.insertBefore(card, lastCard);

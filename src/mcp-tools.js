@@ -393,6 +393,28 @@
   }
 
   /**
+   * BEH-1 (cycle 4, autotune-first): does this type's DEFAULT insert
+   * position sit at the front of the chain? Same single rule the palette
+   * add path uses — EffectCatalog.insertsAtFront — so the human and agent
+   * defaults cannot drift. Only governs the add_node omitted-position
+   * default; an explicit position argument always wins.
+   *
+   * @param {string} type - a node-type name.
+   * @returns {boolean} true when an add without an explicit position
+   *   should insert at index 0.
+   */
+  function typeInsertsAtFront(type) {
+    try {
+      if (window.EffectCatalog && typeof window.EffectCatalog.insertsAtFront === 'function') {
+        return !!window.EffectCatalog.insertsAtFront(type);
+      }
+    } catch (err) {
+      // A damaged optional dependency behaves like an absent catalog.
+    }
+    return false;
+  }
+
+  /**
    * @param {Object} spec
    * @returns {boolean} true when this spec declares a DISCRETE param —
    *   a UI-1 `values` select (autotune key/scale). Discrete specs carry
@@ -3118,9 +3140,10 @@
 
   /**
    * add_node: one node inserted at `position` (clamped into range; append
-   * when omitted). The id is minted by the host and disclosed in the
-   * result note. Appending behind the terminal limiter rejects, per the
-   * required-terminal rule.
+   * when omitted — except the BEH-1 autotune-first default, which inserts
+   * at index 0 via typeInsertsAtFront). The id is minted by the host and
+   * disclosed in the result note. Appending behind the terminal limiter
+   * rejects, per the required-terminal rule.
    */
   function planAddNode(input, model) {
     var id = mintNodeId(model);
@@ -3138,7 +3161,7 @@
     var node = applied.nodes[0];
     var requestedPosition =
       input.position === undefined || input.position === null
-        ? model.length
+        ? (typeInsertsAtFront(input.type) ? 0 : model.length)
         : input.position;
     var position = Math.min(Math.max(0, requestedPosition), model.length);
     var candidate = model.map(function (entry) {
@@ -4301,8 +4324,11 @@
       name: 'add_node',
       description:
         'Add one effect node, optionally with initial parameters. position is a 0-based ' +
-        'insert index; omit it to append. Because the limiter must stay last, insert new ' +
-        'effects upstream of it. The host returns the new node id after policy validation.',
+        'insert index; omit it to append — except autotune, whose omitted position ' +
+        'defaults to the FRONT of the chain (index 0, the autotune-first policy: tune ' +
+        'pitch before other effects touch the signal). Because the limiter must stay ' +
+        'last, insert new effects upstream of it. The host returns the new node id ' +
+        'after policy validation.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4320,7 +4346,8 @@
           position: {
             type: 'integer',
             minimum: 0,
-            description: '0-based index in the nodes array to insert at; omit to append at the end.'
+            description: '0-based index in the nodes array to insert at; omit to append at ' +
+              'the end (autotune instead defaults to the front, index 0).'
           }
         },
         required: ['type'],

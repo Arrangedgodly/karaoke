@@ -10,7 +10,12 @@ off (Q1–Q7 approved as recommended + the user's ongoing-batches directive).
 Awaiting final record confirmation, then `$plan-it-out`.
 
 ## Active Task
-Final record confirmation of town-hall.md.
+**BEH-1 (autotune-first insert rule) — status `awaiting-approval`** on
+branch `beh-1-autotune-first` (PR-only pipeline; coordinator handles
+push/PR). Evidence + decisions in [production-log.md](production-log.md);
+suite 37/38 (the one fail is the known autotune CPU p99 environmental
+flake — identical at the base commit). Next unblocked: GEN-1 (rap cell
+waits on this PR landing).
 
 ## Approvals
 - Town-hall clusters: Q1 full-coverage batch (~16–17 candidates incl. 3
@@ -47,3 +52,17 @@ research-informed authoring and the user's ?audition pass (AUD-1) is the
 binding gate on all content. Ring-mod/tremolo-limitation caveat recorded;
 single-knob fallbacks pre-planned in rq2. PEN-1 must verify the ≤-boundary
 semantics for the megaphone budget.
+
+## Behavior Record (2026-09-01)
+BEH-1 autotune-first implemented on branch `beh-1-autotune-first`: the
+rule defined once as `EffectCatalog.insertsAtFront` and consumed at the
+two add chokepoints — `addNodeType()` (palette chip/keyboard) and
+`planAddNode()` (agent add_node omitted-position default, explicit
+position still honored). Autotune now ADDS at chain index 0 (still
+upstream of the terminal limiter; limiter-only chain gets it before the
+limiter); every other type keeps the existing insert semantics; reorder
+afterwards unchanged. Tests: few3 F4, few4 J6, palette-cards BEH-1 block,
+mcp-tools-cycle3 D-BEH1 (incl. set_chain round-trip through the real
+policy). Suite 37/38 — test-autotune-node.js's two CPU-p99 checks are
+the known environmental flake (reproduced identically at base 4aa6687).
+Status: awaiting-approval; ships as its own PR before the batch PR.

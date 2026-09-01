@@ -596,16 +596,16 @@ var builtCards = cards();
 check(builtCards.length === 4, 'four keyboard adds built four cards');
 check(
   builtCards.map(function (c) { return c.attrs['data-family']; })
-    .join(',') === 'distortion,chorus,gate,autotune',
-  'cards land in click order (append policy, no terminal limiter present)'
+    .join(',') === 'autotune,distortion,chorus,gate',
+  'cards land in click order except autotune, which takes the FRONT (BEH-1 autotune-first default; no terminal limiter present)'
 );
 check(
   seamRequests.length === seamBefore + 4 && calls.buildGraph.length === graphBefore,
   'one ChainEditing request per keyboard add and no Canvas-owned graph write'
 );
 check(
-  seamRequests[seamRequests.length - 1].candidate[3].type === 'autotune',
-  'last normalized structural candidate carries the autotune entry'
+  seamRequests[seamRequests.length - 1].candidate[0].type === 'autotune',
+  'last normalized structural candidate carries the autotune entry at index 0 (BEH-1)'
 );
 check(
   calls.persist.length === persistBefore && calls.markModified === modifiedBefore,
@@ -1274,6 +1274,35 @@ check(
     jAfterLimiter[0].attrs['data-family'] === 'limiter' &&
     jAfterLimiter[1].attrs['data-family'] === 'limiter',
   'keyboard limiter add still inserts before the terminal limiter (policy untouched)'
+);
+
+// BEH-1 (cycle 4, autotune-first): a palette autotune add against an
+// existing chain lands at index 0 — BEFORE every effect node (and a
+// non-autotune add against the same chain still takes the pre-limiter
+// slot). The rule is the real catalog's (this harness loads
+// effect-catalog.js + node-autotune.js — insertsAtFront is live here).
+windowStub.ChainCanvas.renderModel([
+  { id: 'e1', type: 'eq', params: {} },
+  { id: 'L2', type: 'limiter', params: {} }
+]);
+chipFor('autotune').fire('click');
+var jAfterAuto = cards();
+check(
+  jAfterAuto.length === 3 &&
+    jAfterAuto[0].attrs['data-family'] === 'autotune' &&
+    jAfterAuto.map(function (c) { return c.attrs['data-family']; }).join(',') === 'autotune,eq,limiter',
+  'BEH-1: palette autotune add lands at index 0, before every effect node'
+);
+check(
+  jAfterAuto[jAfterAuto.length - 1].attrs['data-family'] === 'limiter',
+  'BEH-1: the terminal limiter stays terminal under the autotune-first default'
+);
+chipFor('gate').fire('click');
+var jAfterGate = cards();
+check(
+  jAfterGate.length === 4 &&
+    jAfterGate.map(function (c) { return c.attrs['data-family']; }).join(',') === 'autotune,eq,gate,limiter',
+  'BEH-1: every other type still inserts before the terminal limiter (semantics unchanged)'
 );
 
 // The header rule follows the optgroup legend register (the in-house

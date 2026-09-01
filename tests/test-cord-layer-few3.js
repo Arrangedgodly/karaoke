@@ -245,7 +245,11 @@ var sandbox = {
     getAllTypes: function () { return ['gain', 'limiter']; },
     getLabel: function (t) { return t === 'limiter' ? 'Limiter' : 'Gain'; },
     getParamSpec: function () { return [{ id: 'level', default: 0 }]; },
-    isExperimental: function () { return false; }
+    isExperimental: function () { return false; },
+    // BEH-1 (cycle 4): mirrors the real catalog's autotune-first rule
+    // (src/effect-catalog.js insertsAtFront) so this harness exercises
+    // the same front-insert default the live page gets.
+    insertsAtFront: function (t) { return t === 'autotune'; }
   },
   ParamControls: {
     render: function () {},
@@ -499,6 +503,38 @@ check(
   'F2: the cords follow the splice — order change from the keyboard path re-routes'
 );
 check(cordPaths().length === 5, 'F3: 4 nodes -> 5 segments');
+
+// ----------------------------------------------------------------------
+console.log('F4. autotune add lands at the FRONT (BEH-1, cycle 4)');
+// The autotune-first default: EffectCatalog.insertsAtFront is the one
+// rule both add paths share. Against the same terminal-limiter chain,
+// autotune goes BEFORE EVERY effect node (index 0), not before the
+// limiter — and a limiter-only chain still gets the autotune upstream.
+CC.renderModel(model3()); // n1, n2, n3 (limiter terminal), board tidy
+var idsF4 = domOrder().slice();
+CC.addNodeType('autotune');
+var orderF4 = domOrder();
+var autoIdF4 = orderF4.filter(function (id) { return idsF4.indexOf(id) === -1; })[0];
+check(
+  orderF4[0] === autoIdF4 && orderF4.join('|') === autoIdF4 + '|n1|n2|n3',
+  'F4a: the autotune add lands at index 0, before every effect node'
+);
+check(
+  orderF4[orderF4.length - 1] === 'n3',
+  'F4b: the terminal limiter stays terminal (the limiter policy is untouched)'
+);
+check(
+  JSON.stringify(segRoute()) === JSON.stringify([
+    'mic>' + autoIdF4, autoIdF4 + '>n1', 'n1>n2', 'n2>n3', 'n3>out'
+  ]) && cordPaths().length === 5,
+  'F4c: the cords follow the front splice (5 segments still)'
+);
+CC.renderModel([{ id: 'x1', type: 'limiter', params: { level: 0 } }]);
+CC.addNodeType('autotune');
+check(
+  domOrder().length === 2 && domOrder()[domOrder().length - 1] === 'x1',
+  'F4d: a limiter-only chain still gets the autotune BEFORE the limiter'
+);
 
 // ----------------------------------------------------------------------
 console.log('G. empty chain + final DOM-contract pins');

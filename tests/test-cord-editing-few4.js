@@ -631,6 +631,31 @@ check(!!applied && applied.params.level === 9, 'J4: the queued set_param applies
 check(domOrder().join('|') === 'n2|n1|n3', 'J5: the committed order survived the queued write');
 
 // ----------------------------------------------------------------------
+console.log('J6. reorder stays free with a front autotune (BEH-1, cycle 4)');
+// The autotune-first DEFAULT never becomes a lock: with autotune sitting
+// at the front (where the add path now puts it), a cord edit that moves
+// it later commits exactly like any other reorder.
+CC.renderModel([
+  { id: 'a1', type: 'autotune', params: { level: 0 } },
+  { id: 'n2', type: 'gain', params: { level: 2 } },
+  { id: 'n3', type: 'limiter', params: { level: 0 } }
+]);
+var j6Seam = seamRequests.length;
+grabJack('section-out', 'a1');
+move({ x: 120, y: 60 }); // detach
+move(seatIn('n3'));
+drop(seatIn('n3')); // a1's OUT on n3's IN -> a1 inserted BEFORE n3 (moves later)
+check(
+  domOrder().join('|') === 'n2|a1|n3',
+  'J6a: the front autotune moves later by cord edit (reorder stays free)'
+);
+check(seamRequests.length === j6Seam + 1, 'J6b: exactly ONE ChainEditing request for the reorder');
+check(
+  JSON.stringify(seamRequests[seamRequests.length - 1].candidate.map(function (e) { return e.id; })) === '["n2","a1","n3"]',
+  'J6c: the candidate carries the reordered chain (no positional lock on autotune)'
+);
+
+// ----------------------------------------------------------------------
 console.log('K. final DOM contracts + the empty board');
 check(
   // Guided Patchbay round: both panel anchors live on their fixed rails,

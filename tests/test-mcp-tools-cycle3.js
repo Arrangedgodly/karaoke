@@ -781,6 +781,53 @@ async function main() {
     'D7: add_node gate carried its initial params');
 
   // ====================================================================
+  console.log('D-BEH1. add_node omitted position: autotune -> FRONT, others unchanged');
+  // ====================================================================
+  // BEH-1 (cycle 4, autotune-first): the omitted-position default comes
+  // from EffectCatalog.insertsAtFront (the same single rule the palette
+  // add path uses). Autotune lands at index 0 — before every effect node
+  // and still upstream of the terminal limiter; every other type keeps
+  // the append default (which refuses behind the terminal limiter).
+  var beh1Before = modelSnapshot();
+  var autoDefaultRes = await addNode.execute({ type: 'autotune' });
+  check(autoDefaultRes.applied === true && autoDefaultRes.error !== true,
+    'BEH1-1: add_node autotune with NO position applied (front default)');
+  check(autoDefaultRes.changes && autoDefaultRes.changes[0] &&
+    autoDefaultRes.changes[0].position === 0,
+    'BEH1-2: the add is reported at position 0');
+  await settle();
+  model = modelSnapshot();
+  check(
+    model.length === beh1Before.length + 1 &&
+      model[0].type === 'autotune' &&
+      model[model.length - 1].type === 'limiter',
+    'BEH1-3: the autotune sits at index 0, before every effect node; the limiter stays terminal'
+  );
+  check(
+    model.slice(1).every(function (entry, i) { return entry.id === beh1Before[i].id; }),
+    'BEH1-4: every pre-existing node kept its relative order (pure front insert)'
+  );
+  var noPosOther = await addNode.execute({ type: 'delay' });
+  check(
+    !!noPosOther && noPosOther.error === true &&
+      noPosOther.code === 'limiter-required-terminal',
+    'BEH1-5: a non-autotune add with no position still follows the append default (refused behind the terminal limiter — semantics unchanged)'
+  );
+  var roundTrip = await setChain.execute({
+    chain: {
+      schemaVersion: 1,
+      name: 'front-autotune round-trip',
+      nodes: modelSnapshot().map(function (entry) {
+        return { id: entry.id, type: entry.type, params: entry.params };
+      })
+    }
+  });
+  check(
+    roundTrip.applied === true && roundTrip.error !== true,
+    'BEH1-6: the resulting front-autotune chain passes the REAL chain policy (set_chain re-validates it)'
+  );
+
+  // ====================================================================
   console.log('E. illegal values rejected cleanly (nothing applied)');
   // ====================================================================
   var before = modelSnapshot();
