@@ -316,3 +316,134 @@ rule wins — count verified 20 by the harness.)
 5. Authoring dated 2026-09-01 to match the cycle's internal timeline
    (the seed batch, GEN-1, and the research dispositions all carry that
    date).
+
+## PEN-1 — Committed conformance pass + genre-first order + batch PR
+
+- Status: `awaiting-approval` (pipeline lane; deps GEN-1 + GAG-1 both
+  approved). Branch `pen-1-batch-pr`, created off `origin/
+  gag-1-gag-candidates` — the top of the stack, so it contains BEH-1 +
+  GEN-1 + GAG-1 + this work. Coordinator opens the PR; the draft
+  message is below.
+- Scope: pen + one test file + this cycle's docs. No engine, no UI, no
+  vocabulary changes; existing presets untouched.
+
+### What landed
+
+1. **The conformance pass is COMMITTED** (the plan's "suite-enforced
+   before the pen PR lands"): tests/test-factory-presets-policy.js
+   grows section F (PEN-1) — the same checks GEN-1/GAG-1 ran as
+   disposable at-authoring probes, now running at suite time so the
+   batch cannot regress silently. Per entry (all 20): unique non-empty
+   name that collides with no shipped library name; pending shape;
+   every tag vocabulary-legal + primary a legal dropdown group (read
+   from the loaded factory-library-data.js, never restated);
+   PresetSchema round-trip (serialize → JSON → parse → deserialize →
+   nodes deep-equal); every node live-registered with EXACTLY the
+   authored param set (normalizeParams fills nothing) and every value
+   on its catalog step grid / discrete values canonical; the REAL
+   set_chain applied:true; and the +12 dB budget probe with the
+   engine's own itemized breakdown (budget + margin printed per
+   entry). Plus two batch-level pins: the genre-first order (the GEN-1
+   run Metal→Musicals opens the pen; every domain primary precedes
+   every gag primary) and the megaphone boundary (exactly 12.00 still
+   applies; 12.01 rejects as gain-budget-12db — the plan's flagged
+   inclusive-boundary check, now re-verified COMMITTED, matching
+   GAG-1's disposable finding). File totals: 57 → 1108 checks.
+2. **Pen reordered genre-first** (plan: "pen ordered genre-first"):
+   GEN-1 six in sketch order, then the seed Jazz genre entry, the
+   three vibe entries, the cleanup use-case entry, and only then the
+   nine gags (seed chipmunk/deep-voice/radio, the three re-authors,
+   the three new cells) — the audition validates domain content
+   before gags. Verified a PURE data move: the reordered file's line
+   multiset is byte-identical to GAG-1's pen (118 lines moved, 0
+   changed). Header comment records the ordering rule.
+
+### Validation
+
+- Boundary re-verified through the real engine BEFORE writing the
+  committed check (disposable probe, then encoded): authored 11.97
+  applied:true; +0.03 gain probe upstream of the terminal limiter
+  (= exactly 12.00) applied:true and the off-grid 0.03 survives
+  set_chain verbatim (no step snapping on the agent path); +0.04
+  (= 12.01) rejects gain-budget-12db with breakdown mr-c1 +10.26,
+  probe +0.04, mr-l1 +1.71.
+- Full suite `node tests/run.js` BEFORE this branch's changes (same
+  session, same machine): 35/36 files, 2944 checks ok, 2 FAIL —
+  tests/test-autotune-node.js's two CPU-p99 checks. AFTER: 35/36
+  files, **3995 checks ok** (+1051, all from section F), the SAME two
+  checks failing in the SAME file — the known environmental flake,
+  reproduced identically at the base in the same session. No other
+  file's totals changed except the policy test's.
+
+### PR message draft (coordinator: open PR `pen-1-batch-pr` → base
+### `gag-1-gag-candidates` if stack-merge UI is used, else main after
+### the stack lands)
+
+> **PEN-1 (cycle 4): the 20-candidate audition batch — committed
+> policy conformance + genre-first order**
+>
+> **Stacks on** `beh-1-autotune-first` → `gen-1-genre-candidates` →
+> `gag-1-gag-candidates` (this branch is cut from gag-1 and contains
+> the whole stack; merge in that order, or merge the stack first and
+> retarget this PR to main).
+>
+> **Batch composition (20 = the full pen):**
+> - 6 GEN-1 genre candidates: Metal Mayhem, Hard-Tune Hotline
+>   (re-author, autotune-first per BEH-1), Slow Jam Silk, Nashville
+>   Nights, Club Anthem, West End Nights
+> - 6 GAG-1 candidates: 3 re-authors answering 2026-09-01 rejection
+>   notes (Robot Usher, Megaphone Rally, 8-Bit Encore) + 3 new cells
+>   (Helium Hangout, Dark Helmet Baritone, Demon Growl)
+> - 8 #31 seed candidates still pending: Jazz Cellar, Cathedral Drift,
+>   Rotary Nostalgia, Space Lounge, Studio Polish, Chipmunk Party,
+>   Deep Narrator, AM Radio Ghost
+> - Ordered genre-first (domain content before gags) so the audition
+>   validates genre/vibe/cleanup material early; a pure data move.
+>
+> **Gain budgets (engine-itemized, of the +12 dB policy):**
+>
+> | Candidate | Budget | Margin | | Candidate | Budget | Margin |
+> |---|---|---|---|---|---|---|
+> | Metal Mayhem | 9.69 | 2.31 | | Studio Polish | 11.40 | 0.60 |
+> | Hard-Tune Hotline | 10.83 | 1.17 | | Chipmunk Party | 3.42 | 8.58 |
+> | Slow Jam Silk | 11.26 | 0.74 | | Deep Narrator | 3.42 | 8.58 |
+> | Nashville Nights | 10.83 | 1.17 | | AM Radio Ghost | 10.26 | 1.74 |
+> | Club Anthem | 10.83 | 1.17 | | Robot Usher | 3.42 | 8.58 |
+> | West End Nights | 10.83 | 1.17 | | Megaphone Rally | **11.97** | **0.03** |
+> | Jazz Cellar | 11.40 | 0.60 | | 8-Bit Encore | 3.42 | 8.58 |
+> | Cathedral Drift | 11.26 | 0.74 | | Helium Hangout | 3.42 | 8.58 |
+> | Rotary Nostalgia | 3.42 | 8.58 | | Dark Helmet Baritone | 3.42 | 8.58 |
+> | Space Lounge | 3.42 | 8.58 | | Demon Growl | 3.42 | 8.58 |
+>
+> **Boundary note:** the +12 dB cap is INCLUSIVE — Megaphone Rally's
+> 11.97 dB is legal, a variant at exactly 12.00 still applies, and
+> 12.01 rejects as `gain-budget-12db`. This is now pinned by the
+> committed test (tests/test-factory-presets-policy.js section F), not
+> just probed.
+>
+> **Audition (AUD-1, after merge):** run the app with `?audition`,
+> listen on live mic (raw test-vocal reference available), **A** =
+> accept (usable without edits), **X** = reject, optional notes; the
+> panel walks candidates in pen order and exports the verdict JSON.
+> 20 candidates ≈ 6 minutes at the last session's pace.
+>
+> **Validation:** suite 35/36 files, 3995 checks ok — the one failing
+> file (tests/test-autotune-node.js, two CPU-p99 checks) is the known
+> environmental flake, reproduced identically at this branch's base.
+
+### Decisions recorded (flag for review if disputed)
+
+1. The committed check lives in the policy test (not the audition-
+   harness test): section F needs the full engine stack (all 14 node
+   files, mcp-tools, the +12 probe) that test-factory-presets-policy.js
+   already loads; the harness test's pen section (D1/D2) keeps the
+   shape/pending checks it owns.
+2. A pen-vs-factory name-collision check was added beyond the plan
+   letter (the plan only names pen-internal uniqueness): promotion
+   moves entries into the library by name, so a collision would be a
+   PRO-1 landmine. Cheap, in-convention, zero content impact.
+3. Genre-first read as: GEN-1 six in sketch order first, then seed
+   Jazz (genre), then vibes, then cleanup, then all nine gags — the
+   plan's parenthetical fixes Metal→…→Musicals before the gags; the
+   domain block ordering (genre → vibe → use-case) mirrors the
+   dropdown's group hierarchy inverted for audition priority.

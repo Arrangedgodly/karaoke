@@ -10,23 +10,23 @@ off (Q1–Q7 approved as recommended + the user's ongoing-batches directive).
 Awaiting final record confirmation, then `$plan-it-out`.
 
 ## Active Task
-**GAG-1 (six gag candidates) — status `awaiting-approval`** on branch
-`gag-1-gag-candidates` (stacked on `gen-1-genre-candidates`; PR-only
-pipeline; coordinator handles push/PR). Six pen entries authored from the
-RQ-2/RQ-3 record (D2/D3): Robot Usher re-author 3.42 dB (distortion
-dropped — harmony double + comb + voice-break AM carry the robot read) ·
-Megaphone Rally re-author **11.97 dB** (max-legal density; boundary
-verified INCLUSIVE by the real engine — exactly 12.00 still applies,
-12.01 rejects) · 8-Bit Encore re-author 3.42 dB (6 bits/mix 55,
-pre-crush presence) · Helium Hangout 3.42 (+10, thin) · Dark Helmet
-Baritone 3.42 (−4, dry intercom) · Demon Growl 3.42 (−10, growl). The
-three re-authors supersede #31 cells 4/5/7 (drafts removed in the same
-edit); pen = 20 entries, no dup names. Disposable policy check: all 20
-set_chain-applied + grid/schema clean, budgets engine-computed; suite
-35/36 (the one fail is the known autotune CPU p99 environmental flake —
-same file/checks/totals as the GEN-1 and BEH-1 records). Per-entry
-budget table + boundary finding in [production-log.md](production-log.md).
-Next unblocked: PEN-1 (GEN-1 + GAG-1 both in).
+**PEN-1 (policy check + pen PR) — status `awaiting-approval`** on branch
+`pen-1-batch-pr` (cut from `origin/gag-1-gag-candidates`, so it carries
+the full stack BEH-1 → GEN-1 → GAG-1; PR-only pipeline; coordinator opens
+the PR — message draft in production-log.md's PEN-1 entry). The
+conformance pass is now COMMITTED: tests/test-factory-presets-policy.js
+section F runs at suite time over all 20 pen entries (schema round-trip,
+catalog grid + exact param sets, vocabulary-legal tags, unique +
+non-colliding names, REAL set_chain applied:true, engine-itemized
+budgets ≤ +12) and pins the genre-first order plus the megaphone
+boundary (12.00 applies / 12.01 rejects — inclusive, matching GAG-1's
+disposable finding). Pen reordered genre-first (GEN-1 Metal→Musicals
+run, seed Jazz, vibes, cleanup, then the nine gags) as a verified PURE
+data move. Suite before (this session, at base): 35/36 files, 2944
+checks ok; after: 35/36, 3995 ok (+1051) — the one fail is the known
+autotune CPU p99 environmental flake, identical file/checks both runs.
+Next unblocked after merge + approval: AUD-1 (user audition at
+`?audition`).
 
 ## Approvals
 - Town-hall clusters: Q1 full-coverage batch (~16–17 candidates incl. 3
@@ -90,3 +90,8 @@ D2/D3 chains in the pen; megaphone boundary pre-answered for PEN-1
 
 ### GAG-1: APPROVED 2026-09-01 (user auditions later). Boundary finding: +12 cap
 INCLUSIVE (12.00 applies, 12.01 rejects). Pen = 20 candidates. Next: PEN-1.
+
+### PEN-1: landed 2026-09-01, status `awaiting-approval` (branch
+`pen-1-batch-pr`, stacked on `gag-1-gag-candidates`). Committed
+conformance pass (policy test section F) + genre-first pen order + PR
+message draft in the production log. Next: PR merge, then AUD-1.

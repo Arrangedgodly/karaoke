@@ -126,7 +126,9 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
   megaphone boundary verified inclusive through the real engine (see
   production-log GAG-1). Suite 35/36 — the known autotune CPU-p99 flake.
 
-- **PEN-1 — Policy check + pen PR** *(small)* — status: `blocked` (GEN-1, GAG-1)
+- **PEN-1 — Policy check + pen PR** *(small)* — status: `awaiting-approval`
+  (branch `pen-1-batch-pr`, stacked on `gag-1-gag-candidates`; coordinator
+  opens the PR — draft message in production-log.md's PEN-1 entry)
   All candidates policy-validated (schema round-trip, catalog param ranges,
   gain budgets via the real engine — reuse the conformance test pattern);
   pen ordered genre-first; PR opened (no direct main push); suite green.
@@ -137,6 +139,19 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
   11.97 applied:true, a pushed-to-exactly-12.00 variant still applied:true,
   12.01 rejects as gain-budget-12db; PEN-1 still re-verifies in the
   committed conformance pass.
+  Evidence: the conformance pass is now COMMITTED, not disposable —
+  tests/test-factory-presets-policy.js section F (PEN-1) runs at suite
+  time over all 20 pen entries: unique non-pending-colliding names,
+  vocabulary-legal tags + primary groups, PresetSchema round-trip,
+  catalog step-grid + exact-param-set checks, REAL set_chain
+  applied:true per entry, engine-itemized budgets (all ≤ +12, printed
+  per entry), the genre-first order (GEN-1 run Metal→Musicals opens;
+  all domain primaries before all gags), and the megaphone boundary
+  pinned (exactly 12.00 applies / 12.01 rejects as gain-budget-12db).
+  Pen reordered genre-first as a PURE data move (line-multiset identical
+  to GAG-1's pen). Suite 35/36 files, 3995 checks ok — the one failing
+  file is the known autotune CPU-p99 environmental flake (reproduced
+  identically at this branch's base in the same session).
 
 ### Audition/promotion lane (user-owned steps)
 
