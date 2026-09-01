@@ -463,9 +463,24 @@
     string parse and nothing else — zero elements, listeners or exports.
     Pure consumer: never registers anything with McpServer; zero
     localStorage (reload resets). Close/Escape hides the panel for this
-    load only — reopen by reloading with ?dev.
+    load only; reopen by reloading with ?dev.
   -->
   <script src="src/mcp-harness.js"></script>
+  <!--
+    Wayfinder #34/#31 — audition pipeline (the preset-library map's human
+    verification step). src/audition-candidates.js is an inert, empty pen
+    where pipeline sessions land not-yet-auditioned candidate chains via
+    PR; src/audition-harness.js is the production Booth — ?audition GATED
+    (same zero-footprint gate as mcp-harness above): one candidate at a
+    time, keyboard A/X binary verdicts (bar "usable without edits"),
+    in-memory verdict records, live-mic listening through the exact
+    ChainEditing.apply request a factory Load submits (no side door), raw
+    test-vocal reference, and a Copy-verdict-JSON export for the
+    promotion edit into factory-library-data.js. Tested by
+    tests/test-audition-harness.js.
+  -->
+  <script src="src/audition-candidates.js"></script>
+  <script src="src/audition-harness.js"></script>
   <!--
     VIS-5 — MIC IN / OUT level meters (window.Meters, src/meters.js):
     canvas lamp-bar meter components created from JS at the two .anchor
