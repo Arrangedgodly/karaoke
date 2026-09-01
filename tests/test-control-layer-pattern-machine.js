@@ -812,6 +812,34 @@ check(
   'the fold animation is reduced-motion guarded (instant fallback under reduce)'
 );
 
+var horizontalParamsRule = cssRule('.canvas-panel.flow-horizontal .node-params-inner');
+check(
+  horizontalParamsRule !== null &&
+    cssDecl(horizontalParamsRule, 'width') === '100%' &&
+    cssDecl(horizontalParamsRule, 'justify-content') === 'flex-start',
+  'horizontal parameter fields fill the card and wrap controls from the left'
+);
+var horizontalKnobRule = cssRule('.canvas-panel.flow-horizontal .knob-row');
+check(
+  horizontalKnobRule === null,
+  'horizontal cards do not force knob rows into fixed columns'
+);
+var horizontalTrimRule = cssRule('.canvas-panel.flow-horizontal .trim-row');
+check(
+  horizontalTrimRule !== null &&
+    cssDecl(horizontalTrimRule, 'width') === 'min(10rem, 100%)',
+  'trim sliders keep a natural width and may share a row when the card is stretched'
+);
+var foldedNameRule = cssRule('.canvas-panel.flow-horizontal .node-card.collapsed .section-name');
+var foldedFootRule = cssRule('.canvas-panel.flow-horizontal .node-card.collapsed .section-foot');
+check(
+  foldedNameRule !== null &&
+    cssDecl(foldedNameRule, 'display') === 'block' &&
+    cssDecl(foldedNameRule, 'writing-mode') === 'vertical-rl' &&
+    foldedFootRule !== null && cssDecl(foldedFootRule, 'flex-direction') === 'column',
+  'folded cards become a vertical name rail with vertically stacked actions'
+);
+
 // ----------------------------------------------------------------------
 // E. Drag-handle scoping.
 // ----------------------------------------------------------------------

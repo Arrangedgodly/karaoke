@@ -18,7 +18,7 @@
 //   - Legacy payloads (bare preset shape, no envelope, OR a pre-redesign
 //     v2 envelope) migrate to the tidy-stack fallback: chain loads
 //     exactly, layout is {} (absence of an entry IS the incumbent
-//     content-hug/default width — no width is synthesized). Migration is
+//     uniform default width — no width is synthesized). Migration is
 //     idempotent.
 //   - Hostile layouts fail soft: the chain still loads exactly, the
 //     layout degrades to {} / drops the hostile entries; a hostile
@@ -155,7 +155,7 @@ function seedRaw(env, value) {
 function main() {
   var LAYOUT_FULL = {
     a1: { w: 260 },
-    a2: { w: 208 },
+    a2: { w: 176 },
     a3: { w: 320 }
   };
 
@@ -214,7 +214,7 @@ function main() {
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        a3: { w: 384 }
+        a3: { w: 640 }
       }),
       'A3: an entry with no `w` (or a non-numeric one) drops entirely — only a valid, clamped w survives (normalized on save)'
     );
@@ -227,9 +227,9 @@ function main() {
     });
     check(
       deepEqual(sandbox.Persistence.loadInitialLayout(), {
-        a1: { w: 208 }
+        a1: { w: 144 }
       }),
-      'A3b: a sub-minimum width clamps to 208px and a non-numeric width drops the entry entirely'
+      'A3b: a sub-minimum width clamps to 144px and a non-numeric width drops the entry entirely'
     );
 
     // Prune on save: entries for ids the model does not contain never
@@ -266,7 +266,7 @@ function main() {
     check(deepEqual(first, chainA()), 'B1: the legacy CHAIN loads EXACTLY as before');
     check(
       firstLayout !== null && typeof firstLayout === 'object' && Object.keys(firstLayout).length === 0,
-      'B1: the legacy payload migrates to layout {} (absent entry = the default/content-hug width)'
+      'B1: the legacy payload migrates to layout {} (absent entry = the uniform default width)'
     );
     check(env.consoleErrors.length === 0, 'B1: legacy migration is not an error (zero console.error)');
 

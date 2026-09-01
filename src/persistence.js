@@ -79,8 +79,8 @@
   //     the board itself (chain order is now the model's own array order,
   //     PD-4 — nothing left to store separately). An entry carries just
   //     `w`, an optional finite number (the card's own manually-resized
-  //     width, clamped 208..384 px; absent = the content-hug/CSS
-  //     default). sanitizeLayout() normalizes every entry to exactly that
+  //     width, clamped 144..640 px; absent = the 144px minimum default).
+  //     sanitizeLayout() normalizes every entry to exactly that
   //     shape, PRUNES entries for node ids the accompanying chain does
   //     not contain (node removed — pruning happens on both save and
   //     load), and drops hostile entries (non-object, a `w` present but
@@ -98,7 +98,7 @@
    * Normalize/prune a candidate layout map against the node ids the
    * accompanying chain actually contains. Never throws — every failure
    * mode degrades to dropping the offending entry (that node falls back
-   * to its content-hug width), and a wholesale-hostile `layout`
+   * to its default width), and a wholesale-hostile `layout`
    * (non-object, throwing getters, ...) degrades to `{}`.
    *
    * @param {*} layout - candidate layout map (any hostility).
@@ -122,16 +122,16 @@
           return; // hostile getter on this key — drop just this entry
         }
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-          return; // hostile entry — dropped, node takes its content hug
+          return; // hostile entry — dropped, node takes its default width
         }
         // Per-card WIDTH: a finite number clamped into the condensed
-        // range (13rem..24rem, mirroring main.css's bounds and
+        // range (9rem..40rem, mirroring main.css's bounds and
         // canvas.js's CARD_W_MIN_PX/CARD_W_MAX_PX); anything else drops
         // the field entirely rather than storing an empty entry — an
         // entry with no `w` at all is the normal shape now (the node
         // simply has no manual resize on record), not a degraded one.
         if (typeof entry.w === 'number' && isFinite(entry.w)) {
-          clean[nodeId] = { w: Math.min(384, Math.max(208, entry.w)) };
+          clean[nodeId] = { w: Math.min(640, Math.max(144, entry.w)) };
         }
       });
     } catch (err) {
