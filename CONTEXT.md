@@ -6,6 +6,56 @@ and edit the same chain through a shared, policy-gated surface.
 
 ## Language
 
+### Views
+
+**Simple view**:
+The preset-led presentation for a person who does not know audio engineering;
+it centers finding, loading, and auditioning sounds while hiding manual chain
+construction and parameter controls. It may name the devices a preset uses as
+read-only context.
+_Avoid_: beginner mode, basic mode
+
+**Advanced view**:
+The current hands-on chain-builder presentation, where a person can add,
+remove, reorder, bypass, and tune individual effects.
+_Avoid_: expert mode, pro mode
+
+**Current sound**:
+The persistent Simple-view area that names the chain playing right now and
+carries the Previous/Next controls for stepping through the filtered library;
+it names the live chain, which is not always a preset.
+_Avoid_: now playing, active preset (the live chain may be unsaved or agent-built)
+
+**Effect summary**:
+The read-only, plain-language account of what a chain does, effect by effect —
+the plain effect first with its technical name quietly after ("Evens out
+loudness · Compressor"); it never shows parameter values.
+_Avoid_: chain description (that names the preset's own prose), signal path
+
+**Unsaved sound**:
+A live chain that no longer matches the preset it was loaded from — the state
+that makes "Save this sound" appear in Simple.
+_Avoid_: dirty state, modified preset
+
+**Custom sound**:
+The live chain when it matches no preset — agent-built, or hand-edited in
+Advanced. Simple names it "Custom sound", derives its effect summary from the
+live chain rather than from a preset record, and offers Save this sound beside
+the name.
+_Avoid_: unsaved preset, draft (a candidate is the thing awaiting audition)
+
+**Plain filter**:
+A named query over existing preset tags, defined in the Simple view and stored
+nowhere on presets ("Funny" resolves to the gag axis, "Speech" to the cleanup
+use-case). A plain filter that returns nothing is a visible coverage gap.
+_Avoid_: axis (that names the taxonomy dimension), category, folder
+
+**Safety floor**:
+The controls both views show at equal prominence — Start, microphone
+selection, Bypass, and the input/output meters. Simple hides chain
+construction, never the human's control over what reaches the speakers.
+_Avoid_: transport, advanced controls
+
 ### Presets
 
 **Factory preset**:
@@ -22,6 +72,11 @@ _Avoid_: default chain (that names the model, not the preset)
 A named chain a user saved into their own browser store; a separate namespace
 that never shadows the factory library.
 _Avoid_: saved chain (conflates with the autosave slot)
+
+**Try a preset**:
+Apply a preset to the live chain so the user can hear it and compare it with
+other presets.
+_Avoid_: audition (reserved for candidate approval), preview (implies the live chain is unchanged)
 
 **Candidate**:
 A generated chain awaiting audition; it becomes a factory preset only by
