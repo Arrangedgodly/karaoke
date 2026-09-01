@@ -759,7 +759,9 @@ var foldCard = cards()[0]; // g3
 var foot = deepFind(foldCard, function (el) {
   return el.className.split(/\s+/).indexOf('section-foot') !== -1;
 });
-var collapseBtn = foot.children[0];
+var collapseBtn = deepFind(foot, function (el) {
+  return el.className.split(/\s+/).indexOf('node-collapse') !== -1;
+});
 
 check(
   collapseBtn.getAttribute('aria-expanded') === 'true' &&

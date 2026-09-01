@@ -89,12 +89,24 @@
   // Internal state.
   // ---------------------------------------------------------------------
 
-  // Ordered array of {id, type, params}. This is the authoritative model of
+  // Ordered array of {id, type, params, bypassed?}. This is the authoritative model of
   // "what nodes exist and in what order", independent of whether real
   // AudioNode instances currently exist for it. Never hand out this array
   // itself from getModel() — always a copy — so callers can't mutate our
   // internal state by reference.
   var currentModel = [];
+
+  function copyModelEntry(entry) {
+    var copy = {
+      id: entry.id,
+      type: entry.type,
+      params: Object.assign({}, entry.params || {})
+    };
+    if (entry.bypassed === true) {
+      copy.bypassed = true;
+    }
+    return copy;
+  }
 
   // Map of model entry id -> live AudioNode currently built for it. Only
   // ever populated/cleared inside buildGraph(); always reflects exactly
@@ -405,16 +417,10 @@
    * the returned array/objects does nothing until a caller passes a new
    * model into buildGraph().
    *
-   * @returns {Array<{id: string, type: string, params: Object}>}
+   * @returns {Array<{id: string, type: string, params: Object, bypassed?: boolean}>}
    */
   function getModel() {
-    return currentModel.map(function (entry) {
-      return {
-        id: entry.id,
-        type: entry.type,
-        params: Object.assign({}, entry.params || {}),
-      };
-    });
+    return currentModel.map(copyModelEntry);
   }
 
   /**
@@ -590,7 +596,7 @@
    * connected straight to the chain gate, then to destination, zero
    * processing nodes in between.
    *
-   * @param {Array<{id: string, type: string, params: Object}>} model
+   * @param {Array<{id: string, type: string, params: Object, bypassed?: boolean}>} model
    * @param {{signal?: AbortSignal}=} options
    * @returns {Promise<{committed: boolean, canceled?: boolean, error?: Error,
    *   rollback?: {attempted: boolean, succeeded: boolean, error?: Error}}>}
@@ -629,9 +635,7 @@
     var attenuator = getOutputAttenuator();
     var oldNodeInstances = nodeInstances; // current live map, captured now
     var oldFirstChainNode = firstChainNode;
-    var oldModel = currentModel.map(function (entry) {
-      return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params || {}) };
-    });
+    var oldModel = currentModel.map(copyModelEntry);
 
     // ---- Phase 1 (SYNCHRONOUS, happens immediately, before any ducking) ----
     // Resolve every model entry to an AudioNode object RIGHT NOW: reuse the
@@ -661,6 +665,11 @@
     var createdThisBuild = [];
     try {
       resolvedNodes = model.map(function (entry) {
+        if (entry.bypassed !== undefined && typeof entry.bypassed !== 'boolean') {
+          throw new TypeError(
+            'AudioGraph.buildGraph: bypassed must be a boolean for node "' + entry.id + '".'
+          );
+        }
         // Issue #1 (P0): reuse demands an id AND TYPE match against the
         // model the live instances were built from. Id alone is not
         // identity — a live instance is a concrete GainNode or
@@ -833,6 +842,13 @@
             var previousOutput = sourceNode;
             model.forEach(function (entry, i) {
               var node = resolvedNodes[i];
+              // A bypassed effect stays in the model and instance map, but
+              // contributes no edge to the audible path. Keeping the instance
+              // alive preserves its internal DSP state for a later re-enable.
+              if (entry.bypassed === true) {
+                newNodeInstances[entry.id] = node;
+                return;
+              }
               var nodeInput = getNodeInput(node);
               var nodeOutput = getNodeOutput(node);
               previousOutput.connect(nodeInput);
@@ -863,9 +879,7 @@
             // Commit new state.
             nodeInstances = newNodeInstances;
             firstChainNode = newFirstNode;
-            currentModel = model.map(function (entry) {
-              return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params || {}) };
-            });
+            currentModel = model.map(copyModelEntry);
 
             // Un-duck — but NOT unconditionally to 1.0. Two states besides
             // "audible" can own the gate's correct steady state:

@@ -251,6 +251,18 @@
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
 
+  function copyModelEntry(entry, params) {
+    var copy = {
+      id: entry.id,
+      type: entry.type,
+      params: Object.assign({}, params === undefined ? entry.params || {} : params)
+    };
+    if (entry.bypassed === true) {
+      copy.bypassed = true;
+    }
+    return copy;
+  }
+
   /**
    * Compact, safe rendering of an offending value for error messages
    * (never throws, truncates long strings).
@@ -1425,11 +1437,7 @@
         schemaVersion: 1,
         name: name,
         nodes: model.map(function (entry) {
-          return {
-            id: entry.id,
-            type: entry.type,
-            params: Object.assign({}, entry.params || {})
-          };
+          return copyModelEntry(entry);
         })
       };
     }
@@ -1876,7 +1884,7 @@
       app: 'voxchain',
       nodeTypes: nodeTypes,
       chainRules: {
-        'limiter-required-terminal': 'Exactly one limiter, always last.',
+        'limiter-required-terminal': 'Exactly one active limiter, always last.',
         'gain-budget-12db':
           'gainDb sum + 0.57*|compressor thresholds| + 0.57*|limiter ceiling| <= 12 dB.',
         'eq-limits':
@@ -2149,13 +2157,17 @@
 
     // limiter-required-terminal (missing / not terminal / duplicated)
     var lastIdx = model.length - 1;
-    var terminalIsLimiter = lastIdx >= 0 && model[lastIdx].type === 'limiter';
+    var terminalIsLimiter = lastIdx >= 0 &&
+      model[lastIdx].type === 'limiter' && model[lastIdx].bypassed !== true;
     if (!terminalIsLimiter) {
       violations.push(ruleViolationResult('limiter-required-terminal', {
         reason: model.length === 0
           ? 'The chain is empty — a limiter is REQUIRED and must be the terminal (last) node.'
-          : "The terminal (last) node is a '" + model[lastIdx].type +
-            "', but a limiter is REQUIRED and must be terminal (last, MIC IN to OUT).",
+          : model[lastIdx].type === 'limiter' && model[lastIdx].bypassed === true
+            ? "The terminal limiter '" + model[lastIdx].id +
+              "' is bypassed, but the agent must keep the safety limiter active."
+            : "The terminal (last) node is a '" + model[lastIdx].type +
+              "', but a limiter is REQUIRED and must be terminal (last, MIC IN to OUT).",
         suggestion: 'End the chain with exactly one limiter node; the agent may only add, remove or reorder UPSTREAM of it.'
       }));
     } else {
@@ -2550,7 +2562,7 @@
           params[key] = value;
         }
       }
-      appliedNodes.push({ id: entry.id, type: entry.type, params: params });
+      appliedNodes.push(copyModelEntry(entry, params));
     }
     return { nodes: appliedNodes, clamped: clamped, reject: null };
   }
@@ -2621,6 +2633,15 @@
       });
       if (Object.keys(paramChanges).length > 0) {
         changes.push({ node: entry.id, type: entry.type, change: 'params', params: paramChanges });
+      }
+      if (!!oldById[entry.id].bypassed !== !!entry.bypassed) {
+        changes.push({
+          node: entry.id,
+          type: entry.type,
+          change: 'bypass',
+          from: !!oldById[entry.id].bypassed,
+          to: !!entry.bypassed
+        });
       }
     });
     oldModel.forEach(function (entry) {
@@ -3142,7 +3163,7 @@
         : input.position;
     var position = Math.min(Math.max(0, requestedPosition), model.length);
     var candidate = model.map(function (entry) {
-      return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+      return copyModelEntry(entry);
     });
     candidate.splice(position, 0, node);
     var violations = evaluateChainRules(candidate);
@@ -3211,7 +3232,7 @@
       .slice(0, index)
       .concat(model.slice(index + 1))
       .map(function (entry) {
-        return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+        return copyModelEntry(entry);
       });
     var violations = evaluateChainRules(candidate);
     if (violations.length > 0) {
@@ -3283,7 +3304,7 @@
           if (e.id === entry.id) {
             params[input.param] = input.value;
           }
-          return { id: e.id, type: e.type, params: params };
+          return copyModelEntry(e, params);
         });
         return {
           error: paramRejectResult(entry.id, entry.type, input.param, policy, input.value, wouldBe)
@@ -3304,7 +3325,7 @@
       if (i === index) {
         params[input.param] = finalValue;
       }
-      return { id: e.id, type: e.type, params: params };
+      return copyModelEntry(e, params);
     });
     var violations = evaluateChainRules(candidate);
     if (violations.length > 0) {
@@ -3536,7 +3557,7 @@
   /**
    * Structural validation of a set_chain/add_node chain object. Mirrors
    * src/preset-schema.js's deserialize() rules (schemaVersion === 1,
-   * non-empty name, nodes array of {id, type, params?}) and adds two
+   * non-empty name, nodes array of {id, type, params?, bypassed?}) and adds two
    * checks deserialize deliberately leaves to build time, both structural
    * rather than policy: node types must be registered, and params keys/
    * values must fit the type (same rules add_node applies). Duplicate node
@@ -3596,6 +3617,9 @@
       if (typeof entry.type !== 'string' || entry.type.length === 0) {
         problems.push(problem(nodePath + '.type', 'must be a non-empty string'));
         return;
+      }
+      if (entry.bypassed !== undefined && typeof entry.bypassed !== 'boolean') {
+        problems.push(problem(nodePath + '.bypassed', 'must be a boolean when present'));
       }
       if (types.indexOf(entry.type) === -1) {
         problems.push(
@@ -4212,7 +4236,7 @@
       name: 'get_chain',
       description:
         'Return the current effect chain as {schemaVersion: 1, name, nodes: [{id, type, ' +
-        'params}]} in MIC IN to OUT order. Use when a task needs current node ids or values; ' +
+        'params, bypassed?}]} in MIC IN to OUT order. Use when a task needs current node ids or values; ' +
         'the result round-trips into set_chain.',
       inputSchema: {
         type: 'object',
@@ -4236,7 +4260,7 @@
       name: 'set_chain',
       description:
         'Replace the whole chain with one preset-shaped object: {schemaVersion: 1, name, ' +
-        'nodes: [{id, type, params}]} in MIC IN to OUT order. Node ids are yours to assign ' +
+        'nodes: [{id, type, params, bypassed?}]} in MIC IN to OUT order. Node ids are yours to assign ' +
         '(unique non-empty strings). This layer validates structure only; loudness policy ' +
         '(limiter terminal, gain budget, feedback caps) is enforced when the change is applied.',
       inputSchema: {
@@ -4245,7 +4269,7 @@
           chain: {
             type: 'object',
             description:
-              'Preset-shaped chain: {schemaVersion: 1, name, nodes: [{id, type, params}]} in ' +
+              'Preset-shaped chain: {schemaVersion: 1, name, nodes: [{id, type, params, bypassed?}]} in ' +
               'MIC IN to OUT order — the same shape get_chain returns.',
             properties: {
               schemaVersion: {
@@ -4274,6 +4298,10 @@
                     params: {
                       type: 'object',
                       description: "Param names to values for this type; omit for the type's defaults."
+                    },
+                    bypassed: {
+                      type: 'boolean',
+                      description: 'True routes around this effect while keeping it in the chain. A bypassed terminal limiter is rejected.'
                     }
                   },
                   required: ['id', 'type'],

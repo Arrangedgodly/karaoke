@@ -551,8 +551,8 @@ check(
   'A2: the tab order through the board equals the DOM card order (chain order)'
 );
 check(
-  tabCardOrder().length === 6,
-  'A3: every section contributes its controls to the tab flow (3 sections x collapse + remove)'
+  tabCardOrder().length === 9,
+  'A3: every section contributes its controls to the tab flow (3 sections x bypass + collapse + remove)'
 );
 
 // ----------------------------------------------------------------------

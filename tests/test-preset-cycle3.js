@@ -406,6 +406,34 @@ async function main() {
       enumRestored.nodes[0].params.key === 9 && enumRestored.nodes[0].params.scale === 1,
       'B4: numeric-enum key/scale (9 / 1) accepted and preserved verbatim'
     );
+
+    var bypassModel = [
+      { id: 'b1', type: 'reverb', params: { mix: 20 }, bypassed: true },
+      { id: 'b2', type: 'limiter', params: { ceiling: -6, release: 120 } }
+    ];
+    var bypassWire = PresetSchema.serialize('bypass state', bypassModel);
+    var bypassRestored = PresetSchema.deserialize(JSON.parse(JSON.stringify(bypassWire)));
+    check(
+      bypassRestored.nodes[0].bypassed === true &&
+        !Object.prototype.hasOwnProperty.call(bypassRestored.nodes[1], 'bypassed'),
+      'B5: per-effect bypass round-trips while active nodes keep the legacy wire shape'
+    );
+    sandbox.Persistence.saveCurrentChain(bypassModel);
+    check(
+      sandbox.Persistence.loadInitialModel()[0].bypassed === true,
+      'B5: autosave restores a bypassed effect without removing it'
+    );
+    var badBypassRejected = false;
+    try {
+      PresetSchema.deserialize({
+        schemaVersion: 1,
+        name: 'bad bypass',
+        nodes: [{ id: 'b1', type: 'reverb', params: {}, bypassed: 'yes' }]
+      });
+    } catch (err) {
+      badBypassRejected = /bypassed must be a boolean/.test(String(err && err.message));
+    }
+    check(badBypassRejected, 'B5: non-boolean bypass state is rejected by the preset schema');
   }
 
   // ------------------------------------------------------------------

@@ -755,8 +755,8 @@
   //     Unplugging can never remove audio: mid-drag the model,
   //     the DOM, and the painted cords are byte-unchanged, and drop
   //     nowhere (or Escape, or pointercancel) reverts the edit with
-  //     ZERO rebuilds. Per-node bypass stays DECLINED elsewhere; a cord
-  //     edit never touches bypass state at all.
+  //     ZERO rebuilds. Per-effect bypass is an explicit card control; a
+  //     cord edit never touches bypass state at all.
   //   - ORDER MATH (the four link-point types):
   //       mic-out point            -> the dragged node becomes the
   //                                   FIRST node (its IN takes the mic
@@ -1411,7 +1411,8 @@
       var type = node && node.type;
       var label = effectLabel(type);
       var isTerminalLimiter = type === 'limiter' && index === ids.length - 1;
-      addStep(isTerminalLimiter ? label + ' · locked last' : label,
+      var stateLabel = label + (node && node.bypassed ? ' · bypassed' : '');
+      addStep(isTerminalLimiter ? stateLabel + ' · locked last' : stateLabel,
         isTerminalLimiter ? 'signal-order-lock' : null);
     });
     addArrow();
@@ -1889,7 +1890,8 @@
   //         .node-drag-icon      <- CSS-drawn grip dots (aria-hidden).
   //       .section-code          <- the 2-letter family silkscreen code
   //                               (title = the full module name).
-  //       .section-foot          <- collapse chevron + remove × (real
+  //       .section-foot          <- per-effect bypass, collapse chevron,
+  //                                 and remove × (real
   //                                 buttons, the section's header-zone
   //                                 parts; siblings of the handle, never
   //                                 nested in it).
@@ -1914,11 +1916,16 @@
   //   of minting a new one via nextNodeId(). Used by loadModel() (below) to
   //   restore a saved/preset model's ORIGINAL ids verbatim, rather than
   //   silently reassigning fresh ones on every reload.
+  // @param {boolean} [initiallyBypassed] - true keeps the section in the
+  //   chain while routing audio around its effect instance.
   // @returns {HTMLElement}
   // ---------------------------------------------------------------------
-  function createNodeCard(type, initialParams, explicitId) {
+  function createNodeCard(type, initialParams, explicitId, initiallyBypassed) {
     var id = explicitId || nextNodeId();
     var nodeState = { id: id, type: type, params: Object.assign({}, initialParams || {}) };
+    if (initiallyBypassed === true) {
+      nodeState.bypassed = true;
+    }
     nodesById[id] = nodeState;
 
     var card = document.createElement('div');
@@ -1932,6 +1939,10 @@
     // drift.
     card.setAttribute('data-family', type);
     card.setAttribute('data-initials', familyInitials(type));
+    if (nodeState.bypassed === true) {
+      card.classList.add('node-bypassed');
+    }
+    card.setAttribute('data-bypassed', nodeState.bypassed === true ? 'true' : 'false');
 
     // --- The family print block (left rail). ---------------------------
     var rail = document.createElement('div');
@@ -1996,6 +2007,20 @@
     var foot = document.createElement('div');
     foot.className = 'section-foot';
 
+    // Per-effect bypass is a real audio-state toggle. The node remains in
+    // order, keeps its parameters and live instance, and is persisted with
+    // the chain. The short IN/BYP labels match the hardware register and
+    // stay distinct from the red emergency Bypass control.
+    var bypassBtn = document.createElement('button');
+    bypassBtn.type = 'button';
+    bypassBtn.className = 'node-bypass';
+    bypassBtn.textContent = nodeState.bypassed === true ? 'BYP' : 'IN';
+    bypassBtn.setAttribute('aria-label', 'Bypass ' + effectLabel(type) + ' effect');
+    bypassBtn.setAttribute('aria-pressed', nodeState.bypassed === true ? 'true' : 'false');
+    bypassBtn.title = nodeState.bypassed === true
+      ? 'Return ' + effectLabel(type) + ' to the signal path'
+      : 'Route around ' + effectLabel(type) + ' without removing it';
+
     // The collapse chevron — drawn in CSS (a rotated square's edge), no
     // text glyph; aria-expanded is the toggle's OWN state mirror, the
     // visual fold lives on the card (.collapsed). The drawn mark is a
@@ -2021,6 +2046,7 @@
     removeMark.setAttribute('aria-hidden', 'true');
     removeBtn.appendChild(removeMark);
 
+    foot.appendChild(bypassBtn);
     foot.appendChild(collapseBtn);
     foot.appendChild(removeBtn);
     rail.appendChild(foot);
@@ -2100,6 +2126,42 @@
       // for the board extent, which reads live card geometry.
       renderCords();
       refreshBoardExtent();
+    });
+
+    bypassBtn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      var editing = requireChainEditing();
+      var candidate = editing.getModel();
+      var found = false;
+      var shouldBypass = nodeState.bypassed !== true;
+      candidate.forEach(function (entry) {
+        if (entry.id !== id) {
+          return;
+        }
+        found = true;
+        if (shouldBypass) {
+          entry.bypassed = true;
+        } else {
+          delete entry.bypassed;
+        }
+      });
+      if (!found) {
+        return;
+      }
+      // Avoid queuing two clicks against the same accepted state while the
+      // graph is fading and rewiring. The accepted render replaces this
+      // button on success; a rejection re-enables the existing control.
+      bypassBtn.disabled = true;
+      editing.apply({
+        source: 'human',
+        candidate: candidate,
+        forceStructural: true
+      }).then(function () {
+        bypassBtn.disabled = false;
+      }, function (err) {
+        bypassBtn.disabled = false;
+        console.error('ChainCanvas: effect bypass change was not accepted', err);
+      });
     });
 
     removeBtn.addEventListener('click', function (event) {
@@ -2431,7 +2493,12 @@
       // seeds, which recomputeModelFromDom() and the autosave read) gets
       // the canonical STRING for any `values` param, never a raw numeric
       // enum that the visible pad could not display.
-      var card = createNodeCard(entry.type, canonicalParams(entry.type, entry.params), entry.id);
+      var card = createNodeCard(
+        entry.type,
+        canonicalParams(entry.type, entry.params),
+        entry.id,
+        entry.bypassed === true
+      );
       chainListEl.appendChild(card);
     });
 
@@ -2599,7 +2666,11 @@
    */
   function getCurrentModel() {
     return chainModel.map(function (entry) {
-      return { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+      var copy = { id: entry.id, type: entry.type, params: Object.assign({}, entry.params) };
+      if (entry.bypassed === true) {
+        copy.bypassed = true;
+      }
+      return copy;
     });
   }
 
