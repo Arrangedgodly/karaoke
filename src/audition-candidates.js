@@ -32,26 +32,23 @@
 // and the complaint vocabulary the preset fixes or avoids. Param values
 // authored against the live catalog specs; gain budgets kept ≤ ~11.4 dB
 // of the published +12 (gainDb + 0.57·|threshold| + 0.57·|ceiling|).
+//
+// GEN-1 GENRE BATCH (cycle 4, appended below the seed entries): six
+// genre candidates — Metal / Rap-Hip-Hop / R&B-Soul / Country /
+// Dance-EDM / Musicals — authored offline 2026-09-01 from the RQ-1 chain
+// sketches (D1 disposition; docs/ultron/preset-axis-cycle/research/
+// rq1-genre-idioms.md). Catalog-forced adjustments are recorded in the
+// per-entry comments; gain budgets 9.69–11.26 dB of the published +12.
+// The rap candidate RE-AUTHORS the seed batch's Hard-Tune Hotline (its
+// audition note — autotune belongs first — is answered by BEH-1's
+// front-insert rule, honored as the chain's leading node); the #31
+// cell-1 draft was removed in the same edit so the cell is not
+// double-covered or name-duplicated in the pen.
 
 (function () {
   'use strict';
 
   window.AUDITION_CANDIDATES = [
-    {
-      // Cell 1: rap · hard-tune ("the T-Pain sound").
-      name: 'Hard-Tune Hotline',
-      description: 'The T-Pain sound: every note snaps hard to the grid for rap and hook nights. Tight, bright, and punchy — no drifting flat notes, no muddy low end.',
-      tags: ['genre:Rap/Hip-Hop', 'use-case:performance', 'technique:hard-tune', 'vibe:bright'],
-      primary: 'genre:Rap/Hip-Hop',
-      provenance: { origin: '#31 seed batch cell 1 (rap · hard-tune), authored offline 2026-09-01', auditionDate: null, verdict: 'pending' },
-      nodes: [
-        { id: 'ht-g1', type: 'gain', params: { gainDb: 0 } },
-        { id: 'ht-e1', type: 'eq', params: { lowGain: 1, midGain: 0, highGain: 2 } },
-        { id: 'ht-t1', type: 'autotune', params: { key: 'C', scale: 'Chromatic', retune: 0, mix: 100 } },
-        { id: 'ht-c1', type: 'compressor', params: { threshold: -12, ratio: 4, attack: 0.005, release: 0.15 } },
-        { id: 'ht-l1', type: 'limiter', params: { ceiling: -6, release: 80 } }
-      ]
-    },
     {
       // Cell 2: gag · chipmunk.
       name: 'Chipmunk Party',
@@ -209,6 +206,148 @@
         { id: 'sp-e1', type: 'eq', params: { lowGain: -1, midGain: 0.5, highGain: 1.5 } },
         { id: 'sp-c1', type: 'compressor', params: { threshold: -14, ratio: 2.5, attack: 0.01, release: 0.25 } },
         { id: 'sp-l1', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    },
+    {
+      // GEN-1 cell: genre · Metal. RQ-1 metal sketch (D1) translated
+      // verbatim: low-shelf cut stands in for the live HPF idiom, the
+      // 5 kHz shelf carries the 3–5 kHz "aggressive bite", fast 6:1
+      // catches karaoke screaming, in-chain grit at moderate drive keeps
+      // the attitude (distortion output is cut-only, never budgeted),
+      // and the near-slap ambience stays short and quiet — fast songs +
+      // long reverb = mud. Budget 0 + 0.57·14 + 0.57·3 = 9.69 dB.
+      name: 'Metal Mayhem',
+      description: 'Aggressive bite for screaming along with the heavy stuff — edge and grit that cuts through the wall of guitars, without turning to mud or a boomy wash.',
+      tags: ['genre:Metal', 'use-case:performance', 'vibe:bright', 'technique:ambience-short'],
+      primary: 'genre:Metal',
+      provenance: { origin: 'GEN-1 genre batch (genre · Metal), authored offline 2026-09-01 from the RQ-1 metal sketch (D1)', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'mt-e1', type: 'eq', params: { lowGain: -4, midGain: -1, highGain: 4 } },
+        { id: 'mt-d1', type: 'distortion', params: { drive: 0.35, tone: 0.5, output: -6 } },
+        { id: 'mt-c1', type: 'compressor', params: { threshold: -14, ratio: 6, attack: 0.003, release: 0.12 } },
+        { id: 'mt-y1', type: 'delay', params: { timeMs: 90, feedback: 10, mix: 12 } },
+        { id: 'mt-r1', type: 'reverb', params: { mix: 12 } },
+        { id: 'mt-l1', type: 'limiter', params: { ceiling: -3, release: 60 } }
+      ]
+    },
+    {
+      // GEN-1 cell: genre · Rap/Hip-Hop — the Hard-Tune re-author (OQ-4
+      // resolved; BEH-1 honored): autotune is the FIRST node, key C /
+      // scale Chromatic (the nearest-semitone grid stays musically valid
+      // whatever the backing track's key — under Chromatic the key param
+      // is inert; a guessed scale is the #1 artifact source), retune
+      // 5 ms (inside Antares' 0–5 hard-tune band but with one detector
+      // epoch of settle — 0 is the audition fallback knob if the snap
+      // reads subtle), mix 100 (insert effect, not a parallel blend).
+      // Supersedes the #31 cell-1 draft, whose audition note asked for
+      // autotune-first. Budget 0 + 0.57·16 + 0.57·3 = 10.83 dB — the
+      // same budget as Classic Karaoke.
+      name: 'Hard-Tune Hotline',
+      description: 'Hard-tune snap, dry and up front — the modern trap sound. Off-key lines lock onto pitch and every word stays crisp, never swimming in echo.',
+      tags: ['genre:Rap/Hip-Hop', 'use-case:performance', 'technique:hard-tune', 'vibe:bright'],
+      primary: 'genre:Rap/Hip-Hop',
+      provenance: { origin: 'GEN-1 genre batch (genre · Rap/Hip-Hop; re-author of the #31 Hard-Tune Hotline draft per its 2026-09-01 note + BEH-1), from the RQ-1 rap sketch (D1)', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'rp-a1', type: 'autotune', params: { key: 'C', scale: 'Chromatic', retune: 5, mix: 100 } },
+        { id: 'rp-e1', type: 'eq', params: { lowGain: -3, midGain: 0, highGain: 2.5 } },
+        { id: 'rp-c1', type: 'compressor', params: { threshold: -16, ratio: 5, attack: 0.004, release: 0.15 } },
+        { id: 'rp-y1', type: 'delay', params: { timeMs: 250, feedback: 20, mix: 18 } },
+        { id: 'rp-r1', type: 'reverb', params: { mix: 10 } },
+        { id: 'rp-l1', type: 'limiter', params: { ceiling: -3, release: 50 } }
+      ]
+    },
+    {
+      // GEN-1 cell: genre · R&B/Soul. RQ-1 sketch verbatim: gentle 2.5:1
+      // leveling on Warm Ballad's auditioned shape, a warm three-band
+      // tilt (no band anywhere near the +6 single-boost rule), chorus at
+      // 15 for the studio doubling/width idiom, 180 ms low-feedback
+      // slap, plate at Warm Ballad's auditioned 35. Budget
+      // 1 + 0.57·12 + 0.57·6 = 11.26 dB — the batch's closest fit to
+      // the +12 policy (margin 0.74).
+      name: 'Slow Jam Silk',
+      description: 'Smooth and silky for slow jams — warm lows, gentle leveling, a soft plate and slap echo sitting behind the voice. Lush, never washed out.',
+      tags: ['genre:R&B/Soul', 'use-case:performance', 'vibe:warm', 'technique:ambience-long'],
+      primary: 'genre:R&B/Soul',
+      provenance: { origin: 'GEN-1 genre batch (genre · R&B/Soul), authored offline 2026-09-01 from the RQ-1 r&b/soul sketch (D1)', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'rb-g1', type: 'gain', params: { gainDb: 1 } },
+        { id: 'rb-e1', type: 'eq', params: { lowGain: 1.5, midGain: 0.5, highGain: 1 } },
+        { id: 'rb-c1', type: 'compressor', params: { threshold: -12, ratio: 2.5, attack: 0.012, release: 0.3 } },
+        { id: 'rb-h1', type: 'chorus', params: { depthMs: 2, rateHz: 0.5, mix: 15 } },
+        { id: 'rb-y1', type: 'delay', params: { timeMs: 180, feedback: 12, mix: 18 } },
+        { id: 'rb-r1', type: 'reverb', params: { mix: 35 } },
+        { id: 'rb-l1', type: 'limiter', params: { ceiling: -6, release: 150 } }
+      ]
+    },
+    {
+      // GEN-1 cell: genre · Country. RQ-1 sketch verbatim: compressor =
+      // Antares' country stage-1 numbers (3:1, 5 ms attack, ~0.2 s
+      // release), 100 ms slapback with feedback 8 and a prominent mix
+      // (slapback = short + little feedback + up-front level), short
+      // plate at 18, and the fixed 1 kHz mid band carrying the 1.5–3 kHz
+      // twang lift (coarse by construction — audition tunes it). Budget
+      // 0 + 0.57·13 + 0.57·6 = 10.83 dB.
+      name: 'Nashville Nights',
+      description: 'Honest and twangy, bright and natural like a country radio mix — the slap-back echo fans expect, with the voice staying up front. Present, never piercing.',
+      tags: ['genre:Country', 'use-case:performance', 'vibe:natural', 'technique:ambience-short'],
+      primary: 'genre:Country',
+      provenance: { origin: 'GEN-1 genre batch (genre · Country), authored offline 2026-09-01 from the RQ-1 country sketch (D1)', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'cn-e1', type: 'eq', params: { lowGain: -1, midGain: 1.5, highGain: 2 } },
+        { id: 'cn-c1', type: 'compressor', params: { threshold: -13, ratio: 3, attack: 0.005, release: 0.2 } },
+        { id: 'cn-y1', type: 'delay', params: { timeMs: 100, feedback: 8, mix: 20 } },
+        { id: 'cn-r1', type: 'reverb', params: { mix: 18 } },
+        { id: 'cn-l1', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    },
+    {
+      // GEN-1 cell: genre · Dance/EDM. RQ-1 sketch with ONE
+      // catalog-forced adjustment: the dotted-eighth throw is 380 ms,
+      // not the sketch's exact 375 (dotted eighth at 120 BPM) — delay
+      // timeMs steps by 10 ms, so 375 sits off the catalog grid; 380 is
+      // the nearest legal value (~1.3% of tempo, under the tuning
+      // audition will do anyway). Otherwise verbatim: fast 4:1 punch
+      // (the studio serial-compression idiom in the one legal
+      // compressor), chorus width on the hook, ceiling −3 for club
+      // loudness within policy, mix depths held moderate because the
+      // studio's sidechain duck cannot be expressed here. Budget
+      // 0 + 0.57·16 + 0.57·3 = 10.83 dB.
+      name: 'Club Anthem',
+      description: 'Big, bright and club-loud — pumping energy, wide sheen on the hook, and echo throws that land on the beat. Punchy, never buried by the track.',
+      tags: ['genre:Dance/EDM', 'use-case:performance', 'vibe:bright', 'technique:modulated/wide'],
+      primary: 'genre:Dance/EDM',
+      provenance: { origin: 'GEN-1 genre batch (genre · Dance/EDM), authored offline 2026-09-01 from the RQ-1 dance/edm sketch (D1; delay 375→380 ms, step-grid)', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'dm-e1', type: 'eq', params: { lowGain: -2, midGain: -0.5, highGain: 3 } },
+        { id: 'dm-c1', type: 'compressor', params: { threshold: -16, ratio: 4, attack: 0.003, release: 0.1 } },
+        { id: 'dm-h1', type: 'chorus', params: { depthMs: 2.5, rateHz: 1.2, mix: 20 } },
+        { id: 'dm-y1', type: 'delay', params: { timeMs: 380, feedback: 30, mix: 22 } },
+        { id: 'dm-r1', type: 'reverb', params: { mix: 30 } },
+        { id: 'dm-l1', type: 'limiter', params: { ceiling: -3, release: 60 } }
+      ]
+    },
+    {
+      // GEN-1 cell: genre · Musicals. RQ-1 sketch verbatim: gate first
+      // (theatre channel tidiness; floor −35 keeps trail-offs natural),
+      // low-shelf cut ≈ the 150–200 Hz radio-mic HPF idiom, diction
+      // presence, light 3:1 riding quiet-to-belt swings, faint 200 ms
+      // throw over a modest plate. Known translation limit (flagged in
+      // the sketch, D1's caveat): the fixed plate IR cannot reach a real
+      // theatre hall's 1.8–2.5 s, so hall size compresses to mix depth —
+      // AUD-1 audition decides if mix 25 reads "just enough hall".
+      // Budget 0 + 0.57·13 + 0.57·6 = 10.83 dB.
+      name: 'West End Nights',
+      description: 'Showtune treatment — clear diction over the pit, light compression that rides the quiet-to-belt swings, and just enough hall around the voice. Every word lands, no tunnel.',
+      tags: ['genre:Musicals', 'use-case:performance', 'vibe:spacious', 'technique:ambience-long'],
+      primary: 'genre:Musicals',
+      provenance: { origin: 'GEN-1 genre batch (genre · Musicals), authored offline 2026-09-01 from the RQ-1 musicals sketch (D1)', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'mu-n1', type: 'gate', params: { threshold: -48, attack: 0.005, release: 0.2, floor: -35 } },
+        { id: 'mu-e1', type: 'eq', params: { lowGain: -3, midGain: 1, highGain: 2 } },
+        { id: 'mu-c1', type: 'compressor', params: { threshold: -13, ratio: 3, attack: 0.006, release: 0.25 } },
+        { id: 'mu-y1', type: 'delay', params: { timeMs: 200, feedback: 15, mix: 12 } },
+        { id: 'mu-r1', type: 'reverb', params: { mix: 25 } },
+        { id: 'mu-l1', type: 'limiter', params: { ceiling: -6, release: 120 } }
       ]
     }
   ];

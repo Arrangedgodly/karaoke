@@ -10,12 +10,19 @@ off (Q1–Q7 approved as recommended + the user's ongoing-batches directive).
 Awaiting final record confirmation, then `$plan-it-out`.
 
 ## Active Task
-**BEH-1 (autotune-first insert rule) — status `awaiting-approval`** on
-branch `beh-1-autotune-first` (PR-only pipeline; coordinator handles
-push/PR). Evidence + decisions in [production-log.md](production-log.md);
-suite 37/38 (the one fail is the known autotune CPU p99 environmental
-flake — identical at the base commit). Next unblocked: GEN-1 (rap cell
-waits on this PR landing).
+**GEN-1 (six genre candidates) — status `awaiting-approval`** on branch
+`gen-1-genre-candidates` (PR-only pipeline; coordinator handles push/PR).
+Six pen entries authored from the RQ-1 sketches (D1): Metal Mayhem
+9.69 dB · Hard-Tune Hotline re-author 10.83 dB (autotune-first, OQ-4 =
+C/Chromatic/5 ms/mix 100; supersedes the #31 cell-1 draft, removed in
+the same edit) · Slow Jam Silk 11.26 dB · Nashville Nights 10.83 dB ·
+Club Anthem 10.83 dB (throw 380 ms — 375 is off the delay step grid) ·
+West End Nights 10.83 dB. Disposable policy check: all six
+set_chain-applied + schema round-trip clean, budgets engine-computed;
+suite 35/36 (the one fail is the known autotune CPU p99 environmental
+flake — identical at the base commit). Per-entry budget table +
+decisions in [production-log.md](production-log.md). Next unblocked:
+GAG-1.
 
 ## Approvals
 - Town-hall clusters: Q1 full-coverage batch (~16–17 candidates incl. 3

@@ -89,15 +89,25 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
 
 ### Content lane
 
-- **GEN-1 — Genre candidates (6)** *(medium)* — status: `pending`
-  (unblocked per D1 — RES-1 complete; rap candidate still waits on BEH-1
-  per deps)
+- **GEN-1 — Genre candidates (6)** *(medium)* — status: `awaiting-approval`
+  (branch `gen-1-genre-candidates`, authored 2026-09-01 per D1)
   Author Metal / Rap-Hip-Hop / R&B-Soul / Country / Dance-EDM / Musicals
   candidates per RES-1 sketches; Rap cell includes hard-tune technique tag
   (re- authors Hard-Tune Hotline under the new autotune-first behavior —
   OQ-4 defaults resolved in production against RES-1's rap idiom).
   House-style descriptions (#28 checklist). Deps: RES-1, BEH-1 (rap only).
   Authoring source: the sketches in `research/rq1-genre-idioms.md` (D1).
+  Evidence: six entries appended to the pen — Metal Mayhem 9.69 dB,
+  Hard-Tune Hotline re-author 10.83 dB (autotune first; OQ-4 = key C /
+  Chromatic / retune 5 ms / mix 100; the #31 cell-1 draft removed in the
+  same edit so the cell is not double-covered), Slow Jam Silk 11.26 dB,
+  Nashville Nights 10.83 dB, Club Anthem 10.83 dB (one catalog-forced
+  adjustment: throw 380 ms — the sketch's 375 ms is off the delay step-10
+  grid), West End Nights 10.83 dB. Disposable policy check: all six
+  set_chain-applied + PresetSchema round-trip clean, budgets
+  engine-computed per entry; suite green except the known autotune CPU
+  p99 flake (reproduced identically at base). Per-entry budget table in
+  `production-log.md`.
 
 - **GAG-1 — Gag + vibe candidates (~10–11)** *(medium)* — status: `pending`
   (unblocked per D2/D3 — RES-2 complete)
