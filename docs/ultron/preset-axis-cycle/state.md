@@ -87,3 +87,6 @@ Next: GAG-1.
 `gag-1-gag-candidates`, stacked on `gen-1-genre-candidates`). Six
 D2/D3 chains in the pen; megaphone boundary pre-answered for PEN-1
 (inclusive). Next: PEN-1.
+
+### GAG-1: APPROVED 2026-09-01 (user auditions later). Boundary finding: +12 cap
+INCLUSIVE (12.00 applies, 12.01 rejects). Pen = 20 candidates. Next: PEN-1.
