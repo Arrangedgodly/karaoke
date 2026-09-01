@@ -329,6 +329,7 @@ function createEnv() {
     'src/default-preset.js',
     'src/preset-schema.js',
     'src/preset-store.js',
+    'src/factory-library-data.js',
     'src/factory-presets.js',
     'src/param-controls.js',
     'src/presets-ui.js',

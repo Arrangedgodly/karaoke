@@ -650,13 +650,22 @@
   }
 
   /**
-   * Compact-browsing v2: the fixed display order for factory categories
-   * (describeAll()'s `category` field) — anything present in the data but
-   * not listed here still renders, just after these, alphabetically last,
-   * rather than being silently dropped (the same no-silent-drop discipline
-   * canvas.js's paletteGroupLabel()/familyInitials() already follow).
+   * Compact-browsing v2 (amended by wayfinder #30/#28): the display order
+   * for factory categories (describeAll()'s `category` field — the
+   * taxonomy primary tag, humanized). The order is the taxonomy's own
+   * group order via FactoryPresets.groupOrder() (cleanup first, then
+   * use-case, genre, vibe, gag), replacing v2's hand-assigned
+   * Karaoke/Music/Novelty/Speech list — one source of truth. The empty
+   * fallback covers bare sandboxes where the loader lacks the taxonomy
+   * surface; anything present in the data but not listed still renders,
+   * just after these, alphabetically last, rather than being silently
+   * dropped (the same no-silent-drop discipline canvas.js's
+   * paletteGroupLabel()/familyInitials() already follow).
    */
-  var PRESET_CATEGORY_ORDER = ['Karaoke', 'Music', 'Novelty', 'Speech'];
+  var PRESET_CATEGORY_ORDER = (window.FactoryPresets &&
+      typeof window.FactoryPresets.groupOrder === 'function')
+    ? window.FactoryPresets.groupOrder()
+    : [];
 
   /**
    * Compact-browsing round: the ONE render path for the Presets tab's
@@ -699,12 +708,25 @@
     var filterNorm = (filterText || '').trim().toLowerCase();
     var descriptions = {};
     var categories = {};
+    var tagHaystacks = {};
     try {
       if (window.FactoryPresets && typeof window.FactoryPresets.describeAll === 'function') {
         window.FactoryPresets.describeAll().forEach(function (entry) {
           if (entry && typeof entry.name === 'string') {
             descriptions[entry.name] = entry.description || '';
             categories[entry.name] = entry.category || '';
+          }
+        });
+      }
+      // Wayfinder #28: the taxonomy TAGS are search fodder too — "pop",
+      // "telephone", "cleanup" reach presets tagged with them even when
+      // the word is in neither the name nor the category label.
+      // listDetailed() never carries nodes, so this read cannot become a
+      // load path.
+      if (window.FactoryPresets && typeof window.FactoryPresets.listDetailed === 'function') {
+        window.FactoryPresets.listDetailed().forEach(function (entry) {
+          if (entry && typeof entry.name === 'string' && Array.isArray(entry.tags)) {
+            tagHaystacks[entry.name] = entry.tags.join(' ').toLowerCase();
           }
         });
       }
@@ -715,21 +737,24 @@
     var factory = factoryPresets();
     var userNames = window.PresetStore.listNames();
 
-    function matches(name, nodes, category) {
+    function matches(name, nodes, category, tagsHaystack) {
       if (!filterNorm) {
         return true;
       }
       // Match against the node TYPE strings ('reverb', 'compressor', …),
       // not nodeFamilyTags()'s 3-letter rail codes ('REV', 'COM') — a
       // search for "reverb" must find every reverb-heavy preset, and a
-      // substring match against an abbreviation can't do that.
+      // substring match against an abbreviation can't do that. Wayfinder
+      // #28: taxonomy tags join the haystack ('genre:pop', 'gag:robot',
+      // …), so a search for "pop" or "cleanup" reaches tagged presets.
       var typeWords = nodes.map(function (n) { return n.type; }).join(' ');
-      var haystack = (name + ' ' + typeWords + ' ' + (category || '')).toLowerCase();
+      var haystack = (name + ' ' + typeWords + ' ' + (category || '') + ' ' +
+        (tagsHaystack || '')).toLowerCase();
       return haystack.indexOf(filterNorm) !== -1;
     }
 
     var visibleFactory = factory.filter(function (preset) {
-      return matches(preset.name, preset.nodes, categories[preset.name]);
+      return matches(preset.name, preset.nodes, categories[preset.name], tagHaystacks[preset.name]);
     });
     var visibleUser = [];
     userNames.forEach(function (name) {

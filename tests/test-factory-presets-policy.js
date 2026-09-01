@@ -220,6 +220,7 @@ async function main() {
   loadSrc(sandbox, 'src/node-reverb.js');
   loadSrc(sandbox, 'src/node-limiter.js');
   loadSrc(sandbox, 'src/default-preset.js');
+  loadSrc(sandbox, 'src/factory-library-data.js');
   loadSrc(sandbox, 'src/factory-presets.js');
   installChainCanvasStub(sandbox);
   loadSrc(sandbox, 'src/chain-editing.js');

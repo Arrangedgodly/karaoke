@@ -416,16 +416,18 @@
   <script src="src/preset-schema.js"></script>
   <script src="src/default-preset.js"></script>
   <!--
-    PS-4 — factory preset library (window.FactoryPresets,
-    src/factory-presets.js): the six shipped starting points (Classic
-    Karaoke + the five QA-3 acceptance chains, content verbatim from
-    docs/ultron/qa/qa3-driver.js). Static runtime content, loaded here
-    right after default-preset.js — BEFORE preset-store.js/presets-ui.js/
-    mcp-tools.js, its three consumers — and never persisted: the preset
-    dropdown merges it at runtime (Factory/Yours optgroups), so a fresh
-    profile sees the full library with zero localStorage seeding and
-    PresetStore's user namespace is untouched.
+    PS-4 + wayfinder #30 — factory preset library: structured CONTENT in
+    src/factory-library-data.js (window.FACTORY_LIBRARY: vocabularies,
+    primary-group order, and the auditioned entries — name, description,
+    tags, primary, provenance, nodes), loaded immediately BEFORE the thin
+    loader src/factory-presets.js (window.FactoryPresets: fresh-copy
+    exports over that data). Conformance against the live registry and
+    schema is enforced by tests/test-factory-library.js. Never persisted:
+    the preset dropdown merges it at runtime (primary-tag optgroups +
+    Yours), so a fresh profile sees the whole library with zero
+    localStorage seeding and PresetStore's user namespace is untouched.
   -->
+  <script src="src/factory-library-data.js"></script>
   <script src="src/factory-presets.js"></script>
   <script src="src/preset-store.js"></script>
   <script src="src/canvas.js"></script>
@@ -474,9 +476,24 @@
     string parse and nothing else — zero elements, listeners or exports.
     Pure consumer: never registers anything with McpServer; zero
     localStorage (reload resets). Close/Escape hides the panel for this
-    load only — reopen by reloading with ?dev.
+    load only; reopen by reloading with ?dev.
   -->
   <script src="src/mcp-harness.js"></script>
+  <!--
+    Wayfinder #34/#31 — audition pipeline (the preset-library map's human
+    verification step). src/audition-candidates.js is an inert, empty pen
+    where pipeline sessions land not-yet-auditioned candidate chains via
+    PR; src/audition-harness.js is the production Booth — ?audition GATED
+    (same zero-footprint gate as mcp-harness above): one candidate at a
+    time, keyboard A/X binary verdicts (bar "usable without edits"),
+    in-memory verdict records, live-mic listening through the exact
+    ChainEditing.apply request a factory Load submits (no side door), raw
+    test-vocal reference, and a Copy-verdict-JSON export for the
+    promotion edit into factory-library-data.js. Tested by
+    tests/test-audition-harness.js.
+  -->
+  <script src="src/audition-candidates.js"></script>
+  <script src="src/audition-harness.js"></script>
   <!--
     VIS-5 — MIC IN / OUT level meters (window.Meters, src/meters.js):
     canvas lamp-bar meter components created from JS at the two .anchor
