@@ -417,9 +417,10 @@ function createEnv() {
 
   // Compact-browsing round: presets-ui.js no longer anchors its naming
   // row / quiet note to #preset-select's .parentNode (that element is
-  // gone) — it anchors directly to #build-panel-presets, so presetHost
-  // now plays THAT role (registered as 'build-panel-presets' below) as
-  // well as still being the subtree findByIdIn() searches for the
+  // gone) — it anchors directly to #presets-panel-content (split-panel
+  // round: renamed from #build-panel-presets), so presetHost now plays
+  // THAT role (registered as 'presets-panel-content' below) as well as
+  // still being the subtree findByIdIn() searches for the
   // dynamically-appended naming row / note.
   var byId = {
     'palette-list': makeElement('ul'),
@@ -434,7 +435,7 @@ function createEnv() {
   byId['current-preset-name'].textContent = 'Unsaved chain';
   byId['unsaved-indicator'].style.display = 'none';
   var presetHost = makeElement('div');
-  byId['build-panel-presets'] = presetHost;
+  byId['presets-panel-content'] = presetHost;
   env.presetHost = presetHost;
   env.byId = byId;
 

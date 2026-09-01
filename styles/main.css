@@ -309,11 +309,10 @@ body {
   .layout.voice-deck {
     flex: 1 1 auto;
     min-height: 0;
-    /* Left-sidebar round (2026-08-31 user direction): a bottom placement
-       for .build was tried and reverted — .layout runs as a ROW at this
-       breakpoint (.build | .voice-deck-face), reverting to a plain
-       stacked COLUMN below 901px (the base rule, unscoped) where
-       side-by-side positioning was never meant to apply anyway. */
+    /* .layout runs as a ROW at this breakpoint (.presets-panel |
+       .voice-deck-face), reverting to a plain stacked COLUMN below 901px
+       (the base rule, unscoped) where side-by-side positioning was never
+       meant to apply anyway. */
     flex-direction: row;
   }
 
@@ -327,7 +326,8 @@ body {
   .layout .canvas-panel,
   .layout .signal-order,
   .layout .voice-deck-face,
-  .layout .build {
+  .layout .presets-panel,
+  .layout .effects-panel {
     min-height: 0;
   }
 
@@ -335,15 +335,16 @@ body {
     min-width: 0;
   }
 
-  /* Row layout: .build is a fixed-width sidebar (collapsible to a rail,
-     see .build.collapsed below); .voice-deck-face — the board + the
-     signal-order strip, wrapped together so .build sits beside that
-     PAIR, not just the board — takes the remaining width and owns its
-     own column layout explicitly (rather than incidentally relying on
-     .canvas-panel's own self-contained max-height clamp to stay bounded,
-     which is the same "own your own contract" discipline the
-     grid-blowout guard above already documents). */
-  .layout .build {
+  /* Row layout: .presets-panel is a fixed-width sidebar (collapsible to
+     a rail, see .presets-panel.collapsed below); .voice-deck-face — the
+     board + the signal-order strip + the Effects panel, wrapped together
+     so Presets sits beside that WHOLE column, not just the board — takes
+     the remaining width and owns its own column layout explicitly
+     (rather than incidentally relying on .canvas-panel's own
+     self-contained max-height clamp to stay bounded, which is the same
+     "own your own contract" discipline the grid-blowout guard above
+     already documents). */
+  .layout .presets-panel {
     flex: 0 0 260px;
   }
 
@@ -354,13 +355,23 @@ body {
     flex-direction: column;
   }
 
-  /* The collapsed rail: a narrow strip showing just the toggle + the two
-     tab labels (rotated — see .build-tabs button below), no tab content.
-     CSS-only — this NEVER touches the `hidden` attribute
-     initBuildTabs()/src/canvas.js manages on .build-tab-panel (its
-     "exactly one panel visible, one hidden" invariant stays true
-     underneath); collapse is a purely visual override layered on top. */
-  .build.collapsed {
+  /* Split-panel round: the board FILLS whatever height Effects (below)
+     leaves it — the only flex-grow item in .voice-deck-face's column, so
+     ordinary flex distribution does the resize with no JS: full height
+     when Effects is collapsed, less when it's open, growing back the
+     instant it collapses again. .signal-order (natural content height)
+     and .effects-panel (a fixed flex-basis, see below) never grow or
+     shrink; .canvas-panel's own max-height clamp (unscoped, further
+     down this file) still caps the ceiling either way. */
+  .layout .canvas-panel {
+    flex: 1 1 auto;
+  }
+
+  /* The collapsed sidebar rail: a narrow strip showing just the head
+     (toggle + rotated label — see .presets-panel.collapsed .panel-label
+     below), no content. CSS-only — this NEVER touches any `hidden`
+     attribute; collapse is a purely visual override layered on top. */
+  .presets-panel.collapsed {
     flex-basis: 48px;
     /* .panel's shared 0.85rem/0.9rem padding is sized for a 260px
        sidebar — at 48px collapsed it would BE most of the rail. */
@@ -368,20 +379,42 @@ body {
     padding-right: 0.3rem;
   }
 
-  .build.collapsed .build-tab-panel {
+  .presets-panel.collapsed .presets-panel-content {
     display: none;
   }
 
-  .build.collapsed .build-tabs {
+  .presets-panel.collapsed .panel-head {
     flex-direction: column;
   }
 
-  .build.collapsed .build-tabs button {
+  .presets-panel.collapsed .panel-label {
     writing-mode: vertical-rl;
-    padding: 0.6rem 0.3rem;
   }
 
-  .layout .build-tab-panel {
+  .layout .presets-panel-content {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* The Effects panel: the SAME disclosure pattern as Presets, but on
+     the HEIGHT axis (it docks under the board, not beside it) — a fixed
+     flex-basis expanded, shrinking to a thin horizontal strip collapsed.
+     Unlike the sidebar rail, the label stays horizontal when collapsed:
+     a wide, short strip has room for normal text, so there is no narrow-
+     rail rotation trick needed here. */
+  .effects-panel {
+    flex: 0 0 260px;
+  }
+
+  .effects-panel.collapsed {
+    flex-basis: 40px;
+  }
+
+  .effects-panel.collapsed .effects-panel-content {
+    display: none;
+  }
+
+  .layout .effects-panel-content {
     min-height: 0;
     overflow-y: auto;
   }
@@ -1305,11 +1338,14 @@ select.control {
    bounded). Guided Patchbay's multi-column build panel is exactly the
    content that blows this: .palette-list's forced per-group column
    breaks (styles above) give it a multi-column min-content width, which
-   without this pushed .build wider than a narrow phone instead of
-   wrapping its columns down to fit. */
+   without this pushed the panel wider than a narrow phone instead of
+   wrapping its columns down to fit — split-panel round: still true for
+   both .presets-panel (.preset-list's rows, though those don't force
+   columns) and .effects-panel (.palette-list itself, which does). */
 .layout .canvas-panel,
 .layout .signal-order,
-.layout .build {
+.layout .presets-panel,
+.layout .effects-panel {
   min-width: 0;
 }
 
@@ -1319,8 +1355,9 @@ select.control {
    src/canvas.js's onSort/remove handlers ALSO guard on
    window.AudioEngine.isStarted directly, so this is a visual/UX affordance
    on top of a real functional guard, not the only thing preventing a
-   pre-Start drop from throwing. Includes .build (Guided Patchbay) too.
-   All three zones share the ONE Pattern Machine disabled grammar (hatch
+   pre-Start drop from throwing. Split-panel round: .presets-panel and
+   .effects-panel (Guided Patchbay's old shared .build) both included.
+   Every gated zone shares the ONE Pattern Machine disabled grammar (hatch
    + recede — see the disabled-texture block). */
 
 .panel {
@@ -1644,9 +1681,14 @@ select.control {
      Two-Deck Stack's chrome: body padding (2rem) + the 4rem system deck
      + the 4px deck seam + slack. Unscoped (applies at every width, same
      as before Guided Patchbay) — the board stays internally scrollable
-     regardless of viewport; only .build's own scroll is width-gated (see
-     .layout's @media (min-width: 901px) block) to match "below 901px the
-     zones stack and the page keeps its scroll". */
+     regardless of viewport; only .presets-panel's/.effects-panel's own
+     scroll is width-gated (see .layout's @media (min-width: 901px)
+     block) to match "below 901px the zones stack and the page keeps its
+     scroll". Split-panel round: this max-height is still the hard
+     ceiling, but within it the board now also carries flex: 1 1 auto
+     (that same @media block) so it actively FILLS whatever height
+     Effects (a fixed-size sibling, docked below) leaves free, rather
+     than just capping how tall its own content could grow. */
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 6.75rem);
@@ -2584,20 +2626,23 @@ select.control {
    gate with the same hatch + recede the canvas face has always used.
    =========================================================================== */
 
-/* Pre-Start gate, the signal-order strip + build panel: pointer lock
-   (the functional gate, unchanged) + the SAME recede + diagonal hatch
-   the canvas face carries below — one grammar, three zones (Guided
-   Patchbay: retargeted from the retired .palette/.presets zones).
-   src/canvas.js also sets native `inert` on the whole layout, which is
-   the keyboard and accessibility-tree half of this functional gate. */
-.layout.engine-not-started .build,
+/* Pre-Start gate, the signal-order strip + the two collapsible panels:
+   pointer lock (the functional gate, unchanged) + the SAME recede +
+   diagonal hatch the canvas face carries below — one grammar, every
+   gated zone (split-panel round: .presets-panel and .effects-panel,
+   Guided Patchbay's old shared .build). src/canvas.js also sets native
+   `inert` on the whole layout, which is the keyboard and
+   accessibility-tree half of this functional gate. */
+.layout.engine-not-started .presets-panel,
+.layout.engine-not-started .effects-panel,
 .layout.engine-not-started .signal-order {
   position: relative;
   opacity: 0.55;
   pointer-events: none;
 }
 
-.layout.engine-not-started .build::before,
+.layout.engine-not-started .presets-panel::before,
+.layout.engine-not-started .effects-panel::before,
 .layout.engine-not-started .signal-order::before {
   content: '';
   position: absolute;
@@ -2700,47 +2745,88 @@ select.control {
 }
 
 /* ===========================================================================
-   BUILD PANEL (Guided Patchbay round, replacing PS-3's Presets zone +
-   the old Palette zone; left-sidebar round, 2026-08-31 user direction,
-   moved it back to a side column after a bottom placement shipped and
-   was reverted) — a two-tab panel, Effects (#palette-list, unchanged)
+   PRESETS PANEL + EFFECTS PANEL (Guided Patchbay round, replacing PS-3's
+   Presets zone + the old Palette zone; left-sidebar round, 2026-08-31,
+   combined them into one shared-tab .build panel and moved it to a side
+   column; split-panel round, 2026-09-01 user direction, retired the
+   shared tab bar — Presets stays the left sidebar, Effects moves back
+   underneath the board as its OWN independently collapsible panel, no
+   longer sharing space with Presets) — Effects (#palette-list, unchanged)
    and Presets (a searchable, categorized row list + the real Save As
-   controls — src/presets-ui.js). At >=901px it is `.layout`'s first,
-   fixed-width child (a real column again, collapsible to a narrow rail
-   — .build.collapsed, styles above in the @media block, and
-   #build-collapse-toggle below); below that it stays the full-width
-   stacked block it already was, unaffected by any of this.
+   controls — src/presets-ui.js) are now two separate `.panel`s, each
+   with the same head (a plain label + a disclosure toggle — see
+   .panel-head/.panel-label below) over a content region. At >=901px
+   .presets-panel is `.layout`'s first, fixed-width child (collapsible to
+   a narrow rail on the WIDTH axis) and .effects-panel docks under the
+   board inside .voice-deck-face (collapsible on the HEIGHT axis instead
+   — see both panels' .collapsed rules in the @media block above); below
+   901px both stay full-width stacked blocks, unaffected by any of this.
    =========================================================================== */
 
-.build {
-  /* Unscoped: just a flex column for the toggle+tabs+panel stack,
-     natural content height below 901px. The fixed sidebar width, the
-     collapse behavior, and the internal scroll budget are all scoped to
-     the @media (min-width: 901px) block above — the board stays bounded
-     at every width via its own self-contained max-height clamp
-     regardless of what .build is doing beside or below it. */
+/* Unscoped: just a flex column for the head+content stack, natural
+   content height below 901px. The fixed size, the collapse behavior, and
+   the internal scroll budget are all scoped to the
+   @media (min-width: 901px) block above — the board stays bounded at
+   every width via its own self-contained max-height clamp regardless of
+   what either panel is doing beside or below it. The groove is VERTICAL
+   here (.presets-panel sits to the LEFT of the board) — cut + lip both
+   live on this one element, the same "one element carries its own
+   complete groove" pattern .io-rail-in/.io-rail-out already use for
+   their own vertical cuts. */
+.presets-panel {
   display: flex;
   flex-direction: column;
   background: transparent;
-  /* The groove — now VERTICAL, on the panel's own right edge (.build
-     sits to the LEFT of the board, not above the signal-order strip) —
-     cut + lip both live here, self-contained on the one element, the
-     same "one element carries its own complete groove" pattern
-     .io-rail-in/.io-rail-out already use for their own vertical cuts. */
   border-right: 1px solid var(--pm-groove-cut);
   box-shadow: inset -1px 0 0 var(--pm-groove-lip);
 }
 
-/* The collapse toggle: sits above the tabs, always visible (collapsed or
-   not) since it's the only way back out of the rail. Drawn chevron mark
-   (below), never emoji/unicode standing in for an icon — the same
-   discipline every other control mark in this file follows. */
-#build-collapse-toggle {
+/* Same shared shape as .presets-panel above, but the groove is
+   HORIZONTAL now (.effects-panel docks BELOW the board), the stacked
+   twin of .canvas-panel's own bottom cut/.signal-order's top lip — same
+   cut-then-lip reading order, one more zone down. */
+.effects-panel {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border-top: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+}
+
+/* The shared head: a plain label (never a tab — neither panel's
+   visibility depends on the other, so role="tab" would describe
+   something that isn't happening) + the disclosure toggle, always
+   visible collapsed or not since it's the only way back out. */
+.panel-head {
   flex: none;
-  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--pm-groove-cut);
+}
+
+.panel-label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pm-print-hi);
+}
+
+/* The toggle: drawn chevron mark, never emoji/unicode standing in for an
+   icon — the same discipline every other control mark in this file
+   follows. Shared chrome for both toggles; each gets its own rotation
+   default below (Presets points left/right — it collapses sideways;
+   Effects points down/up — it collapses into the bottom edge). */
+#presets-collapse-toggle,
+#effects-collapse-toggle {
+  flex: none;
   width: 1.5rem;
   height: 1.5rem;
-  margin-bottom: 0.5rem;
   padding: 0;
   border: 1px solid var(--pm-key-edge);
   border-radius: 3px;
@@ -2749,81 +2835,67 @@ select.control {
   cursor: pointer;
 }
 
-#build-collapse-toggle:hover {
+#presets-collapse-toggle:hover,
+#effects-collapse-toggle:hover {
   color: var(--pm-print-hi);
   border-color: var(--pm-print);
 }
 
-#build-collapse-toggle .chevron-mark {
+#presets-collapse-toggle .chevron-mark,
+#effects-collapse-toggle .chevron-mark {
   display: block;
   width: 6px;
   height: 6px;
   margin: 6px auto;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: rotate(135deg); /* points left: the panel will collapse */
 }
 
-.build.collapsed #build-collapse-toggle {
-  align-self: center;
+#presets-collapse-toggle .chevron-mark {
+  transform: rotate(135deg); /* points left: the panel will collapse that way */
 }
 
-.build.collapsed #build-collapse-toggle .chevron-mark {
+.presets-panel.collapsed #presets-collapse-toggle .chevron-mark {
   transform: rotate(-45deg); /* points right: the panel will expand */
 }
 
+#effects-collapse-toggle .chevron-mark {
+  transform: rotate(45deg); /* points down: the panel will collapse into the bottom edge */
+}
+
+.effects-panel.collapsed #effects-collapse-toggle .chevron-mark {
+  transform: rotate(225deg); /* points up: the panel will expand */
+}
+
+.presets-panel.collapsed .panel-head {
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  #build-collapse-toggle {
+  #presets-collapse-toggle,
+  #effects-collapse-toggle {
     transition: border-color 150ms ease, color 150ms ease;
   }
 }
 
-.build-tabs {
-  flex: none;
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.6rem;
-  border-bottom: 1px solid var(--pm-groove-cut);
-}
-
-.build-tabs button {
-  padding: 0.5rem 0.7rem;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--pm-print);
-  cursor: pointer;
-}
-
-.build-tabs button[aria-selected='true'] {
-  border-bottom-color: var(--pm-accent);
-  color: var(--pm-print-hi);
-}
-
-.build-tab-panel {
+.presets-panel-content,
+.effects-panel-content {
   flex: 1 1 auto;
 }
 
-.build-tab-panel[hidden] {
-  display: none;
-}
+/* Effects panel: #palette-list fills the content region exactly as it
+   filled the old .palette zone — no selector changes needed for
+   .node-chip et al. (they target the chip, not its ancestor panel). */
 
-/* Effects tab: #palette-list fills the tab panel exactly as it filled
-   the old .palette zone — no selector changes needed for .node-chip et
-   al. (they target the chip, not its ancestor panel). */
-
-/* Presets tab, compact-browsing round: a sticky search box over ONE
+/* Presets panel, compact-browsing round: a sticky search box over ONE
    scrollable, groupable row list (.preset-list below), replacing both the
    old factory-only card grid and the #preset-select dropdown+Load/Delete
    pair — the only prior way user presets could be browsed at all. Sticky
-   against whichever ancestor actually scrolls (.build-tab-panel's own
-   overflow-y:auto at >=901px; the page itself below that — same dual-mode
-   behavior the panel already had), opaque so scrolled rows never show
-   through underneath it. */
+   against whichever ancestor actually scrolls (.presets-panel-content's
+   own overflow-y:auto at >=901px; the page itself below that — same
+   dual-mode behavior the panel already had), opaque so scrolled rows
+   never show through underneath it. */
 .preset-search {
   position: sticky;
   top: 0;
@@ -2831,14 +2903,14 @@ select.control {
   background: var(--pm-chassis);
 }
 
-/* Specificity note: #build-panel-presets > .control (defined further
+/* Specificity note: #presets-panel-content > .control (defined further
    below) sets every direct-child .control's margin-top to 0.75rem at
    EQUAL specificity to a same-shaped single-class override, so a later
    source-order rule would win regardless of which one reads more
    "specific" to the eye. Matching BOTH classes the input actually carries
    (class="control preset-search") outranks the single-class rule outright
    — sticky at the panel's own top must not carry a gap above it. */
-#build-panel-presets > .control.preset-search {
+#presets-panel-content > .control.preset-search {
   margin-top: 0;
 }
 
@@ -2846,8 +2918,8 @@ select.control {
    .preset-group-label below borrows .palette-group-label's exact register
    minus its multicol break-before, since this list is never side-by-side
    columns) over compact rows. No bounded height/inner scrollbar of its
-   own: it rides the SAME scroll the Effects tab's #palette-list already
-   uses (see .build-tab-panel's overflow-y:auto), so "many more presets"
+   own: it rides the SAME scroll the Effects panel's #palette-list already
+   uses (see .effects-panel-content's overflow-y:auto), so "many more presets"
    scales the same well-tested way instead of a new nested scrollbox. */
 .preset-list {
   margin-bottom: 0.75rem;
@@ -3063,7 +3135,7 @@ select.control {
    .preset-search input is ALSO a direct child, but its own rule above
    overrides margin-top: 0 (it's sticky at the panel's own top and must
    not carry a gap above it). */
-#build-panel-presets > .control {
+#presets-panel-content > .control {
   display: block;
   width: 100%;
   margin-top: 0.75rem;

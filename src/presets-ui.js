@@ -106,12 +106,14 @@
   var saveBtn = document.getElementById('save-preset-btn');
   // Compact-browsing round: the dropdown+Load/Delete pair and the
   // factory-only card grid are both retired in favor of ONE searchable,
-  // scrollable row list — see renderPresetList() below. #build-panel-presets
-  // itself is the naming-row/note anchor now that #preset-select (whose
-  // .parentNode used to serve that purpose) is gone.
+  // scrollable row list — see renderPresetList() below. Split-panel round:
+  // #presets-panel-content (formerly #build-panel-presets, when Presets
+  // was one tab of a shared Effects/Presets panel — renamed now that it's
+  // its own dedicated panel) is the naming-row/note anchor, same role
+  // #preset-select's .parentNode used to serve before it was retired.
   var presetSearchInputEl = document.getElementById('preset-search-input');
   var presetListEl = document.getElementById('preset-list');
-  var presetsPanelRootEl = document.getElementById('build-panel-presets');
+  var presetsPanelRootEl = document.getElementById('presets-panel-content');
 
   if (!presetsPanelEl || !currentPresetNameEl || !presetListEl || !presetsPanelRootEl) {
     // Presets panel markup isn't present (e.g. not yet built, or

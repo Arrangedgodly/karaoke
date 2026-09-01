@@ -215,42 +215,46 @@
   <!-- VOICE DECK (item 1b): #chain-layout re-cast as the lower slab —
        class .voice-deck added alongside .layout; the engine-not-started
        gate class and id are the wiring contracts, unchanged.
-       Left-sidebar round (2026-08-31 user direction): .build moves back
-       to a LEFT column (a bottom placement was tried and reverted — user
-       call) and is now collapsible to a narrow rail (src/canvas.js's
-       toggle handler + styles/main.css's .build.collapsed, both scoped to
-       the >=901px row layout — below that .build stays the existing
-       full-width stacked block, untouched). .canvas-panel + the
-       signal-order strip move into a new .voice-deck-face wrapper so
-       .build can sit beside that pair as a whole, rather than beside just
-       the board. -->
+       Split-panel round (2026-09-01 user direction): the combined
+       Effects/Presets tab panel is retired in favor of two SEPARATE,
+       independently collapsible panels — Presets stays the left sidebar
+       (unchanged position from the prior round), Effects moves back
+       underneath the board (its original position, now with its own
+       collapse toggle instead of sharing a tab bar with Presets). Both
+       use the same disclosure-button pattern .node-collapse already uses
+       for a per-card fold (aria-expanded + aria-controls over a plain
+       <h3> label, not role="tab" — there is no tab-switching left to
+       justify that role now that neither panel's visibility depends on
+       the other's). The board (.canvas-panel) gets flex: 1 1 auto inside
+       .voice-deck-face so it fills whatever height Effects leaves it —
+       shrinking when Effects opens, growing back when it collapses — the
+       same relationship it already has with the Presets sidebar on the
+       width axis. Both toggles are src/canvas.js's initPanelCollapse();
+       both panels' CSS lives beside each other in styles/main.css's
+       @media (min-width: 901px) block, scoped there like every other
+       panel-collapse rule so far — below that width both panels stay the
+       existing full-width stacked blocks, unaffected. -->
   <div class="layout voice-deck engine-not-started" id="chain-layout">
     <!--
-      BUILD PANEL — replaces PS-3's Presets column and UI-3's Palette
-      column with one two-tab panel. Wired by src/canvas.js (Effects tab:
-      renderPalette() into #palette-list, unchanged, plus initBuildTabs()'s
-      collapse toggle) and src/presets-ui.js (Presets tab: window.PresetStore,
-      window.FactoryPresets, window.ChainEditing.apply()). Sibling of
-      .voice-deck-face below, so it's gated by the same `engine-not-started`
-      class on #chain-layout (see styles/main.css's
-      `.layout.engine-not-started` rule, covering `.build`/`.signal-order`).
+      PRESETS PANEL — the left sidebar. Wired by src/presets-ui.js
+      (window.PresetStore, window.FactoryPresets, window.ChainEditing.apply()).
+      Sibling of .voice-deck-face below, so it's gated by the same
+      `engine-not-started` class on #chain-layout (see styles/main.css's
+      `.layout.engine-not-started` rule, covering `.presets-panel`/
+      `.effects-panel`/`.signal-order`).
     -->
-    <div class="panel build" id="build-panel">
-      <!-- The mark is DRAWN (a rotated corner, the same chevron vocabulary
-           the node-card fold button uses — src/canvas.js's node-collapse),
-           not a text glyph; the accessible name lives on aria-label alone
-           and flips with state in src/canvas.js's toggle handler. -->
-      <button type="button" id="build-collapse-toggle" aria-expanded="true" aria-controls="build-panel" aria-label="Collapse build panel"><span class="chevron-mark" aria-hidden="true"></span></button>
-      <div class="build-tabs" role="tablist" aria-label="Build the chain">
-        <button type="button" role="tab" aria-selected="true" id="build-tab-effects" aria-controls="build-panel-effects" data-build-tab="effects">Effects</button>
-        <button type="button" role="tab" aria-selected="false" id="build-tab-presets" aria-controls="build-panel-presets" data-build-tab="presets">Presets</button>
+    <div class="panel presets-panel" id="presets-panel">
+      <div class="panel-head">
+        <h3 class="panel-label">Presets</h3>
+        <!-- The mark is DRAWN (a rotated corner, the same chevron
+             vocabulary the node-card fold button uses —
+             src/canvas.js's node-collapse), not a text glyph; the
+             accessible name lives on aria-label alone and flips with
+             state in src/canvas.js's initPanelCollapse(). -->
+        <button type="button" id="presets-collapse-toggle" aria-expanded="true" aria-controls="presets-panel-content" aria-label="Collapse Presets panel"><span class="chevron-mark" aria-hidden="true"></span></button>
       </div>
 
-      <div class="build-tab-panel" id="build-panel-effects" role="tabpanel" aria-labelledby="build-tab-effects" data-build-panel="effects">
-        <div class="palette-list" id="palette-list"></div>
-      </div>
-
-      <div class="build-tab-panel" id="build-panel-presets" role="tabpanel" aria-labelledby="build-tab-presets" data-build-panel="presets" hidden>
+      <div class="presets-panel-content" id="presets-panel-content">
         <label for="preset-search-input" class="sr-only">Search presets</label>
         <input type="text" id="preset-search-input" class="control preset-search" placeholder="Search presets…" autocomplete="off">
 
@@ -317,6 +321,23 @@
       <!-- JS-built by src/canvas.js (see renderSignalOrderStrip in that
            file) — the full mic-to-safe-out order in one readable line. -->
       <div class="panel signal-order" id="signal-order-panel" aria-label="Complete signal order"></div>
+
+      <!--
+        EFFECTS PANEL — back underneath the board (its original position).
+        Wired by src/canvas.js's renderPalette() into #palette-list.
+        Independently collapsible from Presets now (no shared tab bar) —
+        collapsing it lets .canvas-panel grow to fill the freed height.
+      -->
+      <div class="panel effects-panel" id="effects-panel">
+        <div class="panel-head">
+          <h3 class="panel-label">Effects</h3>
+          <button type="button" id="effects-collapse-toggle" aria-expanded="true" aria-controls="effects-panel-content" aria-label="Collapse Effects panel"><span class="chevron-mark" aria-hidden="true"></span></button>
+        </div>
+
+        <div class="effects-panel-content" id="effects-panel-content">
+          <div class="palette-list" id="palette-list"></div>
+        </div>
+      </div>
     </div>
   </div>
   </div>

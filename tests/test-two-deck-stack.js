@@ -220,26 +220,28 @@ check(
   check(byId(id) !== null, 'wiring id survives: #' + id);
 });
 
-// The voice deck's direct children (left-sidebar round, 2026-08-31 user
-// direction: a bottom placement for .build shipped and was reverted —
-// .build is back to a real column, FIRST child now, with .canvas-panel +
-// the signal-order strip wrapped together into .voice-deck-face as its
-// sibling, so .build sits beside that PAIR rather than beside just the
-// board. .layout itself runs as a row at >=901px and reverts to a plain
-// stacked column below that — see the flex-direction check further down).
+// The voice deck's direct children (split-panel round, 2026-09-01 user
+// direction: the old shared Effects/Presets .build panel is retired —
+// Presets stays the left sidebar (.presets-panel, FIRST child, same
+// position .build held), Effects moves back underneath the board as its
+// OWN panel, a new third child of .voice-deck-face after .canvas-panel
+// and .signal-order. .layout itself runs as a row at >=901px and reverts
+// to a plain stacked column below that — see the flex-direction check
+// further down).
 var zones = layout ? layout.children : [];
 check(
   zones.length === 2 &&
-    hasClass(zones[0], 'build') && hasClass(zones[0], 'panel') &&
+    hasClass(zones[0], 'presets-panel') && hasClass(zones[0], 'panel') &&
     hasClass(zones[1], 'voice-deck-face'),
-  'voice deck top-level children in order: .build | .voice-deck-face'
+  'voice deck top-level children in order: .presets-panel | .voice-deck-face'
 );
 var faceZones = zones[1] ? zones[1].children : [];
 check(
-  faceZones.length === 2 &&
+  faceZones.length === 3 &&
     hasClass(faceZones[0], 'canvas-panel') && hasClass(faceZones[0], 'panel') &&
-    hasClass(faceZones[1], 'signal-order') && hasClass(faceZones[1], 'panel'),
-  '.voice-deck-face wraps [.canvas-panel, .signal-order] in order — the board and the strip stay stacked together beside .build'
+    hasClass(faceZones[1], 'signal-order') && hasClass(faceZones[1], 'panel') &&
+    hasClass(faceZones[2], 'effects-panel') && hasClass(faceZones[2], 'panel'),
+  '.voice-deck-face wraps [.canvas-panel, .signal-order, .effects-panel] in order — Effects docks under the board+strip, beside .presets-panel'
 );
 
 // The board-frame flanks the scrolling .canvas with two fixed rails, each
@@ -493,29 +495,33 @@ check(
 // ----------------------------------------------------------------------
 console.log('F. voice-deck zones + the one shared disabled grammar');
 
-var buildRule = cssRule('.build');
+var presetsPanelRule = cssRule('.presets-panel');
+var effectsPanelRule = cssRule('.effects-panel');
 var canvasPanelRule = cssRule('.canvas-panel');
 var signalOrderRule = cssRule('.signal-order');
 check(
-  buildRule && cssDecl(buildRule, 'background') === 'transparent' &&
+  presetsPanelRule && cssDecl(presetsPanelRule, 'background') === 'transparent' &&
+    effectsPanelRule && cssDecl(effectsPanelRule, 'background') === 'transparent' &&
     signalOrderRule && cssDecl(signalOrderRule, 'background') === 'transparent' &&
     canvasPanelRule && cssDecl(canvasPanelRule, 'background') === 'var(--pm-chassis)',
-  'all three zones are print on the ONE faceplate (transparent zones over the chassis ground)'
+  'all four zones are print on the ONE faceplate (transparent zones over the chassis ground)'
 );
 check(
   canvasPanelRule && cssDecl(canvasPanelRule, 'border-bottom') === '1px solid var(--pm-groove-cut)' &&
     signalOrderRule && cssDecl(signalOrderRule, 'border-bottom') === '1px solid var(--pm-groove-cut)' &&
-    signalOrderRule && cssDecl(signalOrderRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)',
-  '.voice-deck-face zone separators are HORIZONTAL groove pairs (cut then lip, top to bottom — the stacked twin of the sections\' own grooves): canvas-panel -> signal-order'
+    signalOrderRule && cssDecl(signalOrderRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)' &&
+    effectsPanelRule && cssDecl(effectsPanelRule, 'border-top') === '1px solid var(--pm-groove-cut)' &&
+    cssDecl(effectsPanelRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)',
+  '.voice-deck-face zone separators are HORIZONTAL groove pairs (cut then lip, top to bottom — the stacked twin of the sections\' own grooves): canvas-panel -> signal-order -> effects-panel'
 );
 check(
-  buildRule && cssDecl(buildRule, 'border-right') === '1px solid var(--pm-groove-cut)' &&
-    cssDecl(buildRule, 'box-shadow') === 'inset -1px 0 0 var(--pm-groove-lip)',
-  'left-sidebar round: .build\'s own separator from the board is a VERTICAL groove pair (cut + lip both on .build\'s right edge, the same self-contained pattern .io-rail-in/.io-rail-out already use) — .build sits BESIDE the board now, not above it'
+  presetsPanelRule && cssDecl(presetsPanelRule, 'border-right') === '1px solid var(--pm-groove-cut)' &&
+    cssDecl(presetsPanelRule, 'box-shadow') === 'inset -1px 0 0 var(--pm-groove-lip)',
+  'split-panel round: .presets-panel\'s own separator from the board is a VERTICAL groove pair (cut + lip both on its right edge, the same self-contained pattern .io-rail-in/.io-rail-out already use) — it sits BESIDE the board, not above it'
 );
 
-// The hatch: the canvas face's exact gradient, now on both the strip and
-// the build panel (the old flanking zones' twin).
+// The hatch: the canvas face's exact gradient, now on the strip and both
+// collapsible panels (the old flanking zones' twin).
 function hatchOf(selector) {
   var body = ruleContaining([selector]);
   if (!body) { return null; }
@@ -523,19 +529,24 @@ function hatchOf(selector) {
   return m ? m[1].trim() : null;
 }
 var canvasHatch = hatchOf('.layout.engine-not-started .canvas::before');
-var buildHatch = hatchOf('.layout.engine-not-started .build::before');
+var presetsPanelHatch = hatchOf('.layout.engine-not-started .presets-panel::before');
+var effectsPanelHatch = hatchOf('.layout.engine-not-started .effects-panel::before');
 var signalOrderHatch = hatchOf('.layout.engine-not-started .signal-order::before');
 check(!!canvasHatch, 'the canvas pre-Start hatch rule exists');
 check(
-  !!buildHatch && !!signalOrderHatch &&
-    buildHatch === canvasHatch && signalOrderHatch === canvasHatch,
-  'both the build panel and the signal-order strip gate with the IDENTICAL hatch gradient as the canvas face (one disabled grammar)'
+  !!presetsPanelHatch && !!effectsPanelHatch && !!signalOrderHatch &&
+    presetsPanelHatch === canvasHatch && effectsPanelHatch === canvasHatch &&
+    signalOrderHatch === canvasHatch,
+  'the presets panel, the effects panel, and the signal-order strip all gate with the IDENTICAL hatch gradient as the canvas face (one disabled grammar)'
 );
-var gateBuild = ruleContaining(['.layout.engine-not-started .build']);
+var gatePresets = ruleContaining(['.layout.engine-not-started .presets-panel']);
+var gateEffects = ruleContaining(['.layout.engine-not-started .effects-panel']);
 check(
-  gateBuild && cssDecl(gateBuild, 'opacity') === '0.55' &&
-    cssDecl(gateBuild, 'pointer-events') === 'none',
-  'the pre-Start zone gate keeps the functional lock (opacity + pointer-events, unchanged semantics)'
+  gatePresets && cssDecl(gatePresets, 'opacity') === '0.55' &&
+    cssDecl(gatePresets, 'pointer-events') === 'none' &&
+    gateEffects && cssDecl(gateEffects, 'opacity') === '0.55' &&
+    cssDecl(gateEffects, 'pointer-events') === 'none',
+  'the pre-Start zone gate keeps the functional lock on both panels (opacity + pointer-events, unchanged semantics)'
 );
 
 // ----------------------------------------------------------------------
@@ -544,7 +555,7 @@ console.log('G. viewport law — the deck wraps below 900px; the voice deck runs
 // One 900px media block remains — the system deck's own etch-wrap. The
 // voice deck's OWN narrow-viewport collapse is back (left-sidebar round,
 // 2026-08-31 user direction): .layout is a plain stacked column at its
-// base (unscoped) rule, and only becomes a row — .build beside
+// base (unscoped) rule, and only becomes a row — .presets-panel beside
 // .voice-deck-face — inside the existing @media (min-width: 901px) block,
 // so "below 901px the zones stack" holds again, this time by the
 // mobile-first default rather than a dedicated collapse rule.
@@ -589,7 +600,7 @@ var layoutRule = cssRule('.layout');
 check(
   layoutRule && cssDecl(layoutRule, 'display') === 'flex' &&
     cssDecl(layoutRule, 'flex-direction') === 'column',
-  '.layout\'s BASE (mobile-first, unscoped) rule is a flex column — below 901px .build stacks above .voice-deck-face, same as every other zone pairing on this page'
+  '.layout\'s BASE (mobile-first, unscoped) rule is a flex column — below 901px .presets-panel stacks above .voice-deck-face, same as every other zone pairing on this page'
 );
 
 // Left-sidebar round: find the SPECIFIC @media (min-width: 901px) block
@@ -634,7 +645,7 @@ var layoutWideRule = cssRuleInMedia('min-width: 901px', '.layout.voice-deck');
 check(
   layoutWideRule && cssDecl(layoutWideRule, 'flex-direction') === 'row' &&
     cssDecl(layoutWideRule, 'min-height') === '0',
-  'at 901px+ .layout.voice-deck becomes a ROW with min-height: 0 (the specificity bump that actually wins over the later base rule) — .build (a real column again, collapsible) beside .voice-deck-face (the board + signal-order strip, still stacked together)'
+  'at 901px+ .layout.voice-deck becomes a ROW with min-height: 0 (the specificity bump that actually wins over the later base rule) — .presets-panel (collapsible) beside .voice-deck-face (the board + signal-order strip + the effects panel, all stacked together)'
 );
 
 // ----------------------------------------------------------------------

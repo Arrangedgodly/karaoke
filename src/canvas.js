@@ -1266,93 +1266,71 @@
 
   buildDisplayRegister();
 
-  /** Guided Patchbay's Effects/Presets tab switch — plain show/hide, no
-   *  audio or model implication either way (both tabs' content already
-   *  exists in the DOM; switching never rebuilds anything). Left-sidebar
-   *  round: a tab click also expands the panel if it was collapsed (see
-   *  setBuildCollapsed below) — picking a tab is picking something to
-   *  look at, so it should never leave you staring at a collapsed rail.
-   *  Guarded like every other panel-level init: a harness with no
-   *  .build-tabs simply has nothing to wire. */
-  function initBuildTabs() {
-    if (typeof document.querySelectorAll !== 'function') {
-      return;
-    }
-    var tabs = document.querySelectorAll('[data-build-tab]');
-    if (!tabs || !tabs.length) {
-      return;
-    }
-    Array.prototype.forEach.call(tabs, function (tab) {
-      tab.addEventListener('click', function () {
-        Array.prototype.forEach.call(tabs, function (other) {
-          other.setAttribute('aria-selected', String(other === tab));
-        });
-        var panels = document.querySelectorAll('[data-build-panel]');
-        Array.prototype.forEach.call(panels, function (panel) {
-          panel.hidden = panel.getAttribute('data-build-panel') !== tab.getAttribute('data-build-tab');
-        });
-        setBuildCollapsed(false);
-      });
-    });
-  }
-  initBuildTabs();
-
-  /** Left-sidebar round (2026-08-31 user direction): the collapse toggle
-   *  shrinks .build to a narrow icon-free rail (styles/main.css's
-   *  .build.collapsed, desktop-only — see its own @media block) so the
-   *  panel can be tucked away without losing the board's width. Purely
-   *  visual — CSS-only (.build.collapsed .build-tab-panel{display:none})
-   *  layered on top of initBuildTabs()'s own hidden-attribute bookkeeping,
-   *  which stays untouched and must stay that way: this function NEVER
-   *  writes to a panel's `hidden` attribute, only the wrapping `.build`'s
-   *  class, so the "exactly one tab panel visible, one hidden" invariant
-   *  above keeps holding underneath the collapse regardless of state.
+  /** Split-panel round (2026-09-01 user direction): Presets (left,
+   *  width-axis) and Effects (under the board, height-axis) are two
+   *  SEPARATE, independently collapsible panels now — the Guided
+   *  Patchbay-era shared Effects/Presets tab bar is retired along with it
+   *  (nothing switches visibility between them anymore, so there is
+   *  nothing left for role="tab"/role="tabpanel" to describe honestly;
+   *  each panel's disclosure toggle uses the same aria-expanded +
+   *  aria-controls pattern .node-collapse already uses for a per-card
+   *  fold). Collapsing is purely visual — CSS-only
+   *  (.presets-panel.collapsed .presets-panel-content{display:none}, the
+   *  .effects-panel twin — see styles/main.css's own @media block) — this
+   *  function never touches any other element's `hidden` attribute.
    *
+   *  @param {HTMLElement} panelEl
+   *  @param {HTMLElement} toggleEl
    *  @param {boolean} collapsed
+   *  @param {string} expandedLabel
+   *  @param {string} collapsedLabel
    */
-  function setBuildCollapsed(collapsed) {
-    var buildEl = document.getElementById('build-panel');
-    var toggleEl = document.getElementById('build-collapse-toggle');
-    if (!buildEl || !toggleEl) {
-      return;
-    }
-    if (buildEl.classList.contains('collapsed') === collapsed) {
+  function setPanelCollapsed(panelEl, toggleEl, collapsed, expandedLabel, collapsedLabel) {
+    if (panelEl.classList.contains('collapsed') === collapsed) {
       return; // already in the requested state — no-op, no focus churn
     }
     if (collapsed) {
-      // Collapsing hides the tab panels via CSS; a focused control inside
-      // one would otherwise silently drop focus to <body> (browsers do
-      // not auto-recover focus from a display:none ancestor) — rescue it
-      // onto the toggle, which stays visible and interactive either way.
+      // Collapsing hides the panel's content via CSS; a focused control
+      // inside it would otherwise silently drop focus to <body> (browsers
+      // do not auto-recover focus from a display:none ancestor) — rescue
+      // it onto the toggle, which stays visible and interactive either way.
       var active = document.activeElement;
-      if (active && buildEl.contains(active) && active !== toggleEl &&
+      if (active && panelEl.contains(active) && active !== toggleEl &&
           typeof toggleEl.focus === 'function') {
         toggleEl.focus();
       }
-      buildEl.classList.add('collapsed');
+      panelEl.classList.add('collapsed');
     } else {
-      buildEl.classList.remove('collapsed');
+      panelEl.classList.remove('collapsed');
     }
     toggleEl.setAttribute('aria-expanded', String(!collapsed));
-    toggleEl.setAttribute('aria-label', collapsed ? 'Expand build panel' : 'Collapse build panel');
+    toggleEl.setAttribute('aria-label', collapsed ? collapsedLabel : expandedLabel);
   }
 
-  /** Wires the toggle button itself. Pre-Start, .build (toggle included)
-   *  is already fully inert via the shared engine-not-started gate
-   *  (pointer-events: none + the hatch overlay) — same precedent as the
-   *  tabs themselves being unusable before Start, not a new
-   *  inconsistency, so no extra guard is needed here. */
-  function initBuildCollapse() {
-    var toggleEl = document.getElementById('build-collapse-toggle');
-    var buildEl = document.getElementById('build-panel');
-    if (!toggleEl || !buildEl) {
+  /** Wires one panel's own toggle button. Pre-Start, both panels
+   *  (toggles included) are already fully inert via the shared
+   *  engine-not-started gate (pointer-events: none + the hatch overlay),
+   *  so no extra guard is needed here. Guarded like every other
+   *  panel-level init: a harness missing either element simply has
+   *  nothing to wire.
+   *
+   *  @param {string} panelId
+   *  @param {string} toggleId
+   *  @param {string} expandedLabel
+   *  @param {string} collapsedLabel
+   */
+  function initPanelCollapse(panelId, toggleId, expandedLabel, collapsedLabel) {
+    var panelEl = document.getElementById(panelId);
+    var toggleEl = document.getElementById(toggleId);
+    if (!panelEl || !toggleEl) {
       return;
     }
     toggleEl.addEventListener('click', function () {
-      setBuildCollapsed(!buildEl.classList.contains('collapsed'));
+      setPanelCollapsed(panelEl, toggleEl, !panelEl.classList.contains('collapsed'), expandedLabel, collapsedLabel);
     });
   }
-  initBuildCollapse();
+  initPanelCollapse('presets-panel', 'presets-collapse-toggle', 'Collapse Presets panel', 'Expand Presets panel');
+  initPanelCollapse('effects-panel', 'effects-collapse-toggle', 'Collapse Effects panel', 'Expand Effects panel');
 
 
   function nextNodeId() {

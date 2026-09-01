@@ -186,15 +186,16 @@ function buildPanel() {
     container: container,
     byId: {
       // The preset panel (presets-ui.js). Compact-browsing round: the
-      // init guard now requires #preset-list + #build-panel-presets
-      // instead of the old #preset-select/#load-preset-btn/
-      // #delete-preset-btn trio — this stub exists only so that guard
-      // doesn't bail and break the unrelated read-tool-purity checks.
+      // init guard now requires #preset-list + #presets-panel-content
+      // (split-panel round: renamed from #build-panel-presets) instead
+      // of the old #preset-select/#load-preset-btn/#delete-preset-btn
+      // trio — this stub exists only so that guard doesn't bail and
+      // break the unrelated read-tool-purity checks.
       'save-preset-btn': makeElement('button'),
       'current-preset-name': current,
       'unsaved-indicator': dot,
       'preset-list': makeElement('div'),
-      'build-panel-presets': container,
+      'presets-panel-content': container,
       // The canvas markup (src/canvas.js refuses to wire up without it).
       'palette-list': makeElement('ul'),
       'chain-list': makeElement('ul'),
