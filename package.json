@@ -1,0 +1,18 @@
+{
+  "name": "voxchain",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node tests/run.js",
+    "build": "node scripts/build-static.js",
+    "dev": "npm run build && wrangler dev",
+    "predeploy": "npm run build",
+    "deploy": "wrangler deploy",
+    "predeploy:preview": "npm run build",
+    "deploy:preview": "wrangler versions upload",
+    "check:deploy": "npm run build && wrangler versions upload --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "4.128.0"
+  }
+}

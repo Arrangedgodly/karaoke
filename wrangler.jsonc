@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "voxchain",
+  "compatibility_date": "2026-09-02",
+  "build": {
+    "command": "node scripts/build-static.js"
+  },
+  "assets": {
+    "directory": "./dist"
+  }
+}
