@@ -678,7 +678,11 @@ console.log('App scaffold loaded');
     }
   }
 
-  startButton.addEventListener('click', function () {
+  /** The whole start transaction, lifted out of the click handler so the
+   *  headphone check below can be the thing the FIRST click opens and
+   *  this can be what the confirming click runs. Every caller must be a
+   *  real user gesture, synchronously — see the RQ-4 note inside. */
+  function beginStart() {
     if (startupFinalizationPending) {
       return;
     }
@@ -847,6 +851,94 @@ console.log('App scaffold loaded');
         setStartHint(copy.action, copy.footnote);
         startButton.disabled = false;
       });
+  }
+
+  // ---------------------------------------------------------------------
+  // HEADPHONE CHECK — the one confirmation between the Start gesture and
+  // getUserMedia (index.html's #headphone-check; see its comment for the
+  // full rationale). Start opens the mic into the system output, and if
+  // that output is a speaker in the same room the mic hears itself and
+  // the loop climbs into howling feedback in seconds. The limiter and
+  // the howl watchdog hold the level down; they cannot undo a room loop.
+  // So the decision is taken BEFORE any microphone is opened: a "Not
+  // yet" costs nothing, because nothing has been acquired to undo.
+  // ---------------------------------------------------------------------
+  var headphoneDialog = document.getElementById('headphone-check');
+  var headphoneConfirmBtn = document.getElementById('headphone-check-confirm');
+  var headphoneCancelBtn = document.getElementById('headphone-check-cancel');
+  // Asked once per page LOAD, not once per Start. The question is about
+  // the room the operator is monitoring in, and that does not change
+  // when a dropped context, a failed device switch, or a deliberate
+  // stop sends them back through Start a second time.
+  var headphonesAcknowledged = false;
+
+  /** True only when the real markup is present AND this browser has the
+   *  native modal. Anything else (a bare Node harness, an ancient
+   *  engine) must leave Start behaving exactly as it did before this
+   *  check existed — an unreachable Start is a worse failure than a
+   *  missing warning. */
+  function headphoneCheckAvailable() {
+    return !!(
+      headphoneDialog && headphoneConfirmBtn &&
+      typeof headphoneDialog.showModal === 'function' &&
+      typeof headphoneDialog.close === 'function'
+    );
+  }
+
+  function closeHeadphoneCheck() {
+    try {
+      if (headphoneDialog.open) {
+        headphoneDialog.close();
+      }
+    } catch (err) {
+      /* already closed or detached — nothing to undo */
+    }
+  }
+
+  if (headphoneCheckAvailable()) {
+    headphoneConfirmBtn.addEventListener('click', function () {
+      headphonesAcknowledged = true;
+      // beginStart() FIRST, still inside this click: AudioEngine.start()
+      // creates and resumes the AudioContext before its first await, and
+      // that has to happen inside a user gesture (RQ-4). Moving the
+      // gesture from one button to another is the whole trick — never
+      // putting an await in front of it. Closing after also means the
+      // dialog's own close event sees startupFinalizationPending and
+      // leaves focus alone.
+      beginStart();
+      closeHeadphoneCheck();
+    });
+    if (headphoneCancelBtn) {
+      headphoneCancelBtn.addEventListener('click', closeHeadphoneCheck);
+    }
+    // Both dismissals land here — the button and Escape (which fires the
+    // dialog's own cancel, then close). Nothing was started, so put the
+    // operator back on the control they pressed.
+    headphoneDialog.addEventListener('close', function () {
+      if (!startupFinalizationPending && typeof startButton.focus === 'function') {
+        startButton.focus();
+      }
+    });
+  }
+
+  startButton.addEventListener('click', function () {
+    if (startupFinalizationPending) {
+      return;
+    }
+    if (!headphonesAcknowledged && headphoneCheckAvailable()) {
+      if (headphoneDialog.open) {
+        return; // already asking
+      }
+      try {
+        headphoneDialog.showModal();
+        return;
+      } catch (err) {
+        // Cannot go modal here (detached, or already open in another
+        // form). Fall through and start rather than stranding Start.
+        console.error('Headphone check could not open; starting without it:', err);
+      }
+    }
+    beginStart();
   });
 
   var deviceSwitchRequestGeneration = 0;
