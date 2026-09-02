@@ -1095,9 +1095,20 @@
    *  renderModel() alongside renderChainArrows() — the one place
    *  ChainEditing repaints an accepted model, so the strip updates on
    *  every source (human/agent/preset/startup/undo), not just a human
-   *  commit. */
+   *  commit.
+   *
+   *  2026-09-01 (owner direction, "for fun"): each plugin step prints
+   *  in its family's desaturated ink (the rail-print vocabulary),
+   *  extending the lock ink the terminal limiter already carries. The
+   *  color rides an inline custom-property lookup keyed by the node's
+   *  own type — no hardcoded type list, and an unknown type falls back
+   *  through the var() to neutral print. Text content is untouched. */
   function effectLabel(type) {
     return window.EffectCatalog.getLabel(type) || type;
+  }
+
+  function familyInkVar(type) {
+    return 'var(--pm-family-' + type + ', var(--pm-print))';
   }
 
   function renderSignalOrderStrip() {
@@ -1107,10 +1118,13 @@
     signalOrderEl.textContent = '';
     signalOrderEl.setAttribute('aria-hidden', 'true');
 
-    function addStep(text, cls) {
+    function addStep(text, cls, colorVar) {
       var span = document.createElement('span');
       if (cls) {
         span.className = cls;
+      }
+      if (colorVar) {
+        span.style.color = colorVar;
       }
       span.textContent = text;
       signalOrderEl.appendChild(span);
@@ -1132,7 +1146,8 @@
       var isTerminalLimiter = type === 'limiter' && index === ids.length - 1;
       var stateLabel = label + (node && node.bypassed ? ' · bypassed' : '');
       addStep(isTerminalLimiter ? stateLabel + ' · locked last' : stateLabel,
-        isTerminalLimiter ? 'signal-order-lock' : null);
+        isTerminalLimiter ? 'signal-order-lock' : null,
+        isTerminalLimiter ? null : familyInkVar(type));
     });
     addArrow();
     addStep('Safe out', 'signal-order-safe');
