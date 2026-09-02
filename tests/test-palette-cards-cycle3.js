@@ -1033,9 +1033,24 @@ function cssRule(selector) {
   return depth === 0 ? RAW_CSS.slice(open + 1, i - 1) : null;
 }
 
+/* The type register (2026-09-02 typeset round): sizes, leadings and
+   tracking are token references now, not literals. These assertions pin
+   the value that actually RENDERS, so resolve one level of var()
+   through :root before answering — an assertion for '0.75rem' keeps
+   meaning "12px", and now fails if EITHER the rule or the token moves.
+   Deliberately scoped to --type-/--leading-/--track-: font-family and
+   colour assertions pin the token REFERENCE on purpose (that is the
+   "no raw hex" contract), so those must come back unresolved. */
+function resolveToken(value) {
+  var m = /^var\(\s*(--(?:type|leading|track)-[\w-]+)\s*\)$/.exec(String(value).trim());
+  if (!m) { return value; }
+  var decl = RAW_CSS.match(new RegExp('(?:^|[;\\s])' + m[1] + '\\s*:\\s*([^;]+)'));
+  return decl ? decl[1].trim() : value;
+}
+
 function cssDecl(body, prop) {
   var m = body.match(new RegExp('(?:^|[;\\s])' + prop + '\\s*:\\s*([^;]+)'));
-  return m ? m[1].trim() : null;
+  return m ? resolveToken(m[1].trim()) : null;
 }
 
 // Guided Patchbay mobile fix: the side-by-side palette columns are

@@ -86,6 +86,17 @@ console.log('App scaffold loaded');
   // routing state. Refinement entry 5: the same read now also toggles the
   // canvas panel's `bypassed` class (the chain-region de-emphasis in
   // styles/main.css), so strip button and canvas stay in lockstep too.
+  /** The one read of bypass truth outside setBypassButtonLabel's own —
+   *  guarded so a stripped harness (or a build without AudioBypass yet)
+   *  answers "not engaged" rather than throwing on the status path. */
+  function bypassEngaged() {
+    return !!(
+      window.AudioBypass &&
+      typeof window.AudioBypass.isEngaged === 'function' &&
+      window.AudioBypass.isEngaged()
+    );
+  }
+
   function setBypassButtonLabel() {
     var isEngaged = window.AudioBypass.isEngaged();
     if (bypassButton) {
@@ -101,6 +112,19 @@ console.log('App scaffold loaded');
   function toggleBypass() {
     window.AudioBypass.toggle();
     setBypassButtonLabel();
+    // liveStatusText() reads bypass, so the same gesture has to re-derive
+    // the deck line — nothing else would, and the header would sit on a
+    // stale LIVE until the next unrelated lifecycle event.
+    //
+    // Two guards: only while the engine is actually live (a stopped deck
+    // says "Stopped" and bypass is meaningless there), and never over a
+    // standing error — setStatus() clears the error class, so refreshing
+    // through it would silently erase a failure the operator has not
+    // dealt with yet.
+    var hasError = !!(statusWrapper && statusWrapper.classList.contains('error'));
+    if (isEngineLive() && !hasError) {
+      setStatus(liveStatusText(), true);
+    }
   }
 
   if (bypassButton) {
@@ -308,6 +332,11 @@ console.log('App scaffold loaded');
     }
     if (statusWrapper) {
       statusWrapper.classList.toggle('live', !!isLive);
+      // Copy AND colour, the house rule for every state change: the lamp
+      // and the sentence go safety red together, matching the BYPASS key
+      // that is lit red at the same moment. Only meaningful while live —
+      // a stopped engine's bypass state is not what the deck is reporting.
+      statusWrapper.classList.toggle('bypassed', !!isLive && bypassEngaged());
       statusWrapper.classList.remove('error');
     }
   }
@@ -458,7 +487,20 @@ console.log('App scaffold loaded');
   var startupFinalizationPending = false;
   var startupMetersPending = false;
 
+  /* The deck's engine sentence. BYPASS takes precedence over every other
+     live line (2026-09-02): while it is engaged the effect chain is gated
+     to silence and the room is hearing the independent dry tap, so a
+     header still reading LIVE is the one place this app could tell an
+     operator mid-show that their processing is running when it is not.
+     The engine genuinely IS live — the lamp keeps saying so — but the
+     WORD now reports the chain, which is what the operator is asking the
+     header about. "effects off" rides in the same sentence rather than
+     the .status-detail span: that span is the demoted technical-footnote
+     register, and this is state, not a footnote. */
   function liveStatusText() {
+    if (bypassEngaged()) {
+      return 'Bypassed \u2014 effects off';
+    }
     return startupRestoreFailed
       ? 'Live. Saved chain could not load, so no effects are active.'
       : 'Live';
@@ -696,6 +738,28 @@ console.log('App scaffold loaded');
     startButton.disabled = true;
     setStatus('Waiting for microphone permission...', false);
     startupFinalizationPending = true;
+
+    // THE POWER-UP (2026-09-02 delight round). The commit gesture runs
+    // the meters' lamp test — both ladders end to end and back — so the
+    // machine answers the key immediately, and so the operator watches
+    // every segment on both meters prove itself in the one window
+    // (setup) where that proof is free.
+    //
+    // It fills a wait that already exists above (getUserMedia, the
+    // worklet fetches, the first graph build) and delays nothing: the
+    // engine resolves on its own schedule and the real signal is drawn
+    // over the sweep the instant there is one. Display-only and
+    // additive by construction — see THE LAMP TEST in src/meters.js for
+    // the honesty rules it holds to. Guarded like every other optional
+    // feedback component: a missing or older Meters build simply starts
+    // the way it always did.
+    try {
+      if (window.Meters && typeof window.Meters.lampTest === 'function') {
+        window.Meters.lampTest();
+      }
+    } catch (err) {
+      console.warn('Meters: power-up lamp test skipped.', err);
+    }
 
     window.AudioEngine.start()
       .then(function (result) {

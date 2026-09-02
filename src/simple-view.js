@@ -71,6 +71,11 @@
   // below: a missing stage wrapper costs the visual gate, nothing
   // functional, so it must not take the whole view down with it.
   var stageEl = document.getElementById('simple-stage');
+  // The cold face's mount point (index.html's #simple-cold-face). Read
+  // defensively and kept OUT of the bail check below for the same reason
+  // stageEl is: a missing mount costs the pre-Start print, nothing
+  // functional, so it must not take the whole view down with it.
+  var coldFaceEl = document.getElementById('simple-cold-face');
 
   // The gate note's SHIPPED copy, captured once so the click feedback
   // below can name a specific sound and then put the standing sentence
@@ -243,6 +248,429 @@
     });
   }
 
+  // -----------------------------------------------------------------
+  // THE COLD FACE (2026-09-02 delight round).
+  //
+  // Before Start the stage has no live sound to name, and it used to say
+  // so with three grey words alone in the middle of a hatched
+  // rectangle. This is what stands there instead: the instrument's own
+  // COLD FACEPLATE, printed with the chain that is already loaded and
+  // waiting for the engine — a machined patchbay strip running MIC IN to
+  // OUT with one silkscreen plate per section, in that section's family
+  // ink.
+  //
+  // It is not a degraded copy of the live face. The live face answers
+  // "what am I hearing"; the cold face answers "what is this machine
+  // holding" — a question that HAS a true answer before Start, which is
+  // why the stage no longer has to stand empty. The pre-Start hatch
+  // stays exactly where the gate round put it: the recede over this
+  // print IS the powered-down reading, and Start lifting it is the
+  // power-up.
+  //
+  // Everything on it is READ, never invented:
+  //   - the chain is window.Persistence.loadInitialModel() — the exact
+  //     array src/main.js hands to ChainEditing the moment Start
+  //     resolves, so the strip is a promise the next second keeps. That
+  //     call is a pure read (src/persistence.js writes nothing and
+  //     documents itself as re-readable), and its answer cannot change
+  //     before Start because nothing writes the autosave slot until the
+  //     engine is live — so it is read ONCE and cached, and the cache is
+  //     dropped when the engine goes live so a stop/restart re-reads.
+  //   - the NAME is a structural match against the factory library (same
+  //     types, same params, same order). A match names the sound; no
+  //     match is honestly "your last chain". A never-run profile matches
+  //     Classic Karaoke by construction, since loadInitialModel()
+  //     returns exactly DEFAULT_PRESET.nodes then.
+  //   - the count is the library the Sounds panel is showing, factory
+  //     plus Yours.
+  // Nothing here claims a sound is playing. Nothing is.
+  // -----------------------------------------------------------------
+
+  // ---------------------------------------------------------------
+  // THE ARMED SOUND (2026-09-02, user direction).
+  //
+  // Before Start, reaching for a sound used to be answered with words
+  // alone: a note naming what you touched, and a highlight on Start.
+  // The stage behind it went on printing whatever the autosave held, so
+  // the one surface big enough to SHOW you the sound you just picked
+  // showed you a different one.
+  //
+  // Now a pre-Start click ARMS that sound. The cold face prints ITS
+  // chain, ITS description and "Press Start to try <name>", the row
+  // marks itself, and the engine loads exactly that sound the moment it
+  // comes up — through loadFactoryPreset/loadUserPreset, the same
+  // guarded transaction the live Try button uses.
+  //
+  // The mutation guard has NOT moved. A pre-Start click still commits
+  // NOTHING: arming writes one UI variable and repaints. The load
+  // happens later, from onEngineStarted, after engineIsLive() is true —
+  // so a synthetic click on a gated row still cannot reach the audio
+  // graph, which is the property the pre-Start gate round pinned.
+  //
+  // It is also the only reading that stays honest: the cold face may
+  // only ever promise what Start will actually do, and Start now does
+  // this.
+  // ---------------------------------------------------------------
+  var armedSound = null; // {name, kind} until Start consumes it
+
+  // Read once (see above); null means "not read yet this cold period".
+  var coldChainCache = null;
+
+  function coldChain() {
+    if (coldChainCache) {
+      return coldChainCache;
+    }
+    var nodes = [];
+    try {
+      if (window.Persistence && typeof window.Persistence.loadInitialModel === 'function') {
+        nodes = window.Persistence.loadInitialModel() || [];
+      }
+    } catch (err) {
+      // loadInitialModel() is documented never to throw, but the cold
+      // face is print over a safety surface: it degrades to "no chain to
+      // print" rather than taking the stage down with it.
+      nodes = [];
+    }
+    coldChainCache = Array.isArray(nodes) ? nodes : [];
+    return coldChainCache;
+  }
+
+  /** Same params, compared the way the preset wire form stores them —
+   *  key for key, with numbers compared numerically so a 0 that
+   *  round-tripped through JSON as "0" still matches. */
+  function sameParams(a, b) {
+    var av = a || {};
+    var bv = b || {};
+    var keys = Object.keys(av);
+    if (keys.length !== Object.keys(bv).length) {
+      return false;
+    }
+    return keys.every(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(bv, key)) {
+        return false;
+      }
+      var l = av[key];
+      var r = bv[key];
+      if (typeof l === 'number' || typeof r === 'number') {
+        return Number(l) === Number(r);
+      }
+      return l === r;
+    });
+  }
+
+  /** The factory preset this chain IS, or '' when it is none of them.
+   *  Structural on purpose: a chain restored from the autosave slot
+   *  carries no preset name of its own, so the only honest way to name
+   *  it is to recognize it. */
+  function coldChainName(chain) {
+    var library = [];
+    try {
+      library = (window.FactoryPresets && typeof window.FactoryPresets.list === 'function')
+        ? window.FactoryPresets.list()
+        : [];
+    } catch (err) {
+      library = [];
+    }
+    for (var i = 0; i < library.length; i++) {
+      var nodes = library[i].nodes || [];
+      if (nodes.length !== chain.length) {
+        continue;
+      }
+      var match = true;
+      for (var n = 0; n < nodes.length; n++) {
+        if (nodes[n].type !== chain[n].type || !sameParams(nodes[n].params, chain[n].params)) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return library[i].name;
+      }
+    }
+    return '';
+  }
+
+  /** The armed sound's own chain, from the same two sources the library
+   *  lists. Empty array when it cannot be resolved (a preset deleted in
+   *  another tab between arming and reading) — the caller then falls
+   *  back to the waiting chain rather than printing an empty promise. */
+  function armedChain() {
+    if (!armedSound) {
+      return [];
+    }
+    try {
+      if (armedSound.kind === 'factory') {
+        var lib = (window.FactoryPresets && typeof window.FactoryPresets.list === 'function')
+          ? window.FactoryPresets.list()
+          : [];
+        for (var i = 0; i < lib.length; i++) {
+          if (lib[i].name === armedSound.name) {
+            return lib[i].nodes || [];
+          }
+        }
+        return [];
+      }
+      var saved = (window.PresetStore && typeof window.PresetStore.load === 'function')
+        ? window.PresetStore.load(armedSound.name)
+        : null;
+      return (saved && saved.nodes) || [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  /** Arm a sound from a pre-Start click: repaint the stage so it shows
+   *  what was just reached for, and re-mark the list. Deliberately does
+   *  NOT rebuild the library — the click came from a row button, and
+   *  re-rendering would drop focus off it mid-gesture. */
+  function armSound(name, kind) {
+    armedSound = { name: name, kind: kind };
+    renderStage();
+    markArmedRows();
+  }
+
+  /** Load the armed sound now that the engine is live, through the same
+   *  path a live Try uses. Consumed exactly once. */
+  function consumeArmedSound() {
+    var armed = armedSound;
+    armedSound = null;
+    if (!armed || !engineIsLive() || !window.PresetsUI) {
+      return;
+    }
+    if (armed.kind === 'factory' && typeof window.PresetsUI.loadFactoryPreset === 'function') {
+      window.PresetsUI.loadFactoryPreset(armed.name);
+    } else if (armed.kind === 'user' && typeof window.PresetsUI.loadUserPreset === 'function') {
+      window.PresetsUI.loadUserPreset(armed.name);
+    }
+  }
+
+  /** Mark whichever row is armed, in place. Rows carry their own name in
+   *  data-preset so this needs no map to fall out of date. */
+  function markArmedRows() {
+    if (!cardsListEl || !cardsListEl.children) {
+      return;
+    }
+    for (var i = 0; i < cardsListEl.children.length; i++) {
+      var row = cardsListEl.children[i];
+      if (!row || !row.classList || typeof row.getAttribute !== 'function') {
+        continue;
+      }
+      var rowName = row.getAttribute('data-preset');
+      row.classList.toggle(
+        'preset-row-armed',
+        !!rowName && !!armedSound && rowName === armedSound.name
+      );
+    }
+  }
+
+  /** How many sounds the Sounds panel beside this stage is listing — the
+   *  same two sources it renders from, never a hardcoded number. */
+  function libraryCount() {
+    return factoryEntries().length + userNames().length;
+  }
+
+  /** The 3-letter silkscreen code, from the ONE function the palette
+   *  chips, node-card rails and preset family rows already share. */
+  function familyInitials(type) {
+    try {
+      if (window.ChainCanvas && typeof window.ChainCanvas.familyInitials === 'function') {
+        return window.ChainCanvas.familyInitials(type);
+      }
+    } catch (err) {
+      /* stripped harness — the type key's own initials are the fallback */
+    }
+    return String(type || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+  }
+
+  /** The house jack: one 15px ring with a dark socket dot, the drawn
+   *  vocabulary the board's cord layer uses at every endpoint. Authored
+   *  SVG rather than a glyph, and skipped entirely where createElementNS
+   *  is absent (the committed test harness) — the anchor's silkscreen
+   *  word carries the meaning on its own. */
+  function jackPrint() {
+    if (typeof document.createElementNS !== 'function') {
+      return null;
+    }
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'cold-face-jack');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('width', '15');
+    svg.setAttribute('height', '15');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    var ring = document.createElementNS(NS, 'circle');
+    ring.setAttribute('cx', '8');
+    ring.setAttribute('cy', '8');
+    ring.setAttribute('r', '6.75');
+    ring.setAttribute('class', 'cold-face-jack-ring');
+    var socket = document.createElementNS(NS, 'circle');
+    socket.setAttribute('cx', '8');
+    socket.setAttribute('cy', '8');
+    socket.setAttribute('r', '2.5');
+    socket.setAttribute('class', 'cold-face-jack-socket');
+    svg.appendChild(ring);
+    svg.appendChild(socket);
+    return svg;
+  }
+
+  function coldAnchor(word) {
+    var anchor = document.createElement('div');
+    anchor.className = 'cold-face-anchor';
+    var jack = jackPrint();
+    if (jack) {
+      anchor.appendChild(jack);
+    }
+    var legend = document.createElement('span');
+    legend.className = 'cold-face-anchor-legend';
+    legend.textContent = word;
+    anchor.appendChild(legend);
+    return anchor;
+  }
+
+  /** One section's plate on the strip: the family tick, the 3-letter
+   *  code and the module's own label, all in that family's desaturated
+   *  silkscreen ink — the rail-print vocabulary, standing cold. */
+  function coldPlate(node) {
+    var plate = document.createElement('li');
+    plate.className = 'cold-face-plate';
+    plate.setAttribute('style', familyVars(node.type));
+
+    var code = document.createElement('span');
+    code.className = 'cold-face-code';
+    code.textContent = familyInitials(node.type);
+
+    var label = document.createElement('span');
+    label.className = 'cold-face-label';
+    label.textContent = technicalLabel(node.type);
+
+    plate.appendChild(code);
+    plate.appendChild(label);
+    return plate;
+  }
+
+  /** The one sentence under the heading. Split into subject + rest so
+   *  the sound's own name can carry the lifted print without the copy
+   *  living in two places. */
+  function coldSubject(chain, name) {
+    if (chain.length === 0) {
+      return 'No effects are loaded yet.';
+    }
+    return name || 'Your last chain';
+  }
+
+  function coldRest(chain, count) {
+    var opener = chain.length === 0 ? '' : ' is loaded and waiting.';
+    if (count > 0) {
+      return opener + ' Press Start to hear it, or pick any of the ' +
+        count + ' sounds on the left.';
+    }
+    return opener + ' Press Start to hear it.';
+  }
+
+  function renderColdFace(engineLive) {
+    if (!coldFaceEl) {
+      return;
+    }
+    if (engineLive) {
+      // Live: the cold face has nothing true left to say, and the
+      // Current-sound face below it answers the same question better.
+      // Drop the cached read too, so a later stop/restart re-reads
+      // whatever the session actually left in the slot.
+      coldChainCache = null;
+      // NOT armedSound: the startup restore commits through
+      // ChainEditing -> markAcceptedEdit -> onChainChanged -> renderAll,
+      // which lands HERE with the engine already live — a moment BEFORE
+      // main.js calls onEngineStarted. Clearing the arm here consumed it
+      // into nothing, and Start silently kept the old chain. The arm has
+      // exactly one consumer, consumeArmedSound(), and it nulls it there.
+      coldFaceEl.hidden = true;
+      coldFaceEl.innerHTML = '';
+      return;
+    }
+
+    // An armed sound wins the stage: it is what Start is about to load,
+    // so it is what the cold face must show. Falling back to the waiting
+    // chain if it cannot be resolved keeps the strip truthful.
+    var armedNodes = armedSound ? armedChain() : [];
+    var armed = !!armedSound;
+    // Armed but unresolvable prints the promise with NO strip, rather
+    // than the promise over someone else's chain. Start still loads the
+    // armed sound — consumeArmedSound() reads the name, not the nodes.
+    var chain = armedNodes.length > 0 ? armedNodes : (armed ? [] : coldChain());
+    var name = armed ? armedSound.name : coldChainName(chain);
+    var count = libraryCount();
+
+    coldFaceEl.innerHTML = '';
+    coldFaceEl.hidden = false;
+
+    var line = document.createElement('p');
+    line.className = 'cold-face-line';
+    if (armed) {
+      // The armed reading: one promise, and Start keeps it.
+      line.appendChild(document.createTextNode('Press Start to try '));
+      var armedSubject = document.createElement('strong');
+      armedSubject.className = 'cold-face-subject';
+      armedSubject.textContent = name;
+      line.appendChild(armedSubject);
+      line.appendChild(document.createTextNode('.'));
+    } else {
+      var subject = document.createElement('strong');
+      subject.className = 'cold-face-subject';
+      subject.textContent = coldSubject(chain, name);
+      line.appendChild(subject);
+      line.appendChild(document.createTextNode(coldRest(chain, count)));
+    }
+    coldFaceEl.appendChild(line);
+
+    // The waiting sound's OWN description, from the same factory record
+    // the library card beside it reads — the single most useful sentence
+    // a first-timer can have before Start, and not one word of it
+    // written here. A chain that matches no preset has no description to
+    // borrow and simply goes without.
+    var description = factoryDescription(name);
+    if (description) {
+      var desc = document.createElement('p');
+      desc.className = 'cold-face-desc';
+      desc.textContent = description;
+      coldFaceEl.appendChild(desc);
+    }
+
+    if (chain.length === 0) {
+      // Nothing to print. The sentence above already says so, and a
+      // strip with no sections on it would be an empty promise.
+      return;
+    }
+
+    var strip = document.createElement('div');
+    strip.className = 'cold-face-strip';
+    strip.setAttribute('aria-hidden', 'true');
+
+    strip.appendChild(coldAnchor('Mic in'));
+
+    var plates = document.createElement('ol');
+    plates.className = 'cold-face-plates';
+    chain.forEach(function (node) {
+      plates.appendChild(coldPlate(node));
+    });
+    strip.appendChild(plates);
+
+    strip.appendChild(coldAnchor('Out'));
+    coldFaceEl.appendChild(strip);
+
+    // The strip is a redundant PICTURE of the sentence above, so it is
+    // aria-hidden and this legend carries the same fact as text — the
+    // section count a screen reader would otherwise have to count.
+    var legend = document.createElement('p');
+    legend.className = 'cold-face-legend';
+    // 'Held' is what the machine is sitting on; 'queued' is what Start
+    // will put there instead. The strip means a different thing in each
+    // case and the legend has to say which.
+    legend.textContent = (armed ? 'Queued · mic in through ' : 'Chain held · mic in through ') +
+      chain.length + (chain.length === 1 ? ' section' : ' sections') + ' to out';
+    coldFaceEl.appendChild(legend);
+  }
+
   // wayfinder #49 — whether the inline "Save this sound" naming row is
   // currently open, and the input it owns (built once, lazily).
   var saveRowOpen = false;
@@ -358,6 +786,41 @@
     }
   });
 
+  // -----------------------------------------------------------------
+  // THE WAKE (2026-09-02 delight round) — the surface half of the
+  // power-up. The gate class has just come off; this plays the one
+  // animation that carries the moment (the print rising to full while
+  // the hatch peels off toward OUT — styles/main.css's THE WAKE block)
+  // and takes itself off again the instant it ends.
+  //
+  // Purely additive: the class is applied AFTER the gate is already
+  // gone, so the surface is fully interactive for every frame of it,
+  // and a browser that never fires animationend still drops the class
+  // on the timer. Under `prefers-reduced-motion` the keyframes do not
+  // exist at all — the class lands, animates nothing, and is removed.
+  // -----------------------------------------------------------------
+  function wakeSurface(el, className) {
+    if (!el || !el.classList) {
+      return;
+    }
+    el.classList.add(className);
+    var done = function () {
+      el.classList.remove(className);
+      if (typeof el.removeEventListener === 'function') {
+        el.removeEventListener('animationend', done);
+      }
+    };
+    if (typeof el.addEventListener === 'function') {
+      el.addEventListener('animationend', done);
+    }
+    if (typeof window.setTimeout === 'function') {
+      // The belt to that braces: an element that never animates (reduced
+      // motion, a stripped harness, a browser that swallowed the event)
+      // must not keep the class forever.
+      window.setTimeout(done, 700);
+    }
+  }
+
   function renderStage() {
     var chain = currentChain();
     var state = displayState();
@@ -371,8 +834,20 @@
     // transport / Save buttons beside it. The Sounds library is not
     // gated: browse and search stay live before Start.
     if (stageEl) {
+      var wasGated = stageEl.classList.contains('engine-not-started');
       stageEl.classList.toggle('engine-not-started', !engineLive);
+      // The stage carries a different composition in each state (the
+      // cold faceplate vs. the live Current-sound face), and the cold
+      // one is a wide strip — the class lets the stage widen for it
+      // without the live face losing its reading measure.
+      stageEl.classList.toggle('stage-cold', !engineLive);
+      if (wasGated && engineLive) {
+        wakeSurface(stageEl, 'stage-waking');
+      }
     }
+
+    // What stands on the stage before Start (see THE COLD FACE above).
+    renderColdFace(engineLive);
 
     nameEl.textContent = '';
     nameEl.appendChild(document.createTextNode(name));
@@ -560,8 +1035,14 @@
   function buildCard(name, description, kind, isActive) {
     var row = document.createElement('div');
     row.className = 'preset-row';
+    // markArmedRows() re-marks in place off this, so the armed row never
+    // needs a parallel index that could fall out of date.
+    row.setAttribute('data-preset', name);
     if (isActive) {
       row.classList.add('preset-row-active');
+    }
+    if (armedSound && armedSound.name === name) {
+      row.classList.add('preset-row-armed');
     }
 
     var loadBtn = document.createElement('button');
@@ -591,6 +1072,10 @@
     // file's header and presets-ui.js's export comment.
     loadBtn.addEventListener('click', function () {
       if (!engineIsLive()) {
+        // Arm FIRST, then answer: armSound() repaints the stage and the
+        // row marks, and answerGatedTry() then writes the aria-live note
+        // — which markArmedRows()/renderStage() must not overwrite.
+        armSound(name, kind);
         answerGatedTry(name);
         return;
       }
@@ -756,6 +1241,19 @@
     }
   }
 
+  /** The transport's direction mark: the board's own drawn chevron
+   *  (.chain-arrow-mark's square-corner geometry), rotated per
+   *  direction in CSS. aria-hidden — the button's word is the label. */
+  function transportMark(dir) {
+    var wrap = document.createElement('span');
+    wrap.className = 'simple-transport-mark simple-transport-mark-' + dir;
+    wrap.setAttribute('aria-hidden', 'true');
+    var mark = document.createElement('span');
+    mark.className = 'chain-arrow-mark';
+    wrap.appendChild(mark);
+    return wrap;
+  }
+
   function renderTransport() {
     transportEl.innerHTML = '';
     transportEl.hidden = !engineIsLive();
@@ -765,10 +1263,18 @@
     var list = filteredFactory();
     var pos = currentFactoryPosition(list);
 
+    // The direction marks are DRAWN, not typed (2026-09-02 typeset
+    // round). These were the last two Unicode glyphs standing in for
+    // this app's icon system: a filled triangle renders at whatever
+    // weight and baseline each platform's emoji-or-symbol fallback
+    // happens to pick, next to a board whose every other mark is the
+    // same authored square-corner chevron. The button keeps its word —
+    // the mark is decoration beside a real label, never the label.
     var prevBtn = document.createElement('button');
     prevBtn.type = 'button';
-    prevBtn.className = 'control';
-    prevBtn.textContent = '◀ Previous';
+    prevBtn.className = 'control simple-transport-key';
+    prevBtn.appendChild(transportMark('prev'));
+    prevBtn.appendChild(document.createTextNode('Previous'));
     prevBtn.disabled = list.length < 2;
     prevBtn.addEventListener('click', function () { stepFactory(-1); });
 
@@ -778,8 +1284,9 @@
 
     var nextBtn = document.createElement('button');
     nextBtn.type = 'button';
-    nextBtn.className = 'control';
-    nextBtn.textContent = 'Next ▶';
+    nextBtn.className = 'control simple-transport-key';
+    nextBtn.appendChild(document.createTextNode('Next'));
+    nextBtn.appendChild(transportMark('next'));
     nextBtn.disabled = list.length < 2;
     nextBtn.addEventListener('click', function () { stepFactory(1); });
 
@@ -837,9 +1344,20 @@
   buildLibraryShell();
   renderAll();
 
+  /* Distinct from the plain re-render the other two hooks are: this is
+     the one edge where a sound armed before Start becomes the live
+     chain. consumeArmedSound() runs the ordinary guarded load, which
+     re-enters through markAcceptedEdit -> onChainChanged and repaints
+     on its own; the renderAll() after it covers the no-armed-sound case
+     and any state the load path did not touch. */
+  function onEngineStarted() {
+    consumeArmedSound();
+    renderAll();
+  }
+
   window.SimpleView = {
     onChainChanged: renderAll,
-    onEngineStarted: renderAll,
+    onEngineStarted: onEngineStarted,
     onEngineStopped: renderAll
   };
 })();

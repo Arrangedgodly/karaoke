@@ -437,6 +437,23 @@
                Save + Cancel), opened by #simple-save-btn; mirrors
                Advanced's own Save As... naming row, no browser prompt(). -->
           <div class="simple-save-row" id="simple-save-row" hidden></div>
+          <!-- THE COLD FACE (2026-09-02 delight round) — what the stage
+               shows BEFORE Start, in place of a live sound it does not
+               have yet. Not a degraded copy of the live face: a cold
+               instrument's own printed faceplate, carrying the chain
+               that is loaded and waiting (Persistence.loadInitialModel,
+               read-only) as a machined patchbay strip — jack print,
+               signal rule, one silkscreen plate per section in its
+               family ink.
+
+               JS-built by src/simple-view.js#renderColdFace() from real
+               state only; `hidden` here so the very first paint is
+               empty rather than a flash of placeholder, and hidden
+               again the moment the engine goes live. It sits INSIDE the
+               stage, so the pre-Start hatch covers it exactly as it
+               covers everything else here — the recede IS the cold
+               reading, and Start lifting it is the power-up. -->
+          <div class="simple-cold-face" id="simple-cold-face" hidden></div>
           <p class="simple-desc" id="simple-desc" hidden></p>
           <ol class="simple-summary" id="simple-summary"></ol>
           <!-- wayfinder #48 — JS-built: Previous/Next step the filtered

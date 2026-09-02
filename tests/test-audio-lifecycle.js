@@ -389,6 +389,11 @@ function createSandbox(opts) {
 
   var audioBypass = {
     reconnects: 0,
+    // Starts disengaged exactly as before, so every existing check that
+    // assumed "never engaged" still sees that. What is new is that the
+    // state can MOVE, which is what makes the deck's bypass reporting
+    // testable (section A2).
+    engaged: false,
     reconnectSource: function () {
       if (failNextBypassReconnect) {
         failNextBypassReconnect = false;
@@ -397,7 +402,10 @@ function createSandbox(opts) {
       audioBypass.reconnects += 1;
     },
     isEngaged: function () {
-      return false;
+      return audioBypass.engaged;
+    },
+    toggle: function () {
+      audioBypass.engaged = !audioBypass.engaged;
     }
   };
 
@@ -408,7 +416,22 @@ function createSandbox(opts) {
     setInterval: setInterval,
     clearInterval: clearInterval,
     document: {
-      addEventListener: function () {},
+      __docListeners: {},
+      addEventListener: function (type, fn) {
+        var box = sandbox.document.__docListeners;
+        (box[type] = box[type] || []).push(fn);
+      },
+      /** Drive a document-level key handler — the spacebar bypass is
+       *  bound here, not on any element, because it is the emergency
+       *  control and must work wherever focus happens to be. */
+      __fireKeydown: function (ev) {
+        var e = ev || {};
+        if (typeof e.preventDefault !== 'function') {
+          e.preventDefault = function () {};
+        }
+        (sandbox.document.__docListeners.keydown || []).slice()
+          .forEach(function (fn) { fn(e); });
+      },
       getElementById: function (id) {
         return els[id] || null;
       },
@@ -575,6 +598,55 @@ async function main() {
   );
   check(selectorValue(deviceSelect) === 'd1', 'A1: the selector points at the active device');
   check(AE.isTrackLive === true, 'A1: AudioEngine.isTrackLive is true');
+
+  // --------------------------------------------------------------------
+  console.log('A2. the deck stops saying LIVE while bypass is engaged');
+  // --------------------------------------------------------------------
+  // Bypass gates the effect chain to silence and hands the room the
+  // independent dry tap. The ENGINE is still live — the lamp keeps
+  // saying so — but a header still reading LIVE is the one place this
+  // app could tell an operator mid-show that their processing is running
+  // when it is not. These pin that the WORD reports the chain, that the
+  // colour half of the redundancy travels with it, that the emergency
+  // KEYBOARD path reports identically to the button, and that a standing
+  // error still outranks a deliberate safe state.
+  //
+  // Runs here, on section A's clean live session, and returns bypass to
+  // OFF before section B — so nothing downstream sees a changed world.
+  check(!statusWrap.classList.contains('bypassed'),
+    'A2: a live engine with bypass off carries no bypassed marking');
+
+  bypassBtn.__fire('click');
+  check(statusText(els) === 'Bypassed \u2014 effects off',
+    'A2: engaging bypass replaces the deck sentence — it never keeps saying Live');
+  check(statusWrap.classList.contains('bypassed') && isLiveVisible(),
+    'A2: copy AND colour — the bypassed marking rides alongside live, because the ENGINE is still live');
+  check(bypassBtn.textContent === 'Bypass: ON',
+    'A2: the key and the deck describe the one state together');
+
+  bypassBtn.__fire('click');
+  check(statusText(els) === 'Live' && !statusWrap.classList.contains('bypassed'),
+    'A2: releasing bypass restores the live sentence and drops the marking');
+
+  sandbox.document.__fireKeydown({ code: 'Space', key: ' ' });
+  check(statusText(els) === 'Bypassed \u2014 effects off' &&
+      statusWrap.classList.contains('bypassed'),
+    'A2: the spacebar — the emergency path — reports exactly as the button does');
+  sandbox.document.__fireKeydown({ code: 'Space', key: ' ' });
+  check(statusText(els) === 'Live' && !statusWrap.classList.contains('bypassed'),
+    'A2: and back again');
+
+  // A real failure outranks a deliberate safe state: toggling bypass must
+  // not quietly erase an error the operator has not dealt with yet.
+  statusWrap.classList.add('error');
+  var sentenceUnderError = statusText(els);
+  bypassBtn.__fire('click');
+  check(statusWrap.classList.contains('error') && statusText(els) === sentenceUnderError,
+    'A2: toggling bypass over a standing error leaves both the error sentence and its class alone');
+  bypassBtn.__fire('click'); // back to disengaged
+  statusWrap.classList.remove('error');
+  check(AB.isEngaged() === false && !statusWrap.classList.contains('error'),
+    'A2: the section leaves bypass off and the error register clear for the sections below');
 
   // --------------------------------------------------------------------
   console.log('B. context suspension leaves Live; resume recovers in place');

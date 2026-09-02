@@ -246,7 +246,22 @@ function node(id, type, params) {
     },
     FactoryPresets: {
       listDetailed: function () { return entries; },
-      describeAll: function () { return entries; }
+      describeAll: function () { return entries; },
+      // list() carries the NODES — the armed cold face resolves the
+      // picked sound's own chain through it (2026-09-02).
+      list: function () {
+        return [
+          { name: 'Warm Ballad', nodes: [
+            { id: 'n1', type: 'compressor', params: { threshold: -20 } },
+            { id: 'n2', type: 'reverb', params: { mix: 22 } }
+          ] },
+          { name: 'Rock Night', nodes: [
+            { id: 'n1', type: 'compressor', params: { threshold: -18 } },
+            { id: 'n2', type: 'delay', params: { timeMs: 120 } },
+            { id: 'n3', type: 'limiter', params: { ceiling: -3 } }
+          ] }
+        ];
+      }
     },
     PresetStore: { listNames: function () { return []; } }
   });
@@ -290,6 +305,24 @@ function node(id, type, params) {
   check(h.els['simple-library-gate-note'].hidden === false,
     'H6: the answer is visible (the note cannot be answering from behind hidden)');
 
+  // H7 (2026-09-02): the gated click also ARMS that sound. The stage
+  // behind the note stops printing the waiting chain and prints the one
+  // just reached for, with the promise Start is about to keep. Still
+  // nothing committed — H3 above pinned that, and it ran after this same
+  // click.
+  var armedRow = h.els['simple-library-body'].children[2].children[1];
+  check(armedRow.classList.contains('preset-row-armed'),
+    'H7: the row just clicked marks itself armed');
+  var coldText = (function collect(el) {
+    var out = String(el.textContent || '');
+    (el.children || []).forEach(function (c) { out += collect(c); });
+    return out;
+  })(h.els['simple-cold-face']);
+  check(coldText.indexOf('Press Start to try') !== -1 && coldText.indexOf('Warm Ballad') !== -1,
+    'H7: the cold face promises exactly the armed sound');
+  check(coldText.indexOf('Queued') !== -1,
+    'H7: and its legend says queued, not held — the machine is still sitting on the other chain');
+
   engine.isStarted = true;
   engine.isTrackLive = true;
   engine.audioContext = { state: 'running' };
@@ -308,6 +341,16 @@ function node(id, type, params) {
   check(h.els['simple-transport'].hidden === false && prev.disabled === false &&
       next.disabled === false && h.els['simple-save-btn'].hidden === false,
     'H4: transport and Save become available with the live engine');
+  // The arm is consumed exactly once, by Start, through the same guarded
+  // path a live Try uses — this is what makes "Press Start to try X"
+  // true rather than a caption.
+  check(loadCalls.length === 1 && loadCalls[0] === 'Warm Ballad',
+    'H7: Start loads the sound that was armed before it, exactly once');
+  var coldAfter = h.els['simple-cold-face'];
+  check(coldAfter.hidden === true,
+    'H7: and the cold face is gone the moment the engine is live');
+  loadCalls.length = 0;
+
   firstTry.fire('click');
   check(loadCalls.length === 1 && loadCalls[0] === 'Warm Ballad',
     'H4: the shared preset load path works after Start');
@@ -395,7 +438,7 @@ function makeStorage() {
 
 function makeSimpleViewSandbox(collaborators) {
   var registry = {};
-  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row', 'simple-stage'].forEach(function (id) {
+  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row', 'simple-stage', 'simple-cold-face'].forEach(function (id) {
     var tag = id === 'simple-summary' ? 'ol' : (id.indexOf('view-switch') === 0 ? 'button' : 'div');
     registry[id] = makeElement(tag);
   });
@@ -455,7 +498,7 @@ function makeSimpleViewSandbox(collaborators) {
   seeded.setItem('karaoke-view-v1', 'advanced');
   var reload2 = (function () {
     var registry = {};
-    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row', 'simple-stage'].forEach(function (id) {
+    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row', 'simple-stage', 'simple-cold-face'].forEach(function (id) {
       registry[id] = makeElement(id.indexOf('view-switch') === 0 ? 'button' : 'div');
     });
     var bodyEl = makeElement('body');
@@ -735,8 +778,31 @@ function makeSimpleViewSandbox(collaborators) {
   // load index 1 (Rock Night); Previous from index 0 should wrap to the
   // LAST entry (Big Room).
   var buttons = f8.transport.children;
-  check(buttons.length === 3 && buttons[0].textContent === '◀ Previous' && buttons[2].textContent === 'Next ▶',
+  // The key's WORD is its own text nodes; the direction mark beside it is
+  // the app's drawn chevron, not a typed glyph (2026-09-02 typeset round —
+  // '\u25c0 Previous' and 'Next \u25b6' were the last two Unicode marks
+  // standing in for this icon system, rendering at whatever weight and
+  // baseline each platform's symbol fallback picked).
+  function keyWord(btn) {
+    return btn.children.map(function (c) {
+      return c.nodeType === 3 ? c.textContent : '';
+    }).join('');
+  }
+  function keyMark(btn) {
+    return btn.children.filter(function (c) {
+      return String(c.className || '').indexOf('simple-transport-mark') !== -1;
+    })[0] || null;
+  }
+  check(buttons.length === 3 &&
+    keyWord(buttons[0]) === 'Previous' && keyWord(buttons[2]) === 'Next',
     'E8: the transport renders Previous, a position readout, and Next');
+  check(!!keyMark(buttons[0]) && !!keyMark(buttons[2]) &&
+    keyMark(buttons[0]).children[0].className === 'chain-arrow-mark' &&
+    keyMark(buttons[2]).children[0].className === 'chain-arrow-mark' &&
+    keyMark(buttons[0]).getAttribute('aria-hidden') === 'true',
+    'E8: each transport key carries the board\'s own DRAWN chevron beside its word, aria-hidden');
+  check(!/[\u25c0\u25b6\u2192\u2190]/.test(keyWord(buttons[0]) + keyWord(buttons[2])),
+    'E8: and no Unicode direction glyph is left standing in for it');
   check(buttons[1].textContent === '1 / 5', 'E8: the position readout is "n of m" over the filtered factory list');
   buttons[2].fire('click');
   check(f8.loadCalls.length === 1 && f8.loadCalls[0].name === 'Rock Night',

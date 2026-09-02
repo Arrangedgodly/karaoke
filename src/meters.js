@@ -196,6 +196,93 @@
   var ZONE_MID_EDGE = -20;
   var ZONE_CLIP_EDGE = -6;
 
+  // ---------------------------------------------------------------------
+  // THE LAMP TEST (2026-09-02 delight round) — the power-up.
+  //
+  // Pressing Start is the one moment this instrument comes alive, and it
+  // used to happen in silence: a status sentence changed, and the two
+  // lamp bars sat dark until the first frame of real audio. Real gear
+  // does not do that. It runs its lamps end to end on the way up, which
+  // is both the moment you feel the machine wake AND the only honest
+  // proof that every segment on both meters can still light — the thing
+  // an operator most wants confirmed before a show, in the one window
+  // (setup) where confirming it is free.
+  //
+  // Called by src/main.js#beginStart() at the commit gesture, so it
+  // fills a wait that ALREADY EXISTS (getUserMedia, the worklet module
+  // fetches, the first graph build). It never delays anything: the
+  // engine comes up on its own schedule, and if that beats the sweep the
+  // real signal is simply drawn over it (see the max() in drawScene).
+  //
+  // THE HONESTY RULES, which are what make a display flourish
+  // acceptable on a live-audio safety surface:
+  //   - The sweep can only ever ADD light, never remove it. Every drawn
+  //     level is max(real, sweep), so a bar can never under-report a
+  //     signal that is actually there.
+  //   - It touches the LAMPS only. The dB readout, the CLIP latch, the
+  //     clip dot and every aria value stay wired to the real feed for
+  //     the whole sequence, so the machine's numbers never lie — the
+  //     readout reads −∞ under a full ladder, which is exactly what a
+  //     lamp test looks like on hardware.
+  //   - It runs once per engine start and then never again.
+  //
+  // This is one of the two halves of DESIGN.md's Power-Up Exception (the
+  // other is the face wake in styles/main.css) — the single sequence
+  // permitted past the 150-250 ms answer law.
+  //
+  // Reduced motion: no sweep. The ladders light full-scale for one short
+  // hold and release — the same proof, as a state rather than a motion.
+  // ---------------------------------------------------------------------
+  var LAMP_RISE_MS = 260; // floor to full, exponential ease-out
+  var LAMP_HOLD_MS = 120; // every segment lit
+  var LAMP_FALL_MS = 320; // linear release, the way a ladder drops
+  var LAMP_SWEEP_MS = LAMP_RISE_MS + LAMP_HOLD_MS + LAMP_FALL_MS;
+  var LAMP_STATIC_MS = 200; // reduced-motion: one lit hold, no sweep
+
+  var lampStartT = 0;
+  var lampEndT = 0;
+  var lampStatic = false;
+
+  /** True only when the runtime can answer, and the operator has asked
+   *  for less motion. Anything unreadable means "no preference" — the
+   *  same direction every other guarded animation in this app takes. */
+  function prefersReducedMotion() {
+    try {
+      return !!(
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      );
+    } catch (err) {
+      return false;
+    }
+  }
+
+  /** The sweep's level at time t, or SILENT_DB when no test is running.
+   *  Pure: no state is written here, so a stalled or replayed frame
+   *  cannot desynchronize the two meters from each other. */
+  function lampLevel(t) {
+    if (!(lampEndT > 0) || t >= lampEndT || t < lampStartT) {
+      return SILENT_DB;
+    }
+    if (lampStatic) {
+      return SCALE_MAX;
+    }
+    var e = t - lampStartT;
+    var span = SCALE_MAX - SCALE_MIN;
+    if (e < LAMP_RISE_MS) {
+      var p = e / LAMP_RISE_MS;
+      // Exponential ease-out: the ladder slams up and settles, the way a
+      // needle does, rather than crawling linearly to the top.
+      return SCALE_MIN + span * (1 - Math.pow(1 - p, 3));
+    }
+    if (e < LAMP_RISE_MS + LAMP_HOLD_MS) {
+      return SCALE_MAX;
+    }
+    var f = (e - LAMP_RISE_MS - LAMP_HOLD_MS) / LAMP_FALL_MS;
+    return SCALE_MIN + span * (1 - f);
+  }
+
   // RMS underlay brightness relative to the peak pass (dimmer hardware,
   // and no glow — brightness is saturation on matte in this world).
   var RMS_ALPHA = 0.5;
@@ -419,10 +506,17 @@
 
     // Clip latch: any clipRun frame (re)starts the 2000 ms latch; the
     // latch state itself is time-based so it auto-clears with no input.
+    // Driven by the REAL feed alone — the power-up sweep below never
+    // reaches it, so the machine can never latch a CLIP it did not hear.
     if (live && u.feed.clipRun) {
       u.clipUntil = t + CLIP_LATCH_MS;
     }
     u.clip = t < u.clipUntil;
+
+    // The power-up sweep, kept beside the ballistics rather than folded
+    // into them: drawScene reads max(real, lamp) so the test can only add
+    // light, and everything that reports a NUMBER keeps reading u.peak.
+    u.lamp = lampLevel(t);
   }
 
   // ---------------------------------------------------------------------
@@ -432,6 +526,15 @@
   function drawScene(ctx, u) {
     ctx.setTransform(u.dpr, 0, 0, u.dpr, 0, 0);
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // THE LAMP TEST's one and only reach into the render: the drawn
+    // ladder is the BRIGHTER of the real level and the power-up sweep,
+    // so the sweep can add light but never hide a signal. Outside a
+    // power-up u.lamp is SILENT_DB and all three of these are exactly
+    // the ballistics values, unchanged.
+    var drawnPeak = u.peak > u.lamp ? u.peak : u.lamp;
+    var drawnRms = u.rms > u.lamp ? u.rms : u.lamp;
+    var drawnHold = u.hold > u.lamp ? u.hold : u.lamp;
 
     // 1) Unlit lamp glass — the dark hardware scale visible at rest.
     //    No glow ever lands here (lamp-light discipline).
@@ -443,7 +546,7 @@
     }
 
     // 2) RMS underlay — same lamp geometry, dimmer, no glow.
-    var litRms = litCount(u.rms);
+    var litRms = litCount(drawnRms);
     if (litRms > 0) {
       ctx.globalAlpha = RMS_ALPHA;
       for (var r = 0; r < litRms; r++) {
@@ -454,7 +557,7 @@
     }
 
     // 3) Peak lamps — full brightness, one restrained same-color glow.
-    var litPeak = litCount(u.peak);
+    var litPeak = litCount(drawnPeak);
     if (litPeak > 0) {
       ctx.shadowBlur = LAMP_GLOW_PX * u.dpr; // blur applies in device px
       for (var p = 0; p < litPeak; p++) {
@@ -467,8 +570,8 @@
     }
 
     // 4) Peak-hold tick — or, while latched, the red 0 dB clip pin.
-    if (u.clip || u.hold > SCALE_MIN + 0.5) {
-      var level = u.clip ? SCALE_MAX : clampNum(u.hold, SCALE_MIN, SCALE_MAX);
+    if (u.clip || drawnHold > SCALE_MIN + 0.5) {
+      var level = u.clip ? SCALE_MAX : clampNum(drawnHold, SCALE_MIN, SCALE_MAX);
       var tx = clampNum(dbToX(level), SEG_X0, SEG_X0 + SEG_SPAN);
       ctx.fillStyle = u.clip ? colors.clip : colors.tick;
       ctx.fillRect(tx - TICK_W / 2, BAR_TOP, TICK_W, BAR_H);
@@ -502,6 +605,7 @@
       peak: u.peak,
       rms: u.rms,
       hold: u.hold,
+      lamp: u.lamp,
       clip: u.clip,
       started: engineStarted,
     };
@@ -551,6 +655,7 @@
       Math.abs(u.peak - lp.peak) >= DIRTY_EPS_DB ||
       Math.abs(u.rms - lp.rms) >= DIRTY_EPS_DB ||
       Math.abs(u.hold - lp.hold) >= DIRTY_EPS_DB ||
+      Math.abs(u.lamp - lp.lamp) >= DIRTY_EPS_DB ||
       u.clip !== lp.clip ||
       engineStarted !== lp.started;
     if (dirty) {
@@ -624,6 +729,10 @@
       holdUntil: 0,
       clipUntil: 0,
       clip: false,
+      // The power-up sweep's contribution to THIS unit's drawn level,
+      // recomputed every advance() and never mixed into the ballistics
+      // above — the real state stays real (see THE LAMP TEST).
+      lamp: SILENT_DB,
       lastPaint: null,
       readoutText: '−∞',
       lastAriaT: 0,
@@ -748,6 +857,7 @@
    *  setEngineState(false) transition both route through here). */
   function clearUnit(u) {
     u.feed = null;
+    u.lamp = SILENT_DB;
     u.peak = SILENT_DB;
     u.rms = SILENT_DB;
     u.hold = SILENT_DB;
@@ -877,6 +987,34 @@
     });
   }
 
+  /** Run the power-up lamp test on both meters (see THE LAMP TEST).
+   *  Display-only and additive: it cannot hide a signal, cannot latch a
+   *  clip, and cannot change a single reported number. Called by
+   *  src/main.js at the Start commit; safe before init (no-op), safe to
+   *  call again (the later call simply restarts the sweep).
+   *
+   *  @returns {boolean} whether a sweep is now running */
+  function lampTest() {
+    if (!initialized) {
+      return false;
+    }
+    lampStatic = prefersReducedMotion();
+    lampStartT = now();
+    lampEndT = lampStartT + (lampStatic ? LAMP_STATIC_MS : LAMP_SWEEP_MS);
+    // The shared loop is already running from init(), but a runtime that
+    // stopped it (the one-shot failure guard in frame()) would otherwise
+    // leave the sweep frozen on its first frame.
+    startLoop();
+    eachUnit(function (u) {
+      if (u.lastT === null) {
+        u.lastT = lampStartT;
+      }
+      advance(u, lampStartT);
+      considerPaint(u, lampStartT);
+    });
+    return true;
+  }
+
   /** Clear ballistics/clip on both meters (FEW-3's device-switch /
    *  context-recreation hook). Engine state is untouched. */
   function reset() {
@@ -891,6 +1029,7 @@
     init: init,
     feed: feed,
     setEngineState: setEngineState,
+    lampTest: lampTest,
     reset: reset,
   };
 
