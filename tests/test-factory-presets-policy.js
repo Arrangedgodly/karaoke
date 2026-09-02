@@ -759,6 +759,91 @@ async function main() {
   }
 
   // --------------------------------------------------------------------
+  console.log('G. list_presets is a COMPACT BROWSE INDEX (scale-out D-12, ADR 0003)');
+  // --------------------------------------------------------------------
+
+  // The agent-facing half of the preset-first strategy: a factory entry
+  // must say what it SOUNDS like, or an agent has no basis to load it and
+  // builds a chain from scratch instead. Read through the REAL registered
+  // tool, not the helper, so the served payload is what is checked.
+  var listPresets = getTool(sandbox, 'list_presets');
+  var listed = await listPresets.execute({});
+  var libraryByName = {};
+  sandbox.FACTORY_LIBRARY.PRESETS.forEach(function (entry) {
+    libraryByName[entry.name] = entry;
+  });
+
+  check(!!listed && Array.isArray(listed.factory) && listed.factory.length === 14,
+    'G1: list_presets lists all fourteen factory presets');
+
+  listed.factory.forEach(function (entry) {
+    var p = "factory '" + entry.name + "'";
+    var source = libraryByName[entry.name];
+    check(!!source, 'G1: ' + p + ' is a real library entry');
+    if (!source) {
+      return;
+    }
+    check(entry.summary === source.summary,
+      'G1: ' + p + " carries the library's hand-written summary verbatim");
+    check(entry.primary === source.primary,
+      'G1: ' + p + ' carries its primary tag (the dropdown group)');
+    check(entry.nodeCount === undefined,
+      'G1: ' + p + ' does NOT carry nodeCount — node count never told a listener what a preset sounds like, and get_preset carries the nodes for the one entry the agent picks');
+    check(entry.nodes === undefined,
+      'G1: ' + p + ' does NOT carry nodes (list_presets is a browse index; load_preset/get_preset are the load paths)');
+  });
+
+  // The technique axis is INTERNAL (CONTEXT.md, "Technique axis"):
+  // coverage and dedup only, never user-facing. It must not reach an
+  // agent through this listing even though the library entries carry it.
+  var PUBLIC_AXES = ['genre', 'vibe', 'use-case', 'gag'];
+  var leakedTechnique = [];
+  listed.factory.forEach(function (entry) {
+    var p = "factory '" + entry.name + "'";
+    check(Array.isArray(entry.tags) && entry.tags.length > 0,
+      'G2: ' + p + ' carries at least one public tag');
+    (entry.tags || []).forEach(function (tag) {
+      var axis = tag.slice(0, tag.indexOf(':'));
+      if (axis === 'technique') {
+        leakedTechnique.push(entry.name + ' -> ' + tag);
+      }
+      check(PUBLIC_AXES.indexOf(axis) !== -1,
+        'G2: ' + p + " tag '" + tag + "' is on a PUBLIC axis (genre/vibe/use-case/gag)");
+    });
+    check(entry.tags.indexOf(entry.primary) !== -1,
+      'G2: ' + p + ' primary is one of its listed tags');
+  });
+  check(leakedTechnique.length === 0,
+    'G2: NO technique-axis tag reaches the agent surface (internal axis: coverage and dedup only)' +
+      (leakedTechnique.length ? ' — leaked: ' + leakedTechnique.join(', ') : ''));
+
+  // At least one entry must prove the filter actually removed something,
+  // or G2 would pass vacuously on a library that happened to carry none.
+  var techniqueInLibrary = sandbox.FACTORY_LIBRARY.PRESETS.some(function (entry) {
+    return entry.tags.some(function (tag) {
+      return tag.indexOf('technique:') === 0;
+    });
+  });
+  check(techniqueInLibrary,
+    'G2: the library DOES carry technique tags, so the filter above is doing real work (not passing vacuously)');
+
+  // The input schema is frozen: list_presets still takes no arguments, so
+  // the change gate's "same public names and schemas" answer stays yes.
+  var listDef = listPresets;
+  check(!!listDef && Object.keys(listDef.inputSchema.properties).length === 0 &&
+    listDef.inputSchema.required.length === 0 &&
+    listDef.inputSchema.additionalProperties === false,
+    'G3: list_presets STILL takes no arguments — the compact index changed the OUTPUT only, so the 10-tool schema contract is untouched');
+
+  // Payload disclosure: the index is what a growing library is paid for
+  // in agent tokens, so print it rather than assert a number the library
+  // size would make brittle.
+  console.log('       list_presets factory payload: ' +
+    JSON.stringify(listed.factory).length + ' chars for ' + listed.factory.length +
+    ' presets (' + Math.round(JSON.stringify(listed.factory).length / listed.factory.length) +
+    ' chars/entry)');
+
+  // --------------------------------------------------------------------
   if (failures.length === 0) {
     console.log('PASS: factory presets conform to the WebMCP policy (issue #2) — pen batch of ' + pen.length + ' candidates conform');
     return 0;
