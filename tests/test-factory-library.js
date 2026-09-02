@@ -24,10 +24,10 @@
 // registry all come from the loaded files.
 //
 // SEED-BATCH NOTE (#31): when new entries land, add their node types'
-// src/node-*.js files to the load list below in the SAME edit (the six
-// loaded today cover the six classic types the current entries use), and
+// src/node-*.js files to the load list below in the SAME edit, and
 // update the count check the same way test-factory-presets-policy.js B1
-// is updated.
+// is updated. (2026-09-01: eight promoted entries added — load list now
+// covers the twelve classic+promoted types the fourteen entries use.)
 //
 // Run from a clean clone:  node tests/test-factory-library.js
 // Exits 0 on pass, 1 on any failure.
@@ -86,6 +86,16 @@ function loadLibraryStack(sandbox) {
   loadSrc(sandbox, 'src/node-delay.js');
   loadSrc(sandbox, 'src/node-reverb.js');
   loadSrc(sandbox, 'src/node-limiter.js');
+  // #31 promoted entries add: pitchshift, distortion, chorus, tremolo, phaser, gate.
+  // pitchshift/tremolo/phaser are Tone-backed (register via window.ToneAdapter),
+  // so the adapter loads first — same order as tests/test-tone-adapter.js.
+  loadSrc(sandbox, 'src/tone-adapter.js');
+  loadSrc(sandbox, 'src/node-pitchshift.js');
+  loadSrc(sandbox, 'src/node-distortion.js');
+  loadSrc(sandbox, 'src/node-chorus.js');
+  loadSrc(sandbox, 'src/node-tremolo.js');
+  loadSrc(sandbox, 'src/node-phaser.js');
+  loadSrc(sandbox, 'src/node-gate.js');
   loadSrc(sandbox, 'src/preset-schema.js');
   loadSrc(sandbox, 'src/factory-library-data.js');
   loadSrc(sandbox, 'src/factory-presets.js');
@@ -119,7 +129,7 @@ function main() {
   console.log('A. structure, vocabularies, and primary tags');
   // --------------------------------------------------------------------
 
-  check(entries.length === 6, 'A1: the library ships six entries (update here and in the policy test when #31 lands the seed batch)');
+  check(entries.length === 14, 'A1: the library ships fourteen entries (six original + eight promoted from the #31 seed batch at the 2026-09-01 audition)');
 
   var seenNames = {};
   entries.forEach(function (entry) {
