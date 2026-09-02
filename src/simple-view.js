@@ -61,9 +61,11 @@
   var summaryEl = document.getElementById('simple-summary');
   var libraryBodyEl = document.getElementById('simple-library-body');
   var transportEl = document.getElementById('simple-transport');
+  var saveBtnEl = document.getElementById('simple-save-btn');
+  var saveRowEl = document.getElementById('simple-save-row');
 
   if (!simpleBtn || !advancedBtn || !nameEl || !descEl || !summaryEl ||
-      !libraryBodyEl || !transportEl) {
+      !libraryBodyEl || !transportEl || !saveBtnEl || !saveRowEl) {
     // Shell markup isn't present (e.g. not yet built, or restructured
     // again by a later task) — nothing to wire up.
     return;
@@ -206,6 +208,113 @@
     });
   }
 
+  // wayfinder #49 — whether the inline "Save this sound" naming row is
+  // currently open, and the input it owns (built once, lazily).
+  var saveRowOpen = false;
+  var saveNameInputEl = null;
+  var saveNoteEl = null;
+
+  // An unsaved sound (settled #43): either a named preset that has since
+  // drifted (modified), or no preset loaded at all (Custom sound). This
+  // is the ONE condition "Save this sound" and the secondary-menu-vs-
+  // directly-visible-Delete choice both key off.
+  function isUnsaved(state) {
+    return !!state.modified || !state.name;
+  }
+
+  function closeSaveRow() {
+    saveRowOpen = false;
+    saveRowEl.hidden = true;
+    saveRowEl.innerHTML = '';
+    saveNameInputEl = null;
+    saveNoteEl = null;
+  }
+
+  function commitSaveRow() {
+    if (!saveNameInputEl || !window.PresetsUI || typeof window.PresetsUI.saveCurrentChainAs !== 'function') {
+      return;
+    }
+    var result = window.PresetsUI.saveCurrentChainAs(saveNameInputEl.value);
+    if (!result.ok) {
+      if (saveNoteEl) {
+        saveNoteEl.textContent = result.message;
+        saveNoteEl.hidden = false;
+      }
+      return;
+    }
+    closeSaveRow();
+    renderAll();
+  }
+
+  // Reuses Advanced's own inline naming-row classes verbatim
+  // (.preset-name-row/.preset-name-input/.preset-name-actions,
+  // styles/main.css) — the same "no browser prompt()" naming control
+  // Save As… already uses, so Simple's own save flow looks and behaves
+  // like one app, not two.
+  function openSaveRow() {
+    var state = displayState();
+    saveRowEl.innerHTML = '';
+    saveRowEl.className = 'simple-save-row preset-name-row';
+    saveRowOpen = true;
+    saveRowEl.hidden = false;
+
+    saveNameInputEl = document.createElement('input');
+    saveNameInputEl.type = 'text';
+    saveNameInputEl.className = 'preset-name-input';
+    saveNameInputEl.maxLength = 40;
+    saveNameInputEl.placeholder = 'Name this sound…';
+    saveNameInputEl.value = state.name || '';
+    saveNameInputEl.setAttribute('aria-label', 'Sound name');
+    saveNameInputEl.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        commitSaveRow();
+      } else if (event.key === 'Escape') {
+        closeSaveRow();
+      }
+    });
+
+    var actions = document.createElement('div');
+    actions.className = 'preset-name-actions';
+
+    var confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'control';
+    confirmBtn.textContent = 'Save';
+    confirmBtn.addEventListener('click', commitSaveRow);
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'control';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', closeSaveRow);
+
+    actions.appendChild(confirmBtn);
+    actions.appendChild(cancelBtn);
+
+    saveNoteEl = document.createElement('p');
+    saveNoteEl.className = 'simple-save-note';
+    saveNoteEl.hidden = true;
+
+    saveRowEl.appendChild(saveNameInputEl);
+    saveRowEl.appendChild(actions);
+    saveRowEl.appendChild(saveNoteEl);
+
+    if (typeof saveNameInputEl.focus === 'function') {
+      saveNameInputEl.focus();
+    }
+    if (typeof saveNameInputEl.select === 'function') {
+      saveNameInputEl.select();
+    }
+  }
+
+  saveBtnEl.addEventListener('click', function () {
+    if (saveRowOpen) {
+      closeSaveRow();
+    } else {
+      openSaveRow();
+    }
+  });
+
   function renderStage() {
     var chain = currentChain();
     var state = displayState();
@@ -219,13 +328,26 @@
     // modified=false) is indistinguishable from an agent's freshly-built
     // one at this layer — presets-ui.js tracks no provenance to tell
     // them apart — so it reads plainly as "Custom sound" with no claim
-    // about who built it. Naming that distinction (and any "built by
-    // your agent" framing) is wayfinder #49's job, not this shell's.
+    // about who built it (settled #43: Custom sound's own definition
+    // makes the same call — "agent-built, or hand-edited in Advanced,"
+    // named the same way either way).
     if (state.modified) {
       var marker = document.createElement('span');
       marker.className = 'simple-cs-state';
       marker.textContent = ' · unsaved changes';
       nameEl.appendChild(marker);
+    }
+
+    // "Save this sound" beside the name, shown ONLY for an unsaved sound
+    // (settled #43) — never in the secondary menu, since stepping away
+    // with Previous/Next is what puts an unsaved sound at risk. Closing
+    // an open row when the state moves out of "unsaved" on its own
+    // (e.g. Undo, or the same preset reloading elsewhere) avoids a stale
+    // naming row hanging open over a now-clean sound.
+    var unsaved = isUnsaved(state);
+    saveBtnEl.hidden = !unsaved;
+    if (!unsaved && saveRowOpen) {
+      closeSaveRow();
     }
 
     var description = factoryDescription(state.name);
@@ -260,6 +382,12 @@
   ];
 
   var libraryState = { filter: 'all', query: '' };
+  // wayfinder #49 — which Yours cards currently show their opened
+  // secondary menu (Delete) instead of the plain "…" toggle. Keyed by
+  // name, not index, so it survives a re-render even if the list's
+  // order changes; a deleted preset's own entry is removed explicitly
+  // (see the Delete click handler below) rather than lingering forever.
+  var openCardMenus = {};
   var chipEls = {};
   var cardsListEl = null;
   var chipCountEl = null;
@@ -347,8 +475,7 @@
 
     // "Try a preset" (CONTEXT.md's settled verb): submits through the
     // SAME load path Advanced's own Presets panel rows use — see this
-    // file's header and presets-ui.js's export comment. No Delete or
-    // other secondary action here yet (wayfinder #49's job).
+    // file's header and presets-ui.js's export comment.
     loadBtn.addEventListener('click', function () {
       if (!window.PresetsUI) {
         return;
@@ -361,6 +488,58 @@
     });
 
     row.appendChild(loadBtn);
+
+    // wayfinder #49 — "Delete and future transfer actions [go] in a
+    // secondary menu so they do not compete with trying presets"
+    // (settled #43). A Yours card's second slot is either the plain "…"
+    // toggle or, once opened, the real Delete button — never both at
+    // once, so it never visually competes with Try the way a directly-
+    // visible Delete label would. Delete itself reuses toggleDeleteArm's
+    // exact two-step arm/confirm — the same gesture and the same shared
+    // armed-button state Advanced's own rows use (presets-ui.js's export
+    // comment), so there is still exactly one delete path.
+    if (kind === 'user') {
+      if (openCardMenus[name]) {
+        var deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'preset-row-delete';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', function () {
+          if (!window.PresetsUI || typeof window.PresetsUI.toggleDeleteArm !== 'function') {
+            return;
+          }
+          // toggleDeleteArm mutates deleteBtn's own label/class in place
+          // for the arm step and for a failed delete — re-rendering here
+          // would just discard that armed state, since a fresh render
+          // recreates the button unarmed. Only a confirmed deletion
+          // (true) needs a rebuild — and the FULL renderAll(), not just
+          // the library list: deleting the sound currently shown as
+          // Current sound resets PresetsUI's display state (name to
+          // null) without ever touching ChainEditing/the live chain, so
+          // this is the one write path that reaches PresetsUI without
+          // passing through markAcceptedEdit()'s own SimpleView notify —
+          // the stage needs its own explicit refresh here.
+          if (window.PresetsUI.toggleDeleteArm(deleteBtn, name)) {
+            delete openCardMenus[name];
+            renderAll();
+          }
+        });
+        row.appendChild(deleteBtn);
+      } else {
+        var menuBtn = document.createElement('button');
+        menuBtn.type = 'button';
+        menuBtn.className = 'simple-card-menu-toggle';
+        menuBtn.textContent = '⋯';
+        menuBtn.setAttribute('aria-label', 'More actions for ' + name);
+        menuBtn.setAttribute('aria-expanded', 'false');
+        menuBtn.addEventListener('click', function () {
+          openCardMenus[name] = true;
+          renderLibraryList();
+        });
+        row.appendChild(menuBtn);
+      }
+    }
+
     return row;
   }
 

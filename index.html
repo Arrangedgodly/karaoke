@@ -407,7 +407,17 @@
           <div class="simple-kicker">Current sound</div>
           <div class="simple-stage-head">
             <h2 class="simple-cs-name" id="simple-cs-name">Custom sound</h2>
+            <!-- wayfinder #49 — JS-shown only for an unsaved sound
+                 (modified, or no preset loaded at all): "Save this
+                 sound" sits beside the name, never in the secondary
+                 menu — settled #43, since stepping away with
+                 Previous/Next is what puts an unsaved sound at risk. -->
+            <button type="button" class="simple-save-btn" id="simple-save-btn" hidden>Save this sound</button>
           </div>
+          <!-- wayfinder #49 — JS-built inline naming row (name input +
+               Save + Cancel), opened by #simple-save-btn; mirrors
+               Advanced's own Save As... naming row, no browser prompt(). -->
+          <div class="simple-save-row" id="simple-save-row" hidden></div>
           <p class="simple-desc" id="simple-desc" hidden></p>
           <ol class="simple-summary" id="simple-summary"></ol>
           <!-- wayfinder #48 — JS-built: Previous/Next step the filtered
