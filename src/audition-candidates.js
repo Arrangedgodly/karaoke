@@ -68,6 +68,37 @@
 // 3.42–11.97 dB of the published +12 — megaphone deliberately sits at
 // the boundary (PEN-1 verifies the ≤ is inclusive).
 //
+// LC-1 CORPUS BATCH (scale-out, appended below the PEN-1 12): eight
+// candidates authored offline 2026-09-01 from
+// docs/ultron/preset-axis-cycle/request-corpus.md — a 123-request corpus
+// built from docs/ultron/research/taxonomy-prior-art.md (six products,
+// four communities) and scored against the 26 sounds that exist today
+// under the Closeness rule. Verdicts: 74 matched, 21 coverage gaps (14
+// authored -> these 8 candidates, 7 deferred), 28 capability gaps LOGGED
+// AND NEVER APPROXIMATED (scale-out-plan D-10).
+//
+// The admission bar these eight cleared (D-3): each names, in its
+// provenance.origin, (1) the plain-language request it answers in a real
+// singer's words and (2) why the CLOSEST existing preset FAILS that
+// request. Cell coverage was evidence, never the bar — four of the seven
+// "open cells" the plan listed (use-case:practice, vibe:bright,
+// vibe:dark/moody, vibe:lo-fi) were scored as dropdown holes with no
+// failing request behind them and are DELIBERATELY still empty.
+//
+// Why eight and not fifty (D-4, "if the corpus and the bar conflict, the
+// bar wins"): 23% of the corpus is unbuildable at the engine ceiling
+// (one fixed reverb IR, three fixed EQ bands, no harmony/vocoder/formant
+// shift) and 60% is already served. The capability-gap register in the
+// corpus doc — formant shift blocks 7 requests, harmony 5, a selectable
+// impulse response 4 — is the batch's most valuable output.
+//
+// No vocabulary append: all eight tag inside the frozen vocabularies
+// (src/factory-library-data.js is Lane B's file this batch). Append
+// pressure and the axis-level artist: pressure are logged in the corpus
+// doc, not acted on. All eight are DOMAIN candidates (no gag primary),
+// so the genre-first audition order is preserved batch-wise: the PEN-1
+// block still runs domain-then-gags, and this block is all domain.
+//
 // PEN-1 ORDER (cycle 4, batch PR): the 12 entries are sequenced
 // GENRE-FIRST — the six GEN-1 genre candidates in sketch order
 // (Metal → Rap → R&B/Soul → Country → Dance/EDM → Musicals), and only
@@ -383,6 +414,210 @@
         { id: 'mg-e1', type: 'eq', params: { lowGain: 5, midGain: 2, highGain: -2 } },
         { id: 'mg-d1', type: 'distortion', params: { drive: 0.6, tone: 0.18, output: -8 } },
         { id: 'mg-l1', type: 'limiter', params: { ceiling: -6, release: 80 } }
+      ]
+    },
+    // ==================================================================
+    // LC-1 CORPUS BATCH — eight candidates, all domain (no gag primary).
+    // Each provenance.origin carries the D-3 admission evidence: the
+    // request in a singer's words, and the closest preset's named
+    // failure. Corpus row ids (A1, B7, ...) refer to
+    // docs/ultron/preset-axis-cycle/request-corpus.md.
+    // ==================================================================
+    {
+      // Corpus E1 (genre · Pop — an empty primary WITH a real failing
+      // request behind it, unlike the four cells scored as dropdown
+      // holes). The chain is the modern pop-radio idiom expressed in the
+      // three fixed bands: 200 Hz shelf down to de-box, 1 kHz slightly
+      // scooped, the 5 kHz shelf carrying real air; a fast 5:1 for
+      // record-style density; a whisper of chorus for the sheen a
+      // produced record has and a flat default cannot; an eighth-note
+      // throw (250 ms) tucked under the words rather than Classic
+      // Karaoke's general 300 ms room. Budget 0.57*15 + 0.57*3 =
+      // 8.55 + 1.71 = 10.26 dB. EQ boost sum +4, no band >= +6.
+      name: 'Chart Topper',
+      description: 'Top-40 radio polish — clean lows, real air on top, a touch of width, and an eighth-note echo tucked in behind the words. Produced and bright, never brittle or boxy.',
+      tags: ['genre:Pop', 'use-case:performance', 'vibe:bright', 'technique:ambience-short'],
+      primary: 'genre:Pop',
+      provenance: { origin: 'LC-1 corpus batch, request E1 "I\'m singing a Top-40 pop song — make me sound like the record". CLOSEST FAILS: Classic Karaoke is EQ-flat (0/0/0) by design — it is the neutral default, so no 200 Hz de-box, no 5 kHz air, no width, and its 300 ms/25% delay reads as a general room, not a pop eighth-note; Warm Ballad, the only other genre:Pop-tagged sound, is a slow close-up ballad with no delay and no top end. The request wants a PRODUCED sound; the closest preset\'s whole job is to be unproduced. genre:Pop had no preset at all.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'ct-e1', type: 'eq', params: { lowGain: -2.5, midGain: -1, highGain: 4 } },
+        { id: 'ct-c1', type: 'compressor', params: { threshold: -15, ratio: 5, attack: 0.004, release: 0.12 } },
+        { id: 'ct-h1', type: 'chorus', params: { depthMs: 1.5, rateHz: 0.6, mix: 12 } },
+        { id: 'ct-y1', type: 'delay', params: { timeMs: 250, feedback: 18, mix: 14 } },
+        { id: 'ct-r1', type: 'reverb', params: { mix: 22 } },
+        { id: 'ct-l1', type: 'limiter', params: { ceiling: -3, release: 60 } }
+      ]
+    },
+    {
+      // Corpus D2/D3 (gentle pitch correction). Autotune is the chain's
+      // FIRST node per the BEH-1 rule. Scale Chromatic on purpose — the
+      // pen's own standing note: a guessed scale is the #1 artifact
+      // source, and under Chromatic the key param is inert, so the
+      // preset stays valid whatever key the backing track is in. Retune
+      // 250 ms is the catalog's own documented "natural gentle setting"
+      // on the same engine that Hard-Tune Hotline runs at 5 ms; mix 85
+      // leaves a sliver of the real voice so the correction reads as
+      // help rather than as an effect. Everything downstream is
+      // deliberately modest so the preset sits under any genre.
+      // Budget 0.57*14 + 0.57*6 = 7.98 + 3.42 = 11.40 dB. Audition
+      // knobs: retune 250 -> 150 if the correction reads too slow to
+      // help, mix 85 -> 92 if it reads too weak.
+      name: 'Pitch Safety Net',
+      description: 'Pitch correction you feel instead of hear — sour notes slide into tune over a beat rather than snapping, with a light room behind. A safety net, not a T-Pain robot.',
+      tags: ['use-case:performance', 'technique:hard-tune', 'vibe:natural', 'genre:Pop'],
+      primary: 'use-case:performance',
+      provenance: { origin: 'LC-1 corpus batch, requests D2 "The Helicon provides subtle auto tune, not as harsh as T-Pain" (r/karaoke) and D3 Voloco "Natural Tune". CLOSEST FAILS: Hard-Tune Hotline is the ONLY pitch-correction preset in all 26 sounds, and its retune is 5 ms at mix 100 — precisely the T-Pain snap this request explicitly asks NOT to have. There is no gentle setting to load, and Simple view cannot reach the retune knob to make one.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'ps-a1', type: 'autotune', params: { key: 'C', scale: 'Chromatic', retune: 250, mix: 85 } },
+        { id: 'ps-e1', type: 'eq', params: { lowGain: -1.5, midGain: 0.5, highGain: 1.5 } },
+        { id: 'ps-c1', type: 'compressor', params: { threshold: -14, ratio: 3, attack: 0.008, release: 0.2 } },
+        { id: 'ps-y1', type: 'delay', params: { timeMs: 220, feedback: 14, mix: 12 } },
+        { id: 'ps-r1', type: 'reverb', params: { mix: 24 } },
+        { id: 'ps-l1', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    },
+    {
+      // Corpus A1/A8/F17 (echo AMOUNT — the most-attested family in the
+      // record). The corpus separates echo from reverb explicitly ("33%
+      // reverb.. and just 15% echo"), so this preset is echo-forward and
+      // deliberately reverb-LIGHT: delay mix 38 at 330 ms with 48%
+      // feedback gives repeats a singer can count, and reverb 14 keeps
+      // them distinct instead of smearing into the wash the same forum
+      // calls a tunnel. Feedback 48 sits under the compound-loop guard's
+      // 55 threshold with room to spare, and the EQ boost sum is +1.5,
+      // so the guard's second condition is nowhere near either.
+      // Budget 0.57*14 + 0.57*6 = 11.40 dB. Audition knob: feedback
+      // 48 -> 54 if the repeats die too fast (54 is still legal; 55
+      // trips the guard only when EQ boost sum >= 6, which this is not).
+      name: 'Noraebang Echo',
+      description: 'The karaoke-room echo people actually shout for — repeats you can count trailing every line, with the wash kept low so the words stay words. Big echo, no tunnel.',
+      tags: ['use-case:performance', 'vibe:spacious', 'technique:ambience-long'],
+      primary: 'use-case:performance',
+      provenance: { origin: 'LC-1 corpus batch, requests A1 "Give me some echo!" (Karaoke Scene KJ forum, shouted mid-song), A8 noraebang echo-as-default (r/AskAKorean), F17 "echo but without the wash". CLOSEST FAILS: nothing in the 26 sounds is ABOUT echo — the highest delay mix anywhere is Classic Karaoke\'s 25% at 300 ms/25% feedback, which is exactly the "just enough" setting the singer already has when they shout for MORE. Cathedral Drift and Big Room answer "more reverb", a request the corpus itself distinguishes from echo. Rock Night is the only reverb-free delay and is a bright rock colour, not a neutral echo.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'ne-e1', type: 'eq', params: { lowGain: -1, midGain: 0.5, highGain: 1 } },
+        { id: 'ne-c1', type: 'compressor', params: { threshold: -14, ratio: 3, attack: 0.008, release: 0.18 } },
+        { id: 'ne-y1', type: 'delay', params: { timeMs: 330, feedback: 48, mix: 38 } },
+        { id: 'ne-r1', type: 'reverb', params: { mix: 14 } },
+        { id: 'ne-l1', type: 'limiter', params: { ceiling: -6, release: 150 } }
+      ]
+    },
+    {
+      // Corpus F10/C7 (vibe · intimate — an empty primary WITH a real
+      // failing request). The mechanism is the inverse of Warm Ballad's:
+      // near-dry (reverb 8, no delay at all) so the voice stays at the
+      // mic instead of being pushed into a hall, a gate with a SHALLOW
+      // floor (-22, not Studio Polish's -40) so room noise drops without
+      // clipping the breath tails the request is made of, chest warmth
+      // at 200 Hz, and a 4.5:1 lifting quiet detail up over the backing
+      // track. Budget 0.57*14 + 0.57*6 = 11.40 dB. Audition knob: gate
+      // floor -22 -> -16 if breath tails still get chopped.
+      name: 'Close-Up Whisper',
+      description: 'Right up against the mic — breathy, quiet singing lifted so every word carries, with barely any room behind it. Close and warm; no hall pushing you to the back of the stage.',
+      tags: ['vibe:intimate', 'use-case:performance', 'vibe:warm', 'technique:clean'],
+      primary: 'vibe:intimate',
+      provenance: { origin: 'LC-1 corpus batch, requests F10 TC-Helicon "CLOSE UP" / whisper-close intimate singing and C7 voicechanger.live "ASMR". CLOSEST FAILS: vibe:intimate has no preset at all; Warm Ballad is the closest slow-song chain and fails twice — its 35% plate pushes the voice back into a hall, the exact opposite of "right next to the mic", and its 2.5:1 at -10 dB leaves genuinely breathy notes under the backing track.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'cw-n1', type: 'gate', params: { threshold: -50, attack: 0.003, release: 0.25, floor: -22 } },
+        { id: 'cw-e1', type: 'eq', params: { lowGain: 1.5, midGain: -0.5, highGain: -1 } },
+        { id: 'cw-c1', type: 'compressor', params: { threshold: -14, ratio: 4.5, attack: 0.012, release: 0.3 } },
+        { id: 'cw-r1', type: 'reverb', params: { mix: 8 } },
+        { id: 'cw-l1', type: 'limiter', params: { ceiling: -6, release: 150 } }
+      ]
+    },
+    {
+      // Corpus B7 — an ANTI-PRESET, the one family D-10 approves for
+      // authoring rather than logging. HONEST LIMIT, stated up front:
+      // the app has no de-esser, so the only tool for sibilance is the
+      // FIXED 5 kHz shelf, which trades air for the fix. That trade is
+      // the audition question. The complaint pairs hiss WITH too much
+      // reverb, so the fix is less of both: shelf -4.5, reverb 10 (not
+      // zero — a dead voice is its own complaint), plus the gate and
+      // gentle levelling the cleanup use-case already owes.
+      // Budget 0.57*14 + 0.57*6 = 11.40 dB. Audition knob: high -4.5 ->
+      // -3 if it reads muffled, -6 if the esses still sting.
+      name: 'Hiss Rescue',
+      description: 'For voices where every s and f hisses: the top end comes down and the wash comes off, so sibilance stops stinging. Softer, not muffled — the words keep their edges.',
+      tags: ['use-case:cleanup', 'vibe:warm', 'technique:clean', 'use-case:speech/hosting'],
+      primary: 'use-case:cleanup',
+      provenance: { origin: 'LC-1 corpus batch, request B7 (verbatim, sing.salon): "the default Studio setting have too much reverb... produces also a lot of hiss sounds, especially with sss or fff components". CLOSEST FAILS: Studio Polish is THE cleanup preset and makes this complaint worse — its 5 kHz shelf is +1.5 dB, so every s and f is lifted, and the hiss it promises to fix is room hiss BETWEEN phrases (a gate job), not sibilance INSIDE words. The only two sounds that cut the 5 kHz shelf are Jazz Cellar (-3, a dark jazz colour riding 30% reverb) and Phone Call Gag (a band-limited gag); neither is a cleanup preset.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'hr-n1', type: 'gate', params: { threshold: -46, attack: 0.004, release: 0.16, floor: -35 } },
+        { id: 'hr-e1', type: 'eq', params: { lowGain: 0.5, midGain: 1, highGain: -4.5 } },
+        { id: 'hr-c1', type: 'compressor', params: { threshold: -14, ratio: 2.5, attack: 0.01, release: 0.25 } },
+        { id: 'hr-r1', type: 'reverb', params: { mix: 10 } },
+        { id: 'hr-l1', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    },
+    {
+      // Corpus C4/C8/I2 (hosting). Loudness here is presence + density +
+      // ceiling, the same mechanism Megaphone Rally uses — but WITHOUT
+      // the band-limiting that makes that one a gag: the low shelf comes
+      // down only -2 (not -12) and the 5 kHz shelf goes UP, so this is a
+      // human voice that cuts, not a bullhorn. EQ boost sum +5.5, held
+      // deliberately under the compound-loop guard's +6 so the slap is
+      // unconditionally safe. A whisper of 90 ms slap keeps it from
+      // sounding like a dead PA feed. Budget 0.57*17 + 0.57*3 =
+      // 9.69 + 1.71 = 11.40 dB.
+      name: 'Room Announcer',
+      description: 'The host mic that cuts through a loud room — dense, present and up front, so the next singer\u2019s name lands over the crowd. Clear and human, never a bullhorn.',
+      tags: ['use-case:speech/hosting', 'vibe:bright', 'technique:clean'],
+      primary: 'use-case:speech/hosting',
+      provenance: { origin: 'LC-1 corpus batch, requests C4 voicechanger.live "Announcer", C8 "Streamer Pro", I2 hosting the room (the Karaoke Scene forum, one of the two verbatim sources in the record, is ENTIRELY hosts). CLOSEST FAILS: Clean Speech is the only use-case:speech/hosting preset and is designed to be the exact opposite — "no audible coloring", 2:1 at -10 dB, 5 kHz shelf at -1 dB, ceiling -6; it will not cut through a room because it is not built to. Megaphone Rally does cut through but is a GAG: a band-limited bullhorn honk, not a host\'s voice.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'ra-n1', type: 'gate', params: { threshold: -42, attack: 0.003, release: 0.12, floor: -30 } },
+        { id: 'ra-e1', type: 'eq', params: { lowGain: -2, midGain: 3, highGain: 2.5 } },
+        { id: 'ra-c1', type: 'compressor', params: { threshold: -17, ratio: 6, attack: 0.003, release: 0.1 } },
+        { id: 'ra-y1', type: 'delay', params: { timeMs: 90, feedback: 6, mix: 8 } },
+        { id: 'ra-l1', type: 'limiter', params: { ceiling: -3, release: 60 } }
+      ]
+    },
+    {
+      // Corpus C6 (spoken word, rich). The deliberate opposite of Room
+      // Announcer on the same axis: chest at the 200 Hz shelf (+3.5),
+      // the 1 kHz peak SCOOPED (-1) so the extra low end reads as body
+      // rather than box, a slower 3.5:1 that rides a laugh, and reverb 5
+      // so it is a room rather than an anechoic booth. EQ boost sum +5,
+      // no band >= +6. Budget 0.57*14 + 0.57*6 = 11.40 dB. Audition
+      // knob: low +3.5 -> +2.5 if it reads boomy on a close mic.
+      name: 'Podcast Warmth',
+      description: 'Rich spoken-word warmth for podcasts and streams — chest in the voice, boxiness scooped out, and a steady level from a whisper to a laugh. Broadcast, not boomy.',
+      tags: ['use-case:speech/hosting', 'vibe:warm', 'technique:clean'],
+      primary: 'use-case:speech/hosting',
+      provenance: { origin: 'LC-1 corpus batch, request C6 podcast/streaming voice (vocalpresets.com carries "Podcast" as its own filtered bucket with four presets; Smule "Pro Studio"; the market\'s dominant adjective "radio-ready"). CLOSEST FAILS: Clean Speech\'s whole description is "the voice should just sound like itself" — the opposite ask. Warm Ballad has the warmth but is a SINGING chain wearing a 35% hall, wrong for spoken word. Room Announcer (this same batch) is bright and dense for cutting through a room, not warm and relaxed for headphones.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'pw-n1', type: 'gate', params: { threshold: -44, attack: 0.004, release: 0.2, floor: -32 } },
+        { id: 'pw-e1', type: 'eq', params: { lowGain: 3.5, midGain: -1, highGain: 1.5 } },
+        { id: 'pw-c1', type: 'compressor', params: { threshold: -14, ratio: 3.5, attack: 0.01, release: 0.22 } },
+        { id: 'pw-r1', type: 'reverb', params: { mix: 5 } },
+        { id: 'pw-l1', type: 'limiter', params: { ceiling: -6, release: 120 } }
+      ]
+    },
+    {
+      // Corpus H3/H5 (doubling). The classic ADT: a DEEP, SLOW chorus
+      // (6 ms at 0.3 Hz — a detuned second take, not the 1.5-3 ms
+      // shimmer every other chorus in the pen uses) feeding a 30 ms
+      // delay at mix 40 with feedback ZERO, so it is one double rather
+      // than repeats. Chorus before delay on purpose: the delayed copy
+      // is the chorused one, which is what makes it read as a separate
+      // performance. Budget 0.57*13 + 0.57*6 = 7.41 + 3.42 = 10.83 dB.
+      // HONEST LIMIT carried in the description: this is unison
+      // doubling, NOT harmony or backing singers — the app has neither,
+      // and D-10 forbids selling one as the other. Audition knob:
+      // chorus depth 6 -> 8 if the double reads as width instead of a
+      // second voice.
+      name: 'Double Track',
+      description: 'Sounds like two of you singing the same line — a wide, thick lead with a second take sitting just behind it. Doubling, not harmony: your voice twice, not backing singers.',
+      tags: ['vibe:epic/big', 'use-case:performance', 'technique:modulated/wide', 'genre:Pop'],
+      primary: 'vibe:epic/big',
+      provenance: { origin: 'LC-1 corpus batch, requests H3 Boss VE-5 "DOUBLE VOICE" / TC-Helicon\'s "Doubling" tag (carried by a majority of its published preset list) / Voloco doubling packs, and H5 "UNISON". CLOSEST FAILS: chorus appears in five of the 26 sounds (Slow Jam Silk 15%, Club Anthem 20%, Cathedral Drift 18%, Space Lounge 25%, Jazz Cellar 10%) but ALWAYS as width texture underneath a genre or a vibe — never at a depth and mix that reads as a second take, and never with the short pre-delay that makes a double a double rather than a shimmer. Big Room, the only vibe:epic/big preset, gets its size from a 50% plate and a 320 ms delay: one voice in a hall, not two voices.', auditionDate: null, verdict: 'pending' },
+      nodes: [
+        { id: 'dt-e1', type: 'eq', params: { lowGain: -1, midGain: 0, highGain: 1.5 } },
+        { id: 'dt-c1', type: 'compressor', params: { threshold: -13, ratio: 3, attack: 0.008, release: 0.2 } },
+        { id: 'dt-h1', type: 'chorus', params: { depthMs: 6, rateHz: 0.3, mix: 45 } },
+        { id: 'dt-y1', type: 'delay', params: { timeMs: 30, feedback: 0, mix: 40 } },
+        { id: 'dt-r1', type: 'reverb', params: { mix: 18 } },
+        { id: 'dt-l1', type: 'limiter', params: { ceiling: -6, release: 140 } }
       ]
     }
   ];
