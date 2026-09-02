@@ -127,6 +127,13 @@ The operator manual — everything below is for running a real karaoke show on a
 3. Click the **Start** button in the top left. Your browser will ask for microphone permission — click **Allow**.
 4. If you've got more than one mic plugged in, pick the right one from the dropdown next to Start.
 
+The **Start** button becomes **Stop** while starting or running. Press it to
+release the microphone and silence all output,
+including Bypass and effect tails. You can also press Stop while microphone
+permission is pending. **Start** resumes with the same current sound and layout, including
+accepted edits that could not autosave. An autosave warning stays visible until
+a save succeeds; those edits still will not survive a page reload.
+
 Across the top, the status strip shows whether the engine is **Stopped** or **Live**, along with small readouts for sample rate, latency, and how many effects are in your chain.
 
 ### Building your sound

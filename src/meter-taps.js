@@ -1077,8 +1077,8 @@
     });
   }
 
-  /** main.js teardown hook (no stop path exists today; correct if one
-   *  is added): loop cancelled, meters dark. A latched trip survives. */
+  /** main.js teardown hook: loop cancelled, meters dark.
+   *  A latched trip survives Stop and only human Restore clears it. */
   function onEngineStopped() {
     if (failed) {
       return;

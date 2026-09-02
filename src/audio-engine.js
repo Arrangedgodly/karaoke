@@ -276,7 +276,20 @@
     // completion: this Start owns the next session, not an older switch.
 
     // ---- Async continuation: awaiting from here on is fine ----
-    var stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
+    var gen = switchGeneration;
+    var stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
+    } catch (err) {
+      if (gen !== switchGeneration) {
+        throw staleSwitchError();
+      }
+      throw err;
+    }
+    if (gen !== switchGeneration) {
+      stopStream(stream);
+      throw staleSwitchError();
+    }
 
     mediaStream = stream;
 
@@ -290,7 +303,12 @@
     // here on the recovery path. Full device switching is handled
     // separately by switchInputDevice() below, a deliberate, documented
     // exception to "create once" (see its comment for why).
-    sourceNode = audioContext.createMediaStreamSource(mediaStream);
+    try {
+      sourceNode = audioContext.createMediaStreamSource(mediaStream);
+    } catch (err) {
+      teardownSession();
+      throw err;
+    }
 
     started = true;
     currentDeviceId = getDeviceIdFromStream(mediaStream);
@@ -399,7 +417,7 @@
    *  request was cut off by a newer one) and keeps it out of the
    *  operator-copy map's retry advice (stale completions need no retry). */
   function staleSwitchError() {
-    var err = new Error('Device switch superseded by a newer selection.');
+    var err = new Error('Microphone request superseded by a newer session or selection.');
     err.name = 'AbortError';
     err.stale = true;
     return err;

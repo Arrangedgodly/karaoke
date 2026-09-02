@@ -169,19 +169,10 @@
     </div>
 
     <div class="topbar-section topbar-controls">
-      <!--
-        Refinement entry 2 ($impeccable clarify, 2026-08-28): the strip's
-        one visible pre-Start instruction, anchored to Start via
-        aria-describedby. It must sit AFTER the button in DOM order so CSS
-        can key its visibility off the button's own disabled state
-        (#start-button:disabled ~ .start-hint in styles/main.css): Start is
-        disabled synchronously during the mic request and stays disabled
-        once the engine is live, and src/main.js re-enables it only on
-        failure — so the line shows exactly while pressing Start is the
-        true next action, with zero extra JS. Its copy matches the
-        pre-Start #empty-hint line below (same instruction, two anchors).
-      -->
+      <!-- The shared session button becomes Stop during startup and while
+           capture is open. The description follows the button's action. -->
       <button id="start-button" class="control" type="button" aria-describedby="start-hint">Start</button>
+      <span class="sr-only" id="stop-hint">Stops microphone capture and all audio output.</span>
       <span class="start-hint" id="start-hint">Press Start to power on</span>
 
       <label for="input-device-select" class="sr-only">Microphone:</label>

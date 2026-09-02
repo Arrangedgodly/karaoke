@@ -180,11 +180,11 @@ console.log('App scaffold loaded');
   //    short enough to always read in full — and NEXT ACTION + the
   //    demoted footnote in the .start-hint beside Start (refinement
   //    entry 2's element; its visibility is CSS-keyed to Start's own
-  //    disabled state, so it shows exactly while pressing Start is the
+  //    session-active class, so it shows exactly while pressing Start is the
   //    true next action, which after a failed start is precisely the
   //    case). The hint's title attribute carries the full untruncated
   //    pair for hover.
-  //  - Failed SWITCH: engine still live (Start stays disabled, hint
+  //  - Failed SWITCH: engine still live (the button offers Stop, hint
   //    hidden), so the status line itself carries WHAT HAPPENED + NEXT
   //    ACTION in one front-loaded sentence, with the footnote demoted
   //    inline.
@@ -326,7 +326,7 @@ console.log('App scaffold loaded');
   // Entry 3: after a failed Start, the recovery NEXT ACTION (with the
   // demoted technical footnote appended) replaces entry 2's default hint
   // copy ("Press Start to power on") — the hint region is hidden while
-  // Start is disabled, so this text is only ever seen in the state where
+  // the button offers Stop, so this text is only seen in the state where
   // acting on it is possible. The default copy needs no restore path: it
   // matters only before the first attempt, and every later failure
   // overwrites it with that failure's action. The element's width is
@@ -362,7 +362,9 @@ console.log('App scaffold loaded');
   }
 
   function populateDeviceList(selectedDeviceId) {
+    var generation = sessionGeneration;
     return window.AudioEngine.listInputDevices().then(function (devices) {
+      if (generation !== sessionGeneration) { return; }
       deviceSelect.innerHTML = '';
 
       if (devices.length === 0) {
@@ -417,8 +419,7 @@ console.log('App scaffold loaded');
   // forwards them via AudioEngine.onLifecycle(). Everything below only
   // decides what the OPERATOR sees, reusing entry 3's exact vocabulary
   // (setErrorStatus for the strip, setStartHint for the recovery NEXT
-  // ACTION — the hint is CSS-keyed to Start's disabled state, so
-  // re-enabling Start below is what surfaces the instruction; no new UI).
+  // ACTION. The session button returns to Start once capture is released).
   //
   // Every loss path ends with the strip provably NOT reading Live: the
   // .live class comes off (setErrorStatus's isLive argument is false) and
@@ -441,8 +442,8 @@ console.log('App scaffold loaded');
       action: 'Connect a microphone, then press Start.',
     },
     context: {
-      line: 'Audio engine paused.',
-      action: 'Press Start to resume audio.',
+      line: 'Audio engine paused. Press Stop, then Start to resume.',
+      action: 'Press Stop, then Start to resume audio.',
     },
     graph: {
       line: 'Audio chain did not reconnect.',
@@ -457,6 +458,73 @@ console.log('App scaffold loaded');
   var startupRestoreFailed = false;
   var startupFinalizationPending = false;
   var startupMetersPending = false;
+  var sessionGeneration = 0;
+
+  function requireSession(generation) {
+    if (generation !== sessionGeneration) {
+      var err = new Error('Audio session stopped or replaced.');
+      err.name = 'AbortError';
+      err.stale = true;
+      throw err;
+    }
+  }
+
+  function canStopSession() {
+    return startupFinalizationPending || window.AudioEngine.isStarted;
+  }
+
+  function updateSessionButton() {
+    var canStop = canStopSession();
+    startButton.disabled = false;
+    startButton.textContent = canStop ? 'Stop' : 'Start';
+    startButton.title = canStop ? 'Stop microphone and all audio output' : 'Start microphone audio';
+    startButton.classList.toggle('session-active', canStop);
+    if (typeof startButton.setAttribute === 'function') {
+      startButton.setAttribute('aria-describedby', canStop ? 'stop-hint' : 'start-hint');
+    }
+  }
+
+  function stopSession() {
+    sessionGeneration += 1;
+    deviceSwitchRequestGeneration += 1;
+    activeDeviceSwitchGeneration = 0;
+    pendingDeviceGraphGeneration = 0;
+    startupFinalizationPending = false;
+    if (window.McpTools && typeof window.McpTools.retireSession === 'function') {
+      window.McpTools.retireSession();
+    }
+    startupMetersPending = false;
+    contextLost = false;
+    window.AudioEngine.stop('stopped');
+    window.AudioBypass.stop();
+    window.AudioGraph.stop();
+    if (window.ChainCanvas) { window.ChainCanvas.onEngineStopped(); }
+    window.ChainEditing.retireSession();
+    pendingEngineTransitions.slice().forEach(function (transition) {
+      transition.release(false);
+    });
+    pendingEngineTransitions = [];
+    if (window.MeterTaps) { window.MeterTaps.onEngineStopped(); }
+    if (window.StatusReadouts) { window.StatusReadouts.stop(); }
+    renderSimpleEngineState(false);
+    var panel = getCanvasPanel();
+    if (panel) { panel.classList.remove('bypassed'); }
+    updateSessionButton();
+    deviceSelect.disabled = true;
+    if (bypassButton) { bypassButton.disabled = true; }
+    setStatus('Stopped', false);
+    setStartHint('Microphone and output stopped. Press Start to resume.');
+    if (typeof startButton.focus === 'function') { startButton.focus(); }
+    // Reuse the context on the next user gesture, but pause DSP now.
+    // Output edges are already disconnected even if suspension fails.
+    var ctx = window.AudioEngine.audioContext;
+    if (ctx && typeof ctx.suspend === 'function' && ctx.state !== 'closed') {
+      ctx.suspend().catch(function (err) {
+        console.warn('Stopped audio context could not suspend:', err);
+      });
+    }
+  }
+
 
   function liveStatusText() {
     return startupRestoreFailed
@@ -480,11 +548,9 @@ console.log('App scaffold loaded');
     pendingDeviceGraphGeneration = 0;
     setErrorStatus(copy.line, null, false);
     setStartHint(copy.action);
-    // Do not permit a second Start while the first Start's graph/tap
-    // finalization is still pending. Once that transaction settles, the
-    // normal loss recovery action becomes available (or an automatic
-    // running transition completes recovery in place).
-    startButton.disabled = startupFinalizationPending;
+    // Capture may still be open while the context is paused. Keep Stop
+    // available until the session is released; then offer Start again.
+    updateSessionButton();
     deviceSelect.disabled = true;
     if (bypassButton) {
       bypassButton.disabled = true; // no live source to bypass anymore
@@ -536,10 +602,10 @@ console.log('App scaffold loaded');
   }
 
   function recoverFromLoss() {
-    // The dual of surfaceLoss: a live engine again — re-gate Start (which
-    // re-hides the hint) and restart the meters/watchdog loop (latch-aware
+    // The dual of surfaceLoss: a live engine again. Offer Stop and
+    // restart the meters/watchdog loop (latch-aware
     // by design; a latched trip keeps defending its mute).
-    startButton.disabled = true;
+    updateSessionButton();
     deviceSelect.disabled = false;
     if (bypassButton) {
       bypassButton.disabled = false;
@@ -627,11 +693,13 @@ console.log('App scaffold loaded');
   }
 
   function handleDeviceChange() {
+    var generation = sessionGeneration;
     // Re-enumerate; if the ACTIVE device is gone while live, that IS a
     // track loss (the engine tears the stream down and emits track-lost —
     // the handler below surfaces it), and the dropdown must stop offering
     // the dead device either way.
     window.AudioEngine.listInputDevices().then(function (devices) {
+      if (generation !== sessionGeneration) { return; }
       var activeId = window.AudioEngine.currentDeviceId;
       var activeGone =
         !!activeId &&
@@ -653,6 +721,7 @@ console.log('App scaffold loaded');
       if (evt.type === 'context-state') {
         handleContextState(evt.state);
       } else if (evt.type === 'track-lost') {
+        if (evt.reason === 'stopped') { return; }
         contextLost = false; // a dead track supersedes any suspend state
         surfaceLoss(LOSS_COPY[evt.reason] || LOSS_COPY.ended);
       } else if (evt.type === 'track-muted') {
@@ -693,12 +762,16 @@ console.log('App scaffold loaded');
     // AudioEngine.start() in src/audio-engine.js. This ordering is what
     // satisfies Safari's "resume() must happen within a user gesture"
     // requirement (RQ-4); do not move this call behind any prior await.
-    startButton.disabled = true;
     setStatus('Waiting for microphone permission...', false);
     startupFinalizationPending = true;
+    updateSessionButton();
+    var generation = ++sessionGeneration;
+    var retainedSound = window.ChainEditing && typeof window.ChainEditing.getSnapshot === 'function'
+      ? window.ChainEditing.getSnapshot() : null;
 
     window.AudioEngine.start()
       .then(function (result) {
+        requireSession(generation);
         // PS-2: load the initial chain rather than always starting from an
         // empty model. window.Persistence.loadInitialModel() returns
         // whatever was last autosaved, or (nothing saved yet, e.g. first
@@ -706,12 +779,14 @@ console.log('App scaffold loaded');
         // see src/persistence.js and src/default-preset.js. Issue #20 routes
         // restoration through ChainEditing so the live graph commits before
         // cards, autosave, and later lifecycle hooks become visible.
-        var initialModel = window.Persistence ? window.Persistence.loadInitialModel() : [];
+        var initialModel = retainedSound ? retainedSound.model :
+          (window.Persistence ? window.Persistence.loadInitialModel() : []);
         // FEW-2: the layout half of the same slot — the saved board
         // positions (FEW-1's store seam). {} (nothing saved, a legacy
         // payload, or a preset-load baseline) means every section takes
         // the incumbent tidy stack; nothing is synthesized here.
-        var initialLayout = window.Persistence ? window.Persistence.loadInitialLayout() : null;
+        var initialLayout = retainedSound ? retainedSound.layout :
+          (window.Persistence ? window.Persistence.loadInitialLayout() : null);
         if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
           throw new Error('ChainEditing is required for startup restoration.');
         }
@@ -726,10 +801,15 @@ console.log('App scaffold loaded');
           source: 'startup',
           candidate: initialModel,
           layout: initialLayout,
+          renderOptions: retainedSound ? { preservePresentation: true } : undefined,
           forceStructural: true
         });
 
         return Promise.resolve(restore).catch(function (restoreErr) {
+          requireSession(generation);
+          // A restart must never replace an unsaved accepted sound with
+          // the empty startup fallback. Keep it for another Start attempt.
+          if (retainedSound) { throw restoreErr; }
           console.error('Saved chain could not be restored; starting with an empty chain:', restoreErr);
           restoreFailed = true;
           return window.ChainEditing.apply({
@@ -738,11 +818,13 @@ console.log('App scaffold loaded');
             layout: null,
             forceStructural: true
           }).then(function () {
+            requireSession(generation);
             if (window.Persistence && typeof window.Persistence.saveCurrentChain === 'function') {
               window.Persistence.saveCurrentChain(initialModel, initialLayout || {});
             }
           });
         }).then(function () {
+          requireSession(generation);
           // AE-3: (re-)establish the independent bypass dry tap now that
           // sourceNode exists. Must be called any time sourceNode changes —
           // see the comment on AudioBypass.reconnectSource() in
@@ -822,14 +904,13 @@ console.log('App scaffold loaded');
             contextLost = false;
           }
           startupFinalizationPending = false;
-          if (contextLost || !window.AudioEngine.isStarted) {
-            startButton.disabled = false;
-          }
+          updateSessionButton();
 
           return populateDeviceList(window.AudioEngine.currentDeviceId);
         });
       })
       .catch(function (err) {
+        if (generation !== sessionGeneration || (err && err.stale)) { return; }
         startupFinalizationPending = false;
         startupMetersPending = false;
         console.error('AudioEngine failed to start:', err);
@@ -849,7 +930,11 @@ console.log('App scaffold loaded');
         var copy = micErrorCopy(err, false);
         setErrorStatus(copy.line, null, false);
         setStartHint(copy.action, copy.footnote);
-        startButton.disabled = false;
+        updateSessionButton();
+        if (retainedSound) {
+          setErrorStatus('Could not restart current sound.', null, false);
+          setStartHint('Your sound is kept here. Press Start to try again.');
+        }
       });
   }
 
@@ -921,8 +1006,10 @@ console.log('App scaffold loaded');
     });
   }
 
+  updateSessionButton();
   startButton.addEventListener('click', function () {
-    if (startupFinalizationPending) {
+    if (canStopSession()) {
+      stopSession();
       return;
     }
     if (!headphonesAcknowledged && headphoneCheckAvailable()) {
@@ -955,6 +1042,7 @@ console.log('App scaffold loaded');
   }
 
   deviceSelect.addEventListener('change', function () {
+    var generation = sessionGeneration;
     var deviceId = deviceSelect.value;
     if (!deviceId) {
       return;
@@ -974,9 +1062,11 @@ console.log('App scaffold loaded');
 
     Promise.resolve(engineTransition.ready)
       .then(function () {
+        requireSession(generation);
         return window.AudioEngine.switchInputDevice(deviceId);
       })
       .then(function () {
+        requireSession(generation);
         activeDeviceSwitchGeneration = requestGeneration;
         pendingDeviceGraphGeneration = requestGeneration;
         // A device switch creates a fresh MediaStreamAudioSourceNode (see
@@ -992,6 +1082,7 @@ console.log('App scaffold loaded');
         }
 
         return Promise.resolve(rebuild).then(function (graphResult) {
+          requireSession(generation);
           if (
             requestGeneration !== activeDeviceSwitchGeneration ||
             requestGeneration !== pendingDeviceGraphGeneration
@@ -1040,6 +1131,7 @@ console.log('App scaffold loaded');
         });
       })
       .catch(function (err) {
+        if (generation !== sessionGeneration) { return; }
         if (
           requestGeneration !== activeDeviceSwitchGeneration &&
           err && err.deviceGraphFailure
@@ -1084,8 +1176,8 @@ console.log('App scaffold loaded');
         // successfully obtained (see switchInputDevice() in
         // audio-engine.js), so a failed switch doesn't change whether the
         // engine itself is still live — only the attempted switch failed.
-        // Entry 3: while live, the hint region is hidden (Start stays
-        // disabled), so the switchLine carries what happened AND the next
+        // Entry 3: while live, the hint region is hidden (the button offers
+        // Stop), so the switchLine carries what happened AND the next
         // action; the lamp stays truthful via isEngineLive().
         var copy = micErrorCopy(err, true);
         setErrorStatus(copy.line, copy.footnote, isEngineLive());

@@ -726,15 +726,8 @@ body {
   max-width: 15rem;
 }
 
-/* Refinement entry 2 ($impeccable clarify): the deck's one visible
-   pre-Start instruction — "Press Start to power on" — as muted sentence
-   copy beside Start (0.75rem = 12px, above the 11px floor; same register
-   as the unsaved-dot flag, NOT a silkscreen legend: it is an instruction,
-   not machine state). Visibility keys off the button's OWN disabled state:
-   src/main.js disables Start synchronously for the mic request and leaves
-   it disabled once live (re-enabling only on failure), so the
-   following-sibling rule below tracks the real engine state with zero JS
-   and can never drift from it. */
+/* Show the Start instruction while stopped. The shared button's
+   session-active class hides it while that button offers Stop. */
 .start-hint {
   flex: none;
   /* Entry 3: recovery copy (e.g. the Chrome mic-permission path, plus a
@@ -754,7 +747,7 @@ body {
   white-space: nowrap;
 }
 
-#start-button:disabled ~ .start-hint {
+#start-button.session-active ~ .start-hint {
   display: none;
 }
 
@@ -823,8 +816,7 @@ select.control {
    signal-orange fill with chassis ink (6.54; hover 7.72, press 5.22 —
    ink-on-fill at every step, per the incumbent pressed-state guidance),
    the ink focus ring while filled. Once the engine starts, src/main.js
-   disables the button and it recedes to the shared disabled treatment —
-   post-engine the deck belongs to the state lamp and BYPASS. Id
+   changes the same button to Stop, retaining its primary-control styling. Id
    specificity beats every shared .control rule above without touching
    them. */
 #start-button:not(:disabled) {

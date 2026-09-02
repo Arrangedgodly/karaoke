@@ -51,7 +51,7 @@ use-case). A plain filter that returns nothing is a visible coverage gap.
 _Avoid_: axis (that names the taxonomy dimension), category, folder
 
 **Safety floor**:
-The controls both views show at equal prominence — Start, microphone
+The controls both views show at equal prominence — Start/Stop, microphone
 selection, Bypass, and the input/output meters. Simple hides chain
 construction, never the human's control over what reaches the speakers.
 _Avoid_: transport, advanced controls
