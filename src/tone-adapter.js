@@ -189,6 +189,7 @@
 
     window.EffectCatalog.register(type, {
       label: config.label,
+      plainLabel: config.plainLabel,
       paramSpec: cleanSpec,
       experimental: !!config.experimental,
       latencySeconds: config.latencySeconds,

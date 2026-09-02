@@ -216,6 +216,8 @@
   // has no live signal to protect yet), same convention as the compressor.
   window.EffectCatalog.register('gate', {
     label: 'Noise Gate',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Cuts background noise',
     experimental: false,
     // Matches LOOKAHEAD_S in src/gate-worklet.js — the fixed 5 ms ring
     // delay every sample rides regardless of param settings. Read by

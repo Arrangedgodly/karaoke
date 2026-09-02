@@ -110,6 +110,8 @@
   // stay direct: a new node has no live signal to protect yet).
   window.EffectCatalog.register('eq', {
     label: 'EQ',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Shapes your tone',
     experimental: false,
     paramSpec: [
       { id: 'lowGain', label: 'Low', min: -12, max: 12, default: 0, step: 0.5, unit: 'dB' },

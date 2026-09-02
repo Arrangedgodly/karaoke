@@ -239,6 +239,7 @@ async function main() {
 
   TA.register('probe', {
     label: 'Probe',
+    plainLabel: 'Test plain label',
     paramSpec: [
       { id: 'amount', label: 'Amount', min: 0, max: 100, default: 40, step: 1, unit: '%' }
     ],
@@ -269,6 +270,7 @@ async function main() {
 
   TA.register('echo', {
     label: 'Echo',
+    plainLabel: 'Test plain label',
     experimental: true,
     paramSpec: [
       { id: 'rate', label: 'Rate', min: 0, max: 10, default: 5, step: 0.5, unit: 'Hz',
@@ -321,6 +323,7 @@ async function main() {
 
   TA.register('granular-echo', {
     label: 'Granular Echo',
+    plainLabel: 'Test plain label',
     latencySeconds: 0.1,
     paramSpec: [
       { id: 'amount', label: 'Amount', min: 0, max: 100, default: 40, step: 1, unit: '%' }

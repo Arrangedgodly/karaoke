@@ -196,6 +196,8 @@
   // construction, never param-driven).
   window.EffectCatalog.register('chorus', {
     label: 'Chorus',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Thickens your voice',
     experimental: false,
     paramSpec: [
       { id: 'depthMs', label: 'Depth', min: 0, max: 10, default: 3, step: 0.5, unit: 'ms' },

@@ -268,6 +268,7 @@ async function main() {
 
     sandbox.EffectCatalog.register('schema-live-probe', {
       label: 'Schema live probe',
+      plainLabel: 'Test plain label',
       paramSpec: [{ id: 'amount', label: 'Amount', min: 0, max: 1, step: 0.1, default: 0.5 }],
       experimental: false,
       create: function () { return {}; },
@@ -291,6 +292,7 @@ async function main() {
 
     sandbox.EffectCatalog.register('schema-reserved-key-probe', {
       label: 'Schema reserved-key probe',
+      plainLabel: 'Test plain label',
       paramSpec: [{ id: '__proto__', label: 'Reserved key', min: 0, max: 1, step: 0.1, default: 0.4 }],
       experimental: false,
       create: function () { return {}; },

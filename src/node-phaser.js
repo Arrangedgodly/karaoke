@@ -31,6 +31,8 @@
 
   window.ToneAdapter.register('phaser', {
     label: 'Phaser',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Adds a sweeping swirl',
     paramSpec: [
       {
         id: 'rateHz',

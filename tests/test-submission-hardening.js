@@ -396,6 +396,7 @@ async function main() {
     var nextTag = 0;
     sbC.EffectCatalog.register('toneFake', {
       label: 'Tone Fake',
+      plainLabel: 'Test plain label',
       paramSpec: [{ id: 'level', label: 'Level', min: 0, max: 1, step: 1, default: 0, unit: '' }],
       experimental: false,
       create: function (audioContext) {
@@ -433,6 +434,7 @@ async function main() {
     // disposed before the synchronous rethrow.
     sbC.EffectCatalog.register('toneThrow', {
       label: 'Tone Throw',
+      plainLabel: 'Test plain label',
       paramSpec: [{ id: 'level', label: 'Level', min: 0, max: 1, step: 1, default: 0, unit: '' }],
       experimental: false,
       create: function () { throw new Error('factory boom'); },
