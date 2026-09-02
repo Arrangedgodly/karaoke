@@ -1,0 +1,45 @@
+{
+  "plugin": "devpost-hackathon",
+  "version": 2,
+  "hackathon": {
+    "slug": "webmcp",
+    "name": "The WebMCP Challenge",
+    "url": "https://webmcp.devpost.com",
+    "selected": true,
+    "source": "known"
+  },
+  "participant": {
+    "name": "",
+    "display_name": "Grady Wasil"
+  },
+  "project": {
+    "name": "VoxChain",
+    "summary": "A WebMCP-enabled live vocal-chain builder that lets people create and tune effects using plain language while retaining human control over microphone, bypass, and output safety.",
+    "ai_usage": "",
+    "codex_usage": ""
+  },
+  "current_stage": "resources",
+  "completed_stages": [
+    "start-hackathon",
+    "review",
+    "resources"
+  ],
+  "rules_acknowledged": true,
+  "learning": {
+    "status": "active",
+    "current_step": "spec",
+    "completed_steps": [
+      "onboard",
+      "scope",
+      "prd",
+      "spec"
+    ],
+    "plan_file": "docs/hackathon-build/scope.md",
+    "checklist_file": ""
+  },
+  "submission": {
+    "draft_file": "devpost-submission.md",
+    "status": "not-started"
+  },
+  "next_command": "build-checklist"
+}

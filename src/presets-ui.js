@@ -45,7 +45,7 @@
 // (#preset-name-row: input + Save + Cancel; Enter confirms, Escape
 // cancels, blur never auto-commits; 1-40-char name bound mirroring
 // save_preset's), and Delete is TWO-STEP in-panel (first click arms the
-// button to "DELETE?" with the safety-edge bezel; a second click within
+// button to "Confirm delete" with the safety-edge bezel; a second click within
 // 5 s deletes; expiry, an elsewhere press, or Escape disarms). The
 // #8 failure consequences, the .preset-note quiet refusals, and the
 // overwrite-on-collision semantics are unchanged from the dialog era.
@@ -78,7 +78,7 @@
 // must not silently regress just because the visual treatment is
 // borrowed) plus, for USER rows only, a sibling .preset-row-delete button.
 // Delete's two-step arm (armDeleteButton/disarmDeleteButton below) is the
-// same arm-relabel-to-"DELETE?"-with-an-edge-red-bezel/5s-window/no-
+// same arm-relabel-to-"Confirm delete"-with-an-edge-red-bezel/5s-window/no-
 // confirm() contract R2-3 established, generalized off a single constant
 // button to a mutable "currently armed" reference so arming any row's
 // delete auto-disarms whatever else was armed (only one thing is ever
@@ -158,7 +158,7 @@
   // single constant — arming any row's button auto-disarms whatever else
   // was armed (see armDeleteButton), keeping the same "only one thing is
   // ever mid-delete" contract with N possible buttons instead of one.
-  var DELETE_ARM_LABEL = 'DELETE?';
+  var DELETE_ARM_LABEL = 'Confirm delete';
   var DELETE_ARM_WINDOW_MS = 5000;
   var armedDeleteBtn = null;
   var armedDeleteName = null;
@@ -199,7 +199,7 @@
     namingRowEl.style.display = 'none';
 
     var label = document.createElement('label');
-    label.className = 'sr-only';
+    label.className = 'preset-name-label';
     label.textContent = 'Preset name';
     if (typeof label.setAttribute === 'function') {
       label.setAttribute('for', 'preset-name-input');
@@ -351,13 +351,13 @@
       // Defensive — the naming row's input maxLength stops typing past
       // 40; a paste path that somehow bypasses it still meets the same
       // bound here.
-      return { ok: false, message: 'Preset names are 1-40 characters.' };
+      return { ok: false, message: 'Enter 1 to 40 characters.' };
     }
     try {
       window.PresetStore.save(trimmed, window.ChainCanvas.getCurrentModel());
     } catch (err) {
       console.error('Presets panel: Save As "' + trimmed + '" failed — nothing was written', err);
-      return { ok: false, message: 'Could not save "' + trimmed + '" — nothing was written (storage failure)' };
+      return { ok: false, message: 'Could not save "' + trimmed + '". Your chain is still live, but this preset was not saved. Try again.' };
     }
     refreshPresetSelect(trimmed);
     setCurrentPreset(trimmed);
@@ -410,8 +410,8 @@
   }
 
   /**
-   * R2-3, generalized: arm one row's two-step Delete button — it relabels
-   * to DELETE? with the safety-edge-red bezel (an EDGE, never the
+   * R2-3, generalized: arm one row's two-step Delete button. It relabels
+   * to Confirm delete with the safety-edge-red bezel (an EDGE, never the
    * Bypass-only red fill), and a 5 s window holds the armed state.
    * Disarms whatever else was armed first, so only one row is EVER
    * mid-delete at a time (arming a second row's button is not a bug —
@@ -482,7 +482,7 @@
       window.PresetStore.remove(name);
     } catch (err) {
       console.error('Presets panel: Delete "' + name + '" failed — it is still saved', err);
-      showPresetNote('Could not delete "' + name + '" — it is still saved (storage failure)');
+      showPresetNote('Could not delete "' + name + '". It is still saved. Try again.');
       refreshPresetSelect();
       return false;
     }
@@ -567,7 +567,7 @@
       // Defensive — the dropdown/cards only ever list names the library
       // itself reported, so this needs the library to have changed
       // mid-session. Same quiet-note refusal as every other guard here.
-      showPresetNote('Could not load that preset — it may have been removed.');
+      showPresetNote('That preset is no longer available. Choose another preset.');
       return false;
     }
     applyLoadedPreset(factoryPreset);
@@ -614,7 +614,7 @@
       // so this needs the store to have changed since the last render
       // (e.g. another tab removed it). Same quiet-note refusal as every
       // other guard in this file.
-      showPresetNote('Could not load that preset — it may have been removed.');
+      showPresetNote('That preset is no longer available. Choose another preset.');
       return;
     }
     applyLoadedPreset(result);
@@ -818,7 +818,7 @@
     if (factory.length === 0 && userNames.length === 0) {
       var emptyAll = document.createElement('p');
       emptyAll.className = 'preset-list-empty';
-      emptyAll.textContent = 'No presets yet';
+      emptyAll.textContent = 'No presets are available.';
       presetListEl.appendChild(emptyAll);
       return;
     }
@@ -826,7 +826,7 @@
     if (visibleFactory.length === 0 && visibleUser.length === 0) {
       var emptyFiltered = document.createElement('p');
       emptyFiltered.className = 'preset-list-empty';
-      emptyFiltered.textContent = 'No presets match “' + (filterText || '') + '”';
+      emptyFiltered.textContent = 'No presets match "' + (filterText || '') + '". Clear the search to see all presets.';
       presetListEl.appendChild(emptyFiltered);
       return;
     }
@@ -950,6 +950,17 @@
     renderPresetList(presetSearchInputEl ? presetSearchInputEl.value : '');
   }
 
+  function syncCanvasPresetState() {
+    if (!window.CanvasRegister ||
+        typeof window.CanvasRegister.showPresetState !== 'function') {
+      return;
+    }
+    window.CanvasRegister.showPresetState(
+      currentPresetName,
+      !!(unsavedIndicatorEl && unsavedIndicatorEl.style.display !== 'none')
+    );
+  }
+
   /**
    * Update both the tracked `currentPresetName` state and its on-screen
    * display in one place, so the two can never drift apart.
@@ -959,6 +970,7 @@
   function setCurrentPreset(name) {
     currentPresetName = name;
     currentPresetNameEl.textContent = name || 'Unsaved chain';
+    syncCanvasPresetState();
   }
 
   /**
@@ -970,6 +982,7 @@
     if (unsavedIndicatorEl) {
       unsavedIndicatorEl.style.display = '';
     }
+    syncCanvasPresetState();
   }
 
   /**
@@ -982,6 +995,7 @@
     if (unsavedIndicatorEl) {
       unsavedIndicatorEl.style.display = 'none';
     }
+    syncCanvasPresetState();
   }
 
   function getDisplayState() {
@@ -1078,6 +1092,7 @@
   // pure read since issue #11 (no fresh-profile seeding; the "Yours"
   // group fills with the first explicit Save As).
   refreshPresetSelect();
+  syncCanvasPresetState();
 
   // VIS-3: the full preset-display write path is exported, not just
   // markModified. src/mcp-tools.js (save_preset + the MC-5 undo restores)

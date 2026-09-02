@@ -904,51 +904,98 @@ select.control {
   opacity: 0.55;
 }
 
-/* Narrow deck (<900px, item 1b): the deck re-packs so BYPASS NEVER
-   leaves the visible top — row 1 keeps the identity nameplate, the
-   agent chip, and BYPASS (its red ring at the row's end); the Start/
-   hint/device group takes the second row as a full-width block that
-   wraps internally (Start + hint over the device select — nothing may
-   overflow the deck); the DOT-MATRIX ETCH (lamp + status + readouts,
-   now ONE wrapper) wraps LAST. The deck is sticky, so every row stays
-   pinned. DOM order (and with it tab order and the chip's insertion
-   point) is untouched — presentation-only reordering via order. */
-@media (max-width: 900px) {
+/* Intermediate laptops need two deliberate rows. Letting the flex row
+   wrap on its own stranded Bypass at the far left of a second line at
+   1280px, separating the safety key from the engine state it controls.
+   This grid keeps the etch readable on row one and groups the human
+   controls, agent state, and Bypass on row two. Above 1500px the original
+   single-row deck still wins; below 901px the compact grid owns the stack. */
+@media (min-width: 901px) and (max-width: 1500px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'identity views etch etch'
+      'controls controls agent bypass';
+  }
+
   .topbar-identity {
-    order: 1;
+    grid-area: identity;
+    flex: none;
   }
 
-  /* wayfinder #47: sits right after the nameplate on the deck's first
-     row (same order as .topbar-identity; DOM source order breaks the
-     tie), same treatment .agent-chip/.bypass-btn already get — compact
-     enough to never need its own full-width row. */
   .topbar-viewswitch {
-    order: 1;
+    grid-area: views;
   }
 
-  .agent-chip {
-    order: 2;
-  }
-
-  .bypass-btn {
-    order: 3;
+  .system-etch {
+    grid-area: etch;
   }
 
   .topbar-controls {
-    order: 4;
+    grid-area: controls;
+    margin-left: 0;
+  }
+
+  .agent-chip {
+    grid-area: agent;
+    justify-self: end;
+  }
+
+  .bypass-btn {
+    grid-area: bypass;
+  }
+}
+
+/* Narrow deck (<900px, item 1b): the deck re-packs so BYPASS NEVER
+   leaves the visible top. The nameplate and view switch share row one;
+   agent state and Bypass share row two; Start/device controls and the
+   machine etch each get a full-width row. Explicit grid areas prevent
+   the nameplate from collapsing to a single letter while keeping DOM
+   and keyboard order untouched. */
+@media (max-width: 900px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'identity views'
+      'agent bypass'
+      'controls controls'
+      'etch etch';
+    padding-inline: 0.75rem;
+  }
+
+  .topbar-identity {
+    grid-area: identity;
+    min-width: 0;
+  }
+
+  .topbar-viewswitch {
+    grid-area: views;
+  }
+
+  .agent-chip {
+    grid-area: agent;
+    justify-self: start;
+  }
+
+  .bypass-btn {
+    grid-area: bypass;
+  }
+
+  .topbar-controls {
+    grid-area: controls;
     /* A full-width block so its own internal wrap owns the deck's width
        — the select can never push past the frame (the packing defect
        the first narrow-deck render exposed: controls as an unbreakable
        flex:none group overflowed the viewport). */
-    flex-basis: 100%;
     flex-wrap: wrap;
     row-gap: 0.5rem;
     margin-left: 0;
   }
 
   .system-etch {
-    order: 9;
-    flex-basis: 100%;
+    grid-area: etch;
     justify-content: flex-start;
   }
 
@@ -960,6 +1007,85 @@ select.control {
 
   .start-hint {
     max-width: 9rem;
+  }
+
+  /* Stacked zones use a horizontal groove. The desktop sidebar's right
+     edge otherwise survives as a stray line down the phone layout. */
+  .presets-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--pm-groove-cut);
+    box-shadow: inset 0 -1px 0 var(--pm-groove-lip);
+  }
+
+  /* Sounds remains first in source and focus order, but it no longer
+     consumes the entire page before Current sound. The library scrolls
+     inside a bounded region sized for roughly three cards, keeping the
+     primary stage reachable in the first page scroll on short phones. */
+  #simple-library-panel {
+    max-height: min(22rem, 44vh);
+  }
+
+  .simple-library-body {
+    padding-right: 0.25rem;
+  }
+
+  .simple-stage {
+    justify-content: flex-start;
+    padding: 1.25rem 1rem 1.5rem;
+  }
+
+  .simple-chip,
+  .simple-transport .control {
+    min-height: 2.75rem;
+  }
+}
+
+/* Phone-width deck: both grid columns must be allowed to shrink. The
+   wider narrow layout uses an auto-sized safety column, but at 390px
+   that column's intrinsic button width can push the whole deck past the
+   viewport. Equal shrinkable tracks keep every control inside the frame. */
+@media (max-width: 480px) {
+  .topbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .topbar-viewswitch {
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+  }
+
+  .view-switch-key {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.35rem;
+  }
+
+  .agent-chip,
+  .bypass-btn {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .bypass-btn {
+    padding-inline: 0.75rem;
+  }
+
+  .topbar-controls {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.6rem;
+  }
+
+  .start-hint {
+    display: none;
+  }
+
+  #input-device-select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
   }
 }
 
@@ -1848,6 +1974,50 @@ select.control {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Persistent chain identity on the register's right edge. The control
+   readout remains transient and aria-hidden; this sibling is the one
+   accessible status source for saved versus unsaved preset state. */
+.register-preset-state {
+  position: absolute;
+  z-index: 1;
+  top: 0.35rem;
+  right: 0.9rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  max-width: min(45%, 24rem);
+  min-width: 0;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--pm-groove-lip);
+  background: var(--pm-register-bg);
+  font-family: var(--font-readout);
+  font-size: 0.85rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.register-preset-label {
+  flex: none;
+  color: var(--pm-print-dim);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.register-preset-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pm-print-hi);
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.register-preset-state[data-unsaved='true'] .register-preset-value {
+  color: var(--pm-accent);
 }
 
 /* ONE blink marks the live control: the register's value segment blinks
@@ -3278,6 +3448,12 @@ body.chain-dragging .node-drag-handle {
   margin-top: 0.75rem;
 }
 
+.preset-name-label {
+  color: var(--pm-print-hi);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 input.preset-name-input {
   display: block;
   width: 100%;
@@ -4425,11 +4601,30 @@ body.view-advanced #simple-layout {
   display: none;
 }
 
+/* The diagnostic register belongs to the hands-on chain builder. Simple
+   keeps the engine state sentence but removes sample rate, latency, and
+   node count from the sound-picking path. */
+body:not(.view-advanced) .readout-group {
+  display: none;
+}
+
 .simple-library-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding-top: 0.4rem;
+}
+
+.simple-library-gate-note {
+  margin: 0.35rem 0 0.2rem;
+  color: var(--pm-print-dim);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.preset-row-load:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .simple-library-placeholder {
@@ -4459,14 +4654,6 @@ body.view-advanced #simple-layout {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.simple-kicker {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--pm-print);
 }
 
 .simple-stage-head {
@@ -4558,12 +4745,11 @@ body.view-advanced #simple-layout {
    SIMPLE VIEW — LIBRARY + TRANSPORT (wayfinder #48, map #43)
    ===========================================================================
    The card rows themselves reuse .preset-row/.preset-row-load/
-   .preset-row-name/.preset-row-preview/.preset-row-tags/.preset-group-label/
+   .preset-row-name/.preset-row-preview/.preset-group-label/
    .preset-list/.preset-list-empty/.preset-search VERBATIM (Advanced's own
    Presets panel, above) — same visual system, same "Try a preset" pattern;
-   only the chips and the transport are new here. A Simple card's
-   .preset-row-tags carries the PUBLIC taxonomy words (genre/vibe/use-case/
-   gag), not Advanced's family-code shorthand — different content, same row.
+   only the chips and the transport are new here. Simple keeps taxonomy
+   available to filters and search without repeating it on every card.
    =========================================================================== */
 
 /* Mirrors #presets-panel-content > .control(.preset-search)'s own two

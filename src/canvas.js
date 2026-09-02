@@ -833,6 +833,9 @@
   var registerParamEl = null;
   var registerValueEl = null;
   var registerHelpEl = null;
+  var registerPresetEl = null;
+  var registerPresetValueEl = null;
+  var registerPresetLastKey = null;
 
   function buildDisplayRegister() {
     if (typeof document.querySelector !== 'function' ||
@@ -870,6 +873,47 @@
     registerEl.appendChild(main);
     registerEl.appendChild(registerHelpEl);
     panel.insertBefore(registerEl, panel.firstChild);
+
+    // The preset state is persistent, unlike the transient control readout
+    // above. Keep it as an accessible sibling over the register's right edge
+    // so aria-hidden on the redundant control display remains honest.
+    registerPresetEl = document.createElement('div');
+    registerPresetEl.className = 'register-preset-state';
+    registerPresetEl.setAttribute('role', 'status');
+    registerPresetEl.setAttribute('aria-live', 'polite');
+    registerPresetEl.setAttribute('aria-atomic', 'true');
+
+    var presetLabel = document.createElement('span');
+    presetLabel.className = 'register-preset-label';
+    presetLabel.textContent = 'PRESET';
+    registerPresetValueEl = document.createElement('span');
+    registerPresetValueEl.className = 'register-preset-value';
+    registerPresetEl.appendChild(presetLabel);
+    registerPresetEl.appendChild(registerPresetValueEl);
+    panel.insertBefore(registerPresetEl, registerEl.nextSibling);
+
+    showRegisterPresetState(null, false);
+  }
+
+  function showRegisterPresetState(name, modified) {
+    if (!registerPresetEl || !registerPresetValueEl) {
+      return;
+    }
+    var cleanName = typeof name === 'string' && name.trim() ? name : '';
+    var unsaved = modified === true || !cleanName;
+    var visibleValue = unsaved ? 'UNSAVED' : cleanName;
+    var key = (unsaved ? 'unsaved:' : 'saved:') + visibleValue;
+    if (key === registerPresetLastKey) {
+      return;
+    }
+    registerPresetLastKey = key;
+    registerPresetValueEl.textContent = visibleValue;
+    registerPresetEl.setAttribute('data-unsaved', unsaved ? 'true' : 'false');
+    registerPresetEl.setAttribute(
+      'aria-label',
+      'Current preset: ' + (unsaved ? 'Unsaved preset' : cleanName)
+    );
+    registerPresetEl.setAttribute('title', unsaved ? 'Unsaved preset' : cleanName);
   }
 
   function setRegisterText(module, param, value, help) {
@@ -2800,6 +2844,7 @@
   window.CanvasRegister = {
     showParam: showRegisterParam,
     showPreview: showRegisterPreview,
-    hidePreview: hideRegisterPreview
+    hidePreview: hideRegisterPreview,
+    showPresetState: showRegisterPresetState
   };
 })();

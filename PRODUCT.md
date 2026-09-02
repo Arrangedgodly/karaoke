@@ -34,6 +34,13 @@ Success means a non-technical person can reach a useful sound, understand
 what changed, undo it, and retain immediate human control over Start, the
 microphone, and Bypass. Live audio safety remains the hard limit.
 
+The shipped interface has two presentations over the same live chain. Simple
+view is the default and centers finding, loading, and trying sounds without
+exposing chain construction or parameter controls. Advanced view exposes the
+full hands-on chain builder. Start, microphone selection, Bypass, and the
+input/output meters form the safety floor and remain equally available in both
+views.
+
 ## Positioning
 
 A zero-install live vocal-chain builder whose audio engine runs locally in the
@@ -56,8 +63,18 @@ one chain, one state, two control paths.
 - **Rituals**: "when in doubt, hit Bypass first"; presets saved per event
   type; chain autosaves to localStorage.
 - **Prompted setup**: the user describes a result in everyday words. The
-  agent reads capabilities and current state, then calls the same guarded
-  edit paths the direct UI uses.
+  agent reads capabilities and current state, tries the closest factory preset
+  first when one matches the dominant intent, then adjusts it through the same
+  guarded edit paths the direct UI uses. A request with no matching preset is
+  a coverage gap and may require a fresh chain.
+- **Two-view workflow**: Simple view is the default preset-led presentation.
+  It shows the current sound, plain filters, a searchable sound library,
+  Previous/Next controls, and plain-language effect summaries. Advanced view
+  provides direct chain construction, reordering, per-effect bypass, and
+  parameter editing. Its chain register persistently names the clean loaded
+  preset and changes to "Unsaved" after the first accepted adjustment or for
+  a chain built without a saved preset. Switching views changes presentation
+  only; the live chain, engine, and safety floor do not change.
 - **Preset sharing**: after saving a prompted result, the user can download
   a versioned preset JSON file. Another VoxChain user can import it into the
   personal preset list without an account or server. Shared files contain
@@ -72,15 +89,16 @@ one chain, one state, two control paths.
 
 ## Capabilities and Constraints
 
-Confirmed functionality: 10 node types (gain, compressor, EQ, delay, reverb,
-limiter, plus cycle-3's noise gate, distortion, chorus, autotune — autotune
-flagged experimental in the UI and the agent capabilities readout) registered
-through a type registry; drag-and-drop build/reorder (hand-rolled pointer
-gestures with a dashed ghost slot for the drop preview — no drag library);
-per-node param sliders plus dropdown selects for discrete params
-(autotune's key/scale); named presets + autosave (localStorage); emergency
-bypass (audio path + spacebar); per-effect bypass that keeps a plugin in
-the chain and preserves its settings; gated disabled-until-started states.
+Confirmed functionality: 14 node types registered through a type registry:
+gain, compressor, EQ, delay, reverb, limiter, noise gate, distortion, chorus,
+autotune, pitch shift, tremolo, bitcrusher, and phaser. Autotune remains
+experimental in the UI and the agent capabilities readout. Advanced view
+supports drag-and-drop building and reordering with hand-rolled pointer
+gestures and a dashed ghost slot, per-node parameters, and per-effect bypass
+that keeps the plugin and its settings in the chain. Simple view provides the
+preset-led library and current-sound workflow over that same chain. The app
+also has named presets, localStorage autosave, emergency bypass through the
+audio path or spacebar, and disabled-until-started mutation gates.
 
 Cycle-2 additions (approved scope): WebMCP server shim (feature-detected,
 silent no-op when unavailable), 10 tools (`get_capabilities`, `get_chain`,
@@ -95,6 +113,13 @@ no new tools.
 The contest release adds human-controlled personal-preset transfer through
 download and import. It reuses the existing preset schema and safety policy.
 It does not add a WebMCP tool, cloud storage, or public preset directory.
+
+The factory preset library is coverage-driven data rather than hand-mirrored
+loader code. Every factory preset must pass a human audition before shipping,
+and its provenance records that accepted verdict. The public tag vocabulary is
+append-only and grows when a real request exposes a coverage gap. Browser
+agents follow a preset-first strategy: load and tune a close factory preset
+before building a chain from scratch.
 
 Hard constraints: vanilla JS, **no build step**;
 zero runtime internet dependency; localStorage persistence; no in-app LLM /
@@ -189,6 +214,5 @@ The repo is renamed **voxchain** and the deployment moves to a
 **Cloudflare Worker** as the main serving path. GitHub Pages is retired:
 the Pages site was deleted from the repo (it had been building from
 `main` to `arrangedgodly.com/voxchain/` after the rename, custom domain
-detached) and the `CNAME` artifact is removed. The prior live URL
-(voxchain.arrangedgodly.com) is expected to move to the Worker with the
-domain's DNS — update this record if the final URL differs.
+detached) and the `CNAME` artifact is removed. The Worker now serves the live
+app at **https://voxchain.arrangedgodly.com/**.

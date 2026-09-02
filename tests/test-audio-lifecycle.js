@@ -604,12 +604,12 @@ async function main() {
   endedTrack.__fire('ended'); // exactly what a real unplugged mic fires
   await settle();
 
-  check(statusText(els) === 'Mic was unplugged.', 'C1: track end surfaces operator copy');
+  check(statusText(els) === 'Microphone disconnected.', 'C1: track end surfaces operator copy');
   check(!isLiveVisible(), 'C1: the strip is NOT Live after track end');
   check(statusWrap.classList.contains('error'), 'C1: the error register is raised');
   check(startBtn.disabled === false, 'C1: Start is re-enabled as the recovery action');
   check(
-    startHint.textContent === 'Pick another mic from the dropdown, then press Start.',
+    startHint.textContent === 'Reconnect the microphone, then press Start.',
     'C1: the hint names the recovery action'
   );
   check(MT.stopped === stoppedBefore + 1, 'C1: meters stopped');
@@ -684,7 +684,7 @@ async function main() {
   fireDeviceChange();
   await settle();
 
-  check(statusText(els) === 'Mic was unplugged.', 'F1: device removal surfaces operator copy');
+  check(statusText(els) === 'Microphone disconnected.', 'F1: device removal surfaces operator copy');
   check(!isLiveVisible(), 'F1: the strip is NOT Live after device removal');
   check(startBtn.disabled === false, 'F1: Start is re-enabled as the recovery action');
   check(MT.stopped === stoppedBefore + 1, 'F1: meters stopped');
@@ -724,7 +724,7 @@ async function main() {
 
   check(AE.stream === null && AE.sourceNode === null && AE.isStarted === false,
     'G2: active-track loss tears the engine down while the switch is pending');
-  check(statusText(els) === 'Mic was unplugged.' && !isLiveVisible(),
+  check(statusText(els) === 'Microphone disconnected.' && !isLiveVisible(),
     'G2: the loss state remains visible while the switch is pending');
   check(deviceSelect.disabled === true,
     'G2: the microphone selector is disabled while the engine is stopped');
@@ -779,7 +779,8 @@ async function main() {
   check(AE.currentDeviceId === 'd2', 'H1: the old stream (d2) is untouched by the failed switch');
   check(!isLiveVisible() === false, 'H1: the engine stays live (dot truthful)');
   check(
-    statusWrap.classList.contains('error') && statusText(els).indexOf('gone') !== -1,
+    statusWrap.classList.contains('error') &&
+      statusText(els) === 'That microphone is unavailable. Choose another.',
     'H1: entry-3 switch failure copy still surfaces'
   );
   check(selectorValue(deviceSelect) === 'd2', 'H1: the selector snapped back to the ACTIVE device');
@@ -800,7 +801,7 @@ async function main() {
   deviceSelect.value = 'd3';
   deviceSelect.__fire('change');
   await settle();
-  check(statusText(els) === 'Switching mic...' && !isLiveVisible(),
+  check(statusText(els) === 'Switching microphone...' && !isLiveVisible(),
     'I1: a pending switch clears the Live claim');
   resolveGumAt(0, 'd3');
   await settle();
@@ -985,7 +986,7 @@ async function main() {
   // (live engine -> track end), the strip cannot read Live.
   lastCreatedTrack.__fire('ended');
   await settle();
-  check(statusText(els) === 'Mic was unplugged.' && !isLiveVisible(), 'J1: track end on the FINAL live session leaves no Live');
+  check(statusText(els) === 'Microphone disconnected.' && !isLiveVisible(), 'J1: track end on the FINAL live session leaves no Live');
   check(startBtn.disabled === false && MT.stopped > 0, 'J1: recovery (Start) and meters-stopped hold');
 
   // --------------------------------------------------------------------
@@ -1067,11 +1068,11 @@ async function main() {
     // transition — the loss copy and its error register must survive.
     lastCreatedTrack.__fire('ended');
     await settle();
-    check(statusText2.textContent === 'Mic was unplugged.', 'K3 setup: the track loss owns the strip');
+    check(statusText2.textContent === 'Microphone disconnected.', 'K3 setup: the track loss owns the strip');
     createdContexts[createdContexts.length - 1].__setState('running');
     await settle();
     check(
-      statusText2.textContent === 'Mic was unplugged.' &&
+      statusText2.textContent === 'Microphone disconnected.' &&
         statusWrap2.classList.contains('error') &&
         !statusWrap2.classList.contains('live'),
       'K3: a running transition while the engine is dead does NOT demote the loss copy'
@@ -1105,7 +1106,8 @@ async function main() {
     createdContexts[createdContexts.length - 1].__setState('running');
     await settle();
     check(
-      statusWrap2.classList.contains('error') && statusText2.textContent.indexOf('gone') !== -1,
+      statusWrap2.classList.contains('error') &&
+        statusText2.textContent === 'That microphone is unavailable. Choose another.',
       'K4: a running transition does NOT erase the shown switch-failure copy'
     );
   }
@@ -1166,7 +1168,7 @@ async function main() {
     pendingStartupContext.__settleResume();
     await settle();
     check(
-      sandboxStartupPending.__els['status-text'].textContent === 'Requesting mic access...' &&
+      sandboxStartupPending.__els['status-text'].textContent === 'Waiting for microphone permission...' &&
         !sandboxStartupPending.__els['status'].classList.contains('live') &&
         sandboxStartupPending.__els['input-device-select'].disabled === true &&
         sandboxStartupPending.__els['bypass-toggle-button'].disabled === true &&
@@ -1299,7 +1301,7 @@ async function main() {
       startupRequests.length === 2 && startupRequests[1].candidate.length === 0 &&
         sandbox3.AudioEngine.isStarted === true &&
         sandbox3.__els['status-text'].textContent ===
-          'Stopped — saved chain failed to load; started empty' &&
+          'Stopped. Saved chain could not load, so no effects are active.' &&
         !sandbox3.__els['status'].classList.contains('live') &&
         sandbox3.__chainCanvas.inert === true &&
         sandbox3.__els['bypass-toggle-button'].disabled === true &&
@@ -1310,7 +1312,7 @@ async function main() {
     await settle();
     check(
       sandbox3.__els['status-text'].textContent ===
-          'Live — saved chain failed to load; started empty' &&
+          'Live. Saved chain could not load, so no effects are active.' &&
         sandbox3.__els['status'].classList.contains('live') &&
         sandbox3.__chainCanvas.inert === false &&
         sandbox3.__els['bypass-toggle-button'].disabled === false,

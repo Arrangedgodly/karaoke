@@ -187,6 +187,86 @@ function node(id, type, params) {
 })();
 
 // ==========================================================================
+// H. SIMPLE PRE-START PARITY — browsing stays available while every chain
+//    mutation closes until the same live predicate that gates Advanced wins.
+// ==========================================================================
+
+(function sectionH() {
+  console.log('H. Simple pre-Start controls fail closed and explain the recovery');
+
+  var loadCalls = [];
+  var engine = {
+    isStarted: false,
+    isTrackLive: false,
+    audioContext: null
+  };
+  var entries = [
+    { name: 'Warm Ballad', description: 'Warm and close.', tags: ['vibe:warm'] },
+    { name: 'Rock Night', description: 'Forward rock vocal.', tags: ['genre:Rock'] }
+  ];
+  var h = makeSimpleViewSandbox({
+    AudioEngine: engine,
+    AudioGraph: { getModel: function () { return []; } },
+    PresetsUI: {
+      getDisplayState: function () { return { name: null, modified: false }; },
+      loadFactoryPreset: function (name) { loadCalls.push(name); },
+      saveCurrentChainAs: function () { return { ok: true }; }
+    },
+    FactoryPresets: {
+      listDetailed: function () { return entries; },
+      describeAll: function () { return entries; }
+    },
+    PresetStore: { listNames: function () { return []; } }
+  });
+
+  var cards = h.els['simple-library-body'].children[2];
+  var firstTry = cards.children[1].children[0];
+  check(h.els['simple-cs-name'].textContent === 'Ready to start',
+    'H1: the stopped stage names the real state instead of claiming Custom sound');
+  check(h.els['simple-summary'].hidden === true && h.els['simple-summary'].children.length === 0,
+    'H1: the stopped stage does not repeat the Start instruction');
+  check(h.els['simple-library-gate-note'].hidden === false,
+    'H1: the library shows a visible pre-Start explanation');
+  check(firstTry.disabled === true && h.els['simple-transport'].hidden === true &&
+      h.els['simple-transport'].children.length === 0,
+    'H2: Try is disabled and unavailable Previous/Next controls stay hidden before Start');
+  check(h.els['simple-save-btn'].hidden === true && h.els['simple-save-btn'].disabled === true,
+    'H2: Save this sound is hidden and disabled before Start');
+
+  firstTry.fire('click');
+  h.els['simple-save-btn'].fire('click');
+  check(loadCalls.length === 0 && h.els['simple-save-row'].children.length === 0,
+    'H3: even a synthetic click cannot bypass the pre-Start guards');
+
+  engine.isStarted = true;
+  engine.isTrackLive = true;
+  engine.audioContext = { state: 'running' };
+  h.window.SimpleView.onEngineStarted();
+  cards = h.els['simple-library-body'].children[2];
+  firstTry = cards.children[1].children[0];
+  var prev = h.els['simple-transport'].children[0];
+  var next = h.els['simple-transport'].children[2];
+  check(h.els['simple-library-gate-note'].hidden === true && firstTry.disabled === false,
+    'H4: a live engine hides the gate note and enables Try');
+  check(h.els['simple-transport'].hidden === false && prev.disabled === false &&
+      next.disabled === false && h.els['simple-save-btn'].hidden === false,
+    'H4: transport and Save become available with the live engine');
+  firstTry.fire('click');
+  check(loadCalls.length === 1 && loadCalls[0] === 'Warm Ballad',
+    'H4: the shared preset load path works after Start');
+
+  h.els['simple-save-btn'].fire('click');
+  check(h.els['simple-save-row'].hidden === false,
+    'H5: the naming row can open while live');
+  engine.isTrackLive = false;
+  h.window.SimpleView.onEngineStopped();
+  check(h.els['simple-save-row'].hidden === true && h.els['simple-save-btn'].hidden === true,
+    'H5: engine loss closes the naming row and re-gates Save');
+  check(h.els['simple-library-gate-note'].hidden === false,
+    'H5: engine loss restores the visible recovery instruction');
+})();
+
+// ==========================================================================
 // B-D. src/simple-view.js against a minimal fake DOM.
 // ==========================================================================
 
@@ -256,7 +336,7 @@ function makeStorage() {
 
 function makeSimpleViewSandbox(collaborators) {
   var registry = {};
-  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
+  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
     var tag = id === 'simple-summary' ? 'ol' : (id.indexOf('view-switch') === 0 ? 'button' : 'div');
     registry[id] = makeElement(tag);
   });
@@ -274,6 +354,11 @@ function makeSimpleViewSandbox(collaborators) {
   };
   sandbox.window = sandbox;
   sandbox.localStorage = makeStorage();
+  sandbox.AudioEngine = {
+    isStarted: true,
+    isTrackLive: true,
+    audioContext: { state: 'running' }
+  };
   Object.keys(collaborators || {}).forEach(function (key) {
     sandbox[key] = collaborators[key];
   });
@@ -311,7 +396,7 @@ function makeSimpleViewSandbox(collaborators) {
   seeded.setItem('karaoke-view-v1', 'advanced');
   var reload2 = (function () {
     var registry = {};
-    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
+    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
       registry[id] = makeElement(id.indexOf('view-switch') === 0 ? 'button' : 'div');
     });
     var bodyEl = makeElement('body');
@@ -323,7 +408,12 @@ function makeSimpleViewSandbox(collaborators) {
         getElementById: function (id) { return registry[id] || null; },
         body: bodyEl
       },
-      localStorage: seeded
+      localStorage: seeded,
+      AudioEngine: {
+        isStarted: true,
+        isTrackLive: true,
+        audioContext: { state: 'running' }
+      }
     };
     sandbox.window = sandbox;
     vm.createContext(sandbox);
@@ -426,8 +516,8 @@ function makeSimpleViewSandbox(collaborators) {
   check(custom.nameEl.children.length === 1, 'D3: no overclaiming marker — presets-ui.js tracks no provenance to name it');
 
   var empty = harnessWith([], { name: null, modified: false });
-  check(empty.rows.length === 1 && empty.rows[0].textContent === 'Press Start to power on',
-    'D4: an empty chain (pre-Start) shows the same instruction Advanced\'s own empty-hint gives');
+  check(empty.rows.length === 1 && empty.rows[0].textContent === 'No effects in this sound',
+    'D4: a live empty chain names the sound state instead of repeating the Start instruction');
 })();
 
 // ==========================================================================
@@ -479,6 +569,9 @@ function makeSimpleViewSandbox(collaborators) {
         break;
       }
     }
+    if (start === -1) {
+      return [];
+    }
     var end = rows.length;
     for (var j = start; j < rows.length; j++) {
       if (rows[j].className === 'preset-group-label') {
@@ -489,12 +582,19 @@ function makeSimpleViewSandbox(collaborators) {
     return rows.slice(start, end);
   }
 
-  console.log('  E1: default filter (All) lists every factory entry, both groups render');
+  console.log('  E1: default filter lists every factory entry and any existing user presets');
   var f1 = harness(['My Stage Set', 'Sunday Hosting']);
   check(f1.chips.length === 6, 'E1: five plain filter chips plus the count readout exist (All/Warm/Rock/Funny/Speech + count)');
   check(f1.chips[0].classList.contains('simple-chip-on'), 'E1: All starts active');
+  check(f1.chips[5].hidden === true && f1.chips[5].textContent === '',
+    'E1: the result count stays hidden when All already shows the full library');
   var factoryRows = groupCards(f1.cardsList, 'Factory');
   check(factoryRows.length === 5, 'E1: All lists every factory entry (' + factoryRows.length + ')');
+  check(factoryRows.every(function (row) {
+    return row.children[0].children.every(function (child) {
+      return child.className !== 'preset-row-tags';
+    });
+  }), 'E1: Simple cards omit repeated taxonomy tags while search still indexes them');
   var yoursRows = groupCards(f1.cardsList, 'Yours');
   check(yoursRows.length === 2 && yoursRows[0].children[0].children[0].textContent === 'My Stage Set',
     'E1: Yours lists the user\'s own saved sounds');
@@ -515,9 +615,11 @@ function makeSimpleViewSandbox(collaborators) {
     check(JSON.stringify(names) === JSON.stringify(c.expectNames),
       'E2: "' + c.label + '" resolves to exactly ' + JSON.stringify(c.expectNames) + ' (got ' + JSON.stringify(names) + ')');
     check(chip.classList.contains('simple-chip-on'), 'E2: "' + c.label + '" shows as the active chip');
+    check(f.chips[5].hidden === false && f.chips[5].textContent === c.expectNames.length + ' of 5',
+      'E2: "' + c.label + '" reveals the narrowed result count only when it adds information');
   });
 
-  console.log('  E3: a filter matching nothing is a visible coverage gap, not a crash');
+  console.log('  E3: a filter matching nothing gets a user-facing empty state');
   var f3 = harness([]);
   // No factory entry in this fixture carries a Rock genre AND a warm vibe
   // at once — force an empty result by searching for something no entry's
@@ -526,8 +628,8 @@ function makeSimpleViewSandbox(collaborators) {
   f3.search.fire('input');
   var f3Factory = groupCards(f3.cardsList, 'Factory');
   check(f3Factory.length === 1 && f3Factory[0].className === 'preset-list-empty' &&
-      /coverage gap/.test(f3Factory[0].textContent),
-    'E3: an empty factory result shows the settled coverage-gap copy');
+      f3Factory[0].textContent === 'No factory sounds match your search.',
+    'E3: an empty factory result explains that the current search has no matches');
 
   console.log('  E4: search matches name, description, and tags — Yours included, chips unaffected');
   var f4 = harness(['Warm Ballad Take Two']);
@@ -541,11 +643,11 @@ function makeSimpleViewSandbox(collaborators) {
   var f4Yours = groupCards(f4.cardsList, 'Yours').map(function (r) { return r.children[0].children[0].textContent; });
   check(f4Yours.indexOf('Warm Ballad Take Two') !== -1, 'E4: search also narrows Yours (settled #43/#45 spec)');
 
-  console.log('  E5: no saved sounds at all reads differently from "search matched nothing"');
+  console.log('  E5: an empty user namespace adds no empty group to the default library');
   var f5 = harness([]);
   var f5Empty = groupCards(f5.cardsList, 'Yours');
-  check(f5Empty.length === 1 && /save will show up here/.test(f5Empty[0].textContent),
-    'E5: a genuinely empty Yours shows the save-invitation copy, not the search-miss copy');
+  check(f5Empty.length === 0,
+    'E5: Yours stays absent until at least one user preset exists');
 
   console.log('  E6: a card click "tries" the preset through the shared PresetsUI load path');
   var f6 = harness(['My Stage Set']);
@@ -793,12 +895,12 @@ function makeSimpleViewSandbox(collaborators) {
   var g2 = harness({ name: 'Warm Ballad', modified: true });
   g2.saveBtn.fire('click');
   check(g2.saveRow.hidden === false, 'G2: clicking Save this sound opens the naming row');
-  var input = g2.saveRow.children[0];
+  var input = g2.saveRow.children[1];
   check(input.value === 'Warm Ballad', 'G2: the input is pre-filled with the sound\'s current name');
 
   console.log('  G3: confirming submits through PresetsUI.saveCurrentChainAs and closes on success');
   input.value = 'My Warm Take';
-  var confirmBtn = g2.saveRow.children[1].children[0];
+  var confirmBtn = g2.saveRow.children[2].children[0];
   confirmBtn.fire('click');
   check(g2.saveCalls.length === 1 && g2.saveCalls[0] === 'My Warm Take',
     'G3: Save submits the input\'s current value through saveCurrentChainAs');
@@ -807,18 +909,18 @@ function makeSimpleViewSandbox(collaborators) {
   console.log('  G4: Enter confirms, Escape cancels, a failure keeps the row open with a note');
   var g4 = harness({ name: null, modified: false }, { saveResult: { ok: false, message: 'Give the preset a name first.' } });
   g4.saveBtn.fire('click');
-  var g4Input = g4.saveRow.children[0];
+  var g4Input = g4.saveRow.children[1];
   g4Input.value = '';
   g4Input.fire('keydown', { key: 'Enter' });
   check(g4.saveCalls.length === 1, 'G4: Enter submits the row exactly like clicking Save');
   check(g4.saveRow.hidden === false, 'G4: a failed save keeps the naming row open (so the operator can retry)');
-  var noteEl = g4.saveRow.children[2];
+  var noteEl = g4.saveRow.children[3];
   check(noteEl.hidden === false && noteEl.textContent === 'Give the preset a name first.',
     'G4: the failure message shows in the row\'s own note');
 
   var g4b = harness({ name: null, modified: false });
   g4b.saveBtn.fire('click');
-  g4b.saveRow.children[0].fire('keydown', { key: 'Escape' });
+  g4b.saveRow.children[1].fire('keydown', { key: 'Escape' });
   check(g4b.saveRow.hidden === true && g4b.saveCalls.length === 0,
     'G4: Escape cancels without ever calling saveCurrentChainAs');
 

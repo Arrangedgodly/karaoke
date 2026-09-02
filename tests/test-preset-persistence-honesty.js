@@ -393,6 +393,12 @@ function createEnv(options) {
     },
     localStorage: storage
   };
+  env.presetRegister = [];
+  sandbox.CanvasRegister = {
+    showPresetState: function (name, modified) {
+      env.presetRegister.push({ name: name, modified: modified });
+    }
+  };
   sandbox.window = sandbox;
   sandbox.AudioEngine = { isStarted: false };
   vm.createContext(sandbox);
@@ -971,6 +977,11 @@ async function main() {
       'H1: the unsaved dot is cleared'
     );
     check(
+      env.presetRegister[env.presetRegister.length - 1].name === 'Happy Path' &&
+        env.presetRegister[env.presetRegister.length - 1].modified === false,
+      'H1: the canvas register shows the clean saved preset name'
+    );
+    check(
       after.undoPushes === before.undoPushes + 1,
       'H1: exactly ONE undo entry was pushed'
     );
@@ -1012,6 +1023,11 @@ async function main() {
         env.panel.byId['unsaved-indicator'].style.display !== 'none',
       'H3: undo restore() put the display back (name + unsaved dot restored)'
     );
+    check(
+      env.presetRegister[env.presetRegister.length - 1].name === null &&
+        env.presetRegister[env.presetRegister.length - 1].modified === true,
+      'H3: undo restore() also returns the canvas register to UNSAVED'
+    );
   }
 
   // ------------------------------------------------------------------
@@ -1024,13 +1040,13 @@ async function main() {
 
     env.confirmResponse = true;
     // R2-3, generalized: two-step in-panel Delete on "Baseline"'s OWN row
-    // button — first click ARMS (relabel to "DELETE?"), second click
+    // button — first click ARMS (relabel to "Confirm delete"), second click
     // confirms. No confirm() anywhere.
     var deleteBtnEl = findPresetRowDeleteBtn(env, 'Baseline');
     deleteBtnEl.__fire('click'); // arm
     check(
-      deleteBtnEl.textContent === 'DELETE?',
-      'I1: the first Delete click ARMS the button (relabelled "DELETE?")'
+      deleteBtnEl.textContent === 'Confirm delete',
+      'I1: the first Delete click ARMS the button with a specific confirmation label'
     );
     deleteBtnEl.__fire('click'); // confirm
     check(env.confirmCalls === 0, 'I1: window.confirm was NEVER called (two-step in-panel)');
@@ -1288,7 +1304,7 @@ async function main() {
     var note = noteElement(env);
     check(
       !!note && note.style.display !== 'none' &&
-        note.textContent === 'Could not load that preset — it may have been removed.',
+        note.textContent === 'That preset is no longer available. Choose another preset.',
       'L1: a vanished USER preset surfaces the quiet .preset-note refusal (exact sentence)'
     );
     check(env.alertCalls === 0, 'L1: the browser alert was NEVER called (the PS-3 remnant is gone)');
@@ -1324,7 +1340,7 @@ async function main() {
     note = noteElement(env);
     check(
       !!note && note.style.display !== 'none' &&
-        note.textContent === 'Could not load that preset — it may have been removed.',
+        note.textContent === 'That preset is no longer available. Choose another preset.',
       'L2: a vanished FACTORY preset surfaces the same quiet refusal'
     );
     check(env.alertCalls === 0, 'L2: the browser alert was NEVER called');
