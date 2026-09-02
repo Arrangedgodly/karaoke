@@ -26,6 +26,8 @@
 
   window.ToneAdapter.register('bitcrusher', {
     label: 'Bitcrusher',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Old video-game sound',
     paramSpec: [
       {
         id: 'bits',

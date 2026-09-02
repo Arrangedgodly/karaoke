@@ -89,8 +89,9 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
 
 ### Content lane
 
-- **GEN-1 — Genre candidates (6)** *(medium)* — status: `awaiting-approval`
-  (branch `gen-1-genre-candidates`, authored 2026-09-01 per D1)
+- **GEN-1 — Genre candidates (6)** *(medium)* — status: `completed` (user-approved 2026-09-01)
+  (branch `gen-1-genre-candidates`, authored 2026-09-01 per D1; rap
+  candidate authored against BEH-1's autotune-first rule)
   Author Metal / Rap-Hip-Hop / R&B-Soul / Country / Dance-EDM / Musicals
   candidates per RES-1 sketches; Rap cell includes hard-tune technique tag
   (re- authors Hard-Tune Hotline under the new autotune-first behavior —
@@ -126,7 +127,7 @@ Records: `research/rq1-genre-idioms.md` (RQ-1),
   megaphone boundary verified inclusive through the real engine (see
   production-log GAG-1). Suite 35/36 — the known autotune CPU-p99 flake.
 
-- **PEN-1 — Policy check + pen PR** *(small)* — status: `awaiting-approval`
+- **PEN-1 — Policy check + pen PR** *(small)* — status: `completed` (user-approved 2026-09-01 by audition readiness)
   (branch `pen-1-batch-pr`, stacked on `gag-1-gag-candidates`; coordinator
   opens the PR — draft message in production-log.md's PEN-1 entry)
   All candidates policy-validated (schema round-trip, catalog param ranges,

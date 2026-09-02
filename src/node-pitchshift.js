@@ -35,6 +35,8 @@
 
   window.ToneAdapter.register('pitchshift', {
     label: 'Pitch Shift',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Raises or lowers your voice',
     // Tone.PitchShift's windowSize stays at its 0.1 s (100 ms) default —
     // not exposed as a param — so the added latency the file header
     // describes is this fixed figure. Read by src/status-readouts.js's

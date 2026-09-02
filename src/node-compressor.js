@@ -76,6 +76,8 @@
   // from.)
   window.EffectCatalog.register('compressor', {
     label: 'Compressor',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Evens out loudness',
     experimental: false,
     // Native DynamicsCompressorNode's fixed internal look-ahead — ~6 ms
     // regardless of the exposed attack/release settings (disclosed

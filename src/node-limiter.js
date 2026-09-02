@@ -105,6 +105,8 @@
   // direct: a new node has no live signal to protect yet).
   window.EffectCatalog.register('limiter', {
     label: 'Limiter',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Caps how loud it gets',
     experimental: false,
     // Same underlying DynamicsCompressorNode as node-compressor.js, so the
     // same fixed ~6 ms internal look-ahead applies here too (disclosed in

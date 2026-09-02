@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plugin card layout regression</title>
+  <link rel="stylesheet" href="../../styles/main.css">
+</head>
+<body>
+  <main class="canvas-panel flow-horizontal">
+    <section class="chain-list" aria-label="Plugin card layout fixtures">
+      <div class="node-card" data-node-id="compressor" data-family="compressor">
+        <div class="section-rail">
+          <span class="node-drag-handle"><span class="node-drag-icon"></span></span>
+          <span class="section-code">COM</span>
+          <span class="section-name">Compressor</span>
+          <span class="section-foot">
+            <button class="node-bypass" type="button">IN</button>
+            <button class="node-collapse" type="button" aria-expanded="true"><span class="chevron-mark"></span></button>
+            <button class="node-remove-btn" type="button"><span class="remove-mark"></span></button>
+          </span>
+        </div>
+        <div class="section-main">
+          <div class="node-params">
+            <div class="node-params-inner">
+              <div class="param-row knob-row"><div class="knob-unit"><span class="knob"></span><span class="param-label">Threshold</span><span class="param-value">-24 dB</span></div></div>
+              <div class="param-row knob-row"><div class="knob-unit"><span class="knob"></span><span class="param-label">Ratio</span><span class="param-value">4:1</span></div></div>
+              <div class="param-row knob-row"><div class="knob-unit"><span class="knob"></span><span class="param-label">Attack</span><span class="param-value">10 ms</span></div></div>
+              <div class="param-row knob-row"><div class="knob-unit"><span class="knob"></span><span class="param-label">Release</span><span class="param-value">120 ms</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="node-card" data-node-id="eq" data-family="eq">
+        <div class="section-rail">
+          <span class="node-drag-handle"><span class="node-drag-icon"></span></span>
+          <span class="section-code">EQ</span>
+          <span class="section-name">Equalizer</span>
+          <span class="section-foot">
+            <button class="node-bypass" type="button">IN</button>
+            <button class="node-collapse" type="button" aria-expanded="true"><span class="chevron-mark"></span></button>
+            <button class="node-remove-btn" type="button"><span class="remove-mark"></span></button>
+          </span>
+        </div>
+        <div class="section-main">
+          <div class="node-params">
+            <div class="node-params-inner">
+              <div class="param-row knob-row"><div class="knob-unit"><span class="knob"></span><span class="param-label">Low</span><span class="param-value">0 dB</span></div></div>
+              <div class="param-row knob-row"><div class="knob-unit"><span class="knob"></span><span class="param-label">Mid</span><span class="param-value">0 dB</span></div></div>
+              <div class="param-row knob-row"><div class="knob-unit"><span class="knob"></span><span class="param-label">High</span><span class="param-value">0 dB</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="node-card collapsed" data-node-id="collapsed" data-family="compressor">
+        <div class="section-rail">
+          <span class="node-drag-handle"><span class="node-drag-icon"></span></span>
+          <span class="section-code">COM</span>
+          <span class="section-name">Compressor</span>
+          <span class="section-foot">
+            <button class="node-bypass" type="button">IN</button>
+            <button class="node-collapse" type="button" aria-expanded="false"><span class="chevron-mark"></span></button>
+            <button class="node-remove-btn" type="button"><span class="remove-mark"></span></button>
+          </span>
+        </div>
+        <div class="section-main"></div>
+      </div>
+
+      <div class="node-card" data-node-id="minimum" data-family="compressor">
+        <div class="section-rail">
+          <span class="node-drag-handle"><span class="node-drag-icon"></span></span>
+          <span class="section-code">COM</span>
+          <span class="section-name">Compressor</span>
+          <span class="section-foot">
+            <button class="node-bypass" type="button">IN</button>
+            <button class="node-collapse" type="button" aria-expanded="true"><span class="chevron-mark"></span></button>
+            <button class="node-remove-btn" type="button"><span class="remove-mark"></span></button>
+          </span>
+        </div>
+        <div class="section-main"></div>
+      </div>
+
+      <div class="node-card" data-node-id="minimum-autotune" data-family="autotune">
+        <div class="section-rail">
+          <span class="node-drag-handle"><span class="node-drag-icon"></span></span>
+          <span class="section-code">AUT</span>
+          <span class="section-name">Autotune</span>
+          <span class="node-experimental-badge">EXP</span>
+          <span class="section-foot">
+            <button class="node-bypass" type="button">IN</button>
+            <button class="node-collapse" type="button" aria-expanded="true"><span class="chevron-mark"></span></button>
+            <button class="node-remove-btn" type="button"><span class="remove-mark"></span></button>
+          </span>
+        </div>
+        <div class="section-main"></div>
+      </div>
+    </section>
+  </main>
+
+  <output id="results"></output>
+  <script>
+    function paintedControlBounds(row) {
+      var parts = row.querySelectorAll('.knob, .param-label, .param-value');
+      var left = Infinity;
+      var right = -Infinity;
+      parts.forEach(function (part) {
+        var rect = part.getBoundingClientRect();
+        if (part.matches('.param-label, .param-value')) {
+          var textRange = document.createRange();
+          textRange.selectNodeContents(part);
+          rect = textRange.getBoundingClientRect();
+        }
+        left = Math.min(left, rect.left);
+        right = Math.max(right, rect.right);
+      });
+      return { left: left, right: right, center: (left + right) / 2 };
+    }
+
+    async function measure() {
+      var expanded = document.querySelector('[data-node-id="compressor"]');
+      var collapsed = document.querySelector('[data-node-id="collapsed"]');
+      var minimum = document.querySelector('[data-node-id="minimum"]');
+      var minimumAutotune = document.querySelector('[data-node-id="minimum-autotune"]');
+      var eq = document.querySelector('[data-node-id="eq"]');
+      var canvasSource = await fetch('../../src/canvas.js').then(function (response) { return response.text(); });
+      var defaultMatch = canvasSource.match(/var CARD_W_DEFAULT_PX = (\d+)/);
+      var minimumMatch = canvasSource.match(/var CARD_W_MIN_PX = (\d+)/);
+      var collapsedMatch = canvasSource.match(/var CARD_W_COLLAPSED_PX = (\d+)/);
+      var maximumMatch = canvasSource.match(/var CARD_W_MAX_PX = (\d+)/);
+      expanded.style.width = defaultMatch[1] + 'px';
+      eq.style.width = defaultMatch[1] + 'px';
+      collapsed.style.width = collapsedMatch[1] + 'px';
+      minimum.style.width = minimumMatch[1] + 'px';
+      minimumAutotune.style.width = minimumMatch[1] + 'px';
+      var wide = expanded.cloneNode(true);
+      wide.setAttribute('data-node-id', 'wide-compressor');
+      wide.style.width = maximumMatch[1] + 'px';
+      expanded.parentNode.appendChild(wide);
+      var eqField = eq.querySelector('.node-params-inner').getBoundingClientRect();
+      var firstEqControl = eq.querySelector('.knob-row');
+      var painted = paintedControlBounds(firstEqControl);
+      var minimumCode = minimum.querySelector('.section-code').getBoundingClientRect();
+      var minimumFoot = minimum.querySelector('.section-foot').getBoundingClientRect();
+      var autotuneCode = minimumAutotune.querySelector('.section-code').getBoundingClientRect();
+      var autotuneFoot = minimumAutotune.querySelector('.section-foot').getBoundingClientRect();
+      var collapsedCard = collapsed.getBoundingClientRect();
+      var collapsedFoot = collapsed.querySelector('.section-foot').getBoundingClientRect();
+      var collapsedNameStyle = getComputedStyle(collapsed.querySelector('.section-name'));
+      var wideRows = Array.from(wide.querySelectorAll('.knob-row')).map(function (row) {
+        return Math.round(row.getBoundingClientRect().top);
+      });
+      var result = {
+        expandedWidth: expanded.getBoundingClientRect().width,
+        collapsedWidth: collapsed.getBoundingClientRect().width,
+        defaultStartsAtMinimum: expanded.getBoundingClientRect().width === minimum.getBoundingClientRect().width,
+        collapseSavesAtLeast60Percent: collapsed.getBoundingClientRect().width <= expanded.getBoundingClientRect().width * 0.4,
+        controlsStartAtLeft: Math.abs(painted.left - eqField.left) <= 2,
+        collapsedNameIsVertical: collapsedNameStyle.writingMode === 'vertical-rl',
+        collapsedActionsInsideRail: collapsedFoot.left >= collapsedCard.left && collapsedFoot.right <= collapsedCard.right,
+        minimumWidth: minimum.getBoundingClientRect().width,
+        minimumHeaderGap: Math.round((minimumFoot.left - minimumCode.right) * 10) / 10,
+        minimumHeaderClear: minimumFoot.left > minimumCode.right,
+        autotuneControlsWrappedBelowIdentity: autotuneFoot.top > autotuneCode.bottom,
+        wideCompressorIsOneRow: new Set(wideRows).size === 1,
+        compressorRows: Array.from(expanded.querySelectorAll('.knob-row')).map(function (row) {
+          return Math.round(row.getBoundingClientRect().top);
+        })
+      };
+      document.getElementById('results').textContent = JSON.stringify(result);
+    }
+
+    window.addEventListener('load', function () { measure(); });
+  </script>
+</body>
+</html>

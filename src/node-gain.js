@@ -54,6 +54,9 @@
   // discontinuously rescale the waveform and pop).
   window.EffectCatalog.register('gain', {
     label: 'Gain',
+    // wayfinder #46 — Simple view's effect summary; source of wording is
+    // docs/ultron/research/plain-effect-labels.md (wayfinder #44).
+    plainLabel: 'Adjusts your volume',
     experimental: false,
     paramSpec: [
       { id: 'gainDb', label: 'Gain', min: -24, max: 24, default: 0, step: 0.5, unit: 'dB' }

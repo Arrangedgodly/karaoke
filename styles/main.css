@@ -918,6 +918,14 @@ select.control {
     order: 1;
   }
 
+  /* wayfinder #47: sits right after the nameplate on the deck's first
+     row (same order as .topbar-identity; DOM source order breaks the
+     tie), same treatment .agent-chip/.bypass-btn already get — compact
+     enough to never need its own full-width row. */
+  .topbar-viewswitch {
+    order: 1;
+  }
+
   .agent-chip {
     order: 2;
   }
@@ -2095,6 +2103,7 @@ body.chain-dragging .node-drag-handle {
   border: 1px solid var(--pm-groove-cut);
   box-shadow: inset 0 1px 0 var(--pm-slab-lip);
   min-width: 0;
+  container-type: inline-size;
 }
 
 /* The focus LIFT (the honest-risk solve): a touched section's print
@@ -2185,6 +2194,12 @@ body.chain-dragging .node-drag-handle {
   letter-spacing: 0.06em;
   line-height: 1;
   color: var(--card-family, var(--pm-print));
+}
+
+/* Full module names are reserved for the folded vertical rail. Expanded
+   cards use the compact family code and keep this redundant label hidden. */
+.section-name {
+  display: none;
 }
 
 /* Family derivations — ONE rule per family carries BOTH family-color
@@ -2375,12 +2390,20 @@ body.chain-dragging .node-drag-handle {
 .node-card.collapsed .section-rail {
   flex-direction: row;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.35rem;
   border-left-width: 3px;
 }
 
 .node-card.collapsed .section-code {
   font-size: 0.9rem;
+}
+
+/* The compact fold keeps the three-letter code and all three rail controls.
+   EXP remains available on the expanded module and through the code tooltip;
+   hiding it here is what gives Autotune the same safe folded width as every
+   other plugin without overlapping the controls. */
+.node-card.collapsed .node-experimental-badge {
+  display: none;
 }
 
 .node-card.collapsed .section-foot {
@@ -4107,32 +4130,21 @@ input.preset-name-input:focus-visible {
   align-items: flex-start;
 }
 
-/* CONDENSED SECTION (2026-08-31 horizontal-default round, tightened by
-   the dead-space round the same day). In the horizontal reading each
+/* CONDENSED SECTION. In the horizontal reading each
    section is a condensed MODULE: the rail collapses into a compact
    header band (grip · code · label · badge · fold/eject right) over the
    encoder field, which wraps below. The card's WIDTH is the JS-applied
    per-card width (layout entry `w`, written by the corner resize grip)
-   defaulting to the resizer's FLOOR (11rem/176px) — at the floor each
-   control row fits exactly one unit, so every module opens as a SINGLE
-   STACK of controls with no right-hand dead space; widening the card
-   re-wraps the field to fill. Height HUGS CONTENT (no forced
-   min-height) and TIDY aligns the row's tops. */
+   defaulting to the smallest safe expanded width, 9rem/144px. Controls
+   keep their natural width and wrap from the left as the module grows, so
+   a wide module can place its full control field on one line. Height hugs
+   content with no forced minimum. */
 .canvas-panel.flow-horizontal .node-card {
-  /* The CSS numbers are the PRE-JS fallback only — JS paints every
-     card's content-hug width as an inline style (real browsers) or the
-     128px layout-less default. min-width MUST stay at the resize floor
-     (13rem, raised from 7rem 2026-09-01 alongside the new per-card
-     BYPASS button — src/canvas.js's CARD_W_MIN_PX comment has the
-     header-band-overflow story): a smaller CSS floor lets a
-     stripped/pre-hug paint sit narrower than JS will ever allow once it
-     measures, and a LARGER one silently overrides the hug and re-opens
-     the right-hand dead space (the defect this block carried through
-     two earlier rounds) — it must match CARD_W_MIN_PX exactly, not just
-     bound it. */
-  width: 13rem;
-  min-width: 13rem;
-  max-width: 24rem;
+  /* CSS fallback mirrors canvas.js. JS applies a persisted width when one
+     exists and otherwise paints the same minimum expanded width. */
+  width: 9rem;
+  min-width: 9rem;
+  max-width: 40rem;
   padding: 0.35rem 0.4rem 0.4rem;
   /* One column: header band over the encoder field. */
   grid-template-columns: 1fr;
@@ -4140,7 +4152,8 @@ input.preset-name-input:focus-visible {
 }
 
 .canvas-panel.flow-horizontal .node-card.collapsed {
-  padding: 0.3rem 0.45rem 0.35rem;
+  min-width: 3.5rem;
+  padding: 0.35rem 0.3rem;
 }
 
 /* The header band: the rail's content laid out horizontally, the
@@ -4168,21 +4181,80 @@ input.preset-name-input:focus-visible {
   gap: 0.2rem;
 }
 
-
-
-/* The body: short fields center vertically in whatever room the module
-   has (with no forced min-height that is simply content height), and
-   (2026-09-01, counterbalancing the wider card floor the new bypass
-   button forced) horizontally too — a card that's wider than its
-   content now reads as content centered in a frame rather than pinned
-   to the rail, instead of stretching every row edge-to-edge. */
-.canvas-panel.flow-horizontal .section-main {
-  justify-content: center;
+/* A fold becomes a true vertical identity rail. The full plugin name runs
+   sideways; the reorder grip and three actions stack without competing for
+   the same horizontal pixels. */
+.canvas-panel.flow-horizontal .node-card.collapsed .section-rail {
+  height: 100%;
+  flex-direction: column;
   align-items: center;
+  gap: 0.4rem;
+  border-right: none;
+  border-bottom: none;
+  padding: 0.2rem 0.15rem;
+}
+
+.canvas-panel.flow-horizontal .node-card.collapsed .node-drag-handle {
+  display: flex;
+  margin: 0;
+  padding: 0.1rem;
+}
+
+.canvas-panel.flow-horizontal .node-card.collapsed .section-code {
+  display: none;
+}
+
+.canvas-panel.flow-horizontal .node-card.collapsed .section-name {
+  display: block;
+  flex: 1 1 auto;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  color: var(--card-family, var(--pm-print));
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.canvas-panel.flow-horizontal .node-card.collapsed .section-foot {
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: auto 0 0;
+  padding: 0;
+}
+
+/* The body uses ordinary left-origin flex wrapping. A narrow card stacks;
+   widening it progressively fits more natural-width controls per row. */
+.canvas-panel.flow-horizontal .section-main {
+  justify-content: flex-start;
+  align-items: stretch;
 }
 
 .canvas-panel.flow-horizontal .node-params-inner {
+  width: 100%;
+  justify-content: flex-start;
   gap: 0.25rem 0.45rem;
+}
+
+.canvas-panel.flow-horizontal .node-params {
+  width: 100%;
+}
+
+@container (max-width: 13.5rem) {
+  /* Autotune is the only header with a status badge. At the resize floor,
+     give its controls their own short line instead of letting EXP and the
+     three buttons compete for the same pixels. */
+  .canvas-panel.flow-horizontal .node-card[data-family='autotune']:not(.collapsed) .section-rail {
+    flex-wrap: wrap;
+  }
+
+  .canvas-panel.flow-horizontal .node-card[data-family='autotune']:not(.collapsed) .section-foot {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* The 6ch value slot exists for the centered stacked units; inside the
@@ -4192,10 +4264,11 @@ input.preset-name-input:focus-visible {
   min-width: 0;
 }
 
-/* Trims stretch to the body width (the fixed 10rem throw belongs to the
-   full-width vertical row); pad groups fold within the module. */
+/* Trims keep their useful 10rem throw when room exists and shrink to the
+   card at the floor. They remain natural-width flex items, so a stretched
+   plugin can share a row with knobs and other sliders. */
 .canvas-panel.flow-horizontal .trim-row {
-  width: auto;
+  width: min(10rem, 100%);
   max-width: 100%;
 }
 
@@ -4212,10 +4285,13 @@ input.preset-name-input:focus-visible {
    own wrap actually engage — verified live: Key folds cleanly to 6-per-
    row x 2 at the card's max width, 2-per-row x 6 at the floor. */
 .canvas-panel.flow-horizontal .pad-row {
+  width: 100%;
+  align-items: flex-start;
   max-width: 100%;
 }
 
 .canvas-panel.flow-horizontal .pad-group {
+  justify-content: flex-start;
   max-width: 100%;
 }
 
@@ -4288,4 +4364,323 @@ input.preset-name-input:focus-visible {
 .canvas-panel.flow-horizontal.bypassed .chain-list::after {
   align-self: center;
   padding: 0 0 0 0.5rem;
+}
+
+/* ===========================================================================
+   SIMPLE VIEW (wayfinder #47, map #43)
+   ===========================================================================
+   The switch itself (topbar-identity's .view-switch) plus #simple-layout's
+   own content styling. #simple-layout reuses .layout/.voice-deck/.panel/
+   .presets-panel/.voice-deck-face verbatim — see index.html's own comment —
+   so the row/column breakpoint, sidebar width, and bounded-height scrolling
+   need NO new rules here; only the stage's composed column (borrowed
+   directly from the #45 prototype's variant A, docs/simple-view-layout.md)
+   and the view-switch key are new.
+   =========================================================================== */
+
+.view-switch {
+  display: flex;
+}
+
+.view-switch-key {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--pm-key-edge);
+  background: var(--pm-key);
+  color: var(--pm-print);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.view-switch-key + .view-switch-key {
+  border-left: none;
+}
+
+.view-switch-key[aria-checked="true"] {
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
+}
+
+.view-switch-key:hover {
+  border-color: var(--pm-print);
+}
+
+/* The default state IS Simple (settled #43: "no stored preference means
+   Simple") — #chain-layout hides unconditionally; body.view-advanced
+   (src/simple-view.js, set from the persisted preference) flips both. ID
+   selectors beat .layout's own class rules regardless of source order, so
+   this needs no !important and touches none of Advanced's existing CSS. */
+#chain-layout {
+  display: none;
+}
+
+body.view-advanced #chain-layout {
+  display: flex;
+}
+
+body.view-advanced #simple-layout {
+  display: none;
+}
+
+.simple-library-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 0.4rem;
+}
+
+.simple-library-placeholder {
+  margin: 0;
+  padding: 0.7rem 0.6rem;
+  border: 1px dashed var(--pm-key-edge);
+  color: var(--pm-print-dim);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.simple-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.1rem 1.6rem;
+  background: var(--pm-chassis);
+}
+
+.simple-stage-inner {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.simple-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pm-print);
+}
+
+.simple-stage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.simple-cs-name {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 12rem;
+  color: var(--pm-print-hi);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.simple-cs-state {
+  color: var(--pm-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.simple-desc {
+  margin: -0.35rem 0 0;
+  color: var(--pm-print);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* One row per effect: a family-color legend swatch, the plain phrase,
+   then the technical name quietly after in its family's ink — settled
+   #43 ("plain first, technical name quietly after"), and the SAME
+   single-listing shape the #45 prototype's second pass converged on
+   after its device-strip duplicate was found and removed (see
+   docs/simple-view-layout.md's revision note). No parameter values. */
+.simple-summary {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simple-summary li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.5rem 0.1rem;
+  border-bottom: 1px solid var(--pm-groove-cut);
+  font-size: 1rem;
+  color: var(--pm-print-hi);
+}
+
+.simple-summary li:last-child {
+  border-bottom: none;
+}
+
+.simple-summary-legend {
+  flex: none;
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--fam, var(--pm-print-dim));
+}
+
+.simple-summary-plain {
+  flex: 1 1 auto;
+}
+
+.simple-summary-tech {
+  flex: none;
+  margin-left: 0.55rem;
+  color: var(--famPrint, var(--pm-print));
+  font-family: var(--font-readout);
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+}
+
+.simple-summary-empty {
+  padding: 0.5rem 0.1rem;
+  color: var(--pm-print-dim);
+  font-size: 0.9rem;
+}
+
+/* ===========================================================================
+   SIMPLE VIEW — LIBRARY + TRANSPORT (wayfinder #48, map #43)
+   ===========================================================================
+   The card rows themselves reuse .preset-row/.preset-row-load/
+   .preset-row-name/.preset-row-preview/.preset-row-tags/.preset-group-label/
+   .preset-list/.preset-list-empty/.preset-search VERBATIM (Advanced's own
+   Presets panel, above) — same visual system, same "Try a preset" pattern;
+   only the chips and the transport are new here. A Simple card's
+   .preset-row-tags carries the PUBLIC taxonomy words (genre/vibe/use-case/
+   gag), not Advanced's family-code shorthand — different content, same row.
+   =========================================================================== */
+
+/* Mirrors #presets-panel-content > .control(.preset-search)'s own two
+   rules (main.css, above) for THIS container — Advanced's rule is
+   scoped to its own panel id and does not reach here. */
+#simple-library-body > .control.preset-search {
+  display: block;
+  width: 100%;
+  margin-top: 0;
+}
+
+.simple-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.simple-chip {
+  padding: 0.34rem 0.8rem;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 999px;
+  background: var(--pm-key);
+  color: var(--pm-print-hi);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.simple-chip:hover {
+  border-color: var(--pm-print);
+}
+
+.simple-chip.simple-chip-on {
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
+  font-weight: 700;
+}
+
+.simple-chip-count {
+  align-self: center;
+  margin-left: 0.3rem;
+  color: var(--pm-print-dim);
+  font-size: 0.72rem;
+  font-family: var(--font-readout);
+  white-space: nowrap;
+}
+
+.simple-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--pm-groove-cut);
+}
+
+.simple-transport-pos {
+  min-width: 4ch;
+  color: var(--pm-print-dim);
+  font-family: var(--font-readout);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* ===========================================================================
+   SIMPLE VIEW — SAVE THIS SOUND + SECONDARY MENU (wayfinder #49, map #43)
+   ===========================================================================
+   The naming row itself reuses .preset-name-row/.preset-name-input/
+   .preset-name-actions verbatim (Advanced's own Save As... row, above) —
+   only the "Save this sound" trigger and its failure note, plus the
+   Yours card's "..." secondary-menu toggle, are new here.
+   =========================================================================== */
+
+.simple-save-btn {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--pm-accent);
+  border-radius: 4px;
+  background: var(--pm-key);
+  color: var(--pm-accent-hi);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.simple-save-btn:hover {
+  background: var(--pm-accent);
+  color: var(--pm-ink);
+}
+
+.simple-save-note {
+  margin: 0;
+  color: var(--pm-accent-hi);
+  font-size: 0.78rem;
+}
+
+/* The Yours card's secondary-menu toggle — a quiet "…" key, never as
+   loud as Try (settled #43: Delete "do[es] not compete with trying
+   presets"). Opening it swaps this button for the real Delete button
+   in the SAME row slot (src/simple-view.js) — reusing
+   .preset-row-delete's own two-step arm/confirm styling verbatim once
+   open, rather than adding a second visual language for the same
+   action. */
+.simple-card-menu-toggle {
+  flex: none;
+  align-self: stretch;
+  width: 2rem;
+  border: none;
+  border-left: 1px solid var(--pm-groove-cut);
+  background: transparent;
+  color: var(--pm-print-dim);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.simple-card-menu-toggle:hover {
+  color: var(--pm-print-hi);
 }

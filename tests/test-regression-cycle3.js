@@ -642,6 +642,7 @@ function partB() {
   // a radiogroup — no longer a <select>; the branch KEY is unchanged.)
   s.EffectCatalog.register('test-discrete-throwaway', {
     label: 'Throwaway',
+    plainLabel: 'Test plain label',
     paramSpec: [{ id: 'pick', label: 'Pick', values: ['a', 'b', 'c'], default: 'b' }],
     experimental: false,
     create: function () { return {}; },

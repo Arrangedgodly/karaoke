@@ -269,6 +269,8 @@
   // crossfade of two snap grids is inaudible next to the retune glide).
   window.EffectCatalog.register('autotune', {
     label: 'Autotune',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Keeps you on pitch',
     // MCP-1 (cycle 3): the experimental status declared at the type's own
     // registration — the single source canvas.js's badge and mcp-tools.js's
     // capabilities readout both read via EffectCatalog.isExperimental().

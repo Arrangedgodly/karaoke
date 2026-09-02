@@ -95,3 +95,8 @@ INCLUSIVE (12.00 applies, 12.01 rejects). Pen = 20 candidates. Next: PEN-1.
 `pen-1-batch-pr`, stacked on `gag-1-gag-candidates`). Committed
 conformance pass (policy test section F) + genre-first pen order + PR
 message draft in the production log. Next: PR merge, then AUD-1.
+
+### PEN-1: APPROVED 2026-09-01 (user ready to audition). AUD-1 ACTIVE.
+Merge note: origin/main (wayfinder #46–49, PRs #56–59) merged into local
+main alongside the batch stack; only cycle-doc conflicts, resolved keeping
+both records. AUD-1: user auditioning the 20-candidate pen at ?audition.

@@ -67,6 +67,10 @@ function loadScript(sandbox, relativePath) {
 function numericDefinition(label, calls, withDispose) {
   var definition = {
     label: label,
+    // wayfinder #46: EffectCatalog now requires plainLabel alongside
+    // label; a fixed fixture value keeps every C-series validation test
+    // below targeting its OWN broken field, not this one.
+    plainLabel: 'Test plain label',
     paramSpec: [
       { id: 'mix', label: 'Mix', min: 0, max: 100, default: 40, step: 1, unit: '%' }
     ],
@@ -91,6 +95,7 @@ function numericDefinition(label, calls, withDispose) {
 function discreteDefinition(calls) {
   return {
     label: 'Mode selector',
+    plainLabel: 'Test plain label',
     paramSpec: [
       { id: 'mode', label: 'Mode', values: ['Soft', 'Hard'], default: 'Soft' }
     ],

@@ -39,6 +39,7 @@
     return {
       type: type,
       label: definition.label,
+      plainLabel: definition.plainLabel,
       paramSpec: definition.paramSpec.map(cloneParam),
       experimental: definition.experimental,
       latencySeconds: isFiniteNumber(definition.latencySeconds) ? definition.latencySeconds : 0,
@@ -115,6 +116,14 @@
     if (typeof definition.label !== 'string' || definition.label.trim() === '') {
       throw new Error('EffectCatalog.register: definition.label must be a non-empty string.');
     }
+    // wayfinder #46: the plain-language half of the Simple view's effect
+    // summary row ("Evens out loudness · Compressor") — required at
+    // registration, same as `label`, so a new effect type can't ship
+    // without one. Source of truth for the wording itself is
+    // docs/ultron/research/plain-effect-labels.md (wayfinder #44).
+    if (typeof definition.plainLabel !== 'string' || definition.plainLabel.trim() === '') {
+      throw new Error('EffectCatalog.register: definition.plainLabel must be a non-empty string.');
+    }
     if (!Array.isArray(definition.paramSpec) || definition.paramSpec.length === 0) {
       throw new Error('EffectCatalog.register: definition.paramSpec must be a non-empty array.');
     }
@@ -166,6 +175,14 @@
 
   function getLabel(type) {
     return hasOwn(definitions, type) ? definitions[type].label : null;
+  }
+
+  // The plain-language half of the effect summary row (wayfinder #46) —
+  // "Evens out loudness" for `compressor`, never a parameter value. The
+  // technical name (getLabel) prints quietly after it; see
+  // docs/ultron/research/plain-effect-labels.md for the wording's source.
+  function getPlainLabel(type) {
+    return hasOwn(definitions, type) ? definitions[type].plainLabel : null;
   }
 
   function getParamSpec(type) {
@@ -306,6 +323,7 @@
     hasType: hasType,
     getDefinition: getDefinition,
     getLabel: getLabel,
+    getPlainLabel: getPlainLabel,
     getParamSpec: getParamSpec,
     getParam: getParam,
     getDefault: getDefault,

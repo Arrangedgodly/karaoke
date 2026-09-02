@@ -183,6 +183,8 @@
   // instead. mix ramps BOTH crossfade sides in one schedule pair.
   window.EffectCatalog.register('delay', {
     label: 'Delay',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Adds an echo',
     experimental: false,
     paramSpec: [
       { id: 'timeMs', label: 'Time', min: 10, max: 1000, default: 300, step: 10, unit: 'ms' },

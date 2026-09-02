@@ -262,6 +262,8 @@
   // direct: a new node has no live signal to protect yet).
   window.EffectCatalog.register('reverb', {
     label: 'Reverb',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Puts you in a room',
     experimental: false,
     paramSpec: [
       { id: 'mix', label: 'Mix', min: 0, max: 100, default: 20, step: 1, unit: '%' }
