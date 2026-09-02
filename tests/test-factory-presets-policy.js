@@ -286,11 +286,11 @@ async function main() {
   );
 
   // --------------------------------------------------------------------
-  console.log('B. the shipped library: six presets, Classic byte-identical to DEFAULT_PRESET');
+  console.log('B. the shipped library: fourteen presets, Classic byte-identical to DEFAULT_PRESET');
   // --------------------------------------------------------------------
 
   var factory = sandbox.FactoryPresets.list();
-  check(Array.isArray(factory) && factory.length === 6, 'B1: factory library lists six presets');
+  check(Array.isArray(factory) && factory.length === 14, 'B1: factory library lists fourteen presets (six original + eight promoted 2026-09-01)');
   check(
     factory.length > 0 && factory[0].name === 'Classic Karaoke',
     "B1: the first factory preset is 'Classic Karaoke'"
@@ -492,7 +492,10 @@ async function main() {
   // GAG-1 ran (see docs/ultron/preset-axis-cycle/production-log.md): the
   // batch this PR ships is pinned here so it cannot regress silently.
   var pen = sandbox.AUDITION_CANDIDATES;
-  var EXPECTED_PEN = 20;
+  // 20 -> 12 at the 2026-09-01 promotion: the eight audition-accepted seed
+  // candidates left the pen for src/factory-library-data.js in the same
+  // edit that moved B1's library count 6 -> 14.
+  var EXPECTED_PEN = 12;
   check(Array.isArray(pen) && pen.length === EXPECTED_PEN,
     'F1: the pen ships ' + EXPECTED_PEN + ' candidates (update here in the SAME edit when PRO-1 promotes/rejects entries or a next batch lands)');
 

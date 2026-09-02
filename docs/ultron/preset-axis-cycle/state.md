@@ -100,3 +100,22 @@ message draft in the production log. Next: PR merge, then AUD-1.
 Merge note: origin/main (wayfinder #46–49, PRs #56–59) merged into local
 main alongside the batch stack; only cycle-doc conflicts, resolved keeping
 both records. AUD-1: user auditioning the 20-candidate pen at ?audition.
+
+### PRO-1 (seed-batch promotion): LANDED 2026-09-01, scale-out Lane B.
+The 2026-09-01 live audition closed the #31 seed batch — 8 accepted, 4
+rejected. The promotion edit was written on `promote-seed-batch-auditions`
+but never PR'd, so it was rebased onto `main` here and opened as
+`lane-b/promote-seed-batch` (scale-out plan D-1, gate 1). Library 6 → 14;
+pen 20 → 12 (the eight accepted seed entries removed — the four rejected
+ones had already been superseded on `main` by the GEN-1/GAG-1 re-authors
+that reuse their names). Same-edit counts: `test-factory-library.js` A1
+6 → 14 plus the six promoted node types in its load list,
+`test-factory-presets-policy.js` B1 6 → 14 and `EXPECTED_PEN` 20 → 12,
+`test-preset-cycle3.js` G2 6 → 14. The three cycle-4 records that existed
+only on the stranded branch — `research/rq1-genre-idioms.md`,
+`research/rq2-gag-reauthoring.md`, `town-hall.md` — are carried along,
+since the GEN-1/GAG-1 candidates on `main` were authored from them. Suite
+38/38, 4151 checks, all green (4186 at base; the delta is the eight
+promoted candidates' per-entry pen checks giving way to the cheaper
+library checks). Next: the `summary` field (D-13), then the agent
+surface (D-2/D-12).
