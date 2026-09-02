@@ -250,7 +250,7 @@ function makeStorage() {
 
 function makeSimpleViewSandbox(collaborators) {
   var registry = {};
-  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary'].forEach(function (id) {
+  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport'].forEach(function (id) {
     var tag = id === 'simple-summary' ? 'ol' : (id.indexOf('view-switch') === 0 ? 'button' : 'div');
     registry[id] = makeElement(tag);
   });
@@ -305,7 +305,7 @@ function makeSimpleViewSandbox(collaborators) {
   seeded.setItem('karaoke-view-v1', 'advanced');
   var reload2 = (function () {
     var registry = {};
-    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary'].forEach(function (id) {
+    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport'].forEach(function (id) {
       registry[id] = makeElement(id.indexOf('view-switch') === 0 ? 'button' : 'div');
     });
     var bodyEl = makeElement('body');
@@ -425,11 +425,189 @@ function makeSimpleViewSandbox(collaborators) {
 })();
 
 // ==========================================================================
-// E. src/chain-editing.js's real markAcceptedEdit() reaches SimpleView.
+// E. THE SOUNDS LIBRARY (wayfinder #48) — plain filters, search, Factory/
+//    Yours, and the Previous/Next transport over the filtered factory list.
 // ==========================================================================
 
 (function sectionE() {
-  console.log('E. every accepted edit mode notifies window.SimpleView.onChainChanged');
+  console.log('E. the sounds library: plain filters, search, Factory/Yours, transport');
+
+  var FACTORY = [
+    { name: 'Warm Ballad', description: 'Gentle warmth.', tags: ['use-case:performance', 'genre:Pop', 'vibe:warm'] },
+    { name: 'Rock Night', description: 'Cuts through.', tags: ['use-case:performance', 'genre:Rock', 'vibe:bright'] },
+    { name: 'Phone Call Gag', description: 'Calling from a phone.', tags: ['gag:telephone', 'use-case:performance'] },
+    { name: 'Clean Speech', description: 'Just the voice.', tags: ['use-case:speech/hosting', 'vibe:natural'] },
+    { name: 'Big Room', description: 'Arena-sized space.', tags: ['use-case:performance', 'vibe:epic/big'] }
+  ];
+
+  function harness(userPresetNames) {
+    var loadCalls = [];
+    var collaborators = {
+      AudioGraph: { getModel: function () { return []; } },
+      PresetsUI: {
+        getDisplayState: function () { return { name: 'Warm Ballad', modified: false }; },
+        loadFactoryPreset: function (name) { loadCalls.push({ kind: 'factory', name: name }); },
+        loadUserPreset: function (name) { loadCalls.push({ kind: 'user', name: name }); }
+      },
+      EffectCatalog: { getPlainLabel: function (t) { return t; }, getLabel: function (t) { return t; } },
+      FactoryPresets: { listDetailed: function () { return copy(FACTORY); } },
+      PresetStore: { listNames: function () { return (userPresetNames || []).slice(); } }
+    };
+    var h = makeSimpleViewSandbox(collaborators);
+    return {
+      h: h,
+      loadCalls: loadCalls,
+      chips: h.els['simple-library-body'].children[0].children,
+      search: h.els['simple-library-body'].children[1],
+      cardsList: h.els['simple-library-body'].children[2],
+      transport: h.els['simple-transport']
+    };
+  }
+
+  function groupCards(cardsList, groupLabelText) {
+    var rows = cardsList.children;
+    var start = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].textContent === groupLabelText && rows[i].className === 'preset-group-label') {
+        start = i + 1;
+        break;
+      }
+    }
+    var end = rows.length;
+    for (var j = start; j < rows.length; j++) {
+      if (rows[j].className === 'preset-group-label') {
+        end = j;
+        break;
+      }
+    }
+    return rows.slice(start, end);
+  }
+
+  console.log('  E1: default filter (All) lists every factory entry, both groups render');
+  var f1 = harness(['My Stage Set', 'Sunday Hosting']);
+  check(f1.chips.length === 6, 'E1: five plain filter chips plus the count readout exist (All/Warm/Rock/Funny/Speech + count)');
+  check(f1.chips[0].classList.contains('simple-chip-on'), 'E1: All starts active');
+  var factoryRows = groupCards(f1.cardsList, 'Factory');
+  check(factoryRows.length === 5, 'E1: All lists every factory entry (' + factoryRows.length + ')');
+  var yoursRows = groupCards(f1.cardsList, 'Yours');
+  check(yoursRows.length === 2 && yoursRows[0].children[0].children[0].textContent === 'My Stage Set',
+    'E1: Yours lists the user\'s own saved sounds');
+
+  console.log('  E2: each plain filter resolves the settled tag, storing nothing new');
+  var cases = [
+    { label: 'Warm', expectNames: ['Warm Ballad'] },
+    { label: 'Rock', expectNames: ['Rock Night'] },
+    { label: 'Funny', expectNames: ['Phone Call Gag'] },
+    { label: 'Speech', expectNames: ['Clean Speech'] }
+  ];
+  cases.forEach(function (c) {
+    var f = harness([]);
+    var chip = f.chips.filter(function (el) { return el.textContent === c.label; })[0];
+    chip.fire('click');
+    var rows = groupCards(f.cardsList, 'Factory');
+    var names = rows.map(function (r) { return r.children[0].children[0].textContent; });
+    check(JSON.stringify(names) === JSON.stringify(c.expectNames),
+      'E2: "' + c.label + '" resolves to exactly ' + JSON.stringify(c.expectNames) + ' (got ' + JSON.stringify(names) + ')');
+    check(chip.classList.contains('simple-chip-on'), 'E2: "' + c.label + '" shows as the active chip');
+  });
+
+  console.log('  E3: a filter matching nothing is a visible coverage gap, not a crash');
+  var f3 = harness([]);
+  // No factory entry in this fixture carries a Rock genre AND a warm vibe
+  // at once — force an empty result by searching for something no entry's
+  // name/description/tags contain.
+  f3.search.value = 'xyz-nonexistent';
+  f3.search.fire('input');
+  var f3Factory = groupCards(f3.cardsList, 'Factory');
+  check(f3Factory.length === 1 && f3Factory[0].className === 'preset-list-empty' &&
+      /coverage gap/.test(f3Factory[0].textContent),
+    'E3: an empty factory result shows the settled coverage-gap copy');
+
+  console.log('  E4: search matches name, description, and tags — Yours included, chips unaffected');
+  var f4 = harness(['Warm Ballad Take Two']);
+  f4.search.value = 'arena';
+  f4.search.fire('input');
+  var f4Factory = groupCards(f4.cardsList, 'Factory').map(function (r) { return r.children[0].children[0].textContent; });
+  check(JSON.stringify(f4Factory) === JSON.stringify(['Big Room']),
+    'E4: searching a description word ("arena") matches by description, not just name');
+  f4.search.value = 'warm';
+  f4.search.fire('input');
+  var f4Yours = groupCards(f4.cardsList, 'Yours').map(function (r) { return r.children[0].children[0].textContent; });
+  check(f4Yours.indexOf('Warm Ballad Take Two') !== -1, 'E4: search also narrows Yours (settled #43/#45 spec)');
+
+  console.log('  E5: no saved sounds at all reads differently from "search matched nothing"');
+  var f5 = harness([]);
+  var f5Empty = groupCards(f5.cardsList, 'Yours');
+  check(f5Empty.length === 1 && /save will show up here/.test(f5Empty[0].textContent),
+    'E5: a genuinely empty Yours shows the save-invitation copy, not the search-miss copy');
+
+  console.log('  E6: a card click "tries" the preset through the shared PresetsUI load path');
+  var f6 = harness(['My Stage Set']);
+  var f6FactoryRows = groupCards(f6.cardsList, 'Factory');
+  f6FactoryRows[0].children[0].fire('click');
+  var f6YoursRows = groupCards(f6.cardsList, 'Yours');
+  f6YoursRows[0].children[0].fire('click');
+  check(
+    f6.loadCalls.length === 2 &&
+      f6.loadCalls[0].kind === 'factory' && f6.loadCalls[0].name === 'Warm Ballad' &&
+      f6.loadCalls[1].kind === 'user' && f6.loadCalls[1].name === 'My Stage Set',
+    'E6: Factory cards call loadFactoryPreset, Yours cards call loadUserPreset, with the right name'
+  );
+
+  console.log('  E7: the active preset (PresetsUI.getDisplayState) is highlighted in the list');
+  var f7 = harness([]);
+  var f7Rows = groupCards(f7.cardsList, 'Factory');
+  var activeNames = f7Rows.filter(function (r) { return r.classList.contains('preset-row-active'); })
+    .map(function (r) { return r.children[0].children[0].textContent; });
+  check(JSON.stringify(activeNames) === JSON.stringify(['Warm Ballad']),
+    'E7: exactly the current preset (Warm Ballad, from getDisplayState) is marked active');
+
+  console.log('  E8: Previous/Next step the FILTERED factory list, wrap, and load through PresetsUI');
+  var f8 = harness([]);
+  // All 5 factory entries, current = Warm Ballad (index 0). Next should
+  // load index 1 (Rock Night); Previous from index 0 should wrap to the
+  // LAST entry (Big Room).
+  var buttons = f8.transport.children;
+  check(buttons.length === 3 && buttons[0].textContent === '◀ Previous' && buttons[2].textContent === 'Next ▶',
+    'E8: the transport renders Previous, a position readout, and Next');
+  check(buttons[1].textContent === '1 / 5', 'E8: the position readout is "n of m" over the filtered factory list');
+  buttons[2].fire('click');
+  check(f8.loadCalls.length === 1 && f8.loadCalls[0].name === 'Rock Night',
+    'E8: Next loads the entry right after the current one');
+  var f8b = harness([]);
+  f8b.transport.children[0].fire('click');
+  check(f8b.loadCalls.length === 1 && f8b.loadCalls[0].name === 'Big Room',
+    'E8: Previous from the first entry wraps to the last');
+
+  console.log('  E9: fewer than two results disables both transport buttons');
+  var f9 = harness([]);
+  var warmChip = f9.chips.filter(function (el) { return el.textContent === 'Warm'; })[0];
+  warmChip.fire('click');
+  check(f9.transport.children[0].disabled === true && f9.transport.children[2].disabled === true,
+    'E9: Previous/Next are disabled when the filtered list has fewer than two entries');
+  check(f9.transport.children[1].textContent === '1 / 1', 'E9: the single match still reads "1 / 1"');
+
+  console.log('  E10: window.SimpleView.onChainChanged() also refreshes the library (active row + transport position)');
+  var f10 = harness([]);
+  var displayName = 'Warm Ballad';
+  f10.h.window.PresetsUI.getDisplayState = function () { return { name: displayName, modified: false }; };
+  displayName = 'Rock Night';
+  f10.h.window.SimpleView.onChainChanged();
+  var f10Active = groupCards(f10.cardsList, 'Factory').filter(function (r) {
+    return r.classList.contains('preset-row-active');
+  }).map(function (r) { return r.children[0].children[0].textContent; });
+  check(JSON.stringify(f10Active) === JSON.stringify(['Rock Night']),
+    'E10: onChainChanged moves the active-row highlight to the new current preset');
+  check(f10.transport.children[1].textContent === '2 / 5',
+    'E10: onChainChanged updates the transport position too (' + f10.transport.children[1].textContent + ')');
+})();
+
+// ==========================================================================
+// F. src/chain-editing.js's real markAcceptedEdit() reaches SimpleView.
+// ==========================================================================
+
+(function sectionF() {
+  console.log('F. every accepted edit mode notifies window.SimpleView.onChainChanged');
 
   function makeChainEditingHarness(initial) {
     var canvasModel = copy(initial);

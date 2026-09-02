@@ -363,14 +363,14 @@
     display toggle (src/simple-view.js) — it never touches the audio
     graph, never calls ChainEditing.apply, never reloads a preset.
 
-    Ticket #47's own scope is the SWITCH and this SHELL — the split-
-    collapsible geometry, the safety floor, and a live (not placeholder)
-    Current-sound stage read from the same state Advanced already
-    tracks (window.PresetsUI.getDisplayState(), window.AudioGraph.
-    getModel(), window.EffectCatalog). The Sounds library below is a
-    stated placeholder: filters, search, and real Factory/Yours cards
-    are #48's job, landing inside .simple-library-body unchanged by
-    this ticket. "Save this sound" and Custom-sound save flow are #49's.
+    Ticket #47 shipped the SWITCH and the shell's split-collapsible
+    geometry, safety floor, and Current-sound stage, reading the same
+    state Advanced already tracks (window.PresetsUI.getDisplayState(),
+    window.AudioGraph.getModel(), window.EffectCatalog). Ticket #48
+    filled the Sounds library (#simple-library-body: plain filter
+    chips, search, Factory/Yours cards) and the stage's Previous/Next
+    transport (#simple-transport) — both JS-built by src/simple-view.js.
+    "Save this sound" and Custom-sound save flow are still #49's.
 
     Reuses .layout/.voice-deck/.panel/.presets-panel/.voice-deck-face
     verbatim (styles/main.css) so the row/column breakpoint, sidebar
@@ -384,9 +384,14 @@
       <div class="panel-head">
         <h3 class="panel-label">Sounds</h3>
       </div>
-      <div class="simple-library-body" id="simple-library-body">
-        <p class="simple-library-placeholder">Browsing the sound library arrives in wayfinder #48.</p>
-      </div>
+      <!-- wayfinder #48 — JS-built by src/simple-view.js, the same
+           "the dynamic list lives in JS, the shell just gives it a
+           mount point" convention #preset-list/#palette-list already
+           use: plain filter chips (All/Warm/Rock/Funny/Speech — named
+           queries over the #28 taxonomy's existing tags, stored
+           nowhere on presets), a search box (name/description/tags),
+           then Factory and Yours as separate card groups. -->
+      <div class="simple-library-body" id="simple-library-body"></div>
     </div>
 
     <div class="voice-deck-face" id="simple-stage-face">
@@ -405,6 +410,11 @@
           </div>
           <p class="simple-desc" id="simple-desc" hidden></p>
           <ol class="simple-summary" id="simple-summary"></ol>
+          <!-- wayfinder #48 — JS-built: Previous/Next step the filtered
+               factory list (docs/simple-view-layout.md's own line: "an
+               n of m position readout over the filtered factory
+               list"), centered under the summary. -->
+          <div class="simple-transport" id="simple-transport"></div>
         </div>
       </div>
 
