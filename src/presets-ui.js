@@ -1037,11 +1037,23 @@
   // lag the displayed name). With the real functions exported, agents and
   // the UI buttons now share ONE write path and the private state can
   // never drift. Behavior of each function is unchanged.
+  //
+  // wayfinder #48: loadFactoryPreset/loadUserPreset join the export for
+  // the same reason — "Try a preset" from Simple's own library cards
+  // (src/simple-view.js) submits through the EXACT SAME
+  // applyLoadedPreset() -> ChainEditing.apply() transaction this panel's
+  // own rows already use, so there is still exactly one load path, not
+  // two that could drift. Failure notes (a preset removed mid-session)
+  // still surface via showPresetNote() into THIS panel's own DOM, even
+  // when triggered from Simple — a known, narrow gap while Advanced sits
+  // hidden, not a silent one (the load itself still refuses cleanly).
   window.PresetsUI = {
     markModified: markModified,
     setCurrentPreset: setCurrentPreset,
     clearModified: clearModified,
     refreshPresetSelect: refreshPresetSelect,
-    getDisplayState: getDisplayState
+    getDisplayState: getDisplayState,
+    loadFactoryPreset: loadFactoryPreset,
+    loadUserPreset: loadUserPreset
   };
 })();

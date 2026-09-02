@@ -4553,3 +4553,79 @@ body.view-advanced #simple-layout {
   color: var(--pm-print-dim);
   font-size: 0.9rem;
 }
+
+/* ===========================================================================
+   SIMPLE VIEW — LIBRARY + TRANSPORT (wayfinder #48, map #43)
+   ===========================================================================
+   The card rows themselves reuse .preset-row/.preset-row-load/
+   .preset-row-name/.preset-row-preview/.preset-row-tags/.preset-group-label/
+   .preset-list/.preset-list-empty/.preset-search VERBATIM (Advanced's own
+   Presets panel, above) — same visual system, same "Try a preset" pattern;
+   only the chips and the transport are new here. A Simple card's
+   .preset-row-tags carries the PUBLIC taxonomy words (genre/vibe/use-case/
+   gag), not Advanced's family-code shorthand — different content, same row.
+   =========================================================================== */
+
+/* Mirrors #presets-panel-content > .control(.preset-search)'s own two
+   rules (main.css, above) for THIS container — Advanced's rule is
+   scoped to its own panel id and does not reach here. */
+#simple-library-body > .control.preset-search {
+  display: block;
+  width: 100%;
+  margin-top: 0;
+}
+
+.simple-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.simple-chip {
+  padding: 0.34rem 0.8rem;
+  border: 1px solid var(--pm-key-edge);
+  border-radius: 999px;
+  background: var(--pm-key);
+  color: var(--pm-print-hi);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.simple-chip:hover {
+  border-color: var(--pm-print);
+}
+
+.simple-chip.simple-chip-on {
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
+  font-weight: 700;
+}
+
+.simple-chip-count {
+  align-self: center;
+  margin-left: 0.3rem;
+  color: var(--pm-print-dim);
+  font-size: 0.72rem;
+  font-family: var(--font-readout);
+  white-space: nowrap;
+}
+
+.simple-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--pm-groove-cut);
+}
+
+.simple-transport-pos {
+  min-width: 4ch;
+  color: var(--pm-print-dim);
+  font-family: var(--font-readout);
+  font-size: 0.8rem;
+  text-align: center;
+}
