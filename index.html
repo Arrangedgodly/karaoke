@@ -112,6 +112,26 @@
       <h1 class="app-title">VOXCHAIN</h1>
     </div>
 
+    <!--
+      wayfinder #47 — the Simple/Advanced view switch. A topbar-section
+      of its own (not packed inside .topbar-identity, which needs sole
+      claim to its flex slack for the nameplate's ellipsis — see that
+      section's own comment): the topbar's own flex-wrap:wrap already
+      gives every section a clean fallback row below 900px, the same
+      mechanism .topbar-status/.topbar-controls already rely on.
+      Available from both views (settled #43); presentation-only
+      (src/simple-view.js toggles body.view-advanced, a CSS display
+      swap — no reconnect, no preset reload, no ChainEditing.apply).
+      role="radiogroup" + aria-checked models "exactly one of two views
+      is active" more precisely than a pair of toggle buttons would.
+    -->
+    <div class="topbar-section topbar-viewswitch">
+      <div class="view-switch" role="radiogroup" aria-label="View">
+        <button type="button" id="view-switch-simple" class="view-switch-key" role="radio" aria-checked="true">Simple</button>
+        <button type="button" id="view-switch-advanced" class="view-switch-key" role="radio" aria-checked="false">Advanced</button>
+      </div>
+    </div>
+
     <div class="system-etch">
     <div class="topbar-section topbar-status">
       <!--
@@ -332,6 +352,65 @@
       </div>
     </div>
   </div>
+
+  <!--
+    ================================================================
+    SIMPLE VIEW SHELL (wayfinder #47, map #43) — a sibling of
+    #chain-layout, not a replacement: both exist in the DOM from page
+    load; styles/main.css shows exactly one at a time keyed off
+    body.view-advanced (absent = Simple, per the map's "no stored
+    preference means Simple"). Switching between them is a pure CSS
+    display toggle (src/simple-view.js) — it never touches the audio
+    graph, never calls ChainEditing.apply, never reloads a preset.
+
+    Ticket #47's own scope is the SWITCH and this SHELL — the split-
+    collapsible geometry, the safety floor, and a live (not placeholder)
+    Current-sound stage read from the same state Advanced already
+    tracks (window.PresetsUI.getDisplayState(), window.AudioGraph.
+    getModel(), window.EffectCatalog). The Sounds library below is a
+    stated placeholder: filters, search, and real Factory/Yours cards
+    are #48's job, landing inside .simple-library-body unchanged by
+    this ticket. "Save this sound" and Custom-sound save flow are #49's.
+
+    Reuses .layout/.voice-deck/.panel/.presets-panel/.voice-deck-face
+    verbatim (styles/main.css) so the row/column breakpoint, sidebar
+    width, and bounded-height scrolling are the SAME rules Advanced
+    already ships — zero new structural CSS, only the stage's own
+    content styling is new (see .simple-stage rules).
+    ================================================================
+  -->
+  <div class="layout voice-deck" id="simple-layout">
+    <div class="panel presets-panel" id="simple-library-panel">
+      <div class="panel-head">
+        <h3 class="panel-label">Sounds</h3>
+      </div>
+      <div class="simple-library-body" id="simple-library-body">
+        <p class="simple-library-placeholder">Browsing the sound library arrives in wayfinder #48.</p>
+      </div>
+    </div>
+
+    <div class="voice-deck-face" id="simple-stage-face">
+      <!-- Mount points for src/meters.js#mountSimpleUnit() — the SAME
+           MIC IN / OUT strips Advanced shows, fed by the same
+           ballistics, so the safety floor renders identically in both
+           views (settled #43/#47) without a second live meter to drift
+           out of sync. Empty until meters.js appends into them. -->
+      <div id="simple-meter-in"></div>
+
+      <div class="simple-stage" id="simple-stage">
+        <div class="simple-stage-inner">
+          <div class="simple-kicker">Current sound</div>
+          <div class="simple-stage-head">
+            <h2 class="simple-cs-name" id="simple-cs-name">Custom sound</h2>
+          </div>
+          <p class="simple-desc" id="simple-desc" hidden></p>
+          <ol class="simple-summary" id="simple-summary"></ol>
+        </div>
+      </div>
+
+      <div id="simple-meter-out"></div>
+    </div>
+  </div>
   </div>
 
   <script src="src/audio-engine.js"></script>
@@ -456,6 +535,14 @@
   -->
   <script src="src/presets-ui.js"></script>
   <script src="src/chain-editing.js"></script>
+  <!-- wayfinder #47 — the Simple/Advanced switch and the Simple shell's
+       Current-sound stage. Depends on AudioGraph, EffectCatalog,
+       PresetsUI, and FactoryPresets (all already loaded above);
+       chain-editing.js calls window.SimpleView.onChainChanged() after
+       every accepted edit, so load order between the two files does not
+       matter — only that this script has run by the time a user can
+       trigger an edit, which page load order guarantees. -->
+  <script src="src/simple-view.js"></script>
   <!--
     The 10 production WebMCP tool definitions (window.McpTools): schemas,
     validation, read operations, policy-checked mutations, visible
