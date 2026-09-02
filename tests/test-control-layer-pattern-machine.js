@@ -686,6 +686,31 @@ check(
   'the register carries the module/param/value/help slots'
 );
 
+var presetState = panelEl.children.filter(function (c) {
+  return c.className.split(/\s+/).indexOf('register-preset-state') !== -1;
+})[0];
+var presetValue = presetState && presetState.findByClass('register-preset-value');
+check(
+  !!presetState && presetState.getAttribute('role') === 'status' &&
+    presetState.getAttribute('aria-atomic') === 'true' &&
+    presetValue && presetValue.textContent === 'UNSAVED',
+  'the register exposes an accessible persistent UNSAVED preset state at rest'
+);
+windowStub.CanvasRegister.showPresetState('Warm Ballad', false);
+check(
+  presetValue.textContent === 'Warm Ballad' &&
+    presetState.getAttribute('data-unsaved') === 'false' &&
+    presetState.getAttribute('aria-label') === 'Current preset: Warm Ballad',
+  'a clean named preset appears in the persistent register field'
+);
+windowStub.CanvasRegister.showPresetState('Warm Ballad', true);
+check(
+  presetValue.textContent === 'UNSAVED' &&
+    presetState.getAttribute('data-unsaved') === 'true' &&
+    presetState.getAttribute('aria-label') === 'Current preset: Unsaved preset',
+  'an adjustment replaces the name with the persistent UNSAVED state'
+);
+
 // A control event switches it to MODULE · PARAM · VALUE + the help line.
 windowStub.ChainCanvas.renderModel([
   { id: 'g2', type: 'gain', params: { gainDb: 0 } }

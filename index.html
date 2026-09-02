@@ -149,6 +149,9 @@
       </span>
     </div>
 
+    <!-- Advanced keeps the diagnostic RATE / LATENCY / NODES register.
+         Simple hides it in CSS because it does not help someone choose
+         or hear a sound; engine status itself remains visible in both. -->
     <div class="readout-group" role="group" aria-label="Engine readouts">
       <span class="readout">
         <span class="readout-label">RATE</span>
@@ -181,9 +184,9 @@
       <button id="start-button" class="control" type="button" aria-describedby="start-hint">Start</button>
       <span class="start-hint" id="start-hint">Press Start to power on</span>
 
-      <label for="input-device-select" class="sr-only">Input device:</label>
+      <label for="input-device-select" class="sr-only">Microphone:</label>
       <select id="input-device-select" class="control" disabled>
-        <option value="">-- click Start to list devices --</option>
+        <option value="">Start to choose a microphone</option>
       </select>
     </div>
 
@@ -242,7 +245,7 @@
        collapse toggle instead of sharing a tab bar with Presets). Both
        use the same disclosure-button pattern .node-collapse already uses
        for a per-card fold (aria-expanded + aria-controls over a plain
-       <h3> label, not role="tab" — there is no tab-switching left to
+       <h2> label, not role="tab" — there is no tab-switching left to
        justify that role now that neither panel's visibility depends on
        the other's). The board (.canvas-panel) gets flex: 1 1 auto inside
        .voice-deck-face so it fills whatever height Effects leaves it —
@@ -264,7 +267,7 @@
     -->
     <div class="panel presets-panel" id="presets-panel">
       <div class="panel-head">
-        <h3 class="panel-label">Presets</h3>
+        <h2 class="panel-label">Presets</h2>
         <!-- The mark is DRAWN (a rotated corner, the same chevron
              vocabulary the node-card fold button uses —
              src/canvas.js's node-collapse), not a text glyph; the
@@ -297,9 +300,9 @@
              (the 'chain-autosave-failed'/'chain-autosave-recovered' events
              drive it); it clears only after a later save VERIFIES. -->
         <div class="autosave-warning" id="autosave-warning" role="alert" hidden>
-          Autosave is failing — changes will not survive a reload
+          Changes are not being saved. Keep this page open and try again before reloading.
         </div>
-        <button id="save-preset-btn" class="control" type="button">Save As…</button>
+        <button id="save-preset-btn" class="control" type="button">Save preset as…</button>
       </div>
     </div>
 
@@ -342,7 +345,7 @@
       -->
       <div class="panel effects-panel" id="effects-panel">
         <div class="panel-head">
-          <h3 class="panel-label">Effects</h3>
+          <h2 class="panel-label">Effects</h2>
           <button type="button" id="effects-collapse-toggle" aria-expanded="true" aria-controls="effects-panel-content" aria-label="Collapse Effects panel"><span class="chevron-mark" aria-hidden="true"></span></button>
         </div>
 
@@ -382,15 +385,23 @@
   <div class="layout voice-deck" id="simple-layout">
     <div class="panel presets-panel" id="simple-library-panel">
       <div class="panel-head">
-        <h3 class="panel-label">Sounds</h3>
+        <h2 class="panel-label">Sounds</h2>
       </div>
+      <p
+        class="simple-library-gate-note"
+        id="simple-library-gate-note"
+        aria-live="polite"
+      >Start to try a sound.</p>
       <!-- wayfinder #48 — JS-built by src/simple-view.js, the same
            "the dynamic list lives in JS, the shell just gives it a
            mount point" convention #preset-list/#palette-list already
            use: plain filter chips (All/Warm/Rock/Funny/Speech — named
            queries over the #28 taxonomy's existing tags, stored
            nowhere on presets), a search box (name/description/tags),
-           then Factory and Yours as separate card groups. -->
+           then Factory and, when user presets exist, Yours as separate
+           card groups. Browse and
+           search stay available before Start; Try, Previous/Next, and
+           Save use the same live-engine gate as Advanced. -->
       <div class="simple-library-body" id="simple-library-body"></div>
     </div>
 
@@ -404,9 +415,8 @@
 
       <div class="simple-stage" id="simple-stage">
         <div class="simple-stage-inner">
-          <div class="simple-kicker">Current sound</div>
           <div class="simple-stage-head">
-            <h2 class="simple-cs-name" id="simple-cs-name">Custom sound</h2>
+            <h2 class="simple-cs-name" id="simple-cs-name">Ready to start</h2>
             <!-- wayfinder #49 — JS-shown only for an unsaved sound
                  (modified, or no preset loaded at all): "Save this
                  sound" sits beside the name, never in the secondary

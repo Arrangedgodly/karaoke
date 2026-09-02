@@ -32,9 +32,8 @@
 //      on one faceplate with groove separators (cut+lip pairs), and the
 //      pre-Start gate hatch covers BOTH flanking zones with the exact
 //      gradient the canvas face uses (one grammar, three zones).
-//   G. VIEWPORT LAW — below 900px the voice deck stacks (1fr) with the
-//      grooves turned horizontal, and the etch (not BYPASS) is the group
-//      that wraps away via order.
+//   G. VIEWPORT LAW — responsive system-deck grids keep state, controls,
+//      and BYPASS in named rows while the voice deck stacks below 901px.
 //   H. CHIP KEYS KEEP THE FLAT-BUTTON CONTRACT — chips restyle as panel
 //      keys while staying real buttons in the flat DOM order with the
 //      catch-all family fallback (the palette suite holds the behavioral
@@ -435,6 +434,10 @@ check(
     cssDecl(etchRule, 'box-shadow') === 'inset 0 1px 0 var(--pm-groove-lip)',
   'the etch is an inset register slot (register ground + machined lip), rhyming with the display register'
 );
+check(
+  cssDecl(cssRule('body:not(.view-advanced) .readout-group'), 'display') === 'none',
+  'Simple hides diagnostic engine readouts while Advanced keeps their base display rule'
+);
 
 var startRule = cssRule('#start-button:not(:disabled)');
 check(
@@ -556,9 +559,9 @@ check(
 );
 
 // ----------------------------------------------------------------------
-console.log('G. viewport law — the deck wraps below 900px; the voice deck runs as a row only at >=901px');
+console.log('G. viewport law — the deck uses explicit responsive grids; the voice deck runs as a row only at >=901px');
 
-// One 900px media block remains — the system deck's own etch-wrap. The
+// One 900px media block remains — the system deck's compact grid. The
 // voice deck's OWN narrow-viewport collapse is back (left-sidebar round,
 // 2026-08-31 user direction): .layout is a plain stacked column at its
 // base (unscoped) rule, and only becomes a row — .presets-panel beside
@@ -576,30 +579,68 @@ function mediaBlockAfterIndex(idx) {
   }
   return RAW_CSS.slice(open + 1, i - 1);
 }
+function ruleInBlock(block, selector) {
+  var at = block.indexOf(selector);
+  if (at === -1) { return null; }
+  var open = block.indexOf('{', at);
+  if (open === -1) { return null; }
+  var depth = 1;
+  var i = open + 1;
+  while (i < block.length && depth > 0) {
+    if (block[i] === '{') { depth += 1; }
+    else if (block[i] === '}') { depth -= 1; }
+    i += 1;
+  }
+  return depth === 0 ? block.slice(open + 1, i - 1) : null;
+}
 var narrowIdx = RAW_CSS.indexOf('@media (max-width: 900px)');
 var deckMedia = narrowIdx !== -1 ? mediaBlockAfterIndex(narrowIdx) : '';
 check(
   narrowIdx !== -1 && RAW_CSS.indexOf('@media (max-width: 900px)', narrowIdx + 1) === -1,
-  'exactly one <900px block remains (the system deck\'s etch wrap) — the voice-deck grid collapse is gone with the grid itself'
+  'exactly one <900px block remains (the system deck\'s compact grid) — the voice-deck grid collapse is gone with the grid itself'
 );
 check(
-  deckMedia.indexOf('.system-etch') !== -1 &&
-    /order:\s*9/.test(deckMedia.slice(deckMedia.indexOf('.system-etch'))),
-  'below 900px the ETCH is the group that wraps LAST (order 9)'
+  /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/.test(deckMedia) &&
+    /'identity views'\s*'agent bypass'\s*'controls controls'\s*'etch etch'/.test(deckMedia) &&
+    cssDecl(ruleInBlock(deckMedia, '.system-etch'), 'grid-area') === 'etch',
+  'below 900px the compact grid keeps identity/view, agent/Bypass, controls, and etch in four deliberate rows'
 );
-function orderOf(block, selector) {
-  var at = block.indexOf(selector);
-  if (at === -1) { return null; }
-  var m = block.slice(at).match(/order:\s*(\d+)/);
-  return m ? parseInt(m[1], 10) : null;
-}
-var bypassOrder = orderOf(deckMedia, '.bypass-btn');
-var controlsOrder = orderOf(deckMedia, '.topbar-controls');
 check(
-  bypassOrder !== null && bypassOrder < controlsOrder &&
-    bypassOrder < 9 &&
-    /flex-basis:\s*100%/.test(deckMedia.slice(deckMedia.indexOf('.topbar-controls'))),
-  'below 900px BYPASS keeps a row-1 order (ahead of the controls block and the etch), and the controls block wraps INTERNALLY at full width — BYPASS never leaves the visible top, nothing overflows the deck'
+  cssDecl(ruleInBlock(deckMedia, '.bypass-btn'), 'grid-area') === 'bypass' &&
+    cssDecl(ruleInBlock(deckMedia, '.topbar-controls'), 'grid-area') === 'controls' &&
+    /flex-wrap:\s*wrap/.test(deckMedia.slice(deckMedia.indexOf('.topbar-controls'))),
+  'below 900px BYPASS owns the safety-row end while controls wrap inside their full-width grid row'
+);
+
+var phoneIdx = RAW_CSS.indexOf('@media (max-width: 480px)');
+var phoneMedia = phoneIdx !== -1 ? mediaBlockAfterIndex(phoneIdx) : '';
+check(
+  phoneIdx !== -1 &&
+    /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(phoneMedia) &&
+    /grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/.test(
+      ruleInBlock(phoneMedia, '.topbar-controls') || ''
+    ),
+  'phone widths use shrinkable deck columns and a bounded Start/microphone control row'
+);
+check(
+  cssDecl(ruleInBlock(phoneMedia, '#input-device-select'), 'width') === '100%' &&
+    cssDecl(ruleInBlock(phoneMedia, '#input-device-select'), 'min-width') === '0' &&
+    cssDecl(ruleInBlock(phoneMedia, '.start-hint'), 'display') === 'none',
+  'phone widths keep the microphone inside the frame and remove the duplicated Start hint'
+);
+
+var intermediateIdx = RAW_CSS.indexOf('@media (min-width: 901px) and (max-width: 1500px)');
+var intermediateMedia = intermediateIdx !== -1 ? mediaBlockAfterIndex(intermediateIdx) : '';
+check(
+  intermediateIdx !== -1 &&
+    /'identity views etch etch'\s*'controls controls agent bypass'/.test(intermediateMedia),
+  '901–1500px uses a deliberate two-row system deck instead of allowing an accidental flex wrap'
+);
+check(
+  cssDecl(ruleInBlock(intermediateMedia, '.system-etch'), 'grid-area') === 'etch' &&
+    cssDecl(ruleInBlock(intermediateMedia, '.agent-chip'), 'grid-area') === 'agent' &&
+    cssDecl(ruleInBlock(intermediateMedia, '.bypass-btn'), 'grid-area') === 'bypass',
+  'the intermediate grid keeps engine state, agent state, and Bypass in named stable areas'
 );
 
 var layoutRule = cssRule('.layout');

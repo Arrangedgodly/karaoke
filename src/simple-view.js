@@ -2,8 +2,9 @@
 // (wayfinder #47 and #48, map #43).
 //
 // Loaded as a plain (non-module) <script> — same IIFE + single `window.X`
-// export pattern as the rest of this project. Depends on window.AudioGraph
-// (src/audio-graph.js), window.EffectCatalog (src/effect-catalog.js),
+// export pattern as the rest of this project. Depends on window.AudioEngine
+// (src/audio-engine.js), window.AudioGraph (src/audio-graph.js),
+// window.EffectCatalog (src/effect-catalog.js),
 // window.PresetsUI (src/presets-ui.js), window.FactoryPresets
 // (src/factory-presets.js), and window.PresetStore (src/preset-store.js)
 // — all already loaded by the time this file runs, per index.html's script
@@ -60,12 +61,13 @@
   var descEl = document.getElementById('simple-desc');
   var summaryEl = document.getElementById('simple-summary');
   var libraryBodyEl = document.getElementById('simple-library-body');
+  var libraryGateNoteEl = document.getElementById('simple-library-gate-note');
   var transportEl = document.getElementById('simple-transport');
   var saveBtnEl = document.getElementById('simple-save-btn');
   var saveRowEl = document.getElementById('simple-save-row');
 
   if (!simpleBtn || !advancedBtn || !nameEl || !descEl || !summaryEl ||
-      !libraryBodyEl || !transportEl || !saveBtnEl || !saveRowEl) {
+      !libraryBodyEl || !libraryGateNoteEl || !transportEl || !saveBtnEl || !saveRowEl) {
     // Shell markup isn't present (e.g. not yet built, or restructured
     // again by a later task) — nothing to wire up.
     return;
@@ -128,6 +130,19 @@
       : [];
   }
 
+  // Match main.js's one truthful live predicate. `isStarted` alone is not
+  // enough: a lost track or suspended context cannot accept a human preset
+  // load, so Simple must close the same mutation paths Advanced closes.
+  function engineIsLive() {
+    var engine = window.AudioEngine;
+    var audioContext = engine && engine.audioContext;
+    var trackLive = !!engine && engine.isTrackLive !== false;
+    return !!(
+      engine && engine.isStarted && trackLive &&
+      audioContext && audioContext.state === 'running'
+    );
+  }
+
   function displayState() {
     return (window.PresetsUI && typeof window.PresetsUI.getDisplayState === 'function')
       ? window.PresetsUI.getDisplayState()
@@ -178,10 +193,15 @@
 
   function renderSummary(chain) {
     summaryEl.innerHTML = '';
+    if (!engineIsLive()) {
+      summaryEl.hidden = true;
+      return;
+    }
+    summaryEl.hidden = false;
     if (chain.length === 0) {
       var empty = document.createElement('li');
       empty.className = 'simple-summary-empty';
-      empty.textContent = 'Press Start to power on';
+      empty.textContent = 'No effects in this sound';
       summaryEl.appendChild(empty);
       return;
     }
@@ -258,13 +278,17 @@
     saveRowOpen = true;
     saveRowEl.hidden = false;
 
+    var nameLabel = document.createElement('label');
+    nameLabel.className = 'preset-name-label';
+    nameLabel.textContent = 'Sound name';
+    nameLabel.setAttribute('for', 'simple-sound-name-input');
+
     saveNameInputEl = document.createElement('input');
     saveNameInputEl.type = 'text';
+    saveNameInputEl.id = 'simple-sound-name-input';
     saveNameInputEl.className = 'preset-name-input';
     saveNameInputEl.maxLength = 40;
-    saveNameInputEl.placeholder = 'Name this sound…';
     saveNameInputEl.value = state.name || '';
-    saveNameInputEl.setAttribute('aria-label', 'Sound name');
     saveNameInputEl.addEventListener('keydown', function (event) {
       if (event.key === 'Enter') {
         commitSaveRow();
@@ -295,6 +319,7 @@
     saveNoteEl.className = 'simple-save-note';
     saveNoteEl.hidden = true;
 
+    saveRowEl.appendChild(nameLabel);
     saveRowEl.appendChild(saveNameInputEl);
     saveRowEl.appendChild(actions);
     saveRowEl.appendChild(saveNoteEl);
@@ -308,6 +333,9 @@
   }
 
   saveBtnEl.addEventListener('click', function () {
+    if (!engineIsLive()) {
+      return;
+    }
     if (saveRowOpen) {
       closeSaveRow();
     } else {
@@ -318,7 +346,8 @@
   function renderStage() {
     var chain = currentChain();
     var state = displayState();
-    var name = state.name || 'Custom sound';
+    var engineLive = engineIsLive();
+    var name = engineLive ? (state.name || 'Custom sound') : 'Ready to start';
 
     nameEl.textContent = '';
     nameEl.appendChild(document.createTextNode(name));
@@ -331,7 +360,7 @@
     // about who built it (settled #43: Custom sound's own definition
     // makes the same call — "agent-built, or hand-edited in Advanced,"
     // named the same way either way).
-    if (state.modified) {
+    if (engineLive && state.modified) {
       var marker = document.createElement('span');
       marker.className = 'simple-cs-state';
       marker.textContent = ' · unsaved changes';
@@ -345,12 +374,13 @@
     // (e.g. Undo, or the same preset reloading elsewhere) avoids a stale
     // naming row hanging open over a now-clean sound.
     var unsaved = isUnsaved(state);
-    saveBtnEl.hidden = !unsaved;
-    if (!unsaved && saveRowOpen) {
+    saveBtnEl.disabled = !engineLive;
+    saveBtnEl.hidden = !engineLive || !unsaved;
+    if ((!engineLive || !unsaved) && saveRowOpen) {
       closeSaveRow();
     }
 
-    var description = factoryDescription(state.name);
+    var description = engineLive ? factoryDescription(state.name) : '';
     if (description) {
       descEl.textContent = description;
       descEl.hidden = false;
@@ -368,9 +398,8 @@
 
   // Plain filters — named queries over the SAME public tags #26/#28's
   // taxonomy already carries (factory-library-data.js), defined HERE
-  // and stored nowhere on presets (settled #43). A filter that matches
-  // nothing is a visible coverage gap, rendered as such below — not a
-  // bug to fix in this file.
+  // and stored nowhere on presets (settled #43). A filter or search that
+  // matches nothing gets its own plain no-results message below.
   var PLAIN_FILTERS = [
     { id: 'all', label: 'All', test: function () { return true; } },
     { id: 'warm', label: 'Warm', test: function (tags) { return tags.indexOf('vibe:warm') !== -1; } },
@@ -439,7 +468,7 @@
     return userNames().filter(function (name) { return matchesQuery(name); });
   }
 
-  function buildCard(name, description, tags, kind, isActive) {
+  function buildCard(name, description, kind, isActive) {
     var row = document.createElement('div');
     row.className = 'preset-row';
     if (isActive) {
@@ -449,6 +478,10 @@
     var loadBtn = document.createElement('button');
     loadBtn.type = 'button';
     loadBtn.className = 'preset-row-load';
+    loadBtn.disabled = !engineIsLive();
+    if (loadBtn.disabled) {
+      loadBtn.setAttribute('aria-describedby', 'simple-library-gate-note');
+    }
 
     var nameSpan = document.createElement('span');
     nameSpan.className = 'preset-row-name';
@@ -462,22 +495,11 @@
       loadBtn.appendChild(previewSpan);
     }
 
-    if (tags && tags.length) {
-      var tagsSpan = document.createElement('span');
-      tagsSpan.className = 'preset-row-tags';
-      tagsSpan.setAttribute('aria-hidden', 'true');
-      tagsSpan.textContent = tags.map(function (t) {
-        var i = t.indexOf(':');
-        return i === -1 ? t : t.slice(i + 1);
-      }).join(' · ');
-      loadBtn.appendChild(tagsSpan);
-    }
-
     // "Try a preset" (CONTEXT.md's settled verb): submits through the
     // SAME load path Advanced's own Presets panel rows use — see this
     // file's header and presets-ui.js's export comment.
     loadBtn.addEventListener('click', function () {
-      if (!window.PresetsUI) {
+      if (!engineIsLive() || !window.PresetsUI) {
         return;
       }
       if (kind === 'factory' && typeof window.PresetsUI.loadFactoryPreset === 'function') {
@@ -558,6 +580,8 @@
   }
 
   function renderLibraryList() {
+    libraryGateNoteEl.hidden = engineIsLive();
+
     Object.keys(chipEls).forEach(function (id) {
       var on = id === libraryState.filter;
       chipEls[id].classList.toggle('simple-chip-on', on);
@@ -567,7 +591,9 @@
     var allFactory = factoryEntries();
     var factory = filteredFactory();
     if (chipCountEl) {
-      chipCountEl.textContent = factory.length + ' of ' + allFactory.length;
+      var narrowed = libraryState.filter !== 'all' || !!libraryState.query.trim();
+      chipCountEl.hidden = !narrowed;
+      chipCountEl.textContent = narrowed ? factory.length + ' of ' + allFactory.length : '';
     }
 
     var currentName = displayState().name;
@@ -575,28 +601,33 @@
     cardsListEl.innerHTML = '';
     cardsListEl.appendChild(buildGroupLabel('Factory'));
     if (factory.length === 0) {
+      var emptyFactoryCopy = libraryState.query.trim()
+        ? 'No factory sounds match your search.'
+        : (libraryState.filter === 'all'
+          ? 'No factory sounds are available.'
+          : 'No factory sounds match this filter.');
       cardsListEl.appendChild(buildEmptyNote(
-        'No factory sounds match — a coverage gap for the library to fill, not a Simple-view bug.'
+        emptyFactoryCopy
       ));
     } else {
       factory.forEach(function (p) {
         cardsListEl.appendChild(
-          buildCard(p.name, p.description, publicTags(p.tags), 'factory', p.name === currentName)
+          buildCard(p.name, p.description, 'factory', p.name === currentName)
         );
       });
     }
 
-    cardsListEl.appendChild(buildGroupLabel('Yours'));
     var allUserNames = userNames();
-    var yours = filteredUserNames();
-    if (yours.length === 0) {
-      cardsListEl.appendChild(buildEmptyNote(
-        allUserNames.length === 0 ? 'Sounds you save will show up here.' : 'Nothing of yours matches that search.'
-      ));
-    } else {
-      yours.forEach(function (name) {
-        cardsListEl.appendChild(buildCard(name, '', [], 'user', name === currentName));
-      });
+    if (allUserNames.length > 0) {
+      cardsListEl.appendChild(buildGroupLabel('Yours'));
+      var yours = filteredUserNames();
+      if (yours.length === 0) {
+        cardsListEl.appendChild(buildEmptyNote('No saved sounds match your search.'));
+      } else {
+        yours.forEach(function (name) {
+          cardsListEl.appendChild(buildCard(name, '', 'user', name === currentName));
+        });
+      }
     }
 
     renderTransport();
@@ -613,6 +644,9 @@
   }
 
   function stepFactory(direction) {
+    if (!engineIsLive()) {
+      return;
+    }
     var list = filteredFactory();
     if (list.length === 0) {
       return;
@@ -628,6 +662,10 @@
 
   function renderTransport() {
     transportEl.innerHTML = '';
+    transportEl.hidden = !engineIsLive();
+    if (transportEl.hidden) {
+      return;
+    }
     var list = filteredFactory();
     var pos = currentFactoryPosition(list);
 
@@ -682,8 +720,8 @@
     var search = document.createElement('input');
     search.type = 'text';
     search.className = 'control preset-search';
-    search.placeholder = 'Search sounds…';
-    search.setAttribute('aria-label', 'Search sounds');
+    search.placeholder = 'Search by name, style, or use…';
+    search.setAttribute('aria-label', 'Search sounds by name, style, or use');
     search.addEventListener('input', function () {
       libraryState.query = search.value;
       renderLibraryList();
@@ -704,6 +742,8 @@
   renderAll();
 
   window.SimpleView = {
-    onChainChanged: renderAll
+    onChainChanged: renderAll,
+    onEngineStarted: renderAll,
+    onEngineStopped: renderAll
   };
 })();

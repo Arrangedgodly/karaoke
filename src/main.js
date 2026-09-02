@@ -198,35 +198,35 @@ console.log('App scaffold loaded');
   // ---------------------------------------------------------------------
   var MIC_ERROR_COPY = {
     NotAllowedError: {
-      line: 'Mic was blocked.',
+      line: 'Microphone access blocked.',
       startAction:
-        'Click the camera icon in the address bar \u2192 Microphone \u2192 Allow, then press Start.',
-      switchLine: 'Mic blocked. Re-allow from the address-bar icon, then pick again.',
+        'Allow Microphone for this page in Chrome site controls, then press Start.',
+      switchLine: 'Microphone access is blocked. Allow it in site controls, then try again.',
     },
     NotFoundError: {
-      line: 'No mic was found.',
-      startAction: 'Plug a mic in, then press Start.',
-      switchLine: 'That mic is gone. Pick another from the dropdown.',
+      line: 'No microphone found.',
+      startAction: 'Connect a microphone, then press Start.',
+      switchLine: 'That microphone is unavailable. Choose another.',
     },
     NotReadableError: {
-      line: 'Mic is busy.',
-      startAction: 'Close the other app using the mic, then press Start.',
-      switchLine: 'That mic is busy. Close its app, then pick again.',
+      line: 'Microphone is in use.',
+      startAction: 'Close the other app using it, then press Start.',
+      switchLine: 'That microphone is in use. Close the other app, then choose it again.',
     },
     OverconstrainedError: {
-      line: 'Could not start the engine.',
+      line: 'Could not use that microphone.',
       startAction: 'Press Start to try again.',
-      switchLine: 'That mic is gone. Pick another from the dropdown.',
+      switchLine: 'That microphone is unavailable. Choose another.',
     },
     SecurityError: {
-      line: 'Mic blocked by browser.',
+      line: 'Browser blocked microphone access.',
       startAction: 'Open Chrome at http://localhost:8000, then press Start.',
-      switchLine: 'Browser blocked that mic. Pick another.',
+      switchLine: 'Browser blocked microphone access. Check site controls, then try again.',
     },
     AbortError: {
-      line: 'Mic request cut off.',
+      line: 'Microphone did not respond.',
       startAction: 'Press Start to try again.',
-      switchLine: 'That mic did not respond. Pick it again.',
+      switchLine: 'That microphone did not respond. Choose it again.',
     },
   };
 
@@ -234,17 +234,17 @@ console.log('App scaffold loaded');
   // non-localhost origin): only reachable on the Start path — switching
   // devices requires a started engine, which requires getUserMedia.
   var NO_GETUSERMEDIA_COPY = {
-    line: 'Mic not available here.',
-    startAction: 'Open Chrome at http://localhost:8000 (use the start file), then press Start.',
+    line: 'Microphone unavailable on this page.',
+    startAction: 'Run the included start file, open http://localhost:8000 in Chrome, then press Start.',
   };
 
   // Anything unmapped (TypeError, unknown names, non-Error rejections):
   // name the problem honestly, offer the retry, keep the technical
   // footnote — never a bare exception, never silence.
   var MIC_ERROR_FALLBACK = {
-    line: 'Could not start.',
+    line: 'Could not start microphone audio.',
     startAction: 'Press Start to try again.',
-    switchLine: 'Could not switch. Pick another mic, then try again.',
+    switchLine: 'Could not switch microphones. Choose another, then try again.',
   };
 
   // The demoted footnote: "Name: message" in the mono register.
@@ -368,7 +368,7 @@ console.log('App scaffold loaded');
       if (devices.length === 0) {
         var emptyOpt = document.createElement('option');
         emptyOpt.value = '';
-        emptyOpt.textContent = '-- no input devices found --';
+        emptyOpt.textContent = 'No microphones found';
         deviceSelect.appendChild(emptyOpt);
         deviceSelect.disabled = true;
         return;
@@ -378,7 +378,7 @@ console.log('App scaffold loaded');
       devices.forEach(function (device, index) {
         var opt = document.createElement('option');
         opt.value = device.deviceId;
-        opt.textContent = device.label || ('Input device ' + (index + 1));
+        opt.textContent = device.label || ('Microphone ' + (index + 1));
         if (device.deviceId === selectedDeviceId) {
           opt.selected = true;
           anySelected = true;
@@ -433,12 +433,12 @@ console.log('App scaffold loaded');
   // is re-enabled).
   var LOSS_COPY = {
     ended: {
-      line: 'Mic was unplugged.',
-      action: 'Pick another mic from the dropdown, then press Start.',
+      line: 'Microphone disconnected.',
+      action: 'Reconnect the microphone, then press Start.',
     },
     device: {
-      line: 'Mic was unplugged.',
-      action: 'Pick another mic from the dropdown, then press Start.',
+      line: 'Microphone disconnected.',
+      action: 'Connect a microphone, then press Start.',
     },
     context: {
       line: 'Audio engine paused.',
@@ -446,7 +446,7 @@ console.log('App scaffold loaded');
     },
     graph: {
       line: 'Audio chain did not reconnect.',
-      action: 'Press Start to rebuild audio.',
+      action: 'Press Start to reconnect the audio chain.',
     },
   };
 
@@ -460,8 +460,18 @@ console.log('App scaffold loaded');
 
   function liveStatusText() {
     return startupRestoreFailed
-      ? 'Live — saved chain failed to load; started empty'
+      ? 'Live. Saved chain could not load, so no effects are active.'
       : 'Live';
+  }
+
+  function renderSimpleEngineState(engineLive) {
+    if (!window.SimpleView) {
+      return;
+    }
+    var method = engineLive ? 'onEngineStarted' : 'onEngineStopped';
+    if (typeof window.SimpleView[method] === 'function') {
+      window.SimpleView[method]();
+    }
   }
 
   function surfaceLoss(copy) {
@@ -493,6 +503,7 @@ console.log('App scaffold loaded');
     if (window.ChainCanvas && typeof window.ChainCanvas.onEngineStopped === 'function') {
       window.ChainCanvas.onEngineStopped();
     }
+    renderSimpleEngineState(false);
     if (
       window.AudioEngine &&
       typeof window.AudioEngine.invalidatePendingSwitches === 'function'
@@ -541,6 +552,7 @@ console.log('App scaffold loaded');
     if (window.ChainCanvas && typeof window.ChainCanvas.onEngineStarted === 'function') {
       window.ChainCanvas.onEngineStarted();
     }
+    renderSimpleEngineState(true);
     if (window.MeterTaps) {
       window.MeterTaps.onEngineStarted();
       startupMetersPending = false;
@@ -593,6 +605,7 @@ console.log('App scaffold loaded');
         if (window.ChainCanvas && typeof window.ChainCanvas.onEngineStarted === 'function') {
           window.ChainCanvas.onEngineStarted();
         }
+        renderSimpleEngineState(true);
         if (startupMetersPending && window.MeterTaps) {
           window.MeterTaps.onEngineStarted();
           startupMetersPending = false;
@@ -677,7 +690,7 @@ console.log('App scaffold loaded');
     // satisfies Safari's "resume() must happen within a user gesture"
     // requirement (RQ-4); do not move this call behind any prior await.
     startButton.disabled = true;
-    setStatus('Requesting mic access...', false);
+    setStatus('Waiting for microphone permission...', false);
     startupFinalizationPending = true;
 
     window.AudioEngine.start()
@@ -747,6 +760,7 @@ console.log('App scaffold loaded');
               window.ChainCanvas.onEngineStopped();
             }
           }
+          renderSimpleEngineState(engineLive);
 
           // FEW-3: meter side-taps + runtime watchdog. Now that
           // audioContext/sourceNode exist AND the first buildGraph() has
@@ -791,7 +805,7 @@ console.log('App scaffold loaded');
           } else if (!surfacedLoss) {
             setStatus(
               restoreFailed
-                ? 'Stopped — saved chain failed to load; started empty'
+                ? 'Stopped. Saved chain could not load, so no effects are active.'
                 : 'Stopped',
               false
             );
@@ -864,7 +878,7 @@ console.log('App scaffold loaded');
     // Once a switch is requested neither the old nor the replacement path
     // is the accepted live path yet. Keep the lamp gray until the new graph,
     // bypass tap, and meters have all reconnected.
-    setStatus('Switching mic...', false);
+    setStatus('Switching microphone...', false);
 
     Promise.resolve(engineTransition.ready)
       .then(function () {
