@@ -961,7 +961,31 @@
     });
   }
 
+  // Stop is immediate: cut the output edge before disposing effects so
+  // delay/reverb tails and scheduled gate ramps cannot keep sounding.
+  // Keep the shared gate/attenuator for the meter taps, but rebuild every
+  // effect on the next Start so old tails cannot return with it.
+  function stop() {
+    if (pendingRewireState) {
+      cancelStagedBuild(pendingRewireState, graphAbortError(), false);
+    }
+    if (chainGate) {
+      chainGate.gain.cancelScheduledValues(0);
+      chainGate.gain.value = 0;
+      chainGate.disconnect();
+    }
+    currentModel.forEach(function (entry) {
+      var node = nodeInstances[entry.id];
+      try { getNodeOutput(node).disconnect(); } catch (err) { /* already gone */ }
+      disposeEffect(entry.type, node);
+    });
+    nodeInstances = {};
+    firstChainNode = null;
+    currentModel = [];
+  }
+
   window.AudioGraph = {
+    stop: stop,
     getModel: getModel,
     buildGraph: buildGraph,
     getChainGate: getChainGate,

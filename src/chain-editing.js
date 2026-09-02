@@ -43,6 +43,16 @@
   var engineTransitionGeneration = 0;
   var activeEngineTransition = null;
   var engineTransitionBarrier = Promise.resolve(true);
+  var sessionGeneration = 0;
+  var hasAcceptedState = false;
+
+  function requireSession(generation) {
+    if (generation !== sessionGeneration) {
+      var err = makeAbortError();
+      err.stale = true;
+      throw err;
+    }
+  }
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -558,8 +568,9 @@
     renderParam(rollbackChange);
   }
 
-  function rollbackStructural(previous, previousLayout, candidate) {
+  function rollbackStructural(previous, previousLayout, candidate, generation) {
     return buildGraph(previous).then(function () {
+      requireSession(generation);
       applyReusedParams(candidate, previous);
       renderModel(previous, previousLayout);
       return { attempted: true, succeeded: true };
@@ -590,7 +601,7 @@
     return err;
   }
 
-  function perform(request) {
+  function perform(request, generation) {
     ensureRequest(request);
     if (request.signal && request.signal.aborted) {
       return Promise.reject(makeAbortError());
@@ -623,12 +634,14 @@
     var commit;
     if (change) {
       commit = Promise.resolve().then(function () {
+        requireSession(generation);
         applyParamToGraph(change);
         liveCommitted = true;
         renderParam(change);
       });
     } else {
       commit = buildGraph(candidate, request.signal).then(function () {
+        requireSession(generation);
         liveCommitted = true;
         if (request.signal && request.signal.aborted) {
           throw makeAbortError();
@@ -647,6 +660,7 @@
     }
 
     return commit.then(function () {
+      requireSession(generation);
       acceptedModel = cloneModel(candidate);
       if (mode === 'structural') {
         acceptedLayout = renderedLayout === null ? null : clone(renderedLayout);
@@ -654,6 +668,7 @@
       markAcceptedEdit(request);
       var saved = persist(candidate);
       pushAgentUndo(request, snapshot);
+      hasAcceptedState = true;
       var result = {
         applied: true,
         saved: saved.saved,
@@ -665,6 +680,9 @@
       }
       return result;
     }).catch(function (cause) {
+      // A stopped session has no graph to roll back. Its accepted state
+      // was retained by retireSession; old work must not touch a restart.
+      requireSession(generation);
       var rollbackPromise;
       if (
         mode === 'structural' &&
@@ -677,11 +695,12 @@
         rollbackPromise = Promise.resolve(cause.graphResult.rollback);
       } else if (mode === 'parameter') {
         rollbackPromise = Promise.resolve().then(function () {
+          requireSession(generation);
           rollbackParam(change);
           return { attempted: true, succeeded: true };
         });
       } else {
-        rollbackPromise = rollbackStructural(previous, previousLayout, candidate);
+        rollbackPromise = rollbackStructural(previous, previousLayout, candidate, generation);
       }
       return rollbackPromise.catch(function (rollbackError) {
         return {
@@ -691,6 +710,7 @@
           liveCommitStarted: liveCommitted
         };
       }).then(function (rollback) {
+        requireSession(generation);
         if (rollback.succeeded) {
           acceptedModel = cloneModel(previous);
           acceptedLayout = previousLayout === null ? null : clone(previousLayout);
@@ -701,18 +721,51 @@
   }
 
   function apply(request) {
+    var generation = sessionGeneration;
     var prior = queue;
     var transition = engineTransitionBarrier;
     var run = Promise.all([prior, transition]).then(function (settled) {
+      requireSession(generation);
       if (settled[1] === false) {
         throw engineNotStartedError();
       }
-      return perform(request);
+      return perform(request, generation);
     });
     queue = run.catch(function () {
       // Keep later independent edits usable after a failed transaction.
     });
     return run;
+  }
+
+  /** Retire queued/in-flight edits without awaiting a browser promise.
+   * The caller stops the physical graph in the same synchronous turn.
+   * Return only accepted state, including edits whose autosave failed. */
+  function retireSession() {
+    sessionGeneration += 1;
+    if (activeEngineTransition) {
+      activeEngineTransition.resolve(false);
+      activeEngineTransition = null;
+    }
+    engineTransitionBarrier = Promise.resolve(true);
+    queue = Promise.resolve();
+    var snapshot = getSnapshot();
+    if (!snapshot) {
+      return null;
+    }
+    try {
+      renderModel(snapshot.model, snapshot.layout, { preservePresentation: true });
+    } catch (err) {
+      // A broken renderer must not prevent capture/output teardown or lose
+      // the accepted snapshot needed for the next Start.
+      console.error('Stopped sound could not be rendered; accepted state retained:', err);
+    }
+    return snapshot;
+  }
+
+  function getSnapshot() {
+    return hasAcceptedState
+      ? { model: currentAcceptedModel(), layout: currentAcceptedLayout() }
+      : null;
   }
 
   /**
@@ -771,6 +824,8 @@
 
   window.ChainEditing = {
     apply: apply,
+    retireSession: retireSession,
+    getSnapshot: getSnapshot,
     beginEngineTransition: beginEngineTransition,
     getModel: currentAcceptedModel,
     getLayout: currentAcceptedLayout,

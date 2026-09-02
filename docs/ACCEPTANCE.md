@@ -53,6 +53,13 @@ actual mic and the actual room.
       mic, and engage/disengage again mid-song with no glitch.
 - [ ] Date / operator / result: ____________
 
+- [ ] **Stop and restart**: in both Simple and Advanced, press Stop while
+      singing with Delay or Reverb active. Microphone capture ends and all
+      output, including tails, stops. Repeat with Bypass engaged. Press Start
+      again and confirm the same sound, layout, and Bypass choice return,
+      with no old tail replay. Verify the keyboard can activate Stop.
+- [ ] Date / operator / Stop result: ____________
+
 ## 2. Audible-DSP checks
 
 Each effect must be audible, correct, and quiet-transitioning through the

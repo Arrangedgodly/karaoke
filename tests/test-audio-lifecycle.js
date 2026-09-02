@@ -589,7 +589,7 @@ async function main() {
 
   check(statusText(els) === 'Live', 'A1: status reads Live after a normal start');
   check(isLiveVisible(), 'A1: the .live class (green dot) is on');
-  check(startBtn.disabled === true, 'A1: Start is disabled after a successful start');
+  check((startBtn.textContent === 'Stop' && startBtn.disabled === false), 'A1: the session button becomes an enabled Stop after a successful start');
   check(MT.started === 1, 'A1: MeterTaps.onEngineStarted fired exactly once');
   check(sandbox.__chainCanvas.started === 1, 'A1: ChainCanvas.onEngineStarted unlocked the board exactly once');
   check(
@@ -657,11 +657,11 @@ async function main() {
   ctx.__setState('suspended');
   await settle();
 
-  check(statusText(els) === 'Audio engine paused.', 'B1: suspension surfaces operator copy');
+  check(statusText(els) === 'Audio engine paused. Press Stop, then Start to resume.', 'B1: suspension surfaces operator copy');
   check(!isLiveVisible(), 'B1: the strip is NOT Live after suspension');
   check(statusWrap.classList.contains('error'), 'B1: the error register is raised');
-  check(startBtn.disabled === false, 'B1: Start is re-enabled (the recovery action)');
-  check(startHint.textContent === 'Press Start to resume audio.', 'B1: the hint names the recovery action');
+  check(startBtn.textContent === 'Stop' && !startBtn.disabled, 'B1: Stop remains available while paused capture is open');
+  check(startHint.textContent === 'Press Stop, then Start to resume audio.', 'B1: the hint names the recovery action');
   check(MT.stopped === stoppedBefore + 1, 'B1: MeterTaps.onEngineStopped stopped the loop');
   check(sandbox.__chainCanvas.stopped === canvasStopsBefore + 1,
     'B1: ChainCanvas.onEngineStopped re-gated the board');
@@ -673,7 +673,7 @@ async function main() {
   await settle();
 
   check(statusText(els) === 'Live' && isLiveVisible(), 'B2: resume restores Live (track still live)');
-  check(startBtn.disabled === true, 'B2: Start re-disabled after in-place recovery');
+  check((startBtn.textContent === 'Stop' && startBtn.disabled === false), 'B2: Stop stays enabled after in-place recovery');
   check(sandbox.__chainCanvas.started === 2, 'B2: in-place recovery unlocks the board again');
   check(deviceSelect.disabled === false, 'B2: in-place recovery re-enables the microphone selector');
   check(MT.started === startedBefore + 1, 'B2: the meter loop restarted');
@@ -733,7 +733,7 @@ async function main() {
   var canvasStartsBeforeTrackRecovery = sandbox.__chainCanvas.started;
   await startWith('d1');
   check(statusText(els) === 'Live' && isLiveVisible(), 'C2: pressing Start after a loss rebuilds and goes Live');
-  check(startBtn.disabled === true, 'C2: Start is gated again after the recovery start');
+  check((startBtn.textContent === 'Stop' && startBtn.disabled === false), 'C2: Stop is offered after the recovery start');
   check(AE.isTrackLive === true, 'C2: the fresh session is live');
   check(sandbox.__chainCanvas.started === canvasStartsBeforeTrackRecovery + 1,
     'C2: the recovered Start unlocked the board again');
@@ -747,7 +747,7 @@ async function main() {
   lastCreatedTrack.__fire('unmute');
   await settle();
   check(statusText(els) === 'Live' && isLiveVisible(), 'D1: unmute returns to Live');
-  check(startBtn.disabled === true, 'D1: mute never re-enabled Start (no loss happened)');
+  check((startBtn.textContent === 'Stop' && startBtn.disabled === false), 'D1: mute keeps the session button on Stop');
 
   // --------------------------------------------------------------------
   console.log('E. reverse-order switch: the NEWER request wins');
@@ -874,7 +874,7 @@ async function main() {
       MT.switched.length === meterSwitchesAfterLoss,
     'G4: only recovery Start reconnects graph and bypass; the late switch reconnects nothing'
   );
-  check(statusText(els) === 'Live' && isLiveVisible() && startBtn.disabled === true,
+  check(statusText(els) === 'Live' && isLiveVisible() && (startBtn.textContent === 'Stop' && startBtn.disabled === false),
     'G4: the recovered Live state remains authoritative after the stale completion');
 
   // --------------------------------------------------------------------
@@ -897,7 +897,7 @@ async function main() {
     'H1: entry-3 switch failure copy still surfaces'
   );
   check(selectorValue(deviceSelect) === 'd2', 'H1: the selector snapped back to the ACTIVE device');
-  check(startBtn.disabled === true, 'H1: a failed switch never re-enables Start (engine still live)');
+  check((startBtn.textContent === 'Stop' && startBtn.disabled === false), 'H1: a failed switch keeps Stop available while the engine stays live');
 
   // --------------------------------------------------------------------
   console.log('I. graph reconnect must commit before switch finalization');
@@ -1144,7 +1144,7 @@ async function main() {
       'K1: start completed with the resume pending — the strip reads "Stopped"'
     );
     check(!statusWrap2.classList.contains('live'), 'K1: the lamp is off');
-    check(startBtn2.disabled === true, 'K1: Start is DISABLED (the start itself succeeded)');
+    check((startBtn2.textContent === 'Stop' && startBtn2.disabled === false), 'K1: Stop is enabled while the successful start awaits context resume');
     check(
       sandbox2.__chainCanvas.started === 0 && sandbox2.__chainCanvas.stopped === 1 &&
         sandbox2.__chainCanvas.inert === true &&
@@ -1169,7 +1169,7 @@ async function main() {
         bypassBtn2.disabled === false,
       'K2: the late running transition unlocks the board and Bypass'
     );
-    check(startBtn2.disabled === true, 'K2: Start stays gated (no spurious re-enable)');
+    check((startBtn2.textContent === 'Stop' && startBtn2.disabled === false), 'K2: Stop remains the session action');
     check(!statusWrap2.classList.contains('error'), 'K2: no error raised');
     check(
       MT2.started === 1 && MT2.stopped === 0,
@@ -1330,21 +1330,20 @@ async function main() {
     suspendedStartupContext.__setState('suspended');
     await settle();
     check(
-      sandboxStartupSuspended.__els['status-text'].textContent === 'Audio engine paused.' &&
-        suspendedStartButton.disabled === true &&
+      sandboxStartupSuspended.__els['status-text'].textContent === 'Audio engine paused. Press Stop, then Start to resume.' &&
+        (suspendedStartButton.textContent === 'Stop' && suspendedStartButton.disabled === false) &&
         sandboxStartupSuspended.__chainCanvas.inert === true,
       'K7: suspension during restoration stays gated until the startup transaction settles'
     );
-    suspendedStartButton.__fire('click');
-    await settle();
     check(
-      gumQueue.length === 0 && suspendedStartupApplyCount === 1,
-      'K7: Start cannot re-enter while startup finalization is pending'
+      suspendedStartButton.textContent === 'Stop' && !suspendedStartButton.disabled &&
+        gumQueue.length === 0 && suspendedStartupApplyCount === 1,
+      'K7: the pending startup offers Stop instead of another Start'
     );
     finishSuspendedStartupRestore({ applied: true, saved: true, mode: 'structural' });
     await settle();
     check(
-      sandboxStartupSuspended.__els['status-text'].textContent === 'Audio engine paused.' &&
+      sandboxStartupSuspended.__els['status-text'].textContent === 'Audio engine paused. Press Stop, then Start to resume.' &&
         sandboxStartupSuspended.__els['status'].classList.contains('error') &&
         !sandboxStartupSuspended.__els['status'].classList.contains('live') &&
         sandboxStartupSuspended.__chainCanvas.inert === true &&
@@ -1358,12 +1357,12 @@ async function main() {
     check(
       sandboxStartupSuspended.__els['status-text'].textContent === 'Live' &&
         sandboxStartupSuspended.__els['status'].classList.contains('live') &&
-        suspendedStartButton.disabled === true &&
+        (suspendedStartButton.textContent === 'Stop' && suspendedStartButton.disabled === false) &&
         sandboxStartupSuspended.__els['input-device-select'].disabled === false &&
         sandboxStartupSuspended.__els['bypass-toggle-button'].disabled === false &&
         sandboxStartupSuspended.__chainCanvas.inert === false &&
         sandboxStartupSuspended.__meterTaps.started === 1,
-      'K7: the later running event completes recovery, meters, and Start gating exactly once'
+      'K7: the later running event completes recovery and meters with Stop available'
     );
   }
 
@@ -1502,14 +1501,14 @@ async function main() {
       'N4: confirming acquires the microphone SYNCHRONOUSLY in its own click (RQ-4)'
     );
     check(
-      hpStart.disabled === true &&
+      (hpStart.textContent === 'Stop' && hpStart.disabled === false) &&
         hpSandbox.__els['status-text'].textContent === 'Waiting for microphone permission...',
       'N4: confirming runs the real start transaction, not a copy of it'
     );
     check(hpDialog.open === false, 'N4: the check closes itself once it has been answered');
     check(
       hpStart.__focusCount === 2,
-      'N4: closing after a confirm does not yank focus back to a now-disabled Start'
+      'N4: closing after a confirm leaves focus handling to the dialog'
     );
 
     resolveGumAt(gumQueue.length - 1, 'hp1');

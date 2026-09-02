@@ -318,6 +318,7 @@
   var engineStarted = false; // setEngineState()'s flag (default: dark)
   var initialized = false;
   var loopRunning = false;
+  var rafHandle = null;
   var colors = null; // resolved token map (see resolveColors)
   var warned = {}; // one console.warn per distinct defensive message
 
@@ -874,6 +875,8 @@
   // ---------------------------------------------------------------------
 
   function frame(ts) {
+    rafHandle = null;
+    if (!loopRunning) { return; }
     try {
       var t = isNum(ts) ? ts : now();
       eachUnit(function (u) {
@@ -891,7 +894,7 @@
       return;
     }
     if (loopRunning && typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      window.requestAnimationFrame(frame);
+      rafHandle = window.requestAnimationFrame(frame);
     }
   }
 
@@ -900,7 +903,15 @@
       return;
     }
     loopRunning = true;
-    window.requestAnimationFrame(frame);
+    rafHandle = window.requestAnimationFrame(frame);
+  }
+
+  function stopLoop() {
+    loopRunning = false;
+    if (rafHandle !== null && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(rafHandle);
+    }
+    rafHandle = null;
   }
 
   // ---------------------------------------------------------------------
@@ -928,7 +939,7 @@
     }
     resolveColors();
     initialized = true;
-    startLoop();
+    if (engineStarted) { startLoop(); }
     // One immediate silent-at-rest paint per unit (scale + numerals
     // visible as dark hardware from load; engineStarted defaults false).
     var t = now();
@@ -976,6 +987,7 @@
       return;
     }
     engineStarted = next;
+    if (engineStarted) { startLoop(); } else { stopLoop(); }
     if (!engineStarted) {
       // Stopped: clear everything so no latched CLIP or frozen bar can
       // outlive the signal, and repaint the at-rest dark render.

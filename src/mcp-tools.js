@@ -655,6 +655,16 @@
   // calls cannot both plan from the same accepted pre-state and have the
   // later candidate overwrite the earlier one.
   var agentMutationQueue = Promise.resolve();
+  var agentSessionGeneration = 0;
+  var pendingDragWaits = new Set();
+
+  // Stop also retires work waiting outside ChainEditing's transaction
+  // queue. A later Start must not inherit an old tool's plan or drag poll.
+  function retireSession() {
+    agentSessionGeneration += 1;
+    agentMutationQueue = Promise.resolve();
+    pendingDragWaits.forEach(function (cancel) { cancel(); });
+  }
 
   /**
    * Counter for the node ids this layer mints on add_node (the tool takes
@@ -2805,8 +2815,12 @@
    * @returns {Promise<boolean|string>} true = canvas idle (proceed);
    *   false = timed out (resolve BUSY); 'aborted' = cancelled.
    */
-  function waitForDragSettle(signal) {
+  function waitForDragSettle(signal, generation) {
     return new Promise(function (resolve) {
+      if (signalAborted(signal) || generation !== agentSessionGeneration) {
+        resolve('aborted');
+        return;
+      }
       if (!isDragActiveNow()) {
         resolve(true);
         return;
@@ -2819,6 +2833,7 @@
           return;
         }
         done = true;
+        pendingDragWaits.delete(cancel);
         if (timer !== null) {
           clearInterval(timer);
         }
@@ -2827,6 +2842,8 @@
         }
         resolve(value);
       }
+      function cancel() { finish('aborted'); }
+      pendingDragWaits.add(cancel);
       if (signal) {
         if (signal.aborted) {
           finish('aborted');
@@ -4180,8 +4197,9 @@
         reportAgentRejection(name, notStarted);
         return Promise.resolve(notStarted);
       }
+      var generation = agentSessionGeneration;
       var run = agentMutationQueue.then(function () {
-        return waitForDragSettle(signal);
+        return waitForDragSettle(signal, generation);
       }).then(function (settled) {
         if (settled === 'aborted') {
           return abortedResult(name);
@@ -4202,7 +4220,7 @@
         return ready.then(function () {
           // TOCTOU recheck: cancellation may have arrived during drag wait
           // or while waiting for the shared mutation queue.
-          if (signalAborted(signal)) {
+          if (signalAborted(signal) || generation !== agentSessionGeneration) {
             return abortedResult(name);
           }
           try {
@@ -4928,6 +4946,7 @@
   var registrationReady = Promise.resolve({ registered: [], failed: [] });
   window.McpTools = {
     getDefs: getDefs,
+    retireSession: retireSession,
     registrationReady: registrationReady,
     validateAgentPolicyReferences: validateAgentPolicyReferences,
     validateGuideReferences: validateGuideReferences,

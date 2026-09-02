@@ -34,8 +34,7 @@
 //     latency doesn't apply to what's actually heard. This is what turns
 //     LATENCY from "mic I/O only" into "adaptable to the current chain".
 //   refreshNow()  one-shot manual refresh of all three (tests/dev).
-//   stop()        clears the interval — hygiene/tests only (the app has
-//                 no stop path; the readouts run for its lifetime).
+//   stop()        clears the interval when the human stops the session.
 //
 // DOM discipline: every write re-finds its element via getElementById —
 // 3 lookups/s are unmeasurable, and a future topbar re-render can never
@@ -201,6 +200,9 @@
       }
       intervalHandle = null;
     }
+    context = null;
+    write('readout-sample-rate', '—');
+    write('readout-latency', '—');
   }
 
   window.StatusReadouts = {

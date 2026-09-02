@@ -2507,7 +2507,7 @@
    *   resize), else default to the uniform 240px width. When omitted the same
    *   rules run against an empty saved map. Order is no longer a layout
    *   concern — the array's own order IS the chain order.
-   * @param {{freshSeats?: boolean}} [options]
+   * @param {{freshSeats?: boolean, preservePresentation?: boolean}} [options]
    *   freshSeats (#16 stale-seats finding): skip the carry-forward
    *   branch entirely — every entry takes its saved/default width.
    *   stack. Preset loads (src/presets-ui.js) set it: a preset REPLACES
@@ -2516,6 +2516,14 @@
    *   startup restores leave it unset and keep the carry-forward rule.
    */
   function renderModel(model, layout, options) {
+    // Stop/Start rebuilds audio, but an unchanged board needs no DOM swap.
+    // Keep folded cards and scroll position as well as accepted widths.
+    // Stop has already canceled gestures through onEngineStopped().
+    if (options && options.preservePresentation && !dragActive &&
+        JSON.stringify(model) === JSON.stringify(getCurrentModel()) &&
+        JSON.stringify(layout || {}) === JSON.stringify(currentLayout())) {
+      return true;
+    }
     // Chain replacement invalidates every in-flight board gesture (the
     // #16 race finding): a reorder drag / width resize armed against the
     // OLD chain must never commit against the replacement board.

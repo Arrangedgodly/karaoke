@@ -195,7 +195,16 @@
     return engaged;
   }
 
+  // Preserve the human's bypass choice across Stop/Start, but sever its
+  // destination edge now. reconnectSource() restores it on the next Start.
+  function stop() {
+    if (bypassGain) {
+      bypassGain.disconnect();
+    }
+  }
+
   window.AudioBypass = {
+    stop: stop,
     reconnectSource: reconnectSource,
     engage: engage,
     disengage: disengage,
