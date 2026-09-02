@@ -16,9 +16,22 @@
 //
 // Entry shape:
 //   name         display name (unique, non-empty)
-//   description  1–2 sentences, the agent-matching surface — user words,
+//   description  1–2 sentences, the full account of the sound — user words,
 //                artist shorthand where universal, complaint vocabulary the
-//                preset fixes/avoids (checked at audition, per #28)
+//                preset fixes/avoids (checked at audition, per #28). This is
+//                what get_preset carries; it is NOT what a browse listing
+//                carries.
+//   summary      <= 60 characters, HAND-WRITTEN, one line: the
+//                agent-matching surface. This is the string an AI agent
+//                matches a plain-language user request against in
+//                list_presets, so the library can be scanned in one call
+//                instead of rebuilt from scratch (scale-out D-12/D-13;
+//                docs/adr/0003-preset-first-agent-strategy.md). It is NOT
+//                derived by truncating `description` — truncation keeps the
+//                setup and cuts the payoff (Studio Polish's description
+//                opens on what it fixes and closes on the clean voice that
+//                results, which is the half a request matches). Write the
+//                request, not the recipe: what a person would ask for.
 //   tags         combinable 'axis:value' tags; vocabularies are APPEND-ONLY
 //                (a tag is added only when a real user request fails to
 //                match — never speculatively)
@@ -99,6 +112,7 @@
       // value.
       name: 'Classic Karaoke',
       description: 'The all-purpose starting point: gentle leveling, a warm-neutral EQ, a short slap-back delay, and a light room reverb.',
+      summary: 'All-purpose karaoke vocal — the safe starting point.',
       tags: ['use-case:performance', 'vibe:natural', 'technique:ambience-short'],
       primary: 'use-case:performance',
       provenance: {
@@ -121,6 +135,7 @@
       // name). Warm ballad: gentle compression, low warmth, light hall.
       name: 'Warm Ballad',
       description: 'Gentle compression, a touch of low-end warmth, and a light hall reverb for slow, close-up songs.',
+      summary: 'Soft, warm and close-up for slow ballads.',
       tags: ['use-case:performance', 'genre:Pop', 'vibe:warm', 'technique:ambience-long'],
       primary: 'vibe:warm',
       provenance: {
@@ -142,6 +157,7 @@
       // top-end bite, short slap, dry.
       name: 'Rock Night',
       description: 'Stronger compression and top-end bite with a short, dry slap delay — built to cut through a loud room.',
+      summary: 'Bright, punchy rock vocal that cuts a loud room.',
       tags: ['use-case:performance', 'genre:Rock', 'vibe:bright', 'technique:ambience-short'],
       primary: 'genre:Rock',
       provenance: {
@@ -163,6 +179,7 @@
       // crushed, intelligible.
       name: 'Phone Call Gag',
       description: 'Band-limited and lightly crushed for the classic "calling from a phone" bit — still fully intelligible.',
+      summary: 'Tinny phone-call voice — the calling-in bit.',
       tags: ['gag:telephone', 'use-case:performance', 'technique:lo-fi'],
       primary: 'gag:telephone',
       provenance: {
@@ -182,6 +199,7 @@
       // vocal up front.
       name: 'Big Room',
       description: 'Long reverb and a wide delay for an epic, arena-sized space, with the vocal still riding up front.',
+      summary: 'Huge arena echo — an epic, stadium-sized space.',
       tags: ['use-case:performance', 'vibe:epic/big', 'technique:ambience-long'],
       primary: 'vibe:epic/big',
       provenance: {
@@ -204,6 +222,7 @@
       // effects.
       name: 'Clean Speech',
       description: 'Light leveling with no audible coloring — for hosting, announcements, or anywhere the voice should just sound like itself.',
+      summary: 'Plain, uncolored voice for hosting and speech.',
       tags: ['use-case:speech/hosting', 'vibe:natural', 'technique:clean'],
       primary: 'use-case:speech/hosting',
       provenance: {
@@ -223,6 +242,7 @@
       // accepted). Nodes verbatim from the pen; only provenance was filled.
       name: 'Chipmunk Party',
       description: 'Squeaky chipmunk voice — the birthday-party gag that gets a laugh every line. Words stay crisp, never squeaky mush.',
+      summary: 'Squeaky high chipmunk voice — the party gag.',
       tags: ['gag:chipmunk', 'use-case:performance', 'technique:pitch-gag'],
       primary: 'gag:chipmunk',
       provenance: {
@@ -241,6 +261,7 @@
       // #31 seed batch cell 3, PROMOTED at the 2026-09-01 audition.
       name: 'Deep Narrator',
       description: 'Movie-trailer depth with a cave behind it — dramatic readings, Darth Vader bits, "in a world…". Deep without turning to mud, never boomy over the words.',
+      summary: 'Deep movie-trailer voice with cave echo behind it.',
       tags: ['gag:deep-voice', 'vibe:dark/moody', 'technique:pitch-gag'],
       primary: 'gag:deep-voice',
       provenance: {
@@ -260,6 +281,7 @@
       // #31 seed batch cell 6, PROMOTED at the 2026-09-01 audition.
       name: 'AM Radio Ghost',
       description: 'Vintage AM broadcast — tinny, warm, slightly haunted. The old-radio gag with every word still coming through the static.',
+      summary: 'Tinny old AM radio — vintage and a bit haunted.',
       tags: ['gag:radio', 'technique:lo-fi', 'vibe:lo-fi'],
       primary: 'gag:radio',
       provenance: {
@@ -279,6 +301,7 @@
       // #31 seed batch cell 8, PROMOTED at the 2026-09-01 audition.
       name: 'Cathedral Drift',
       description: 'Dreamy and wide — every held note drifts off into a long hall with the voice floating up front. Space for slow songs: air, not tunnel.',
+      summary: 'Dreamy long cathedral hall for slow songs.',
       tags: ['vibe:spacious', 'use-case:performance', 'technique:ambience-long', 'vibe:epic/big'],
       primary: 'vibe:spacious',
       provenance: {
@@ -301,6 +324,7 @@
       // #31 seed batch cell 9, PROMOTED at the 2026-09-01 audition.
       name: 'Jazz Cellar',
       description: 'Late-night club warmth — rounded edges, slow leveling, a haze of hall around the voice. For standards and slow swings; mellow never means muffled.',
+      summary: 'Late-night jazz club warmth for standards.',
       tags: ['genre:Jazz', 'vibe:dark/moody', 'use-case:performance', 'vibe:warm'],
       primary: 'genre:Jazz',
       provenance: {
@@ -321,6 +345,7 @@
       // #31 seed batch cell 10, PROMOTED at the 2026-09-01 audition.
       name: 'Rotary Nostalgia',
       description: 'Warbling stage nostalgia — the wobble of an old rotating speaker behind a crooner\u2019s mic. Vintage flutter without tape hiss or a muddy bottom.',
+      summary: 'Wobbly vintage rotating-speaker warble.',
       tags: ['vibe:retro', 'use-case:performance', 'vibe:lo-fi'],
       primary: 'vibe:retro',
       provenance: {
@@ -341,6 +366,7 @@
       // #31 seed batch cell 11, PROMOTED at the 2026-09-01 audition.
       name: 'Space Lounge',
       description: 'Swooshy, floating, holographic — a slow sweep gliding under everything. Spacey interludes and psychedelic moments; seasick swirl without losing the vocal.',
+      summary: 'Swooshy floating sweep — spacey and psychedelic.',
       tags: ['vibe:psychedelic', 'vibe:spacious', 'use-case:performance', 'technique:modulated/wide'],
       primary: 'vibe:psychedelic',
       provenance: {
@@ -361,6 +387,7 @@
       // #31 seed batch cell 12, PROMOTED at the 2026-09-01 audition.
       name: 'Studio Polish',
       description: 'Fixes the mic first: hiss gone between phrases, poppin\u2019 p\u2019s tamed, room hum quieted — a clean, natural voice with nothing you can hear working. No tunnel, no pumping, no tin can.',
+      summary: 'Cleans up a noisy mic: hiss, pops and room hum.',
       tags: ['use-case:cleanup', 'vibe:natural', 'technique:clean', 'use-case:speech/hosting'],
       primary: 'use-case:cleanup',
       provenance: {

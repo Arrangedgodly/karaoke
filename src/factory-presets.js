@@ -26,11 +26,18 @@
 //                   the entry's primary tag humanized (#28 taxonomy, one
 //                   source of truth — it absorbed compact-browsing v2's
 //                   hand-assigned categories).
-//   listDetailed()  {name, description, tags, primary, provenance}[] —
-//                   additive (wayfinder #30): everything except nodes, so
-//                   it can never become a second load path. presets-ui.js
-//                   feeds its search from these tags; #32's metadata
-//                   exposure reads the same entries.
+//   listDetailed()  {name, summary, description, tags, primary,
+//                   provenance}[] — additive (wayfinder #30): everything
+//                   except nodes, so it can never become a second load
+//                   path. presets-ui.js feeds its search from these tags;
+//                   #32's metadata exposure reads the same entries.
+//                   `summary` is the data module's hand-written <=60-char
+//                   agent-matching line (scale-out D-13); this is the ONLY
+//                   export that carries it, because it is the only export
+//                   an agent-facing consumer reads. describeAll() stays at
+//                   its three UI keys — the Presets tab already shows the
+//                   full description, so a compact restatement there would
+//                   be redundant, and its shape is pinned.
 //   groupOrder()    the category display order (data module's
 //                   PRIMARY_GROUP_ORDER, humanized — cleanup first, then
 //                   use-case, genre, vibe, gag; technique never groups).
@@ -140,12 +147,19 @@
    * freshly copied. The one hard rule: NO `nodes` key, ever — the load path
    * stays list() alone.
    *
-   * @returns {Array<{name: string, description: string, tags: string[], primary: string, provenance: Object}>}
+   * Carries BOTH prose fields, and they are not interchangeable: `summary`
+   * is the data module's hand-written <=60-char line an agent matches a
+   * request against (never a truncation of `description`), and
+   * `description` is the full 1–2 sentence account. A compact consumer
+   * takes summary; get_preset-shaped detail takes description.
+   *
+   * @returns {Array<{name: string, summary: string, description: string, tags: string[], primary: string, provenance: Object}>}
    */
   function listDetailed() {
     return data().map(function (preset) {
       return {
         name: preset.name,
+        summary: preset.summary,
         description: preset.description,
         tags: preset.tags.slice(),
         primary: preset.primary,

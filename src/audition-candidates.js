@@ -19,9 +19,17 @@
 //
 // Entry shape = the library's (src/factory-library-data.js), with
 // provenance.verdict 'pending' and auditionDate null while waiting:
-//   { name, description, tags: ['axis:value', ...], primary,
+//   { name, description, summary, tags: ['axis:value', ...], primary,
 //     provenance: { origin, auditionDate: null, verdict: 'pending' },
 //     nodes: [{id, type, params}] }
+//
+// `summary` (<= 60 chars, hand-written, the line an agent matches a
+// request against) is a LIBRARY conformance requirement, so promotion
+// cannot land an entry without one. Candidates authored from here on
+// should carry it at authoring time rather than have it invented at
+// promotion — the person who wrote the sound knows what request it
+// answers. The pen's own conformance pass does not yet require it, so
+// the pre-existing entries below are not blocked.
 //
 // SEED BATCH, CLOSED (#31, authored offline 2026-09-01). The 2026-09-01
 // live audition at the ?audition Booth decided all twelve seed
