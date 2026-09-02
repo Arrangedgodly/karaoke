@@ -1,0 +1,37 @@
+name: Request CodeBro review
+
+on:
+  pull_request_target:
+    types: [opened, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  request-reviewer:
+    name: Request the other CodeBro
+    if: >-
+      !github.event.pull_request.draft &&
+      (github.event.pull_request.user.login == 'GrantWasil' ||
+       github.event.pull_request.user.login == 'Arrangedgodly')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Request review
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const author = context.payload.pull_request.user.login;
+            const reviewers = {
+              GrantWasil: "Arrangedgodly",
+              Arrangedgodly: "GrantWasil",
+            };
+
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              reviewers: [reviewers[author]],
+            });
