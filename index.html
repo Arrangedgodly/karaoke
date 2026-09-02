@@ -413,7 +413,16 @@
            out of sync. Empty until meters.js appends into them. -->
       <div id="simple-meter-in"></div>
 
-      <div class="simple-stage" id="simple-stage">
+      <!-- The stage carries the SAME pre-Start gate Advanced's canvas
+           face does: the one disabled grammar (diagonal hatch + recede,
+           styles/main.css's DISABLED TEXTURE block). Ships ON in the
+           markup so the very first paint is gated; src/simple-view.js's
+           renderStage() toggles it off/on from the same engineIsLive()
+           predicate every other Simple gate reads. The Sounds library
+           deliberately does NOT carry it — browse and search stay live
+           before Start (index.html's own note above), and the hatch may
+           only ever mark something that is genuinely inert. -->
+      <div class="simple-stage engine-not-started" id="simple-stage">
         <div class="simple-stage-inner">
           <div class="simple-stage-head">
             <h2 class="simple-cs-name" id="simple-cs-name">Ready to start</h2>
@@ -442,6 +451,55 @@
     </div>
   </div>
   </div>
+
+  <!--
+    ================================================================
+    HEADPHONE CHECK — the one confirmation between pressing Start and
+    the microphone actually opening.
+
+    Rationale: Start opens the mic and routes it to the system output.
+    If that output is a speaker in the same room, the mic hears itself
+    and the loop climbs into howling feedback in seconds — the single
+    fastest way to hurt an audience (and ears) with this app. The
+    limiter and the howl watchdog (src/meter-taps.js) reduce the damage
+    but cannot undo a room loop, so the honest fix is a decision made
+    BEFORE getUserMedia, not a rescue after it.
+
+    A native <dialog> on purpose: real modality, focus containment,
+    Escape-to-cancel and top-layer painting without hand-rolling any of
+    it — and it is NOT one of the browser dialogs the R2-3 rule bans
+    (prompt/confirm/alert), which are banned for being un-styleable,
+    un-scriptable and outside the app's own vocabulary.
+
+    A sibling of both view containers, like the rest of the safety
+    floor, so neither view's display toggle can hide it.
+
+    src/main.js owns the behavior: the Start click opens this instead of
+    starting; the confirm button then runs the SAME start path
+    synchronously inside its own click, which is what keeps Safari's
+    "resume() within a user gesture" requirement (RQ-4) satisfied.
+    "Not yet" is FIRST in DOM order deliberately — <dialog>.showModal()
+    focuses the first focusable child, so the keyboard default is the
+    harmless one.
+    ================================================================
+  -->
+  <dialog id="headphone-check" class="safety-dialog" aria-labelledby="headphone-check-title">
+    <h2 class="safety-dialog-title" id="headphone-check-title">Headphones first</h2>
+    <p class="safety-dialog-body">
+      Starting switches your microphone on and sends it to this
+      computer's output. If that output is a speaker in the same room,
+      the mic hears itself and the loop builds into howling feedback
+      within seconds.
+    </p>
+    <p class="safety-dialog-body safety-dialog-fineprint">
+      The output limiter and the howl watchdog stay on either way — they
+      hold the level down, they do not stop a room loop.
+    </p>
+    <div class="safety-dialog-actions">
+      <button type="button" class="control" id="headphone-check-cancel">Not yet</button>
+      <button type="button" class="control safety-dialog-confirm" id="headphone-check-confirm">Start with headphones on</button>
+    </div>
+  </dialog>
 
   <script src="src/audio-engine.js"></script>
   <script src="src/effect-catalog.js"></script>

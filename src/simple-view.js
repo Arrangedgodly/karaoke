@@ -65,6 +65,21 @@
   var transportEl = document.getElementById('simple-transport');
   var saveBtnEl = document.getElementById('simple-save-btn');
   var saveRowEl = document.getElementById('simple-save-row');
+  // The stage element itself, so renderStage() can carry the pre-Start
+  // gate on it (the shared hatch + recede — styles/main.css's DISABLED
+  // TEXTURE block). Read defensively and kept OUT of the bail check
+  // below: a missing stage wrapper costs the visual gate, nothing
+  // functional, so it must not take the whole view down with it.
+  var stageEl = document.getElementById('simple-stage');
+
+  // The gate note's SHIPPED copy, captured once so the click feedback
+  // below can name a specific sound and then put the standing sentence
+  // back. Reading it from the element keeps the default wording in
+  // index.html — one place, not two that can drift.
+  var DEFAULT_GATE_NOTE = libraryGateNoteEl.textContent;
+  // Cleared on every re-render and whenever the engine goes live, so a
+  // flash can never outlive the state that caused it.
+  var gateFlashTimer = null;
 
   if (!simpleBtn || !advancedBtn || !nameEl || !descEl || !summaryEl ||
       !libraryBodyEl || !libraryGateNoteEl || !transportEl || !saveBtnEl || !saveRowEl) {
@@ -349,6 +364,16 @@
     var engineLive = engineIsLive();
     var name = engineLive ? (state.name || 'Custom sound') : 'Ready to start';
 
+    // Pre-Start, the stage wears the SAME gate Advanced's canvas face
+    // wears — one diagonal hatch + recede for "not interactive yet",
+    // driven by the same engineIsLive() predicate every other gate in
+    // this file reads, so the paint can never disagree with the Try /
+    // transport / Save buttons beside it. The Sounds library is not
+    // gated: browse and search stay live before Start.
+    if (stageEl) {
+      stageEl.classList.toggle('engine-not-started', !engineLive);
+    }
+
     nameEl.textContent = '';
     nameEl.appendChild(document.createTextNode(name));
     // Only the reliably-true marker ships here: "unsaved changes" means
@@ -468,6 +493,70 @@
     return userNames().filter(function (name) { return matchesQuery(name); });
   }
 
+  // The Try button pre-Start is `aria-disabled`, NOT natively disabled:
+  // a natively disabled button swallows the click, and a click that
+  // produces no answer at all is the dead affordance this surface keeps
+  // trying to avoid. The mutation guard has not moved — it lives in the
+  // click handler below, which checks the same engineIsLive() predicate
+  // before it will call PresetsUI — so a synthetic click still commits
+  // nothing. What the click buys is the ANSWER: the standing note names
+  // the sound the operator just reached for and points at the one
+  // control that unblocks it, and Start itself takes a brief highlight
+  // so the eye lands on it.
+  var FLASH_MS = 1600;
+
+  function clearFlash() {
+    if (gateFlashTimer !== null && typeof clearTimeout === 'function') {
+      clearTimeout(gateFlashTimer);
+    }
+    gateFlashTimer = null;
+    libraryGateNoteEl.classList.remove('gate-note-flash');
+    var startButton = document.getElementById('start-button');
+    if (startButton) {
+      startButton.classList.remove('needs-attention');
+    }
+  }
+
+  function answerGatedTry(name) {
+    libraryGateNoteEl.hidden = false;
+    // Naming the sound also makes the text CHANGE, which is what makes
+    // the aria-live="polite" region announce again — an identical string
+    // re-assigned announces nothing. The sentence then STAYS as the
+    // standing instruction (only the highlight is temporary): the note
+    // is still true, and swapping copy back under the reader a second
+    // later would announce a second time for no new information.
+    libraryGateNoteEl.textContent =
+      'Press Start to switch the microphone on — then Try "' + name + '".';
+
+    // Drop any highlight still running and re-arm it on the NEXT tick, so
+    // a second click on the same card replays the flash instead of
+    // landing on an already-present class and doing nothing visible.
+    clearFlash();
+    if (typeof setTimeout !== 'function') {
+      return;
+    }
+    // Held in the SAME handle clearFlash() cancels, so a re-render landing
+    // inside this tick cannot leave an orphaned flash behind it.
+    gateFlashTimer = setTimeout(function () {
+      libraryGateNoteEl.classList.add('gate-note-flash');
+      var startButton = document.getElementById('start-button');
+      // Only when Start is actually pressable — highlighting a disabled
+      // Start (mid-startup, or already live) would point at a dead end.
+      if (startButton && !startButton.disabled) {
+        startButton.classList.add('needs-attention');
+      }
+      gateFlashTimer = setTimeout(clearFlash, FLASH_MS);
+    }, 0);
+  }
+
+  // Put the standing sentence back and drop any in-flight highlight —
+  // called from every re-render, so the moment the engine goes live (or
+  // the list rebuilds for any other reason) the surface stops shouting.
+  function resetGateNote() {
+    clearFlash();
+    libraryGateNoteEl.textContent = DEFAULT_GATE_NOTE;
+  }
+
   function buildCard(name, description, kind, isActive) {
     var row = document.createElement('div');
     row.className = 'preset-row';
@@ -478,8 +567,10 @@
     var loadBtn = document.createElement('button');
     loadBtn.type = 'button';
     loadBtn.className = 'preset-row-load';
-    loadBtn.disabled = !engineIsLive();
-    if (loadBtn.disabled) {
+    var gated = !engineIsLive();
+    if (gated) {
+      // Stays focusable and clickable on purpose — see answerGatedTry().
+      loadBtn.setAttribute('aria-disabled', 'true');
       loadBtn.setAttribute('aria-describedby', 'simple-library-gate-note');
     }
 
@@ -499,7 +590,11 @@
     // SAME load path Advanced's own Presets panel rows use — see this
     // file's header and presets-ui.js's export comment.
     loadBtn.addEventListener('click', function () {
-      if (!engineIsLive() || !window.PresetsUI) {
+      if (!engineIsLive()) {
+        answerGatedTry(name);
+        return;
+      }
+      if (!window.PresetsUI) {
         return;
       }
       if (kind === 'factory' && typeof window.PresetsUI.loadFactoryPreset === 'function') {
@@ -580,6 +675,7 @@
   }
 
   function renderLibraryList() {
+    resetGateNote();
     libraryGateNoteEl.hidden = engineIsLive();
 
     Object.keys(chipEls).forEach(function (id) {

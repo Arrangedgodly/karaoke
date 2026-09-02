@@ -131,6 +131,35 @@ function makeElement(tag) {
       fn(ev || { type: type });
     });
   };
+  el.__focusCount = 0;
+  el.focus = function () {
+    el.__focusCount += 1;
+  };
+  return el;
+}
+
+// A <dialog> stub with the three members main.js feature-detects and
+// uses: showModal(), close() and the `open` property. close() fires the
+// real element's 'close' event, so the focus-return path is exercised
+// rather than assumed.
+function makeDialogElement() {
+  var el = makeElement('dialog');
+  el.open = false;
+  el.__showModalCalls = 0;
+  el.showModal = function () {
+    if (el.open) {
+      throw new Error('InvalidStateError: dialog already open');
+    }
+    el.__showModalCalls += 1;
+    el.open = true;
+  };
+  el.close = function () {
+    if (!el.open) {
+      return;
+    }
+    el.open = false;
+    el.__fire('close');
+  };
   return el;
 }
 
@@ -292,7 +321,7 @@ function fireDeviceChange() {
 // ChainCanvas / Persistence / StatusReadouts optional — MeterTaps is
 // stubbed as a RECORDER so loss paths are assertable).
 // ----------------------------------------------------------------------
-function createSandbox() {
+function createSandbox(opts) {
   var graphBuildBehavior = null;
   var transitionReleases = [];
   var failNextBypassReconnect = false;
@@ -305,6 +334,18 @@ function createSandbox() {
     'start-hint': makeElement('span'),
     'bypass-toggle-button': makeElement('button')
   };
+  // The headphone check is OPT-IN in this harness. Without it the sandbox
+  // reproduces main.js's documented degradation — markup absent, or no
+  // native <dialog>, so Start behaves exactly as it did before the check
+  // existed — which is what every lifecycle scenario below wants to
+  // exercise. Section N opts in and pins the real gated path; section A9
+  // pins that the real index.html ships the markup, so the degradation
+  // can never quietly become the shipped behavior.
+  if (opts && opts.headphoneCheck) {
+    els['headphone-check'] = makeDialogElement();
+    els['headphone-check-confirm'] = makeElement('button');
+    els['headphone-check-cancel'] = makeElement('button');
+  }
   Object.keys(els).forEach(function (id) {
     els[id].id = id;
   });
@@ -1317,6 +1358,139 @@ async function main() {
         sandbox3.__chainCanvas.inert === false &&
         sandbox3.__els['bypass-toggle-button'].disabled === false,
       'L3: late resume unlocks the session without erasing the startup restore warning'
+    );
+  }
+
+  // --------------------------------------------------------------------
+  console.log('N. headphone check: Start asks BEFORE the microphone opens');
+  // --------------------------------------------------------------------
+  // The room-feedback hazard is created by getUserMedia, not by anything
+  // after it: mic into the system output, output back into the mic. So
+  // the check has to sit in FRONT of acquisition — a warning shown after
+  // the stream is live is a warning shown after the howl. These checks
+  // pin exactly that ordering, plus the two properties that make the
+  // dialog safe to put in the Start path at all: a dismissal leaves
+  // nothing to undo, and the confirming click still runs the start
+  // transaction SYNCHRONOUSLY (Safari's RQ-4 gesture requirement — an
+  // await between the click and AudioContext.resume() would break audio
+  // on Safari, so this is a real regression risk, not a style point).
+  {
+    var hpSandbox = createSandbox({ headphoneCheck: true });
+    loadSrc(hpSandbox, 'src/audio-engine.js');
+    loadSrc(hpSandbox, 'src/main.js');
+    var hpStart = hpSandbox.__els['start-button'];
+    var hpDialog = hpSandbox.__els['headphone-check'];
+    var hpConfirm = hpSandbox.__els['headphone-check-confirm'];
+    var hpCancel = hpSandbox.__els['headphone-check-cancel'];
+    var gumBefore = gumQueue.length;
+
+    hpStart.__fire('click');
+    check(
+      hpDialog.open === true && hpDialog.__showModalCalls === 1,
+      'N1: the first Start opens the headphone check'
+    );
+    check(
+      gumQueue.length === gumBefore && hpSandbox.AudioEngine.isStarted === false,
+      'N1: no microphone is acquired while the question is on screen'
+    );
+    check(
+      hpStart.disabled === false &&
+        hpSandbox.__els['status-text'].textContent !== 'Waiting for microphone permission...',
+      'N1: Start is not consumed by merely asking'
+    );
+
+    hpCancel.__fire('click');
+    check(hpDialog.open === false, 'N2: "Not yet" closes the check');
+    check(
+      gumQueue.length === gumBefore && hpSandbox.AudioEngine.isStarted === false &&
+        hpStart.disabled === false,
+      'N2: a dismissal leaves nothing acquired and nothing to undo'
+    );
+    check(
+      hpStart.__focusCount === 1,
+      'N2: focus goes back to the control the operator pressed'
+    );
+
+    // Escape takes the same route (the dialog closes itself, main.js only
+    // sees the close event) — assert the recovery, not the browser.
+    hpStart.__fire('click');
+    check(hpDialog.open === true && hpDialog.__showModalCalls === 2,
+      'N3: a declined check does not suppress the next ask');
+    hpDialog.close();
+    check(hpDialog.open === false && hpStart.__focusCount === 2 &&
+        hpSandbox.AudioEngine.isStarted === false,
+      'N3: Escape-style close recovers identically to the button');
+
+    hpStart.__fire('click');
+    check(hpDialog.open === true, 'N4: the check is up for the confirming click');
+    hpConfirm.__fire('click');
+    // Synchronously, inside that same click: no await has run yet.
+    check(
+      gumQueue.length === gumBefore + 1,
+      'N4: confirming acquires the microphone SYNCHRONOUSLY in its own click (RQ-4)'
+    );
+    check(
+      hpStart.disabled === true &&
+        hpSandbox.__els['status-text'].textContent === 'Waiting for microphone permission...',
+      'N4: confirming runs the real start transaction, not a copy of it'
+    );
+    check(hpDialog.open === false, 'N4: the check closes itself once it has been answered');
+    check(
+      hpStart.__focusCount === 2,
+      'N4: closing after a confirm does not yank focus back to a now-disabled Start'
+    );
+
+    resolveGumAt(gumQueue.length - 1, 'hp1');
+    await settle();
+    check(hpSandbox.AudioEngine.isStarted === true, 'N5: the confirmed start completes normally');
+
+    // Asked once per page LOAD: a later Start (after a stop, a lost
+    // context, a failed switch) must not re-interrogate the operator
+    // about a room that has not changed.
+    hpSandbox.AudioEngine.stop('test');
+    await settle();
+    var showsBefore = hpDialog.__showModalCalls;
+    hpStart.disabled = false;
+    hpStart.__fire('click');
+    check(
+      hpDialog.__showModalCalls === showsBefore && hpDialog.open === false,
+      'N6: an acknowledged operator is not asked again this page load'
+    );
+    check(
+      hpSandbox.__els['status-text'].textContent === 'Waiting for microphone permission...',
+      'N6: that later Start goes straight through to the start transaction'
+    );
+  }
+
+  // --------------------------------------------------------------------
+  console.log('O. the shipped page actually carries the check');
+  // --------------------------------------------------------------------
+  {
+    var indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    check(
+      /<dialog[^>]*id="headphone-check"/.test(indexHtml),
+      'O1: index.html ships #headphone-check as a native <dialog>'
+    );
+    check(
+      /id="headphone-check-confirm"/.test(indexHtml) &&
+        /id="headphone-check-cancel"/.test(indexHtml),
+      'O1: both answers exist in the shipped markup'
+    );
+    // DOM order IS the keyboard default: showModal() focuses the first
+    // focusable child, and that must be the harmless answer.
+    check(
+      indexHtml.indexOf('id="headphone-check-cancel"') <
+        indexHtml.indexOf('id="headphone-check-confirm"'),
+      'O2: "Not yet" precedes the confirm, so the keyboard default is the safe one'
+    );
+    // The check must not be inside either view container, or switching
+    // views could hide the one thing standing between Start and a howl.
+    var simpleAt = indexHtml.indexOf('id="simple-layout"');
+    var dialogAt = indexHtml.indexOf('id="headphone-check"');
+    check(
+      simpleAt !== -1 && dialogAt > simpleAt &&
+        indexHtml.indexOf('id="headphone-check"', indexHtml.indexOf('</dialog>')) === -1,
+      'O3: the check sits outside both view containers, like the rest of the safety floor'
     );
   }
 

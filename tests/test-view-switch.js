@@ -184,6 +184,38 @@ function node(id, type, params) {
     isDescendantOf(instrument, 'chain-layout', 'chain-canvas'),
     'A7: #chain-canvas (Advanced meters own anchor) is unchanged, inside #chain-layout'
   );
+
+  // The pre-Start gate paints on the FIRST frame in both views. Advanced
+  // ships `engine-not-started` on #chain-layout; Simple ships it on the
+  // one surface that is genuinely inert before Start, #simple-stage.
+  var simpleStage = byId(instrument, 'simple-stage');
+  check(
+    !!simpleStage && hasClass(simpleStage, 'engine-not-started'),
+    'A8: #simple-stage ships pre-gated, so Simple hatches on first paint like Advanced does'
+  );
+  check(
+    !!chainLayout && hasClass(chainLayout, 'engine-not-started'),
+    'A8: #chain-layout still ships pre-gated (Advanced unchanged)'
+  );
+  // The Sounds library must NOT be swept into the gate: the shared
+  // `.layout.engine-not-started .presets-panel` rule pointer-locks the
+  // panel it matches, and Simple keeps browse + search live before Start.
+  check(
+    !!simpleLayout && !hasClass(simpleLayout, 'engine-not-started'),
+    'A9: #simple-layout itself is NOT gated, so the Sounds library stays browsable before Start'
+  );
+
+  // The paint half of the same grammar: one hatch declaration, sharing
+  // the geometry of the Advanced gate it mirrors.
+  var css = fs.readFileSync(path.join(ROOT, 'styles/main.css'), 'utf8');
+  check(
+    /\.simple-stage\.engine-not-started\s*\{[^}]*opacity:\s*0\.55/.test(css),
+    'A10: .simple-stage.engine-not-started recedes to the same 0.55 the Advanced gate uses'
+  );
+  check(
+    /\.simple-stage\.engine-not-started::before\s*\{[^}]*repeating-linear-gradient\(\s*-45deg/.test(css),
+    'A10: .simple-stage.engine-not-started paints the same -45deg hatch as the Advanced gate'
+  );
 })();
 
 // ==========================================================================
@@ -227,16 +259,36 @@ function node(id, type, params) {
     'H1: the stopped stage does not repeat the Start instruction');
   check(h.els['simple-library-gate-note'].hidden === false,
     'H1: the library shows a visible pre-Start explanation');
-  check(firstTry.disabled === true && h.els['simple-transport'].hidden === true &&
+  check(h.els['simple-stage'].classList.contains('engine-not-started'),
+    'H1: the stopped stage wears the shared hatch-and-recede gate');
+  // Try is aria-disabled, NOT natively disabled: a native `disabled`
+  // swallows the click, and the click is how the operator gets told what
+  // to do about it (H6 below). The guard that matters is the handler's,
+  // pinned by H3.
+  check(firstTry.getAttribute('aria-disabled') === 'true' && firstTry.disabled !== true &&
+      h.els['simple-transport'].hidden === true &&
       h.els['simple-transport'].children.length === 0,
-    'H2: Try is disabled and unavailable Previous/Next controls stay hidden before Start');
+    'H2: Try reads unavailable to AT before Start, and Previous/Next stay hidden');
+  check(firstTry.getAttribute('aria-describedby') === 'simple-library-gate-note',
+    'H2: the gated Try points at the note that explains the recovery');
   check(h.els['simple-save-btn'].hidden === true && h.els['simple-save-btn'].disabled === true,
     'H2: Save this sound is hidden and disabled before Start');
 
+  var standingNote = h.els['simple-library-gate-note'].textContent;
   firstTry.fire('click');
   h.els['simple-save-btn'].fire('click');
   check(loadCalls.length === 0 && h.els['simple-save-row'].children.length === 0,
     'H3: even a synthetic click cannot bypass the pre-Start guards');
+
+  // H6: the click is not swallowed — it ANSWERS. The note names the sound
+  // that was just reached for and points at Start.
+  var answered = h.els['simple-library-gate-note'].textContent;
+  check(answered !== standingNote && answered.indexOf('Warm Ballad') !== -1,
+    'H6: a gated Try rewrites the live note to name the sound just clicked');
+  check(answered.indexOf('Press Start') === 0,
+    'H6: the answer names Start — the one control that unblocks the surface');
+  check(h.els['simple-library-gate-note'].hidden === false,
+    'H6: the answer is visible (the note cannot be answering from behind hidden)');
 
   engine.isStarted = true;
   engine.isTrackLive = true;
@@ -246,8 +298,13 @@ function node(id, type, params) {
   firstTry = cards.children[1].children[0];
   var prev = h.els['simple-transport'].children[0];
   var next = h.els['simple-transport'].children[2];
-  check(h.els['simple-library-gate-note'].hidden === true && firstTry.disabled === false,
-    'H4: a live engine hides the gate note and enables Try');
+  check(h.els['simple-library-gate-note'].hidden === true &&
+      firstTry.getAttribute('aria-disabled') === null,
+    'H4: a live engine hides the gate note and un-gates Try');
+  check(h.els['simple-library-gate-note'].textContent === standingNote,
+    'H4: going live restores the standing note — the answer never outlives the gate');
+  check(!h.els['simple-stage'].classList.contains('engine-not-started'),
+    'H4: a live engine lifts the stage gate at the same transition');
   check(h.els['simple-transport'].hidden === false && prev.disabled === false &&
       next.disabled === false && h.els['simple-save-btn'].hidden === false,
     'H4: transport and Save become available with the live engine');
@@ -264,6 +321,8 @@ function node(id, type, params) {
     'H5: engine loss closes the naming row and re-gates Save');
   check(h.els['simple-library-gate-note'].hidden === false,
     'H5: engine loss restores the visible recovery instruction');
+  check(h.els['simple-stage'].classList.contains('engine-not-started'),
+    'H5: engine loss re-hatches the stage — the paint can never outlive the live engine');
 })();
 
 // ==========================================================================
@@ -336,7 +395,7 @@ function makeStorage() {
 
 function makeSimpleViewSandbox(collaborators) {
   var registry = {};
-  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
+  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row', 'simple-stage'].forEach(function (id) {
     var tag = id === 'simple-summary' ? 'ol' : (id.indexOf('view-switch') === 0 ? 'button' : 'div');
     registry[id] = makeElement(tag);
   });
@@ -396,7 +455,7 @@ function makeSimpleViewSandbox(collaborators) {
   seeded.setItem('karaoke-view-v1', 'advanced');
   var reload2 = (function () {
     var registry = {};
-    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
+    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-library-gate-note', 'simple-transport', 'simple-save-btn', 'simple-save-row', 'simple-stage'].forEach(function (id) {
       registry[id] = makeElement(id.indexOf('view-switch') === 0 ? 'button' : 'div');
     });
     var bodyEl = makeElement('body');

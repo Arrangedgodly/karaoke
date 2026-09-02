@@ -2912,6 +2912,41 @@ body.chain-dragging .node-drag-handle {
   cursor: not-allowed;
 }
 
+/* Pre-Start gate, SIMPLE's face: the same recede + diagonal hatch the
+   Advanced canvas face carries above, on the one Simple surface that is
+   genuinely inert before Start (#simple-stage — the Current-sound stage:
+   its name line, summary, Save button and Previous/Next transport are all
+   engine-gated, and JS keeps the last three hidden entirely until the
+   engine is live). Scoped to .simple-stage rather than the whole
+   #simple-layout on purpose: the shared `.layout.engine-not-started`
+   rules above would also hatch AND pointer-lock .presets-panel, and
+   Simple's Sounds library stays browsable and searchable before Start
+   (index.html) — hatching a live surface would break the one-meaning
+   rule this block opens with. The meter strips sit outside the stage, so
+   they stay clean here exactly as they do in Advanced.
+   src/simple-view.js#renderStage() toggles the class. */
+.simple-stage.engine-not-started {
+  position: relative;
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.simple-stage.engine-not-started::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 7px,
+    rgba(11, 12, 16, 0.55) 7px,
+    rgba(11, 12, 16, 0.55) 9px
+  );
+}
+
 /* ===========================================================================
    SIGNAL-ORDER STRIP (Guided Patchbay round) — the voice deck's second
    zone: one readable line, "Mic in -> each section in DOM order -> Safe
@@ -4622,9 +4657,73 @@ body:not(.view-advanced) .readout-group {
   line-height: 1.35;
 }
 
-.preset-row-load:disabled {
+/* Pre-Start, Try is `aria-disabled` rather than natively disabled (see
+   src/simple-view.js#answerGatedTry): it still LOOKS unavailable — the
+   same recede the disabled rule gives — but it accepts the click so it
+   can answer with the recovery instruction instead of swallowing it.
+   :disabled stays in the selector for any other row that is genuinely
+   inert. */
+.preset-row-load:disabled,
+.preset-row-load[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+/* Hover/focus on the gated Try does NOT pretend the button works, but it
+   does confirm the click will be heard — without this the row reads as
+   completely dead and nobody discovers the answer. */
+.preset-row-load[aria-disabled='true']:hover,
+.preset-row-load[aria-disabled='true']:focus-visible {
+  opacity: 0.75;
+}
+
+/* The answer itself: the standing gate note goes accent-bright and names
+   the sound just reached for. Colour alone carries it under reduce; the
+   brief pulse below is the sighted nicety, motion-guarded. */
+.simple-library-gate-note.gate-note-flash {
+  color: var(--pm-accent);
+}
+
+/* ...and Start takes a matching highlight, so the eye lands on the ONE
+   control that unblocks the surface. Ring only — the button already owns
+   the accent fill, so a second accent would say nothing. */
+#start-button.needs-attention {
+  outline: 2px solid var(--pm-display);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .simple-library-gate-note.gate-note-flash {
+    animation: gate-note-flash 1.6s ease-out 1;
+  }
+
+  #start-button.needs-attention {
+    animation: start-needs-attention 1.6s ease-out 1;
+  }
+
+  @keyframes gate-note-flash {
+    0%, 55% {
+      color: var(--pm-accent);
+    }
+
+    100% {
+      color: var(--pm-print-dim);
+    }
+  }
+
+  @keyframes start-needs-attention {
+    0%, 20% {
+      outline-color: var(--pm-display);
+    }
+
+    60% {
+      outline-color: transparent;
+    }
+
+    100% {
+      outline-color: var(--pm-display);
+    }
+  }
 }
 
 .simple-library-placeholder {
@@ -4869,4 +4968,90 @@ body:not(.view-advanced) .readout-group {
 
 .simple-card-menu-toggle:hover {
   color: var(--pm-print-hi);
+}
+
+/* ===========================================================================
+   SAFETY DIALOG — the native <dialog> the headphone check uses
+   (index.html's #headphone-check, driven by src/main.js). One instance
+   today; styled as a small vocabulary rather than an id so a second
+   pre-flight confirmation would not fork the look.
+
+   It borrows the panel chassis it interrupts — same ground, same edge,
+   same print colours — because it is the app speaking, not the browser.
+   The confirming key takes the accent fill Start itself carries, so the
+   thing that continues the gesture looks like the thing that began it.
+   =========================================================================== */
+
+.safety-dialog {
+  max-width: 30rem;
+  padding: 1.4rem 1.5rem 1.25rem;
+  border: 1px solid var(--pm-face-edge);
+  border-radius: 6px;
+  background: var(--pm-chassis);
+  color: var(--pm-print);
+  box-shadow: 0 18px 48px rgba(1, 2, 8, 0.6);
+}
+
+.safety-dialog::backdrop {
+  /* Dark enough to lift the dialog off a busy deck, sheer enough that
+     the operator still sees WHICH surface they interrupted. */
+  background: rgba(1, 2, 8, 0.66);
+}
+
+.safety-dialog-title {
+  margin: 0 0 0.7rem;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pm-print-hi);
+}
+
+.safety-dialog-body {
+  margin: 0 0 0.7rem;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+/* The honest footnote (what the safety floor does and does NOT do) reads
+   as a footnote — present, never competing with the instruction. */
+.safety-dialog-fineprint {
+  color: var(--pm-print-dim);
+  font-size: 0.78rem;
+}
+
+.safety-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+}
+
+/* The continuing key wears Start's own fill — same gesture, same colour.
+   Specificity matches `button.control:not(:disabled)` shapes above
+   without needing !important. */
+button.control.safety-dialog-confirm:not(:disabled) {
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
+  font-weight: 700;
+}
+
+button.control.safety-dialog-confirm:not(:disabled):hover {
+  background: var(--pm-accent-hi);
+  border-color: var(--pm-accent-hi);
+}
+
+button.control.safety-dialog-confirm:not(:disabled):active {
+  background: var(--pm-accent-lo);
+  border-color: var(--pm-accent-lo);
+}
+
+button.control.safety-dialog-confirm:not(:disabled):focus-visible,
+button.control.safety-dialog-confirm:not(:disabled):active:focus-visible {
+  /* Ink ring on the orange fill — orange-on-orange is unusable (the same
+     reason #start-button carries this variant). */
+  outline-color: var(--pm-ink);
+  outline-offset: -2px;
 }
