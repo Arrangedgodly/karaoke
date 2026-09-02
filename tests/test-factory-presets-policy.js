@@ -60,14 +60,17 @@
 // and the genre-first audition order are pinned here too. When PRO-1
 // promotes/rejects entries, update the pen count in the SAME edit.
 //
-// LC-1 (scale-out batch): the pen is now a SEQUENCE OF BATCHES — the
-// PEN-1 20 followed by the LC-1 corpus batch of 8
-// (docs/ultron/preset-axis-cycle/request-corpus.md). F7 therefore scopes
-// the domain-before-gag ordering per batch, pins the LC-1 block's
-// contiguity and authored order, and — new here — pins the D-3 admission
-// evidence itself: every LC-1 provenance must name the request it
-// answers and carry a 'CLOSEST FAILS:' clause. That turns the admission
-// bar from a promise in a document into a check that runs.
+// LC-1 (scale-out batch): the pen was a SEQUENCE OF BATCHES — the PEN-1
+// 20 followed by the LC-1 corpus batch of 8 (docs/ultron/preset-axis-
+// cycle/request-corpus.md). F7 scoped the domain-before-gag ordering per
+// batch, pinned the LC-1 block's contiguity and authored order, and
+// first pinned the D-3 admission evidence: every LC-1 provenance names
+// the request it answers and carries a 'CLOSEST FAILS:' clause. The
+// 2026-09-02 audition decided all twenty candidates (nineteen promoted,
+// one rejected — Podcast Warmth, 'too much reverb'), so the pen is now
+// EMPTY: the order pins retired with the batch they guarded, and the
+// D-3 evidence check survives by running over the LIBRARY entries the
+// promotees became (see F7).
 //
 // Run from a clean clone:  node tests/test-factory-presets-policy.js
 // Exits 0 on pass, 1 on any failure.
@@ -295,11 +298,11 @@ async function main() {
   );
 
   // --------------------------------------------------------------------
-  console.log('B. the shipped library: fourteen presets, Classic byte-identical to DEFAULT_PRESET');
+  console.log('B. the shipped library: thirty-three presets, Classic byte-identical to DEFAULT_PRESET');
   // --------------------------------------------------------------------
 
   var factory = sandbox.FactoryPresets.list();
-  check(Array.isArray(factory) && factory.length === 14, 'B1: factory library lists fourteen presets (six original + eight promoted 2026-09-01)');
+  check(Array.isArray(factory) && factory.length === 33, 'B1: factory library lists thirty-three presets (six original + eight promoted 2026-09-01 + nineteen promoted 2026-09-02)');
   check(
     factory.length > 0 && factory[0].name === 'Classic Karaoke',
     "B1: the first factory preset is 'Classic Karaoke'"
@@ -501,11 +504,14 @@ async function main() {
   // GAG-1 ran (see docs/ultron/preset-axis-cycle/production-log.md): the
   // batch this PR ships is pinned here so it cannot regress silently.
   var pen = sandbox.AUDITION_CANDIDATES;
-  // 12 (PEN-1, post-promotion) + 8 (LC-1 corpus batch) = 20. The eight
-  // audition-accepted seed candidates left the pen for
-  // src/factory-library-data.js at the 2026-09-01 promotion, in the same
-  // edit that moved B1's library count 6 -> 14.
-  var EXPECTED_PEN = 20;
+  // 20 -> 0 at the 2026-09-02 scale-out promotion: the live audition
+  // decided ALL twenty candidates — nineteen promoted into
+  // src/factory-library-data.js (the same edit that moved B1's library
+  // count 14 -> 33) and one rejected (Podcast Warmth, 'too much
+  // reverb'; verdict recorded in the pen header). The pen stays an empty
+  // array; the next batch lands here and moves this count in its own
+  // same edit.
+  var EXPECTED_PEN = 0;
   check(Array.isArray(pen) && pen.length === EXPECTED_PEN,
     'F1: the pen ships ' + EXPECTED_PEN + ' candidates (update here in the SAME edit when PRO-1 promotes/rejects entries or a next batch lands)');
 
@@ -656,83 +662,40 @@ async function main() {
     }
   }
 
-  // Genre-first audition order (PEN-1's data move, pinned): the GEN-1 genre
-  // run in RQ-1 sketch order opens the pen, and every domain candidate
-  // (genre/vibe/use-case primary) precedes every gag.
-  //
-  // The pen is now a SEQUENCE OF BATCHES, so the domain-before-gag
-  // invariant is scoped per batch rather than globally: the PEN-1 block
-  // runs its domain candidates then its gags, and the LC-1 corpus batch
-  // is appended whole after it. Scoping it this way is also what keeps
-  // the check stable across PRO-1's promotion, which removes only PEN-1
-  // entries.
-  var penNames = pen.map(function (e) {
-    return e.name;
+  // 2026-09-02: the scale-out audition decided every candidate, so the
+  // batch-order pins that used to live here (the GEN-1 genre run in
+  // sketch order, the LC-1 block's contiguity, domain-before-gag)
+  // retired with the batch they guarded — their job was to keep the
+  // pen's audition order stable between PR and audition, and a decided
+  // batch cannot regress. The D-3 admission evidence is the one pin that
+  // must SURVIVE promotion: the seven LC-1 promotees carried their
+  // evidence into the library verbatim, so the check that made the bar
+  // runnable at PR time now runs over the library.
+  var lc1Library = sandbox.FACTORY_LIBRARY.PRESETS.filter(function (entry) {
+    return entry.provenance && entry.provenance.origin.indexOf('LC-1 corpus batch') === 0;
   });
-  var GENRE_RUN = ['Metal Mayhem', 'Hard-Tune Hotline', 'Slow Jam Silk', 'Nashville Nights', 'Club Anthem', 'West End Nights'];
-  check(penNames.slice(0, GENRE_RUN.length).join(',') === GENRE_RUN.join(','),
-    'F7: the pen opens with the GEN-1 genre run in sketch order (Metal -> ... -> Musicals)');
-
-  // The LC-1 corpus batch, in authored order (corpus doc's candidate
-  // table). All eight are DOMAIN candidates, so appending the block
-  // preserves the genre-first intent without interleaving.
-  var LC1_BATCH = [
-    'Chart Topper',
-    'Pitch Safety Net',
-    'Noraebang Echo',
-    'Close-Up Whisper',
-    'Hiss Rescue',
-    'Room Announcer',
-    'Podcast Warmth',
-    'Double Track'
-  ];
-  var lc1Start = penNames.indexOf(LC1_BATCH[0]);
-  check(lc1Start !== -1 && penNames.slice(lc1Start).join(',') === LC1_BATCH.join(','),
-    'F7: the LC-1 corpus batch is appended contiguously at the tail in authored order (' +
-      LC1_BATCH.length + ' candidates)');
-
-  var penOneBlock = lc1Start === -1 ? pen : pen.slice(0, lc1Start);
-  var firstGagIdx = -1;
-  var lastDomainIdx = -1;
-  penOneBlock.forEach(function (e, i) {
-    if (e.primary.split(':')[0] === 'gag') {
-      if (firstGagIdx === -1) {
-        firstGagIdx = i;
-      }
-    } else {
-      lastDomainIdx = i;
-    }
-  });
-  check(firstGagIdx > lastDomainIdx,
-    'F7: inside the PEN-1 block every domain candidate precedes every gag (' + (lastDomainIdx + 1) +
-      ' domain, then ' + (penOneBlock.length - firstGagIdx) +
-      ' gags — the audition validates domain content early)');
-  check(pen.slice(lc1Start === -1 ? pen.length : lc1Start).every(function (e) {
-    return e.primary.split(':')[0] !== 'gag';
-  }),
-    'F7: the LC-1 batch carries no gag primary (the corpus scored every gag request as matched, deferred, or a capability gap)');
-
-  // D-3 admission evidence, pinned for the LC-1 batch: every candidate's
-  // provenance names the corpus request it answers AND why the closest
-  // existing preset fails it. This is the check that makes the bar
-  // reviewable at PR time instead of a promise in a doc.
-  pen.slice(lc1Start === -1 ? pen.length : lc1Start).forEach(function (entry) {
+  check(lc1Library.length === 7,
+    'F7: the library carries exactly the seven LC-1 promotees (eight authored; Podcast Warmth rejected at the 2026-09-02 audition — a count of 8 would mean the rejection was promoted by mistake)');
+  lc1Library.forEach(function (entry) {
     var origin = (entry.provenance && entry.provenance.origin) || '';
-    check(origin.indexOf('LC-1 corpus batch') === 0 &&
-      /request/i.test(origin) && origin.indexOf('CLOSEST FAILS:') !== -1,
-      "F7: LC-1 '" + entry.name + "' provenance carries the D-3 evidence (the request it answers + 'CLOSEST FAILS:' naming the closest preset's failure)");
+    check(/request/i.test(origin) && origin.indexOf('CLOSEST FAILS:') !== -1,
+      "F7: library '" + entry.name + "' still carries the D-3 evidence (the request it answers + 'CLOSEST FAILS:' naming the closest preset's failure)");
   });
 
   // The megaphone boundary, committed (plan PEN-1 note): the +12 dB cap is
   // INCLUSIVE. Authored 11.97 dB applies (F5 above); pushed to EXACTLY
   // 12.00 dB it still applies; one centistep over (12.01) rejects.
+  // Megaphone Rally was promoted into the library at the 2026-09-02
+  // audition, so the characterization reads it there now — the cap
+  // semantics belong to the POLICY and are pinned wherever the 11.97 dB
+  // chain lives.
   var megaphone = null;
-  pen.forEach(function (e) {
+  sandbox.FACTORY_LIBRARY.PRESETS.forEach(function (e) {
     if (e.name === 'Megaphone Rally') {
       megaphone = e;
     }
   });
-  check(!!megaphone, 'F8: Megaphone Rally is present for the boundary characterization');
+  check(!!megaphone, 'F8: Megaphone Rally is present in the library for the boundary characterization');
   if (megaphone) {
     var atCapNodes = copyNodes(megaphone.nodes);
     atCapNodes.splice(atCapNodes.length - 1, 0, {
@@ -773,8 +736,8 @@ async function main() {
     libraryByName[entry.name] = entry;
   });
 
-  check(!!listed && Array.isArray(listed.factory) && listed.factory.length === 14,
-    'G1: list_presets lists all fourteen factory presets');
+  check(!!listed && Array.isArray(listed.factory) && listed.factory.length === 33,
+    'G1: list_presets lists all thirty-three factory presets');
 
   listed.factory.forEach(function (entry) {
     var p = "factory '" + entry.name + "'";

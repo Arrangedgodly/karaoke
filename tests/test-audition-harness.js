@@ -802,8 +802,11 @@ function main() {
           s3.__domCalls.addEventListener >= 1,
           'E1: with ?audition the panel builds (created ' + s3.__domCalls.createElement +
           ' elements, appended, wired keydown)');
-        // The no-candidates state needs an explicitly EMPTY pen — the
-        // shipped pen carries a batch whenever one awaits audition.
+        // The no-candidates state needs an explicitly EMPTY pen — but
+        // since the 2026-09-02 scale-out promotion decided the last
+        // batch, the SHIPPED pen is itself empty until the next one
+        // lands, so the shipped-pen branch below stays conditional on
+        // batch state.
         var s3e = createSandbox({ search: '?audition=1' });
         loadSrc(s3e, 'src/audition-candidates.js');
         s3e.window.AUDITION_CANDIDATES = [];
@@ -811,9 +814,13 @@ function main() {
         check(s3e.__domCalls.bodyAppend >= 1 &&
           s3e.window.AuditionHarness.session.current() === null,
           'E1: an empty-pen panel renders the no-candidates state without a current candidate');
-        check(!!s3.window.AuditionHarness.session.current(),
-          'E1: the shipped pen\u2019s panel starts on its first candidate (' +
-          (s3.window.AuditionHarness.session.current() || {}).name + ')');
+        check(pen.length === 0
+          ? s3.window.AuditionHarness.session.current() === null
+          : !!s3.window.AuditionHarness.session.current(),
+          pen.length === 0
+            ? 'E1: the shipped pen is empty (the 2026-09-02 audition decided every candidate), so its panel also renders the no-candidates state'
+            : 'E1: the shipped pen\u2019s panel starts on its first candidate (' +
+              (s3.window.AuditionHarness.session.current() || {}).name + ')');
 
         var s4 = createSandbox({ search: '?audition' });
         loadSrc(s4, 'src/audition-candidates.js');

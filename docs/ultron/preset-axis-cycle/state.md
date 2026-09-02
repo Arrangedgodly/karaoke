@@ -119,3 +119,35 @@ since the GEN-1/GAG-1 candidates on `main` were authored from them. Suite
 promoted candidates' per-entry pen checks giving way to the cheaper
 library checks). Next: the `summary` field (D-13), then the agent
 surface (D-2/D-12).
+
+### PRO-2 (scale-out promotion): LANDED 2026-09-02, a day ahead of the
+plan's Sep-3 window (the user auditioned early). The 2026-09-02 live
+audition at `?audition` decided ALL TWENTY pen candidates — the PEN-1
+twelve (six GEN-1 genre, six GAG-1 gag) and the LC-1 corpus eight.
+NINETEEN ACCEPTED, promoted into `src/factory-library-data.js` nodes
+verbatim with provenance filled (verdict accepted, auditionDate
+2026-09-02): Metal Mayhem, Hard-Tune Hotline, Slow Jam Silk, Nashville
+Nights, Club Anthem, West End Nights, Robot Usher, Megaphone Rally,
+8-Bit Encore, Helium Hangout, Dark Helmet Baritone, Demon Growl, Chart
+Topper, Pitch Safety Net, Noraebang Echo, Close-Up Whisper, Hiss
+Rescue, Room Announcer, Double Track. ONE REJECTED: Podcast Warmth
+('too much reverb' — the C6 corpus request stays unanswered; a
+re-author with less wash is the next batch's call under D-3). The
+verdict JSON stayed on the audition machine (never exported); the
+verdicts were relayed by the user directly and are recorded in the pen
+header — the binding record for a rejection is the header + this entry.
+These twenty predate the summary requirement, so each promotee's
+hand-written summary was composed at promotion from its own request
+evidence (the RQ-1/RQ-2 sketches, the corpus rows the provenance
+names). Library 14 → 33; pen 20 → 0 (empty array, Booth contract
+preserved). Same-edit counts: `test-factory-library.js` A1 14 → 33 and
+autotune + bitcrusher join its load list (now all fourteen types),
+`test-factory-presets-policy.js` B1 14 → 33, `EXPECTED_PEN` 20 → 0 and
+G1 14 → 33, `test-preset-cycle3.js` G2 14 → 33. Section F rework: the
+batch-order pins (GEN-1 genre run, LC-1 contiguity, domain-before-gag)
+retired with the decided batch; the D-3 evidence pin SURVIVES by
+running over the seven LC-1 library promotees (count pinned at 7 — a
+count of 8 would mean Podcast Warmth was promoted by mistake); the F8
+megaphone +12-boundary characterization now reads Megaphone Rally from
+the library. Remaining per the sequencing: deploy + VERIFY THE DEPLOYED
+PAGE before the Sep-3 13:00 PT Devpost close.
