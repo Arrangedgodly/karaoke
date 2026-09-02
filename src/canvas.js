@@ -1173,10 +1173,20 @@
       span.textContent = text;
       signalOrderEl.appendChild(span);
     }
+    // The flow mark is DRAWN, never a Unicode arrow — the same
+    // square-corner chevron .chain-arrow-mark puts between the board's
+    // own cards, three feet away from this strip (2026-09-02 typeset
+    // round). It had been a <b>→</b> at 0.85em of an already-small tier,
+    // i.e. a 9.8px text glyph doing an icon's job, below this design
+    // system's own 11px floor and against the drawn-mark discipline
+    // every other glyph in this file follows.
     function addArrow() {
-      var arrow = document.createElement('b');
+      var arrow = document.createElement('span');
+      arrow.className = 'signal-order-arrow';
       arrow.setAttribute('aria-hidden', 'true');
-      arrow.textContent = '→';
+      var mark = document.createElement('span');
+      mark.className = 'chain-arrow-mark signal-order-arrow-mark';
+      arrow.appendChild(mark);
       signalOrderEl.appendChild(arrow);
     }
 
@@ -2353,9 +2363,35 @@
    * cannot submit a mutation before the audio lifecycle is ready.
    */
   function onEngineStarted() {
+    var wasGated = !!(layoutEl && layoutEl.classList &&
+      layoutEl.classList.contains('engine-not-started'));
     if (layoutEl) {
       layoutEl.classList.remove('engine-not-started');
       layoutEl.inert = false;
+    }
+    // THE WAKE (2026-09-02 delight round) — the board's half of the
+    // power-up, the twin of the Simple stage's. The gate class is
+    // already off above, so the face is fully interactive for every
+    // frame of this: the print rises to full while the hatch peels off
+    // toward OUT, in the direction signal travels (styles/main.css's
+    // THE WAKE block; DESIGN.md's Power-Up Exception). Guarded to
+    // nothing under `prefers-reduced-motion` — the keyframes do not
+    // exist there, so the class lands, animates nothing, and comes off
+    // again on the timer below.
+    if (wasGated && boardEl && boardEl.classList) {
+      boardEl.classList.add('face-waking');
+      var unwake = function () {
+        boardEl.classList.remove('face-waking');
+        if (typeof boardEl.removeEventListener === 'function') {
+          boardEl.removeEventListener('animationend', unwake);
+        }
+      };
+      if (typeof boardEl.addEventListener === 'function') {
+        boardEl.addEventListener('animationend', unwake);
+      }
+      if (typeof window.setTimeout === 'function') {
+        window.setTimeout(unwake, 700);
+      }
     }
     // R2-2: unlock the palette chips at the exact same transition — real
     // disabled attributes come OFF here (they shipped ON in

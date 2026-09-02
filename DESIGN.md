@@ -15,6 +15,7 @@ colors:
   print: "#9ea4b8"
   print-hi: "#c9cedc"
   print-dim: "#767c90"
+  print-gated: "#dde2ee"
   accent: "#ff6b35"
   accent-hi: "#ff8558"
   accent-lo: "#e85a20"
@@ -244,7 +245,7 @@ measured in the build records (redesign.md item 1/1b tables).
 - **Face Edge** (#232330): the chassis frame's machined bezel edge — a cut face, not a floating border.
 - **Groove Cut / Groove Lip** (#05060a / rgba(158,164,184,0.14)): the machined groove between sections and zones — dark slot beside a light lip.
 - **Seam Cut / Seam Lip** (#010208 / rgba(201,206,220,0.3)): the deck seam — deliberately deeper (4px) and brighter-lipped than section grooves; the deepest cut on the page.
-- **Print ladder**: #9ea4b8 silkscreen labels (7.47 on chassis) · #c9cedc lifted print, values, trim caps (11.78) · #767c90 receding print, flow marks (5.26).
+- **Print ladder**: #9ea4b8 silkscreen labels (7.47 on chassis) · #c9cedc lifted print, values, trim caps (11.78) · #767c90 receding print, flow marks (5.26) · #dde2ee the GATED tier (2026-09-02), the rung measured to survive the pre-Start recede — 4.92 on chassis and 4.87 on a slab AFTER opacity 0.55 composites it, where print-hi would land 4.32 and print 3.09.
 - **Key grounds**: #1d1e26 key ground with #343746 cut-edge bezel — a physical key on the panel; rest seams are decorative by the house hairline precedent.
 - **Register slot** (#0b0c10): the inset display ground. **Ring track** (#454a5a): unlit knob scale — decorative; the arc carries the value. **Cap** (#1e2027): the matte knob cap.
 
@@ -252,6 +253,7 @@ measured in the build records (redesign.md item 1/1b tables).
 **The One Orange Rule.** Signal orange is spent only on system states (register marks, focus, live blink, pressed pads/keys, the chosen groove, Start). Family color belongs to the arc; identity color to the rail print. If a use is not a system state, it is not orange.
 **The Split-Role Red Rule.** Edge red rings; fill red fills with white text. BYPASS is the only red thing on the system surface, and nothing outranks it.
 **The Machined-Geometry Rule.** Boundaries are cut faces: dark cut under a light lip (grooves, seam, key bezels). No ambient shadow draws a boundary anywhere on the chassis.
+**The Gated Print Rule** (2026-09-02). A gated surface may not be touched, but it must still be READ — both views print their "press Start" teaching inside the recede, and Simple prints its whole cold faceplate there. The recede is calibrated for CONTROLS, not prose, and at 0.55 it pushed every pre-Start word to 3.0–4.3. So the gate keeps its exact recede and the PRINT on it moves to the gated tier, which is the only ink permitted under the pre-Start recede and is never used anywhere else — off the gate it would outshine the ladder's top rung. Large print is exempt: the cold strip's family codes stay in family ink (20px/700 clears the 3:1 large-text bar at 3.94).
 
 ## Typography
 
@@ -273,9 +275,38 @@ is the same micro-style as the zone legends, in lifted print.
 - **Silkscreen labels** (sans, 700, 0.7rem / 11.2px, 0.08em uppercase): param labels, zone legends, group legends, readout labels.
 - **Nameplate** (sans, 700, 0.75rem, 0.08em): the identity legend on the system deck.
 
+### The type register (2026-09-02)
+
+Sizes are TOKENS, not literals — `--type-title` 1.7rem · `--type-code`
+1.25rem · `--type-code-rail` 1rem · `--type-key` 1.05rem · `--type-body`
+1rem · `--type-prose` 0.9rem · `--type-register` 0.85rem · `--type-value`
+0.75rem · `--type-label` 0.7rem · `--type-floor` 0.6875rem, plus
+`--leading-prose` 1.55 / `--leading-dense` 1.35 / `--leading-code` 1.6 and
+`--track-prose` 0.01em, over `--font-print` and `--font-readout`. This ramp
+had been prose here since cycle 2 with nothing enforcing it, and the
+stylesheet had drifted to 19 distinct sizes across 13 undocumented values —
+three of them (0.68 / 0.70 / 0.72rem) inside two thirds of a pixel of each
+other, and two BELOW the 11px floor, one of those on the preset
+descriptions an operator reads in a dark room. A size is now one of these
+roles or it is a bug. Two code sizes exist on purpose: the rail's condensed
+module has started at 144px wide since the compactness round and 20px
+crowds it.
+
+**Light-on-dark compensation.** Prose opens one step on BOTH axes —
+leading and tracking — because light strokes bloom on a near-black ground
+and lines that read comfortably in a light document run together in a dark
+one. Neither reaches the silkscreen labels (their own 0.08em) or the mono
+register (whose columns stay on the ch grid).
+
 ### Named Rules
 **The Register Rule.** Machine state renders mono tabular at the value tier (register main line one tier up at 13.6px); human labels render silkscreen sans. Nothing in between, and no value readout at any size outside the two tiers.
 **The 11px Floor Rule.** No text below 11px (the EXP badge's 0.6875rem is the floor). Standing recorded exception: canvas meter scale numerals are 9px inside the 96×26 scene — canvas-drawn, unchanged by recorded decision.
+**The Drawn-Mark Rule** (2026-09-02). Direction and flow marks are drawn
+geometry — `.chain-arrow-mark`'s square corner — never typed glyphs. The
+signal-order strip's arrow and Simple's transport keys were the last three
+Unicode stand-ins; the strip's rendered at 9.8px, under this system's own
+floor, three feet from a board drawing the same mark properly.
+
 **The Nameplate Discipline.** The app title is a nameplate, not a headline — it must never out-shout the BYPASS key.
 
 ## Layout
@@ -340,6 +371,8 @@ pointer-live children: dragging a cord end reorders the chain — audio
 changes ONLY on a completed link; drop nowhere reverts (keyboard Escape
 is the twin). Ghost cords and hot drop targets take the accent ink.
 
+**The machined gutter (2026-09-02):** every scroller inside the chassis wears one scrollbar vocabulary — a slim floating pill in the key-edge ink on a transparent track, brightening to print-dim on hover, with the corner left as chassis. It shipped on the Advanced flanks only, so Simple's Sounds library and stage and the board itself still showed the raw platform bar; one selector list now owns it, and a new scroller joins that list rather than growing a second copy. Simple's Sounds body also takes Advanced's own content padding (0.9rem right, at every width), so scrolled content keeps the same gap from the gutter that it has from the panel's left edge.
+
 Spacing rhythm is console-tight (4/8/12/16px); panel padding ~0.85–1rem;
 section padding 0.4/0.6/0.45/0.7rem (the board: header band + wrapping
 body inside the condensed module, default width at the 144px resize
@@ -363,6 +396,7 @@ shadow. No glow, no hover shadows, no ambient anything.
 
 ### Named Rules
 **The Rest-Flat Rule.** Surfaces are flat at rest. A shadow means physical lift (drag, floating toast); emphasis means brightness on matte. Never glow.
+**The Power-Up Exception** (2026-09-02, owner-approved). The engine's cold start is the ONE sequence permitted past the 150–250ms answer law: the meters' lamp test and the gated face's wake (the print rising to full while the hatch peels off toward OUT, 420ms). It runs once per engine start, at setup, never during a show; it fills a wait that already exists and gates nothing — the gate class is off before the wake's first frame, so the surface is interactive throughout. Both halves are `prefers-reduced-motion` guarded, and both degrade to a state rather than a motion. Everything else on this instrument still answers in 150–250ms, and page LOAD choreography stays banned — this is a state answer to a deliberate human action, not an entrance.
 
 ## Shapes
 
@@ -414,10 +448,18 @@ never shadow or glow.
 - **Agent toasts (rq5 residual, off-chassis):** floating cards with bezel borders, lifted shadow, ≤340px, bottom-right stack; refusal bezel is 2px edge red; Undo is the one ink-on-orange action.
 
 ### Navigation
+- **BYPASSED on the deck (2026-09-02, user direction):** while bypass is engaged the chain is gated to silence and the room hears the dry tap, so the deck's sentence stops saying LIVE and reads `BYPASSED — EFFECTS OFF`. The lamp keeps reporting the ENGINE (still live); the WORD reports the CHAIN, which is what an operator is asking the header about. Both go safety red, matching the BYPASS key lit red at the same moment — a third, deliberately narrow role for edge red (a 10px lamp and one short line, never a fill, never a large area), so the split-role rule holds and nothing outranks the key itself. A standing error still outranks it: `.status.error` is declared after `.status.bypassed`. Measured 4.99 on the etch ground.
 - **System deck + dot-matrix etch:** the signature surface — one persistent row reading as an instrument's status display. The etch borrows the register's inset geometry but stays SUBORDINATE to the chain face's register: neutral bright print (never amber/orange), values one tier down at 12px. The machine reports from one mouth, and it is the canvas register's.
 
 ### Meters
 - **MIC IN / OUT units + the VU corner:** 96×26px canvas lamp bars (unlit glass, green→amber→clip stops, peak tick, clip latch dot) with mono dB readouts at the 12px tier. The pinned OUT footer is a second VIEW of one feed — output ground truth never depends on scroll or collapse, and never dims (including while bypassed). Ballistics are per-frame canvas draws: functional motion, live under reduced-motion by construction.
+- **The lamp test (the power-up, 2026-09-02):** the Start commit runs both ladders end to end and back — 260ms exponential-ease-out rise, 120ms full-scale hold, 320ms linear release — filling a wait that already exists (getUserMedia, the worklet fetches, the first graph build) and delaying nothing. It is also the only free moment to prove every segment on both meters still lights, which is what an operator most wants confirmed before a show. Three honesty rules make it admissible on a live-audio surface: the drawn level is `max(real, sweep)`, so the test can only ADD light and can never under-report a real signal; it touches the LAMPS alone, leaving the dB readout, the CLIP latch, the clip dot and every aria value on the real feed for the whole sequence (the readout reads −∞ under a full ladder, exactly as hardware does); and it runs once per engine start. Under reduced motion there is no sweep — both ladders light full-scale for a 200ms hold and release, the same proof as a state rather than a motion.
+
+### The cold face (Simple, before Start)
+- The stage's pre-Start composition, and NOT a degraded copy of the live one. The live face answers "what am I hearing"; the cold face answers "what is this machine holding" — a question that has a true answer before Start, so the stage never stands empty. Built by `src/simple-view.js#renderColdFace()` from reads only: the chain is `Persistence.loadInitialModel()` (the exact array Start will commit), the name is a STRUCTURAL match against the factory library (same types, params, order — anything else is honestly "your last chain"), the description is that preset's own library copy, and the count is the library the Sounds panel is listing. Nothing on it claims a sound is playing.
+- **The strip:** a raised casting (slab ground, cut faces top and bottom, machined lip) carrying the two panel termini in the board's own 15px jack vocabulary and one PLATE per section between them — a 2px family tick down the left edge (doing double duty as the division between sections), the 3-letter code at the family-code tier in the family's desaturated ink, the module label in silkscreen micro, and the drawn chain-arrow chevron in the gap after each. Plates size to their own print, not to an equal share: real silkscreen has irregular columns because the words do. Below 901px the two termini become the strip's top and bottom rails; the sections keep their one horizontal reading and wrap.
+- The strip is `aria-hidden` — a redundant picture of the sentence above it — and the legend under it carries the same fact as text.
+- **Armed (2026-09-02, user direction):** a pre-Start click on a Sounds row ARMS that sound. The cold face then prints ITS chain, ITS description and "Press Start to try <name>", its legend reads QUEUED rather than CHAIN HELD, the row takes a dashed accent edge (chosen, not yet real — the insertion ghost's own distinction), and the engine loads exactly that sound the moment it comes up, through the same guarded `loadFactoryPreset`/`loadUserPreset` transaction a live Try uses. The mutation guard does not move: arming writes one UI variable and repaints, and the load runs from `onEngineStarted` after `engineIsLive()` is true, so a synthetic click on a gated row still reaches nothing. Armed-but-unresolvable prints the promise with no strip rather than the promise over another sound's chain.
 
 ### Inputs / Fields
 - **Selects (device, presets):** shared key vocabulary, native dark rendering via root `color-scheme: dark`; optgroup labels read as silkscreen micro-legends.
@@ -439,6 +481,6 @@ never shadow or glow.
 - **Don't** render text below 11px (recorded exception: the 9px canvas meter numerals), use webfonts/CDN assets, or add display fonts.
 - **Don't** use signal orange for anything that is not a system state, and never as decoration or large-area fill.
 - **Don't** swap the safety red roles (edge ↔ fill) or put white text on edge red; don't let anything outrank BYPASS on the deck.
-- **Don't** add glow, blur, load choreography, hover shadows, or border-radius card islands — sections are print zones of the one faceplate.
+- **Don't** add glow, blur, load choreography, hover shadows, or border-radius card islands — sections are print zones of the one faceplate. The one sequence past the answer law is the Power-Up Exception above; nothing else earns it.
 - **Don't** let the cords gate audio mid-drag — sound changes only on a completed link; drop-nowhere reverts.
 - **Don't** let the machine speak twice — the system etch stays subordinate (neutral print, 12px); the chain face's register is the one amber machine voice.
