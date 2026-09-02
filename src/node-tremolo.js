@@ -26,6 +26,8 @@
 
   window.ToneAdapter.register('tremolo', {
     label: 'Tremolo',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Adds a volume wobble',
     paramSpec: [
       {
         id: 'rateHz',

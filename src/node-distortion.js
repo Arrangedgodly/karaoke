@@ -170,6 +170,8 @@
   // signal to protect yet), same convention as the compressor.
   window.EffectCatalog.register('distortion', {
     label: 'Distortion',
+    // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
+    plainLabel: 'Dirties up the sound',
     experimental: false,
     // Finishing entry 4 ($impeccable polish, critique P3-4): drive/tone
     // carry `displayScale: 100` — a READOUT-ONLY field the generic

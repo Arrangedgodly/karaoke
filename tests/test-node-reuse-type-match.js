@@ -309,6 +309,7 @@ async function main() {
   var stagedProbe = null;
   sandbox.EffectCatalog.register('probe', {
     label: 'Probe',
+    plainLabel: 'Test plain label',
     paramSpec: [{ id: 'value', label: 'Value', min: 0, max: 1, step: 1, default: 0, unit: '' }],
     experimental: false,
     create: function () {
@@ -333,6 +334,7 @@ async function main() {
   var abortProbe = null;
   sandbox.EffectCatalog.register('abort-probe', {
     label: 'Abort Probe',
+    plainLabel: 'Test plain label',
     paramSpec: [{ id: 'value', label: 'Value', min: 0, max: 1, step: 1, default: 0, unit: '' }],
     experimental: false,
     create: function () {

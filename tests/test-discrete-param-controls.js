@@ -154,6 +154,7 @@ var SCALES = ['Chromatic', 'Major', 'Minor'];
 var applied = [];
 windowStub.EffectCatalog.register('test-keys', {
   label: 'Test Keys',
+  plainLabel: 'Test plain label',
   experimental: false,
   paramSpec: [
     { id: 'key', label: 'Key', values: KEYS, default: 'C' },
