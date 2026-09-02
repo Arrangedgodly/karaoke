@@ -143,6 +143,23 @@ function main() {
     check(sentenceCount(entry.description) <= 2,
       'A1: ' + p + ' description is at most two sentences');
 
+    // The agent-matching line (scale-out D-13). Presence and the <=60-char
+    // ceiling are both load-bearing: list_presets ships one summary per
+    // entry, so a library growing toward 60 presets stays inside the
+    // agent's browse budget only while every summary is short. It must
+    // also be HAND-WRITTEN, not a truncation of description — checked
+    // structurally below (a prefix of the description is a truncation).
+    check(typeof entry.summary === 'string' && entry.summary.trim().length > 0,
+      'A1: ' + p + ' has a non-empty summary (the <=60-char line an agent matches a request against)');
+    if (typeof entry.summary === 'string') {
+      check(entry.summary.length <= 60,
+        'A1: ' + p + ' summary is at most 60 characters (' + entry.summary.length + ')');
+      check(entry.summary === entry.summary.trim(),
+        'A1: ' + p + ' summary carries no leading/trailing whitespace');
+      check(entry.description.indexOf(entry.summary.replace(/[.…]+$/, '')) !== 0,
+        'A1: ' + p + ' summary is hand-written, not a truncation of description (truncation keeps the setup and cuts the payoff)');
+    }
+
     check(Array.isArray(entry.tags) && entry.tags.length > 0,
       'A1: ' + p + ' carries at least one tag');
     var vocab = lib.VOCABULARIES;
@@ -317,8 +334,10 @@ function main() {
   var detailed = fp.listDetailed();
   check(detailed.length === entries.length, 'E3: listDetailed() covers every entry');
   detailed.forEach(function (e) {
-    check(Object.keys(e).sort().join(',') === 'description,name,primary,provenance,tags',
-      "E3: listDetailed() entry '" + e.name + "' has exactly {name, description, tags, primary, provenance} — never nodes");
+    check(Object.keys(e).sort().join(',') === 'description,name,primary,provenance,summary,tags',
+      "E3: listDetailed() entry '" + e.name + "' has exactly {name, summary, description, tags, primary, provenance} — never nodes");
+    check(e.summary === byName[e.name].summary && e.description === byName[e.name].description,
+      "E3: listDetailed() entry '" + e.name + "' carries the data module's summary AND description verbatim (compact and full are separate fields, not one truncated into the other)");
   });
   detailed[0].tags.push('genre:Sneaky');
   check(fp.listDetailed()[0].tags.indexOf('genre:Sneaky') === -1,
