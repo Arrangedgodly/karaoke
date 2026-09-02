@@ -85,9 +85,16 @@ _Avoid_: draft preset, generated preset
 
 **Audition**:
 The human listening pass every candidate must pass before entering the factory
-library; the bar is "usable without edits."
+library; the bar is "usable without edits." A candidate may also be deferred:
+not judged, left pending for a later session. Deferring is not a third quality
+tier — the bar stays binary.
 _Avoid_: review, verification (automated checks also verify — only a human
 auditions), quality check
+
+**Deferred candidate**:
+A candidate a human declined to judge in this session — kept pending in the pen,
+distinct from a rejected one.
+_Avoid_: skipped, maybe
 
 **Provenance**:
 The recorded origin and audition history of a factory preset.
@@ -97,6 +104,17 @@ _Avoid_: attribution, credit
 Sizing the library by "every plausible karaoke request finds a close preset"
 rather than by a target count.
 _Avoid_: exhaustive, complete library
+
+**Capability gap**:
+A real request no preset can answer because the effect catalog lacks the node
+type — harmony, vocoder, formant shift. Recorded in the coverage report, never
+papered over with an approximation.
+_Avoid_: coverage gap (that names a missing preset, not a missing effect)
+
+**Request corpus**:
+The recorded list of plain-language requests the library is scored against; the
+source of a candidate's admission evidence.
+_Avoid_: user research, prompt list
 
 **Seed batch**:
 The first small set of candidates run end-to-end through the pipeline to prove
