@@ -474,6 +474,18 @@
     ) {
       window.AgentUI.noteHumanEdit();
     }
+    // wayfinder #47: every accepted edit — human, agent, or preset load,
+    // structural or param-only fast path — reaches this ONE function
+    // already (the choke point above already updates PresetsUI's
+    // name/modified display), so it is also where Simple's Current-sound
+    // stage learns to re-read the live chain. Fires AFTER the PresetsUI
+    // updates above so SimpleView sees the settled name/modified state,
+    // never a stale one. The map's own scene: an agent builds a chain
+    // while the human sits in Simple, and Current sound updates live —
+    // this is that update's source, not a poll.
+    if (window.SimpleView && typeof window.SimpleView.onChainChanged === 'function') {
+      window.SimpleView.onChainChanged();
+    }
   }
 
   function persist(model) {

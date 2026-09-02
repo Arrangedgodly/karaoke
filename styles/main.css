@@ -918,6 +918,14 @@ select.control {
     order: 1;
   }
 
+  /* wayfinder #47: sits right after the nameplate on the deck's first
+     row (same order as .topbar-identity; DOM source order breaks the
+     tie), same treatment .agent-chip/.bypass-btn already get — compact
+     enough to never need its own full-width row. */
+  .topbar-viewswitch {
+    order: 1;
+  }
+
   .agent-chip {
     order: 2;
   }
@@ -4356,4 +4364,192 @@ input.preset-name-input:focus-visible {
 .canvas-panel.flow-horizontal.bypassed .chain-list::after {
   align-self: center;
   padding: 0 0 0 0.5rem;
+}
+
+/* ===========================================================================
+   SIMPLE VIEW (wayfinder #47, map #43)
+   ===========================================================================
+   The switch itself (topbar-identity's .view-switch) plus #simple-layout's
+   own content styling. #simple-layout reuses .layout/.voice-deck/.panel/
+   .presets-panel/.voice-deck-face verbatim — see index.html's own comment —
+   so the row/column breakpoint, sidebar width, and bounded-height scrolling
+   need NO new rules here; only the stage's composed column (borrowed
+   directly from the #45 prototype's variant A, docs/simple-view-layout.md)
+   and the view-switch key are new.
+   =========================================================================== */
+
+.view-switch {
+  display: flex;
+}
+
+.view-switch-key {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--pm-key-edge);
+  background: var(--pm-key);
+  color: var(--pm-print);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.view-switch-key + .view-switch-key {
+  border-left: none;
+}
+
+.view-switch-key[aria-checked="true"] {
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
+}
+
+.view-switch-key:hover {
+  border-color: var(--pm-print);
+}
+
+/* The default state IS Simple (settled #43: "no stored preference means
+   Simple") — #chain-layout hides unconditionally; body.view-advanced
+   (src/simple-view.js, set from the persisted preference) flips both. ID
+   selectors beat .layout's own class rules regardless of source order, so
+   this needs no !important and touches none of Advanced's existing CSS. */
+#chain-layout {
+  display: none;
+}
+
+body.view-advanced #chain-layout {
+  display: flex;
+}
+
+body.view-advanced #simple-layout {
+  display: none;
+}
+
+.simple-library-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 0.4rem;
+}
+
+.simple-library-placeholder {
+  margin: 0;
+  padding: 0.7rem 0.6rem;
+  border: 1px dashed var(--pm-key-edge);
+  color: var(--pm-print-dim);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.simple-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.1rem 1.6rem;
+  background: var(--pm-chassis);
+}
+
+.simple-stage-inner {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.simple-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pm-print);
+}
+
+.simple-stage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.simple-cs-name {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 12rem;
+  color: var(--pm-print-hi);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.simple-cs-state {
+  color: var(--pm-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.simple-desc {
+  margin: -0.35rem 0 0;
+  color: var(--pm-print);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* One row per effect: a family-color legend swatch, the plain phrase,
+   then the technical name quietly after in its family's ink — settled
+   #43 ("plain first, technical name quietly after"), and the SAME
+   single-listing shape the #45 prototype's second pass converged on
+   after its device-strip duplicate was found and removed (see
+   docs/simple-view-layout.md's revision note). No parameter values. */
+.simple-summary {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.simple-summary li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.5rem 0.1rem;
+  border-bottom: 1px solid var(--pm-groove-cut);
+  font-size: 1rem;
+  color: var(--pm-print-hi);
+}
+
+.simple-summary li:last-child {
+  border-bottom: none;
+}
+
+.simple-summary-legend {
+  flex: none;
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--fam, var(--pm-print-dim));
+}
+
+.simple-summary-plain {
+  flex: 1 1 auto;
+}
+
+.simple-summary-tech {
+  flex: none;
+  margin-left: 0.55rem;
+  color: var(--famPrint, var(--pm-print));
+  font-family: var(--font-readout);
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+}
+
+.simple-summary-empty {
+  padding: 0.5rem 0.1rem;
+  color: var(--pm-print-dim);
+  font-size: 0.9rem;
 }

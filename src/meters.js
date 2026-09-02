@@ -491,9 +491,12 @@
     }
   }
 
-  /** Paint the unit's scene onto its canvas. Views without a 2d context
-   *  are skipped (state stays correct, per the stripped-embed note
-   *  above). */
+  /** Paint the unit's scene onto every mounted target (wayfinder #47: a
+   *  side may carry more than one — the Advanced board's strip plus
+   *  Simple's own stage-framing strip, both fed by this ONE ballistics
+   *  state so the two views can never show different numbers). Views
+   *  without a 2d context are skipped (state stays correct, per the
+   *  stripped-embed note above). */
   function paint(u) {
     u.lastPaint = {
       peak: u.peak,
@@ -503,32 +506,38 @@
       started: engineStarted,
     };
 
-    if (u.ctx) {
-      drawScene(u.ctx, u);
-    }
+    u.targets.forEach(function (target) {
+      if (target.ctx) {
+        drawScene(target.ctx, u);
+      }
+    });
   }
 
-  /** DOM-facing outputs: the mono readout (updated whenever its text
-   *  actually changes; the data-clip flag lets styles/main.css render the
-   *  latched 'CLIP' in the --meter-clip stop) and the ~4 Hz throttled
-   *  aria attributes. */
+  /** DOM-facing outputs, written to every mounted target: the mono
+   *  readout (updated whenever its text actually changes; the data-clip
+   *  flag lets styles/main.css render the latched 'CLIP' in the
+   *  --meter-clip stop) and the ~4 Hz throttled aria attributes. */
   function updateOutputs(u, t) {
     var txt = readoutText(u);
     if (txt !== u.readoutText) {
       u.readoutText = txt;
-      if (u.readoutEl) {
-        u.readoutEl.textContent = txt;
-        u.readoutEl.setAttribute('data-clip', u.clip ? 'true' : 'false');
-      }
+      u.targets.forEach(function (target) {
+        if (target.readoutEl) {
+          target.readoutEl.textContent = txt;
+          target.readoutEl.setAttribute('data-clip', u.clip ? 'true' : 'false');
+        }
+      });
     }
     var ariaTxt = ariaValueText(u);
     if (ariaTxt !== u.lastAriaText && t - u.lastAriaT >= ARIA_INTERVAL_MS) {
       u.lastAriaText = ariaTxt;
       u.lastAriaT = t;
-      if (u.canvas) {
-        u.canvas.setAttribute('aria-valuenow', String(ariaValueNow(u)));
-        u.canvas.setAttribute('aria-valuetext', ariaTxt);
-      }
+      u.targets.forEach(function (target) {
+        if (target.canvas) {
+          target.canvas.setAttribute('aria-valuenow', String(ariaValueNow(u)));
+          target.canvas.setAttribute('aria-valuetext', ariaTxt);
+        }
+      });
     }
   }
 
@@ -584,28 +593,51 @@
    * @returns {boolean} true when the strip was built (or already existed
    *   with a live unit — see the idempotence guard below).
    */
-  function buildFooterUnit(side) {
-    if (typeof document.createElement !== 'function' ||
-        typeof document.querySelector !== 'function') {
-      return false;
-    }
-    var panel = document.querySelector('.canvas-panel');
-    var canvasEl = document.getElementById('chain-canvas');
-    // #chain-canvas is .canvas-panel's own direct child (the free
-    // board's .board-frame wrapper that used to sit between them is
-    // retired along with the rest of the free board), so canvasEl is a
-    // valid insertBefore reference node directly.
-    if (!panel || !canvasEl || !panel.insertBefore ||
-        panel.querySelector('.canvas-footer[data-meter-footer="' + side + '"]')) {
-      return false;
-    }
-
-    var dpr = clampNum(
+  function currentDpr() {
+    return clampNum(
       (typeof window !== 'undefined' && isNum(window.devicePixelRatio)) ? window.devicePixelRatio : 1,
       1,
       3
     );
+  }
 
+  /** The ballistics state for `side`, created on first mount (Advanced's
+   *  buildFooterUnit or Simple's mountSimpleUnit — whichever runs first).
+   *  `targets` starts empty; every mount function below pushes one entry
+   *  ({canvas, ctx, readoutEl}) rather than replacing this object, so a
+   *  side already fed once by advance()/paint() keeps its exact ballistics
+   *  (peak/rms/hold/clip) when a second view's strip mounts — nothing
+   *  resets or double-computes just because Simple joins Advanced. */
+  function ensureUnit(side) {
+    if (units[side]) {
+      return units[side];
+    }
+    units[side] = {
+      side: side,
+      targets: [],
+      dpr: currentDpr(),
+      lastT: null,
+      feed: null, // last fed {peakDb, rmsDb, clipRun, at}
+      peak: SILENT_DB,
+      rms: SILENT_DB,
+      hold: SILENT_DB,
+      holdUntil: 0,
+      clipUntil: 0,
+      clip: false,
+      lastPaint: null,
+      readoutText: '−∞',
+      lastAriaT: 0,
+      lastAriaText: 'silence',
+    };
+    return units[side];
+  }
+
+  /** Build one <div class="canvas-footer ...">...</div> strip (the
+   *  contract block's markup, verbatim) for `side`, sized at the current
+   *  device pixel ratio. Pure DOM construction — no insertion, no unit
+   *  bookkeeping — so both mount paths below share exactly one markup
+   *  source. */
+  function createFooterStrip(side, dpr) {
     var footer = document.createElement('div');
     footer.className = 'canvas-footer canvas-footer-' + side;
     footer.setAttribute('data-meter-footer', side);
@@ -642,16 +674,6 @@
     unit.appendChild(srLabel);
     footer.appendChild(legend);
     footer.appendChild(unit);
-    // A PANEL child, never inside #chain-canvas — IN goes immediately
-    // BEFORE it (a header strip), OUT immediately after (a footer
-    // strip); .canvas-panel is a flex column, so DOM position alone
-    // decides visual position — no scroll or insertion-point impact
-    // either way.
-    if (side === SIDE_IN) {
-      panel.insertBefore(footer, canvasEl);
-    } else {
-      panel.insertBefore(footer, canvasEl.nextSibling);
-    }
 
     var ctx = null;
     try {
@@ -660,25 +682,65 @@
       ctx = null;
     }
 
-    units[side] = {
-      side: side,
-      canvas: canvas,
-      readoutEl: readout,
-      ctx: ctx,
-      dpr: dpr,
-      lastT: null,
-      feed: null, // last fed {peakDb, rmsDb, clipRun, at}
-      peak: SILENT_DB,
-      rms: SILENT_DB,
-      hold: SILENT_DB,
-      holdUntil: 0,
-      clipUntil: 0,
-      clip: false,
-      lastPaint: null,
-      readoutText: '−∞',
-      lastAriaT: 0,
-      lastAriaText: 'silence',
-    };
+    return { footer: footer, canvas: canvas, readoutEl: readout, ctx: ctx };
+  }
+
+  function buildFooterUnit(side) {
+    if (typeof document.createElement !== 'function' ||
+        typeof document.querySelector !== 'function') {
+      return false;
+    }
+    var panel = document.querySelector('.canvas-panel');
+    var canvasEl = document.getElementById('chain-canvas');
+    // #chain-canvas is .canvas-panel's own direct child (the free
+    // board's .board-frame wrapper that used to sit between them is
+    // retired along with the rest of the free board), so canvasEl is a
+    // valid insertBefore reference node directly.
+    if (!panel || !canvasEl || !panel.insertBefore ||
+        panel.querySelector('.canvas-footer[data-meter-footer="' + side + '"]')) {
+      return false;
+    }
+
+    var u = ensureUnit(side);
+    var strip = createFooterStrip(side, u.dpr);
+    // A PANEL child, never inside #chain-canvas — IN goes immediately
+    // BEFORE it (a header strip), OUT immediately after (a footer
+    // strip); .canvas-panel is a flex column, so DOM position alone
+    // decides visual position — no scroll or insertion-point impact
+    // either way.
+    if (side === SIDE_IN) {
+      panel.insertBefore(strip.footer, canvasEl);
+    } else {
+      panel.insertBefore(strip.footer, canvasEl.nextSibling);
+    }
+    u.targets.push({ canvas: strip.canvas, ctx: strip.ctx, readoutEl: strip.readoutEl });
+    return true;
+  }
+
+  /** wayfinder #47 — Simple's own MIC IN / OUT strips, framing its
+   *  Current-sound stage exactly as the map's safety floor requires
+   *  ("renders identically in both views"). Mounts the SAME markup as
+   *  buildFooterUnit into Simple's own empty host elements
+   *  (#simple-meter-in / #simple-meter-out — index.html, present from
+   *  page load, hidden by CSS while Advanced is active) as an ADDITIONAL
+   *  paint target on the side's existing ballistics unit, so both
+   *  strips always show the exact same numbers — one feed, one set of
+   *  ballistics, painted twice. Advanced's own mount (buildFooterUnit)
+   *  is completely unaffected: same function, same call, same behavior.
+   *  Silently skipped when the host element is absent (bare-harness
+   *  safety, and pre-#47 index.html) or already has a mounted strip. */
+  function mountSimpleUnit(side) {
+    if (typeof document.getElementById !== 'function') {
+      return false;
+    }
+    var host = document.getElementById(side === SIDE_IN ? 'simple-meter-in' : 'simple-meter-out');
+    if (!host || !host.appendChild || host.querySelector('.canvas-footer')) {
+      return false;
+    }
+    var u = ensureUnit(side);
+    var strip = createFooterStrip(side, u.dpr);
+    host.appendChild(strip.footer);
+    u.targets.push({ canvas: strip.canvas, ctx: strip.ctx, readoutEl: strip.readoutEl });
     return true;
   }
 
@@ -746,7 +808,12 @@
     }
     var builtIn = buildFooterUnit(SIDE_IN);
     var builtOut = buildFooterUnit(SIDE_OUT);
-    if (!builtIn && !builtOut) {
+    // wayfinder #47: Simple's strips mount alongside Advanced's — both
+    // present in index.html from page load, one hidden by CSS depending
+    // on the active view (see mountSimpleUnit's own comment).
+    var builtSimpleIn = mountSimpleUnit(SIDE_IN);
+    var builtSimpleOut = mountSimpleUnit(SIDE_OUT);
+    if (!builtIn && !builtOut && !builtSimpleIn && !builtSimpleOut) {
       return false;
     }
     resolveColors();

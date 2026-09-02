@@ -186,27 +186,43 @@ check(
 );
 
 // DOM order inside the instrument: system deck → seam → voice deck (the
-// joint sits BETWEEN the slabs), and nothing else wraps into the frame.
+// joint sits BETWEEN the slabs) → the Simple shell (wayfinder #47's
+// #simple-layout, a sibling of #chain-layout — styles/main.css shows
+// exactly one at a time; both exist in the DOM from page load).
+var simpleLayout = instrument && instrument.children.filter(function (c) {
+  return c.attrs && c.attrs.id === 'simple-layout';
+})[0];
 check(
   !!instrument &&
-    instrument.children.length === 3 &&
+    instrument.children.length === 4 &&
     instrument.children[0] === deckHeader &&
     instrument.children[1] === seam &&
-    instrument.children[2] === layout,
-  'instrument children are exactly [system deck, deck seam, voice deck] in order'
+    instrument.children[2] === layout &&
+    instrument.children[3] === simpleLayout,
+  'instrument children are exactly [system deck, deck seam, voice deck, simple shell] in order (wayfinder #47)'
 );
 
-// The system deck's own child order — identity, etch, controls, BYPASS
-// last (the agent chip inserts before BYPASS and after controls).
+// The system deck's own child order — identity, the view switch
+// (wayfinder #47 — its own topbar-section, not packed inside identity;
+// see that section's own comment), etch, controls, BYPASS last (the
+// agent chip inserts before BYPASS and after controls).
 var deckChildren = deckHeader ? deckHeader.children : [];
 var lastDeckChild = deckChildren[deckChildren.length - 1];
 check(
-  deckChildren.length === 4 &&
+  deckChildren.length === 5 &&
     hasClass(deckChildren[0], 'topbar-identity') &&
-    hasClass(deckChildren[1], 'system-etch') &&
-    hasClass(deckChildren[2], 'topbar-controls') &&
+    hasClass(deckChildren[1], 'topbar-viewswitch') &&
+    hasClass(deckChildren[2], 'system-etch') &&
+    hasClass(deckChildren[3], 'topbar-controls') &&
     lastDeckChild.attrs.id === 'bypass-toggle-button',
-  'system deck order: identity → system-etch → controls → #bypass-toggle-button (LAST — the #agent-chip insertion point)'
+  'system deck order: identity → view switch (#47) → system-etch → controls → #bypass-toggle-button (LAST — the #agent-chip insertion point)'
+);
+
+var viewSwitchSection = deckChildren[1];
+check(
+  !!viewSwitchSection && descendants(viewSwitchSection, function (n) { return n.attrs.id === 'view-switch-simple'; }).length === 1 &&
+    descendants(viewSwitchSection, function (n) { return n.attrs.id === 'view-switch-advanced'; }).length === 1,
+  'the view switch carries both #view-switch-simple and #view-switch-advanced (wayfinder #47)'
 );
 
 // Every wiring id the three UI scripts resolve survives the restructure.
