@@ -4629,3 +4629,58 @@ body.view-advanced #simple-layout {
   font-size: 0.8rem;
   text-align: center;
 }
+
+/* ===========================================================================
+   SIMPLE VIEW — SAVE THIS SOUND + SECONDARY MENU (wayfinder #49, map #43)
+   ===========================================================================
+   The naming row itself reuses .preset-name-row/.preset-name-input/
+   .preset-name-actions verbatim (Advanced's own Save As... row, above) —
+   only the "Save this sound" trigger and its failure note, plus the
+   Yours card's "..." secondary-menu toggle, are new here.
+   =========================================================================== */
+
+.simple-save-btn {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--pm-accent);
+  border-radius: 4px;
+  background: var(--pm-key);
+  color: var(--pm-accent-hi);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.simple-save-btn:hover {
+  background: var(--pm-accent);
+  color: var(--pm-ink);
+}
+
+.simple-save-note {
+  margin: 0;
+  color: var(--pm-accent-hi);
+  font-size: 0.78rem;
+}
+
+/* The Yours card's secondary-menu toggle — a quiet "…" key, never as
+   loud as Try (settled #43: Delete "do[es] not compete with trying
+   presets"). Opening it swaps this button for the real Delete button
+   in the SAME row slot (src/simple-view.js) — reusing
+   .preset-row-delete's own two-step arm/confirm styling verbatim once
+   open, rather than adding a second visual language for the same
+   action. */
+.simple-card-menu-toggle {
+  flex: none;
+  align-self: stretch;
+  width: 2rem;
+  border: none;
+  border-left: 1px solid var(--pm-groove-cut);
+  background: transparent;
+  color: var(--pm-print-dim);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.simple-card-menu-toggle:hover {
+  color: var(--pm-print-hi);
+}

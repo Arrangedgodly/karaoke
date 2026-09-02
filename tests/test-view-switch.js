@@ -235,7 +235,13 @@ function makeElement(tagName) {
   el.getAttribute = function (name) {
     return Object.prototype.hasOwnProperty.call(el.attrs, name) ? el.attrs[name] : null;
   };
-  el.fire = function (evt) { (el.listeners[evt] || []).forEach(function (fn) { fn({}); }); };
+  el.fire = function (evt, data) {
+    var event = data ? Object.assign({}, data) : {};
+    if (event.preventDefault === undefined) {
+      event.preventDefault = function () {};
+    }
+    (el.listeners[evt] || []).forEach(function (fn) { fn(event); });
+  };
   return el;
 }
 
@@ -250,7 +256,7 @@ function makeStorage() {
 
 function makeSimpleViewSandbox(collaborators) {
   var registry = {};
-  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport'].forEach(function (id) {
+  ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
     var tag = id === 'simple-summary' ? 'ol' : (id.indexOf('view-switch') === 0 ? 'button' : 'div');
     registry[id] = makeElement(tag);
   });
@@ -305,7 +311,7 @@ function makeSimpleViewSandbox(collaborators) {
   seeded.setItem('karaoke-view-v1', 'advanced');
   var reload2 = (function () {
     var registry = {};
-    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport'].forEach(function (id) {
+    ['view-switch-simple', 'view-switch-advanced', 'simple-cs-name', 'simple-desc', 'simple-summary', 'simple-library-body', 'simple-transport', 'simple-save-btn', 'simple-save-row'].forEach(function (id) {
       registry[id] = makeElement(id.indexOf('view-switch') === 0 ? 'button' : 'div');
     });
     var bodyEl = makeElement('body');
@@ -731,4 +737,177 @@ function makeSimpleViewSandbox(collaborators) {
     });
     process.exit(1);
   })();
+})();
+
+// ==========================================================================
+// G. SAVE THIS SOUND + THE SECONDARY MENU (wayfinder #49) — unsaved-sound
+//    detection, the naming row, and the Yours card's Delete-behind-menu.
+// ==========================================================================
+
+(function sectionG() {
+  console.log('G. Save this sound and the secondary menu');
+
+  function harness(displayState, presetStoreOverrides) {
+    var saveCalls = [];
+    var deleteCalls = [];
+    var deleteReturns = [];
+    var collaborators = {
+      AudioGraph: { getModel: function () { return [node('a', 'gain', {})]; } },
+      PresetsUI: {
+        getDisplayState: function () { return displayState; },
+        saveCurrentChainAs: function (name) {
+          saveCalls.push(name);
+          return (presetStoreOverrides && presetStoreOverrides.saveResult) || { ok: true, name: name };
+        },
+        toggleDeleteArm: function (btn, name) {
+          deleteCalls.push(name);
+          return deleteReturns.length ? deleteReturns.shift() : false;
+        }
+      },
+      EffectCatalog: { getPlainLabel: function (t) { return t; }, getLabel: function (t) { return t; } },
+      FactoryPresets: { listDetailed: function () { return []; } },
+      PresetStore: { listNames: function () { return ['My Stage Set']; } }
+    };
+    var h = makeSimpleViewSandbox(collaborators);
+    return {
+      h: h,
+      saveCalls: saveCalls,
+      deleteCalls: deleteCalls,
+      queueDeleteReturn: function (v) { deleteReturns.push(v); },
+      saveBtn: h.els['simple-save-btn'],
+      saveRow: h.els['simple-save-row']
+    };
+  }
+
+  console.log('  G1: "Save this sound" visibility follows isUnsaved (modified OR unnamed)');
+  var clean = harness({ name: 'Warm Ballad', modified: false });
+  check(clean.saveBtn.hidden === true, 'G1: a clean, named preset hides Save this sound');
+
+  var modifiedState = harness({ name: 'Warm Ballad', modified: true });
+  check(modifiedState.saveBtn.hidden === false, 'G1: a modified preset shows Save this sound');
+
+  var customState = harness({ name: null, modified: false });
+  check(customState.saveBtn.hidden === false, 'G1: an unnamed (Custom sound) chain shows Save this sound');
+
+  console.log('  G2: the button opens a naming row pre-filled with the current name');
+  var g2 = harness({ name: 'Warm Ballad', modified: true });
+  g2.saveBtn.fire('click');
+  check(g2.saveRow.hidden === false, 'G2: clicking Save this sound opens the naming row');
+  var input = g2.saveRow.children[0];
+  check(input.value === 'Warm Ballad', 'G2: the input is pre-filled with the sound\'s current name');
+
+  console.log('  G3: confirming submits through PresetsUI.saveCurrentChainAs and closes on success');
+  input.value = 'My Warm Take';
+  var confirmBtn = g2.saveRow.children[1].children[0];
+  confirmBtn.fire('click');
+  check(g2.saveCalls.length === 1 && g2.saveCalls[0] === 'My Warm Take',
+    'G3: Save submits the input\'s current value through saveCurrentChainAs');
+  check(g2.saveRow.hidden === true, 'G3: a successful save closes the naming row');
+
+  console.log('  G4: Enter confirms, Escape cancels, a failure keeps the row open with a note');
+  var g4 = harness({ name: null, modified: false }, { saveResult: { ok: false, message: 'Give the preset a name first.' } });
+  g4.saveBtn.fire('click');
+  var g4Input = g4.saveRow.children[0];
+  g4Input.value = '';
+  g4Input.fire('keydown', { key: 'Enter' });
+  check(g4.saveCalls.length === 1, 'G4: Enter submits the row exactly like clicking Save');
+  check(g4.saveRow.hidden === false, 'G4: a failed save keeps the naming row open (so the operator can retry)');
+  var noteEl = g4.saveRow.children[2];
+  check(noteEl.hidden === false && noteEl.textContent === 'Give the preset a name first.',
+    'G4: the failure message shows in the row\'s own note');
+
+  var g4b = harness({ name: null, modified: false });
+  g4b.saveBtn.fire('click');
+  g4b.saveRow.children[0].fire('keydown', { key: 'Escape' });
+  check(g4b.saveRow.hidden === true && g4b.saveCalls.length === 0,
+    'G4: Escape cancels without ever calling saveCurrentChainAs');
+
+  console.log('  G5: a Yours card shows the quiet secondary-menu toggle, not a directly-visible Delete');
+  var g5 = harness({ name: null, modified: false });
+  // Factory is empty in this fixture, so cardsList children are:
+  // [0]=Factory label, [1]=factory empty note, [2]=Yours label, [3]=My Stage Set row
+  var cardsList = g5.h.els['simple-library-body'].children[2];
+  check(cardsList.children[0].textContent === 'Factory', 'G5: sanity — Factory group label is first');
+  var myStageSetRow = cardsList.children[3];
+  check(myStageSetRow.children.length === 2, 'G5: a Yours row carries Try + exactly one secondary control');
+  var secondSlot = myStageSetRow.children[1];
+  check(secondSlot.className === 'simple-card-menu-toggle',
+    'G5: the second slot starts as the quiet menu toggle, not a Delete label');
+  check(secondSlot.textContent !== 'Delete',
+    'G5: Delete does not compete directly with Try — it is not the visible label');
+
+  console.log('  G6: opening the menu swaps the toggle for the real Delete button in the SAME slot');
+  secondSlot.fire('click');
+  var reRenderedRow = g5.h.els['simple-library-body'].children[2].children[3];
+  var deleteSlot = reRenderedRow.children[1];
+  check(deleteSlot.className === 'preset-row-delete' && deleteSlot.textContent === 'Delete',
+    'G6: the same row now shows a real Delete button in the second slot');
+
+  console.log('  G7: Delete submits through the shared toggleDeleteArm, and only a confirmed delete refreshes the list');
+  g5.queueDeleteReturn(false); // arm step
+  deleteSlot.fire('click');
+  check(g5.deleteCalls.length === 1 && g5.deleteCalls[0] === 'My Stage Set',
+    'G7: Delete calls toggleDeleteArm with the right name');
+  var stillFourChildren = g5.h.els['simple-library-body'].children[2].children.length === 4;
+  check(stillFourChildren, 'G7: an arm-only click (false) leaves the list exactly as it was — no premature rebuild');
+
+  console.log('  G8: a confirmed delete (true) rebuilds the list');
+  var g8 = harness({ name: null, modified: false });
+  var g8CardsList = g8.h.els['simple-library-body'].children[2];
+  g8CardsList.children[3].children[1].fire('click'); // open the menu
+  var g8DeleteBtn = g8.h.els['simple-library-body'].children[2].children[3].children[1];
+  g8.queueDeleteReturn(true); // confirmed delete
+  g8DeleteBtn.fire('click');
+  check(g8.deleteCalls.length === 1, 'G8: the confirming click also goes through toggleDeleteArm');
+  // The mock PresetStore.listNames() is static in this harness (always
+  // returns ['My Stage Set']), so a real deletion elsewhere would not
+  // reflect here — what this proves is that a TRUE return triggers
+  // renderLibraryList() at all, observable as the card menu state
+  // resetting (a fresh render always starts a Yours row back at the
+  // quiet toggle, never a leftover armed Delete button).
+  var g8Row = g8.h.els['simple-library-body'].children[2].children[3];
+  check(g8Row.children[1].className === 'simple-card-menu-toggle',
+    'G8: a confirmed delete rebuilds the list, resetting the row back to its quiet toggle');
+
+  console.log('  G9: deleting the CURRENTLY DISPLAYED sound refreshes the stage name too');
+  // Regression case found live in-browser: toggleDeleteArm's real
+  // implementation calls PresetsUI.setCurrentPreset(null) when the
+  // deleted preset is the one on stage, but never touches
+  // ChainEditing — the one write path that reaches PresetsUI's display
+  // state WITHOUT passing through markAcceptedEdit()'s SimpleView
+  // notify. A plain renderLibraryList() after a confirmed delete looked
+  // sufficient (G8's own checks above still pass with it) but silently
+  // left the stage name showing the just-deleted preset.
+  var displayState = { name: 'My Stage Set', modified: false };
+  var g9Collaborators = {
+    AudioGraph: { getModel: function () { return [node('a', 'gain', {})]; } },
+    PresetsUI: {
+      getDisplayState: function () { return displayState; },
+      toggleDeleteArm: function () {
+        displayState = { name: null, modified: false }; // setCurrentPreset(null)'s real effect
+        return true;
+      }
+    },
+    EffectCatalog: { getPlainLabel: function (t) { return t; }, getLabel: function (t) { return t; } },
+    FactoryPresets: { listDetailed: function () { return []; } },
+    PresetStore: { listNames: function () { return ['My Stage Set']; } }
+  };
+  var g9 = makeSimpleViewSandbox(g9Collaborators);
+  check(g9.els['simple-cs-name'].textContent === 'My Stage Set', 'G9: starts showing the about-to-be-deleted sound\'s name');
+  var g9CardsList = g9.els['simple-library-body'].children[2];
+  // Factory empty note takes slot 1 in this fixture too — Yours starts
+  // at slot 3, same layout G8 already established.
+  g9CardsList.children[3].children[1].fire('click'); // open the menu
+  var g9DeleteBtn = g9.els['simple-library-body'].children[2].children[3].children[1];
+  g9DeleteBtn.fire('click'); // confirming click -> toggleDeleteArm returns true above
+  check(g9.els['simple-cs-name'].textContent === 'Custom sound',
+    'G9: the stage name updates to "Custom sound" in the SAME tick the deletion completes');
+
+  // No process.exit() here, deliberately: section G is fully synchronous
+  // and runs to completion in the SAME tick as section F's own
+  // synchronous portion, before F's awaited ChainEditing.apply() calls
+  // ever resolve. Exiting here would end the process before F's checks
+  // (queued on the microtask queue) get a chance to run at all. Section
+  // F's own async completion — the ONLY async work in this file — stays
+  // the one place that reads the shared `failures` array and exits.
 })();

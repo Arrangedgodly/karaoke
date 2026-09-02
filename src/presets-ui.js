@@ -321,36 +321,43 @@
    * changed — same #8 consequences as before) so the operator can retry;
    * on success the row collapses.
    */
-  function commitNamingRow() {
-    if (!namingRowOpen) {
-      return;
-    }
-    var trimmed = (namingInputEl.value || '').trim();
+  /**
+   * The Save As commit's validation + write + state-sync core, extracted
+   * (wayfinder #49) so Simple's own "Save this sound" flow
+   * (src/simple-view.js) can drive the exact same
+   * PresetStore.save() -> refreshPresetSelect/setCurrentPreset/
+   * clearModified sequence this panel's naming row already uses — one
+   * save path, never two that could drift. Presentation (showing the
+   * failure note, collapsing an open row) stays with each caller; this
+   * function only validates, writes, and reports what happened.
+   *
+   * PS-4 note: this ALWAYS writes the USER store (PresetStore.save),
+   * even when `name` collides with a factory name — namespaces are
+   * separate, so a user "Warm Ballad" simply appears beside the factory
+   * one, and refreshPresetSelect(trimmed) selects the USER option.
+   *
+   * Issue #8: on failure NOTHING downstream runs — no dropdown refresh,
+   * no current-preset display change, no clearModified().
+   *
+   * @param {string} name
+   * @returns {{ok: boolean, name?: string, message?: string}}
+   */
+  function saveCurrentChainAs(name) {
+    var trimmed = (name || '').trim();
     if (trimmed.length === 0) {
-      showPresetNote('Give the preset a name first.');
-      return;
+      return { ok: false, message: 'Give the preset a name first.' };
     }
     if (trimmed.length > 40) {
-      // Defensive — the input's maxLength stops typing past 40; a paste
-      // path that somehow bypasses it still meets the same bound here.
-      showPresetNote('Preset names are 1-40 characters.');
-      return;
+      // Defensive — the naming row's input maxLength stops typing past
+      // 40; a paste path that somehow bypasses it still meets the same
+      // bound here.
+      return { ok: false, message: 'Preset names are 1-40 characters.' };
     }
-
-    // PS-4 note: this ALWAYS writes the USER store (PresetStore.save),
-    // even when `trimmed` collides with a factory name — namespaces are
-    // separate, so a user "Warm Ballad" simply appears beside the factory
-    // one, and refreshPresetSelect(trimmed) selects the USER option.
-    //
-    // Issue #8: on failure NOTHING downstream may run — no dropdown
-    // refresh, no current-preset display change, no clearModified() —
-    // and the failure is surfaced through the panel's quiet inline note.
     try {
       window.PresetStore.save(trimmed, window.ChainCanvas.getCurrentModel());
     } catch (err) {
       console.error('Presets panel: Save As "' + trimmed + '" failed — nothing was written', err);
-      showPresetNote('Could not save "' + trimmed + '" — nothing was written (storage failure)');
-      return;
+      return { ok: false, message: 'Could not save "' + trimmed + '" — nothing was written (storage failure)' };
     }
     refreshPresetSelect(trimmed);
     setCurrentPreset(trimmed);
@@ -360,6 +367,18 @@
     // the human's newer stored content.
     if (window.AgentUI && typeof window.AgentUI.noteHumanEdit === 'function') {
       window.AgentUI.noteHumanEdit();
+    }
+    return { ok: true, name: trimmed };
+  }
+
+  function commitNamingRow() {
+    if (!namingRowOpen) {
+      return;
+    }
+    var result = saveCurrentChainAs(namingInputEl.value);
+    if (!result.ok) {
+      showPresetNote(result.message);
+      return;
     }
     collapseNamingRow();
   }
@@ -419,6 +438,68 @@
       deleteArmTimer = null;
       disarmDeleteButton();
     }, DELETE_ARM_WINDOW_MS);
+  }
+
+  /**
+   * The full two-step Delete gesture for one user preset's button: arms
+   * on a first click (or re-arms if a DIFFERENT row was armed), confirms
+   * and deletes on a second click on the SAME already-armed button.
+   * Extracted from buildPresetRow's own click handler (wayfinder #49) so
+   * Simple's own Yours cards (src/simple-view.js) can drive the exact
+   * same arm/disarm state and PresetStore.remove() path this panel's
+   * rows already use — one delete path, never two that could drift, and
+   * arming a delete in one view correctly shows as armed in the other
+   * too (they share armedDeleteBtn), rather than each view silently
+   * tracking its own.
+   *
+   * @param {HTMLElement} btn
+   * @param {string} name
+   */
+  /**
+   * @returns {boolean} true only when this call actually deleted the
+   *   preset (the second, confirming click) — false for the arming
+   *   click and for a failed delete. armDeleteButton/disarmDeleteButton
+   *   already mutate the SAME button node imperatively (label, class,
+   *   aria-live), so neither of those two cases needs — or should
+   *   trigger — a caller-side re-render; only a true return does
+   *   (src/simple-view.js's card menu relies on exactly this to know
+   *   when its OWN list must drop the now-gone card, vs. leaving the
+   *   armed/failed button's own DOM node alone).
+   */
+  function toggleDeleteArm(btn, name) {
+    if (armedDeleteBtn !== btn) {
+      armDeleteButton(btn, name);
+      return false;
+    }
+    disarmDeleteButton();
+
+    // Issue #8: a delete that could not be persisted throws the typed
+    // StorageError — the preset is STILL stored, so it must not vanish
+    // from the list. Reconcile from the store (what it truthfully still
+    // contains) and say so through the quiet note; the current-preset
+    // display is left untouched either way.
+    try {
+      window.PresetStore.remove(name);
+    } catch (err) {
+      console.error('Presets panel: Delete "' + name + '" failed — it is still saved', err);
+      showPresetNote('Could not delete "' + name + '" — it is still saved (storage failure)');
+      refreshPresetSelect();
+      return false;
+    }
+    refreshPresetSelect();
+
+    // Deleting a saved preset never touches the live chain itself — only
+    // reset the "currently loaded" display if the preset just removed was
+    // the one being displayed as current.
+    if (currentPresetName === name) {
+      setCurrentPreset(null);
+    }
+    // Issue #6: a HUMAN delete — bump the state revision so a stale agent
+    // save_preset Undo entry (whose restore re-saves or removes stored
+    // content) can no longer auto-apply over the human's newer store
+    // state.
+    noteHumanEditGuarded();
+    return true;
   }
 
   /**
@@ -605,43 +686,12 @@
       deleteBtnEl.type = 'button';
       deleteBtnEl.className = 'preset-row-delete';
       deleteBtnEl.textContent = 'Delete';
+      // R2-3, generalized: first click on an unarmed (or differently
+      // armed) row's button ARMS this one instead — no browser confirm()
+      // anywhere. A second click on the SAME already-armed button, within
+      // the window, confirms. See toggleDeleteArm's own comment.
       deleteBtnEl.addEventListener('click', function () {
-        // R2-3, generalized: first click on an unarmed (or differently
-        // armed) row's button ARMS this one instead — no browser
-        // confirm() anywhere. A second click on the SAME already-armed
-        // button, within the window, confirms.
-        if (armedDeleteBtn !== deleteBtnEl) {
-          armDeleteButton(deleteBtnEl, name);
-          return;
-        }
-        disarmDeleteButton();
-
-        // Issue #8: a delete that could not be persisted throws the typed
-        // StorageError — the preset is STILL stored, so it must not
-        // vanish from the list. Reconcile from the store (what it
-        // truthfully still contains) and say so through the quiet note;
-        // the current-preset display is left untouched either way.
-        try {
-          window.PresetStore.remove(name);
-        } catch (err) {
-          console.error('Presets panel: Delete "' + name + '" failed — it is still saved', err);
-          showPresetNote('Could not delete "' + name + '" — it is still saved (storage failure)');
-          refreshPresetSelect();
-          return;
-        }
-        refreshPresetSelect();
-
-        // Deleting a saved preset never touches the live chain itself —
-        // only reset the "currently loaded" display if the preset just
-        // removed was the one being displayed as current.
-        if (currentPresetName === name) {
-          setCurrentPreset(null);
-        }
-        // Issue #6: a HUMAN delete — bump the state revision so a stale
-        // agent save_preset Undo entry (whose restore re-saves or removes
-        // stored content) can no longer auto-apply over the human's newer
-        // store state.
-        noteHumanEditGuarded();
+        toggleDeleteArm(deleteBtnEl, name);
       });
       row.appendChild(deleteBtnEl);
     }
@@ -1047,6 +1097,11 @@
   // still surface via showPresetNote() into THIS panel's own DOM, even
   // when triggered from Simple — a known, narrow gap while Advanced sits
   // hidden, not a silent one (the load itself still refuses cleanly).
+  // wayfinder #49: toggleDeleteArm/disarmDeleteButton join the export for
+  // the same reason loadFactoryPreset/loadUserPreset did in #48 — Simple's
+  // own Yours cards (src/simple-view.js) drive the EXACT SAME two-step
+  // arm/confirm state and PresetStore.remove() path this panel's own
+  // rows use, so there remains exactly one delete path.
   window.PresetsUI = {
     markModified: markModified,
     setCurrentPreset: setCurrentPreset,
@@ -1054,6 +1109,9 @@
     refreshPresetSelect: refreshPresetSelect,
     getDisplayState: getDisplayState,
     loadFactoryPreset: loadFactoryPreset,
-    loadUserPreset: loadUserPreset
+    loadUserPreset: loadUserPreset,
+    toggleDeleteArm: toggleDeleteArm,
+    disarmDeleteButton: disarmDeleteButton,
+    saveCurrentChainAs: saveCurrentChainAs
   };
 })();
