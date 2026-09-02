@@ -397,9 +397,19 @@
        Read-only, no values (settled #43). Owner direction, 2026-09-01
        ("for fun"): the technical name prints in its family's ink
        (--famPrint, set per row from the same --pm-family-* tokens the
-       board's rail print uses), so the devices stay color-coded in
-       text too; the stage's rich reading adds the family tick down
-       the row's left edge, the same mark the section rail carries. */
+       board's rail print uses).
+
+       This pass folds the standalone device strip INTO these rows
+       instead of stacking both: the previous version showed the same
+       5-ish technical names twice in one screen — once as bold pills
+       right above this list, once again a few lines down as the quiet
+       trailing label — which is clutter, not clarity, for a first-run
+       non-engineer, and it gave the technical name top billing right
+       next to the very list built to keep it quiet. Each row now
+       carries its own family-color legend swatch (the device strip's
+       exact visual — a colored square) at the LEFT of the plain
+       phrase, so "what device is this" reads at a glance without a
+       second list saying the same names again. */
     .px-summary {
       margin: 0;
       padding: 0;
@@ -418,18 +428,41 @@
     }
 
     .px-summary-rich li {
-      padding: 0.34rem 0 0.34rem 0.75rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.65rem;
+      padding: 0.5rem 0.1rem;
+      border-bottom: 1px solid var(--pm-groove-cut);
+      font-size: 1rem;
+    }
+
+    .px-summary-rich li:last-child {
       border-bottom: none;
-      border-left: 3px solid var(--fam, var(--pm-key-edge));
-      font-size: 0.98rem;
+    }
+
+    .px-summary-legend {
+      flex: none;
+      align-self: center;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      background: var(--fam, var(--pm-print-dim));
+    }
+
+    .px-plain {
+      flex: 1 1 auto;
     }
 
     .px-tech {
-      margin-left: 0.55rem;
+      flex: none;
       color: var(--famPrint, var(--pm-print));
       font-family: var(--font-readout);
       font-size: 0.75rem;
       letter-spacing: 0.03em;
+    }
+
+    .px-summary-rich .px-tech {
+      margin-left: 0.55rem;
     }
 
     .px-transport {
@@ -521,8 +554,11 @@
        centered — the stage fills the board's seat, but its content
        keeps a page-like measure instead of smearing across 900px of
        chassis. Owner direction, 2026-09-01: the bare name + list left
-       the old chain area feeling empty; the stage now carries the
-       preset's own description and a device strip between them. */
+       the old chain area feeling empty, so the stage carries the
+       preset's own description above the effect summary. A follow-up
+       pass folded the standalone device strip that first answered that
+       into the summary rows themselves (see .px-summary-rich above) —
+       same family-color legend, once instead of twice. */
     .px-stage-inner {
       width: 100%;
       max-width: 640px;
@@ -550,47 +586,6 @@
       color: var(--pm-print);
       font-size: 0.95rem;
       line-height: 1.45;
-    }
-
-    /* The device strip — the glossary's read-only "names the devices a
-       preset uses as context": one key per device with its family
-       legend square, chevrons between. The chain as a readable object,
-       with none of the construction controls Simple hides. */
-    .px-devices {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.4rem 0.3rem;
-      padding: 0.55rem 0.6rem;
-      border: 1px solid var(--pm-groove-cut);
-      box-shadow: inset 0 1px 0 var(--pm-groove-lip);
-      background: var(--pm-system-deck);
-    }
-
-    .px-device {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.32rem 0.6rem;
-      border: 1px solid var(--pm-key-edge);
-      border-radius: 4px;
-      background: var(--pm-key);
-      color: var(--pm-print-hi);
-      font-size: 0.82rem;
-      font-weight: 600;
-    }
-
-    .px-device-legend {
-      flex: none;
-      width: 14px;
-      height: 14px;
-      border-radius: 3px;
-      background: var(--fam, var(--pm-print-dim));
-    }
-
-    .px-device-sep {
-      color: var(--pm-print-dim);
-      font-size: 0.85rem;
     }
 
     .px-stage .px-transport {
@@ -795,8 +790,24 @@
       overflow: visible;
     }
 
+    /* The real fix for a bug that shipped in the previous pass: .px-faceA
+       carries an UNSCOPED `flex: 1 1 auto; min-height: 0;` (below, "variant
+       A" block) so it can stretch to fill the board's seat on desktop. But
+       this file's mobile preview is a scaled-down `.px-frame` sitting
+       INSIDE a real desktop-width page — the real viewport never actually
+       drops under 901px, so main.css's own `@media(min-width:901px)`
+       height-bounded console chain (`.instrument{height:100vh}` down
+       through `.layout.voice-deck{flex:1 1 auto;min-height:0}`) stays
+       genuinely active the whole time. .px-lib is already given `flex:
+       none` below so it sits at its natural (tall) content height; without
+       a matching override .px-faceA stayed shrinkable with min-height:0
+       against that same bounded ancestor, so flexbox handed it 100% of the
+       overflow and it collapsed to 0px — invisible meters, invisible
+       Current sound, invisible Save. `flex: none` here mirrors .px-lib's
+       treatment: content height, unshrinkable, verified non-zero below. */
     html.px-mob .px-faceA {
       order: 1;
+      flex: none;
     }
 
     html.px-mob .px-stage {
@@ -1126,6 +1137,10 @@
       return '--fam:var(--family-' + type + ');--famPrint:var(--pm-family-' + type + ')';
     }
 
+    // The technical name as it prints quietly after the plain phrase
+    // (e.g. "Noise Gate", not "gate") — the only place a device's name
+    // now appears; the previous pass's separate device-strip pills
+    // duplicated this same lookup one screen-region higher.
     function deviceName(type) {
       var names = {
         gain: 'Gain', compressor: 'Compressor', eq: 'EQ', delay: 'Delay',
@@ -1135,17 +1150,6 @@
         bitcrusher: 'Bitcrusher'
       };
       return names[type] || type;
-    }
-
-    function deviceStrip(chain) {
-      var html = '<div class="px-devices">';
-      chain.forEach(function (n, i) {
-        if (i > 0) html += '<span class="px-device-sep" aria-hidden="true">›</span>';
-        html += '<span class="px-device" style="' + familyVars(n.type) + '">' +
-          '<span class="px-device-legend" aria-hidden="true"></span>' +
-          esc(deviceName(n.type)) + '</span>';
-      });
-      return html + '</div>';
     }
 
     function currentDescription() {
@@ -1158,7 +1162,10 @@
     function summaryList(chain, rich) {
       var html = '<ol class="px-summary' + (rich ? ' px-summary-rich' : '') + '">';
       chain.forEach(function (n) {
-        html += '<li style="' + familyVars(n.type) + '"><span class="px-plain">' + esc(PLAIN_LABELS[n.type] || n.type) + '</span><span class="px-tech">' + esc(n.type) + '</span></li>';
+        html += '<li style="' + familyVars(n.type) + '">' +
+          (rich ? '<span class="px-summary-legend" aria-hidden="true"></span>' : '') +
+          '<span class="px-plain">' + esc(PLAIN_LABELS[n.type] || n.type) + '</span>' +
+          '<span class="px-tech">' + esc(deviceName(n.type)) + '</span></li>';
       });
       return html + '</ol>';
     }
@@ -1232,7 +1239,6 @@
                   saveButton() +
                 '</div>' +
                 (currentDescription() ? '<p class="px-desc">' + esc(currentDescription()) + '</p>' : '') +
-                deviceStrip(currentChain()) +
                 summaryList(currentChain(), true) +
                 transport() +
               '</div>' +

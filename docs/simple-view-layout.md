@@ -44,8 +44,36 @@ stack rather than at thumb height (C's one genuine win; if field use
 contradicts the pick, C is the runner-up and the mobile stacking is the
 first thing to revisit). The stage's original sparseness at wide
 desktops was answered by owner direction (2026-09-01) with the composed
-stage below — description, device strip, richer summary rows — rather
-than accepted.
+stage below — description, richer summary rows — rather than accepted.
+
+**Revision, 2026-09-01 (second pass):** the first build of this spec's
+pick shipped two real problems, found reviewing it live rather than
+from the write-up. Both are fixed in the prototype now; neither is a
+cost carried forward.
+
+1. **The mobile stage was invisible.** `.px-faceA` (MIC IN → Current
+   sound → OUT) carried an unscoped `flex: 1 1 auto; min-height: 0`
+   meant for the desktop console, where `.instrument` is genuinely
+   `height: 100vh`. The prototype's mobile *preview* is a scaled-down
+   frame sitting inside a real desktop-width page, so that height chain
+   stayed active underneath it; against an unshrinkable library sibling,
+   the stage collapsed to 0px. Fixed by giving `.px-faceA` the same
+   `flex: none` (content height) treatment the library already had in
+   the mobile override — verified non-zero, both meters and Save
+   visible, on every sound state. A layout this central to the map's
+   safety-floor requirement needs an explicit test once #47 builds it
+   for real, not just a live look.
+2. **The device strip duplicated the effect summary.** The composed
+   stage (added by the first owner-direction pass to fix sparseness)
+   showed the same handful of technical names twice — once as bold
+   pills directly above the summary, once again as the summary's own
+   quiet trailing label a few lines down. Fixed by folding the strip's
+   one distinct piece of information (the family-color swatch) into
+   each summary row itself, at the plain phrase's left, instead of a
+   separate block — see the effect-summary bullet below. This also
+   corrected a smaller inconsistency: the strip gave the technical name
+   *top* billing, ahead of the plain phrase, cutting against "plain
+   first, technical name quietly after."
 
 ## Desktop (≥901px), top to bottom
 
@@ -72,15 +100,16 @@ than accepted.
   sound" beside the name** whenever the sound is unsaved or custom
   (never in the secondary menu — settled); the sound's own one-line
   description (the preset's prose; a save invitation for a custom
-  sound); the **device strip** — one key per device in the live chain,
-  each carrying its family legend square and separated by chevrons
-  (the glossary's permitted read-only "names the devices a preset
-  uses"; no construction controls); the **effect summary**, one row per
-  effect, plain phrase first with a family tick down the row's left
-  edge and the technical name quietly after in its family's ink
-  ("Evens out loudness · `Compressor`"), read-only, no values; then
-  **Previous / Next** centered under the summary with an *n of m*
-  position readout over the filtered factory list.
+  sound); the **effect summary**, one row per effect — a family-color
+  legend swatch, then the plain phrase, then the technical name quietly
+  after in its family's ink ("Evens out loudness · `Compressor`"),
+  read-only, no values. The swatch is the glossary's permitted read-only
+  "names the devices a preset uses as context" (no construction
+  controls); it prints once per device, in the row that already
+  explains it, rather than as a second list above the summary (see the
+  revision note above). Then **Previous / Next** centered under the
+  summary with an *n of m* position readout over the filtered factory
+  list.
 - **What Simple does not show here** (settled, restated for layout
   consequences): no board cards, no Effects/palette panel, no
   signal-order strip — the effect summary is the chain's Simple
@@ -94,8 +123,8 @@ Zones stack, the deck stays sticky at top, the page keeps its scroll
 
 1. System deck (wrapped rows, as today — Bypass never leaves view)
 2. MIC IN meter strip
-3. Current sound stage (name + Save + description + device strip +
-   effect summary + Previous/Next)
+3. Current sound stage (name + Save + description + effect summary +
+   Previous/Next) — verified non-collapsed; see the revision note above
 4. OUT meter strip
 5. Sounds library — the scrolling tail; filters, search, cards full-width
 
@@ -111,3 +140,9 @@ first screen; the library is one flick below it.
   library returns exactly one result per chip today.
 - "Try a preset" is the settled verb for what a card does (PR #50's
   glossary addition); the prototype's cards just do it silently.
+- For #47: on mobile, the real Simple shell's stage element needs an
+  explicit `flex: none` (or equivalent auto-height treatment) wherever
+  it reuses `.voice-deck-face`'s desktop-only `flex: 1 1 auto;
+  min-height: 0`, matching the fix in this prototype's revision note
+  above. Give it a test at a narrow width, not just a live look — this
+  is exactly how the first pass shipped invisible on mobile.
