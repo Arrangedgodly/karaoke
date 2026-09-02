@@ -705,8 +705,8 @@ async function main() {
     );
     var factory = sandbox.FactoryPresets.list();
     check(
-      Array.isArray(factory) && factory.length === 14,
-      'G2: the factory library lists fourteen presets — six original + eight audition-accepted via the wayfinder pipeline on 2026-09-01 (the PRE-1 provenance bar, met by human audition rather than a cycle-3 showcase)'
+      Array.isArray(factory) && factory.length === 33,
+      'G2: the factory library lists thirty-three presets — six original + eight audition-accepted 2026-09-01 + nineteen audition-accepted 2026-09-02 via the same pipeline (the PRE-1 provenance bar, met by human audition rather than a cycle-3 showcase)'
     );
     check(
       factory.length > 0 && deepEqual(factory[0].nodes, sandbox.DEFAULT_PRESET.nodes),
