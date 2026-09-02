@@ -590,6 +590,25 @@ async function main() {
   check(soundGuide.intensity && /first listed/i.test(soundGuide.intensity.slight) &&
     /last listed/i.test(soundGuide.intensity.strong),
     'A16: intensity follows each mild-to-strong listed range, including cuts');
+  // PRESET-FIRST (CONTEXT.md; scale-out D-2, ADR 0003). The workflow used
+  // to open on "call get_chain first; preserve nodes" — correct for an
+  // EDIT, and the reason an agent asked for a brand-new sound built it
+  // node by node instead of loading a preset that already had it. The
+  // preset-first step must LEAD (JSON key order is what the agent reads
+  // in) and must name both halves of the Closeness rule: load the closest
+  // match, build fresh only when nothing matches.
+  check(typeof soundGuide.workflow.start === 'string' &&
+    /list_presets/.test(soundGuide.workflow.start) &&
+    /load_preset/.test(soundGuide.workflow.start),
+    'A16b: the workflow opens on a preset-first step naming list_presets and load_preset');
+  check(Object.keys(soundGuide.workflow)[0] === 'start',
+    'A16b: preset-first is the FIRST workflow key — an agent reading in order meets it before the edit-oriented steps');
+  check(/close enough/i.test(soundGuide.workflow.start) &&
+    /build fresh/i.test(soundGuide.workflow.start),
+    'A16b: the preset-first step states BOTH halves of the Closeness rule (one matching tag is close enough; otherwise build fresh)');
+  check(!/preserve nodes/.test(soundGuide.workflow.start) &&
+    /preserve nodes/.test(soundGuide.workflow.edit),
+    'A16b: "preserve nodes" is scoped to the EDIT step, so it no longer reads as the instruction for a new sound');
   var guideSteps = [];
   Object.keys(soundGuide.vocabulary).forEach(function (intent) {
     soundGuide.vocabulary[intent].forEach(function (step) {

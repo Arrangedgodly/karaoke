@@ -1076,18 +1076,31 @@
     app: 'voxchain',
     focus: CAPABILITY_FOCUS.SOUND_DESIGN,
     workflow: {
-      edit: 'Call get_chain first; preserve nodes unless the user asks to rebuild.',
-      apply: 'Use set_param on existing nodes; add_node only for a missing effect.',
+      // PRESET-FIRST (CONTEXT.md; scale-out D-2, ADR 0003). This line
+      // leads deliberately: without it the guide read as "preserve the
+      // current chain, tweak params, add a node if one is missing",
+      // which is correct for EDITING and is exactly why an agent asked
+      // for a brand-new sound built it node by node over many slow
+      // mutation calls instead of loading a preset that already had it.
+      // `start` states the Closeness rule in the glossary's own terms.
+      start:
+        'New sound: list_presets, then load_preset the closest match — one tag matching ' +
+        'the ask is close enough. Else build fresh.',
+      edit: 'Editing that sound: call get_chain first; preserve nodes unless asked to rebuild.',
+      apply: 'set_param on existing nodes; add_node only for a missing effect.',
+      // Compressed 2026-09-01 to fund `start` inside the 2000-char
+      // ceiling (see ADR 0003's payload arithmetic). Every fact is
+      // retained: read outputAuthority before asking for a listen,
+      // disclose either flag first, and name both as human-only.
       verify:
         'Before asking the human to listen, read get_chain\'s outputAuthority: if bypass ' +
-        'is true or outputMuted is true, say so first (both are human-only controls — the ' +
-        'human must disengage Bypass or Restore output themselves) — then describe changes ' +
-        'and ask the human to listen.'
+        'or outputMuted is true, say so first — both are human-only, so only the human ' +
+        'can disengage Bypass or Restore output — then describe the changes.'
     },
     intensity: {
-      slight: 'Use the first listed value in each range and make 1-2 changes.',
-      moderate: 'Use the middle of each range.',
-      strong: 'Use the last listed value, still inside policy.'
+      slight: 'First listed value in each range; 1-2 changes.',
+      moderate: 'Middle of each range.',
+      strong: 'Last listed value, still inside policy.'
     },
     vocabulary: {
       deeper: [
@@ -1141,7 +1154,7 @@
       // status the same day, so no per-entry EXPERIMENTAL notes ride here.
       transposed: [
         effectGuideLine('pitchshift', 'pitchshift pitch -4..+4 st'),
-        'Negative lowers the pitch, positive raises it; keep |shift| <= 7 st for intelligibility.'
+        'Negative lowers pitch, positive raises it; keep |shift| <= 7 st for intelligibility.'
       ],
       spacey: [
         effectGuideLine('phaser', 'phaser rateHz 0.3..1 Hz'),
@@ -1161,7 +1174,7 @@
         effectGuideLine('bitcrusher', 'bitcrusher mix 20..45%')
       ]
     },
-    boundaries: ['Keep exactly one limiter last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
+    boundaries: ['Exactly one limiter, last.', 'Start, microphone, Bypass, and watchdog restore stay human-only.']
   };
 
   /**
@@ -1386,6 +1399,63 @@
   }
 
   /**
+   * The four PUBLIC taxonomy axes (CONTEXT.md, "Axis"). The `technique:`
+   * axis is INTERNAL — coverage and dedup only, never user-facing
+   * grouping and never steering copy — so it is filtered out of every
+   * agent-facing listing here. Filtering by an allow-list rather than by
+   * excluding 'technique' means a future internal axis is excluded by
+   * default rather than leaking until someone remembers to add it.
+   */
+  var PUBLIC_TAG_AXES = ['genre', 'vibe', 'use-case', 'gag'];
+
+  function publicTags(tags) {
+    if (!Array.isArray(tags)) {
+      return [];
+    }
+    return tags.filter(function (tag) {
+      if (typeof tag !== 'string') {
+        return false;
+      }
+      var i = tag.indexOf(':');
+      return i > 0 && PUBLIC_TAG_AXES.indexOf(tag.slice(0, i)) !== -1;
+    });
+  }
+
+  /**
+   * Factory metadata for the compact browse index, keyed by preset name.
+   * Reads FactoryPresets.listDetailed() — the additive metadata export
+   * that deliberately never carries nodes (ADR 0001), so this read can
+   * never become a second load path. Guarded the same way
+   * factoryPresets() is: a bare harness or a damaged module resolves an
+   * empty map and the listing degrades to names alone.
+   *
+   * @returns {Object} name -> {summary, primary, tags}
+   */
+  function factoryMetaByName() {
+    var out = {};
+    try {
+      if (window.FactoryPresets && typeof window.FactoryPresets.listDetailed === 'function') {
+        var detailed = window.FactoryPresets.listDetailed();
+        if (Array.isArray(detailed)) {
+          detailed.forEach(function (entry) {
+            if (entry && typeof entry.name === 'string') {
+              out[entry.name] = {
+                summary: typeof entry.summary === 'string' ? entry.summary : null,
+                primary: typeof entry.primary === 'string' ? entry.primary : null,
+                tags: publicTags(entry.tags)
+              };
+            }
+          });
+        }
+      }
+    } catch (err) {
+      // Metadata is additive — a damaged module costs the summaries, not
+      // the listing.
+    }
+    return out;
+  }
+
+  /**
    * The human-owned output authority state an agent needs before asking
    * the human to listen (#15 finding): Bypass engagement (AE-3) and the
    * watchdog latch (FEW-3/RQ-3). Read-only; each read is guarded so a
@@ -1470,17 +1540,53 @@
    * separately from the user `presets`, mirroring the dropdown's
    * Factory/Yours optgroups. `count` stays the USER preset count
    * (existing consumers read it as "how many presets can save_preset
-   * overwrite"); a factory entry's nodeCount is just its static nodes'
-   * length. `currentlyLoaded` matches the display name against EITHER
-   * group (user first) — the human may have loaded a factory preset,
-   * which never enters the user store.
+   * overwrite"). `currentlyLoaded` matches the display name against
+   * EITHER group (user first) — the human may have loaded a factory
+   * preset, which never enters the user store.
+   *
+   * COMPACT BROWSE INDEX (scale-out D-12; see
+   * docs/adr/0003-preset-first-agent-strategy.md). A factory entry used
+   * to be `{name, nodeCount}`, which told an agent that "Cathedral Drift"
+   * has 7 nodes and nothing about what it SOUNDS like — so the agent had
+   * no basis to load it and built a chain from scratch instead, one slow
+   * mutation call at a time. Each factory entry now carries `summary`
+   * (the library's hand-written <=60-char agent-matching line) and its
+   * PUBLIC tags plus `primary`, which is the browse surface a
+   * plain-language request is actually matched against. `nodeCount` is
+   * dropped from the factory group: node count never distinguished two
+   * presets for a listener, and the bytes are better spent on the
+   * summary — get_preset still carries the full nodes and description
+   * for the one entry the agent picks. User entries keep `nodeCount`
+   * (they have no library metadata, and it is the only thing knowable
+   * about them without a load).
+   *
+   * The `technique:` axis is INTERNAL and is filtered out here — see
+   * publicTags(). The input schema is UNCHANGED: list_presets still
+   * takes no arguments.
    *
    * @returns {Object}
    */
   function buildListPresetsResult() {
     var display = readPresetDisplay().displayName;
+    var meta = factoryMetaByName();
     var factory = factoryPresets().map(function (preset) {
-      return { name: preset.name, nodeCount: preset.nodes.length };
+      var m = meta[preset.name];
+      // Degrade honestly: no metadata (bare harness, damaged data module)
+      // means the name alone, never an invented summary.
+      if (!m) {
+        return { name: preset.name };
+      }
+      var entry = { name: preset.name };
+      if (m.summary) {
+        entry.summary = m.summary;
+      }
+      if (m.primary) {
+        entry.primary = m.primary;
+      }
+      if (m.tags.length > 0) {
+        entry.tags = m.tags;
+      }
+      return entry;
     });
     if (!(window.PresetStore && typeof window.PresetStore.listNames === 'function')) {
       return {
@@ -4429,11 +4535,12 @@
     return {
       name: 'list_presets',
       description:
-        'List saved chain presets (name plus node count) without loading any. Use to find a ' +
-        'starting point before set_chain, or to check a name before save_preset — saving ' +
-        'under an existing name overwrites that preset. The result separates the user\'s ' +
-        'presets ("presets" — the only ones save_preset writes) from the read-only "factory" ' +
-        'library shipped with the app.',
+        'Browse every chain preset without loading any. CALL THIS FIRST for a new sound: ' +
+        'each "factory" entry carries a one-line summary of what it sounds like plus its ' +
+        'tags, so the closest match can be picked here and loaded with load_preset instead ' +
+        'of built node by node. Also use to check a name before save_preset — saving under ' +
+        'an existing name overwrites it. Separates the user\'s "presets" (name plus node ' +
+        'count; the only ones save_preset writes) from the read-only "factory" library.',
       inputSchema: {
         type: 'object',
         properties: {},
