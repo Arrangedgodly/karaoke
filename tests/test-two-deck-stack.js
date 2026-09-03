@@ -255,13 +255,23 @@ check(
     hasClass(zones[1], 'voice-deck-face'),
   'voice deck top-level children in order: .presets-panel | .voice-deck-face'
 );
+// Live round 2026-09-03: the OUTPUT SCOPE BAND joins the face between the
+// board and the strip — the Simple stage's scope as a second VIEW on this
+// deck, directly under the board's OUT meter, which is the tap it reads.
+// It is NOT a .panel: it is a printed band on the chassis in the strip's
+// own vocabulary, so the panel checks below deliberately skip it.
 var faceZones = zones[1] ? zones[1].children : [];
 check(
-  faceZones.length === 3 &&
+  faceZones.length === 4 &&
     hasClass(faceZones[0], 'canvas-panel') && hasClass(faceZones[0], 'panel') &&
-    hasClass(faceZones[1], 'signal-order') && hasClass(faceZones[1], 'panel') &&
-    hasClass(faceZones[2], 'effects-panel') && hasClass(faceZones[2], 'panel'),
-  '.voice-deck-face wraps [.canvas-panel, .signal-order, .effects-panel] in order — Effects docks under the board+strip, beside .presets-panel'
+    hasClass(faceZones[1], 'adv-scope') &&
+    hasClass(faceZones[2], 'signal-order') && hasClass(faceZones[2], 'panel') &&
+    hasClass(faceZones[3], 'effects-panel') && hasClass(faceZones[3], 'panel'),
+  '.voice-deck-face wraps [.canvas-panel, .adv-scope, .signal-order, .effects-panel] in order — the scope band sits under the board\'s OUT meter, Effects docks beneath'
+);
+check(
+  /<div class="adv-scope" aria-hidden="true">\s*<canvas class="adv-scope-canvas">/.test(HTML),
+  'the scope band is aria-hidden and carries the adopted canvas — a redundant picture; the OUT meter keeps the numbers'
 );
 
 // Board redesign (2026-09-01): the .board-frame + .io-rail-in/-out +

@@ -415,8 +415,29 @@ function sectionC() {
     getContext: function () { return ctx; },
   };
 
+  // A slot the module did NOT build — Advanced's band, adopted from
+  // markup by its canvas class. Off screen until a test mounts it.
+  const advDraws = { rects: [], clears: 0 };
+  const advCtx = {
+    fillStyle: '', globalAlpha: 1, lineWidth: 1,
+    setTransform: function () {},
+    clearRect: function () { advDraws.clears++; },
+    beginPath: function () {}, moveTo: function () {}, lineTo: function () {}, stroke: function () {},
+    fillRect: function (x, y, w, h) { advDraws.rects.push({ x: x, y: y, w: w, h: h, fill: advCtx.fillStyle }); },
+  };
+  const advCanvas = {
+    className: 'adv-scope-canvas', clientWidth: 0, clientHeight: 0, width: 0, height: 0,
+    getContext: function () { return advCtx; },
+  };
+
   s.document = {
     querySelectorAll: function (sel) {
+      // The scope slots are found by class, not held by reference —
+      // the module builds Simple's and adopts every other one. This
+      // query is NOT part of the chevron cache's count.
+      if (sel.indexOf('scope-canvas') !== -1) {
+        return inserted.length ? [canvas, advCanvas] : [advCanvas];
+      }
       queryCount++;
       return sel === '#chain-list .chain-arrow-mark' ? marks.slice() : [];
     },
@@ -520,6 +541,25 @@ function sectionC() {
   check(draws.clears === clearsBefore,
     'C7: a hidden scope skips the paint entirely');
 
+  // Live round (2026-09-03): the scope is not Simple's alone. A slot the
+  // module never built — Advanced's output band, adopted by its canvas
+  // class — paints from the SAME feed, in its own smaller box. Two views
+  // of one truth; the second is never a second measurement.
+  canvas.clientWidth = 600; // Simple back on screen: both slots visible
+  canvas.clientHeight = 72;
+  advCanvas.clientWidth = 600;
+  advCanvas.clientHeight = 56;
+  const simpleClearsBefore = draws.clears;
+  Lamps.feedScope(pairs, 136, -0.04);
+  check(advDraws.clears === 1 && advDraws.rects.length === 136 + 1,
+    'C10: an adopted slot paints the same window as the built one');
+  check(draws.clears === simpleClearsBefore + 1,
+    'C10: adopting a second slot does not cost the first one a frame');
+  check(advCanvas.height === 56 && canvas.height === 72,
+    'C10: each slot measures its OWN box (no shared geometry)');
+  advCanvas.clientWidth = 0; // back off screen for the checks below
+  advCanvas.clientHeight = 0;
+
   // Polish round (2026-09-02): on a fractional device pixel ratio the
   // columns snap to the device grid — x*2 lands on integers at dpr 2, so
   // a Retina trace paints crisp 2-device-px strokes, not soft ones.
@@ -555,9 +595,249 @@ function sectionC() {
     'C8: a paint failure is swallowed, logged once, and the module disables (one-strike)');
 }
 
+
+// =====================================================================
+// D. The nameplate matrix + its power-up self-test.
+// =====================================================================
+
+/** A sandbox carrying only the nameplate's canvas: the wordmark must
+ *  render with no stage, no scope slot and no engine at all. */
+function nameplateSandbox(opts) {
+  const s = sandboxBase();
+  const draws = { rects: [], clears: 0 };
+  const ctx = {
+    fillStyle: '', globalAlpha: 1, lineWidth: 1,
+    setTransform: function () {},
+    clearRect: function () { draws.clears++; draws.rects.length = 0; },
+    beginPath: function () {}, moveTo: function () {}, lineTo: function () {},
+    stroke: function () {},
+    fillRect: function (x, y, w, h) {
+      draws.rects.push({ x: x, y: y, w: w, h: h, fill: ctx.fillStyle });
+    },
+  };
+  // 47 x 7 cells at a 4px pitch — the shipped desktop box.
+  const canvas = {
+    className: 'nameplate-matrix-canvas',
+    clientWidth: 188, clientHeight: 28, width: 0, height: 0,
+    getContext: function () { return ctx; },
+    parentNode: { parentNode: { classList: { _n: [], add: function (c) { this._n.push(c); } } } },
+  };
+  s.document = {
+    querySelectorAll: function () { return []; },
+    querySelector: function (sel) {
+      return sel === '.nameplate-matrix-canvas' ? canvas : null;
+    },
+    getElementById: function () { return null; },
+    createElement: function () { return { className: '', appendChild: function () {}, setAttribute: function () {} }; },
+    documentElement: {},
+    readyState: 'complete',
+  };
+  s.getComputedStyle = function () {
+    return {
+      getPropertyValue: function (name) {
+        const map = {
+          '--pm-vu-low': '#4ea96b', '--pm-vu-mid': '#ffd75e', '--pm-vu-clip': '#e4574a',
+          '--pm-vu-tick': '#c9cedc', '--pm-display': '#ffd75e', '--pm-vu-unlit': '#262933',
+          '--pm-print-hi': '#c9cedc',
+        };
+        return map[name] || '';
+      },
+    };
+  };
+  s.matchMedia = function () { return { matches: !!(opts && opts.reducedMotion) }; };
+  s.devicePixelRatio = 1;
+  return { s: s, draws: draws, canvas: canvas };
+}
+
+// The lit ladder's inks, in the sandbox's own token values.
+const NP_GREEN = '#4ea96b';
+const NP_AMBER = '#ffd75e';
+const NP_RED = '#e4574a';
+const NP_PRINT = '#c9cedc';
+
+/** Split the current frame's rects into the ladder's zones and print. A
+ *  cell's glyph row is recoverable from its y: the paint lays cells on a
+ *  4px pitch with a 3px dot, so y = 4*row + 1. */
+function nameplateState(draws) {
+  let green = 0, amber = 0, red = 0, print = 0, maxLitX = -1;
+  const rowInk = {};
+  draws.rects.forEach(function (r) {
+    const row = Math.round((r.y - 1) / 4);
+    if (r.fill === NP_PRINT) { print++; return; }
+    if (r.fill === NP_GREEN) { green++; }
+    else if (r.fill === NP_AMBER) { amber++; }
+    else if (r.fill === NP_RED) { red++; }
+    if (r.x > maxLitX) { maxLitX = r.x; }
+    (rowInk[row] = rowInk[row] || new Set()).add(r.fill);
+  });
+  const lit = green + amber + red;
+  return {
+    lit: lit, green: green, amber: amber, clip: red, print: print,
+    total: lit + print, front: maxLitX, rowInk: rowInk,
+  };
+}
+
+const NP_TOTAL_CELLS = 116; // the 8 glyphs' set cells, counted from the table
+
+function sectionD() {
+  console.log('D. nameplate matrix');
+
+  const env = nameplateSandbox();
+  const s = env.s;
+  loadInSandbox(s, lampsSrc, 'signal-lamps.js');
+  const Lamps = s.window.SignalLamps;
+
+  // The resting face: the module self-starts on a complete document.
+  let st = nameplateState(env.draws);
+  check(st.total === NP_TOTAL_CELLS && st.lit === 0,
+    'D1: the wordmark paints every letterform cell at rest, none of them lit');
+  check(env.canvas.width === 188 && env.canvas.height === 28,
+    'D1: the backing store matches the 47x7 cell box');
+  check(env.canvas.parentNode.parentNode.classList._n.indexOf('matrix-live') !== -1,
+    'D1: a successful paint stands the CSS text fallback down (.matrix-live)');
+
+  // The self-test: a wipe crosses, everything holds lit, the light drains.
+  Lamps.powerUp();
+  const seen = [];
+  for (let i = 0; i < 50; i++) {
+    pumpFrame(s, 16);
+    seen.push({ t: s._nowMs, ...nameplateState(env.draws) });
+  }
+  const rise = seen.filter(function (f) { return f.t > 30 && f.t < 240; });
+  // The sweep clock: 260ms rise, then a 120ms hold, then a 320ms release.
+  const hold = seen.filter(function (f) { return f.t >= 270 && f.t <= 370; });
+  const after = seen.filter(function (f) { return f.t > 720; });
+
+  check(rise.length > 2 && rise[0].lit > 0 && rise[0].lit < NP_TOTAL_CELLS,
+    'D2: the wipe starts partway — some cells lit, not the whole word');
+  let advances = true;
+  for (let i = 1; i < rise.length; i++) {
+    if (rise[i].front < rise[i - 1].front) { advances = false; }
+  }
+  check(advances && rise[rise.length - 1].front > rise[0].front,
+    'D2: the wipe front only ever travels forward, left to right');
+  check(hold.length > 0 && hold.every(function (f) { return f.lit === NP_TOTAL_CELLS; }),
+    'D3: the hold proves every cell in the word can light');
+  check(after.length > 0 && after.every(function (f) { return f.lit === 0 && f.print === NP_TOTAL_CELLS; }),
+    'D4: the light drains back to print, and the test runs once — it does not repeat');
+
+  // Additive by construction: a real signal is never hidden by the proof.
+  const pairs = new Float32Array(136 * 2);
+  for (let c = 0; c < 136; c++) { pairs[c * 2] = -0.02; pairs[c * 2 + 1] = 0.02; }
+  Lamps.powerUp();
+  pumpFrame(s, 16);
+  const duringRise = nameplateState(env.draws);
+  Lamps.feedScope(pairs, 136, -40); // a near-silent real window, mid-sweep
+  const fed = nameplateState(env.draws);
+  check(fed.lit >= duringRise.lit && fed.lit > 0,
+    'D5: the sweep can only ADD light — a quiet real window never darkens it');
+
+  // THE LADDER. Colour belongs to the ROW, not to the level — the word is
+  // 47 little VU ladders, so a loud syllable pushes red through the tops
+  // of the letters exactly as it pushes red up the OUT bar.
+  const full = new Float32Array(136 * 2);
+  for (let c = 0; c < 136; c++) { full[c * 2] = -1; full[c * 2 + 1] = 1; }
+  Lamps.restNameplate(); // end the sweep so this reads the real feed alone
+  Lamps.feedScope(full, 136, 0);
+  const ladder = nameplateState(env.draws);
+  const inkOf = function (row) {
+    const set = ladder.rowInk[row];
+    return set && set.size === 1 ? Array.from(set)[0] : 'MIXED';
+  };
+  check(ladder.lit === NP_TOTAL_CELLS && ladder.green > 0 && ladder.amber > 0 && ladder.clip > 0,
+    'D5: a full-scale window lights the whole word across all three zones');
+  // Glyph rows run top-down, so row 0 is the ladder's TOP.
+  check(inkOf(0) === NP_RED && inkOf(1) === NP_AMBER && inkOf(2) === NP_AMBER &&
+    inkOf(3) === NP_GREEN && inkOf(6) === NP_GREEN,
+    'D5: the body ladder runs green at the baseline, amber, then red at the top');
+
+  // THE TIP AGREES WITH THE METERS. Seven rows cannot land the meters'
+  // zone edges on a row boundary, so the top lit row reports the column's
+  // measured zone. Without this the word read a whole zone cold exactly
+  // where speech sits.
+  // The fall is rate-limited (24 dB/s) and dt is clamped per frame, so a
+  // previous peak clears by running frames, never by jumping the clock.
+  const silence = new Float32Array(136 * 2);
+  const settle = function () {
+    for (let i = 0; i < 40; i++) {
+      s._nowMs += 100;
+      Lamps.feedScope(silence, 136, -120);
+    }
+  };
+  const feedAt = function (db) {
+    settle();
+    const amp = Math.pow(10, db / 20);
+    const w = new Float32Array(136 * 2);
+    for (let c = 0; c < 136; c++) { w[c * 2] = -amp; w[c * 2 + 1] = amp; }
+    s._nowMs += 16;
+    Lamps.feedScope(w, 136, db);
+    return nameplateState(env.draws);
+  };
+  const meterZone = function (db) {
+    return db >= -6 ? NP_RED : (db >= -20 ? NP_AMBER : NP_GREEN);
+  };
+  const tipOf = function (st) {
+    let top = null;
+    Object.keys(st.rowInk).forEach(function (row) {
+      const r = Number(row);
+      if (top === null || r < top) { top = r; } // smallest y = highest row
+    });
+    return top === null ? null : Array.from(st.rowInk[top]).pop();
+  };
+  let agree = true;
+  // The zone edges are probed from BOTH sides rather than exactly on the
+  // boundary: a dB value round-tripped through an amplitude lands a
+  // half-ulp off (-6 comes back as -6.000000000000001), which is a
+  // property of the probe, not of the ladder. What matters is that the
+  // word flips zone on the same side of the edge the meters do.
+  const probes = [-40, -30, -21, -20.05, -19.95, -16.5, -12, -6.05, -5.95, -3, 0];
+  probes.forEach(function (db) {
+    const got = tipOf(feedAt(db));
+    if (got !== meterZone(db)) { agree = false; }
+  });
+  check(agree,
+    'D5: the lit tip reports the meters\' own zone at every level, edges included');
+
+  // Quiet is quiet: the dB scale lifts the response, it does not add gain.
+  const q = feedAt(-30);
+  check(q.clip === 0 && q.amber === 0 && q.green > 0 && q.lit < NP_TOTAL_CELLS,
+    'D5: a -30 dBFS window stays entirely in the green zone, partly lit');
+
+  // Silence FALLS rather than cuts — the meters hold their peak and so
+  // does the word, or a syllable would paint for one frame and be gone.
+  feedAt(0); // a full-scale peak, then nothing but silence
+  s._nowMs += 16;
+  Lamps.feedScope(silence, 136, -120);
+  check(nameplateState(env.draws).lit > 0,
+    'D5: a peak does not vanish on the next frame — the word falls, like the bars');
+  settle();
+  check(nameplateState(env.draws).lit === 0,
+    'D5: and sustained silence falls all the way back to the resting face');
+
+  // An engine stop ends the proof with it.
+  Lamps.powerUp();
+  pumpFrame(s, 16);
+  Lamps.setEngineState(false);
+  check(nameplateState(env.draws).lit === 0,
+    'D6: stopping mid-test rests the word — no light left over a dead engine');
+
+  // Reduced motion: the same proof as a state, with no wipe.
+  const rm = nameplateSandbox({ reducedMotion: true });
+  loadInSandbox(rm.s, lampsSrc, 'signal-lamps.js');
+  rm.s.window.SignalLamps.powerUp();
+  pumpFrame(rm.s, 16);
+  const rmFirst = nameplateState(rm.draws);
+  check(rmFirst.lit === NP_TOTAL_CELLS,
+    'D7: reduced motion lights the whole word at once — a state, not a wipe');
+  for (let i = 0; i < 30; i++) { pumpFrame(rm.s, 16); }
+  check(nameplateState(rm.draws).lit === 0,
+    'D7: and releases to print, so the proof still ends');
+}
+
 (async function main() {
   await sectionB();
   sectionC();
+  sectionD();
   if (failures === 0) {
     console.log('live-signal-surface: all checks passed');
   } else {
