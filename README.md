@@ -88,8 +88,11 @@ The app registers ten tools with the browser using **WebMCP** — no MCP server,
 The fastest way to see it:
 
 1. Open **https://voxchain.arrangedgodly.com/** in the ChatGPT (or Codex) in-app browser and press **Start**.
-2. Ask: *"Set up a warm ballad vocal with light reverb."* Watch the chain rebuild itself, with a plain-English summary toast and a one-click **Undo**.
-3. Ask for something unsafe: *"Remove the limiter."* The app refuses, shows what was asked versus what's allowed, and the limiter stays.
+2. Ask: *"Make my voice really big and echoey, but keep it clear."* Watch the chain update, with a plain-English summary toast and a one-click **Undo**.
+3. Use **Undo**, then ask: *"Remove the terminal limiter."* The app refuses, shows what was asked versus what's allowed, and the limiter stays.
+4. Toggle **Bypass** off and on, then press **Stop**. These immediate audio controls remain human-only.
+
+Watch the public 2:59 demo: **https://youtu.be/CVex0eMZo18**
 
 **No agent handy?** Open the site with **`?dev`** — an **Agent Harness** panel appears where you can run all ten tools directly with example inputs. Start with `get_capabilities`, then `set_chain` (prefilled with a valid example), then hit Undo.
 

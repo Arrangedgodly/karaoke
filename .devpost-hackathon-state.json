@@ -9,20 +9,21 @@
     "source": "known"
   },
   "participant": {
-    "name": "",
+    "name": "Grady Wasil",
     "display_name": "Grady Wasil"
   },
   "project": {
     "name": "VoxChain",
     "summary": "A WebMCP-enabled live vocal-chain builder that lets people create and tune effects using plain language while retaining human control over microphone, bypass, and output safety.",
-    "ai_usage": "",
-    "codex_usage": ""
+    "ai_usage": "Codex, Claude, and GLM",
+    "codex_usage": "Codex helped shape the product scope and architecture, implement and test the WebMCP tool surface and safety policies, debug the live app, and prepare the judge-facing documentation."
   },
   "current_stage": "prepare-submission",
   "completed_stages": [
     "start-hackathon",
     "review",
-    "resources"
+    "resources",
+    "prepare-submission"
   ],
   "rules_acknowledged": true,
   "learning": {
@@ -41,5 +42,5 @@
     "draft_file": "devpost-submission.md",
     "status": "drafting"
   },
-  "next_command": "prepare-submission"
+  "next_command": "submit-project"
 }

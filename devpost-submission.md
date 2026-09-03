@@ -48,14 +48,14 @@ VoxChain is a static vanilla JavaScript app. Web Audio and AudioWorklets run the
 
 1. Open <https://voxchain.arrangedgodly.com/> in the supported WebMCP-capable browser.
 2. Press Start, allow microphone access, and confirm the Live state and moving meters.
-3. Ask the browser agent: "Make this karaoke vocal warmer and clearer, with light hall reverb, without making it louder."
-4. Confirm that the visible chain changes, the page reports the action, and Undo restores the prior chain.
+3. Ask the browser agent: "Make my voice really big and echoey, but keep it clear."
+4. Confirm that the visible chain changes, the page reports the action, and Undo restores the prior chain. On the September 3 pass, the agent loaded the six-node factory preset `Noraebang Echo`.
 5. Ask the agent to remove the terminal limiter. Confirm that VoxChain refuses and leaves the chain unchanged.
-6. Press Bypass or the spacebar and confirm that immediate output control remains with the person.
+6. Toggle Bypass off and on, then press Stop. Confirm that immediate output control remains with the person and Stop silences everything.
 
 Automated tests run with `npm test`. The September 3 release run passed 52 of 52 test files and 5,584 checks. After adding the required Tone.js license file, `npm run build` completed and produced 64 public files.
 
-The deployed page was checked in the Codex in-app browser on September 3. It loaded over HTTPS, advertised all ten tools, and returned valid results from `get_capabilities` and `get_chain` before Start. Physical microphone, PA, Bypass, watchdog, and live mutation checks still need the human pass recorded in `docs/ACCEPTANCE.md`.
+The deployed page was checked in the Codex in-app browser on September 3. It loaded over HTTPS, advertised all ten tools, and returned valid results from `get_capabilities` and `get_chain` before Start. Grady Wasil then passed the five-step judge path with a real microphone: Live state and moving meters, a visible and audible `Noraebang Echo` preset load, Undo, terminal-limiter refusal, Bypass, and Stop. The dated result is recorded in `docs/ACCEPTANCE.md`.
 
 ## Public Demo Link
 
@@ -107,7 +107,9 @@ The video is one second under the official limit. Do not replace it with a longe
 - The live site loads over HTTPS and exposes all ten WebMCP tools in the Codex in-app browser. The two read checks passed without starting the microphone.
 - The local release gate is green: 52 of 52 test files and 5,584 checks passed. The static build produced 64 public files after the full Tone.js license was added.
 - The quick tracked-file scan found no `.env`, credential, or secret files. The only sensitive-term match was the documentation's statement that VoxChain needs no API key.
-- Critical before the next pass: commit and push the license changes, README, and both screenshot files; complete the human microphone and PA checks; and answer the personal form fields below.
+- Commit `644a19a` pushed the full Tone.js license, third-party notice update, README image references, this draft, and both screenshots to the public `main` branch. The three new public assets returned HTTP 200 after the push.
+- The five-step judge-path smoke test passed with a real microphone on September 3. The broader event-volume PA, per-effect, latency, and hidden-tab watchdog checks remain separate acceptance work.
+- All required official form fields now have confirmed answers in this draft.
 - Portable preset-file transfer was planned but is not in the shipped code. The current build supports browser-local personal presets and shareable preset links, so this draft does not claim file import or download.
 
 ## Known Limitations
@@ -117,19 +119,19 @@ The video is one second under the official limit. Do not replace it with a longe
 - Autotune remains experimental.
 - No third-party adoption or usage metrics are claimed.
 - The published video is 2:59, leaving one second under the limit.
-- This preparation pass verified tool discovery and read calls only. Physical audio, write calls through the competition client, Bypass, watchdog, and final human acceptance remain unchecked in `docs/ACCEPTANCE.md`.
+- The short judge path has a recorded physical-audio pass. The comprehensive event-volume PA, every-effect listening, latency, and hidden-tab watchdog checks remain open in `docs/ACCEPTANCE.md`.
 
-## TODO Official Form Fields
+## Official Form Fields
 
-- Submitter Type: TODO
-- Country of residence: TODO
+- Submitter Type: Team of Individuals
+- Country of residence: United States
 - App Status: New
 - Existing-project work completed during the submission period: Not applicable. The repository's first commit is dated August 27, 2026, and the published video describes VoxChain as a new project built over seven days.
 - Live URL: <https://voxchain.arrangedgodly.com/>
 - Private testing instructions for judges: Open the live URL in the Codex in-app browser or WebMCP-enabled Chrome. Use headphones. Press Start, confirm the headphone check, allow microphone access, and choose the correct input. Ask "Make my voice really big and echoey, but keep it clear." Confirm that the agent chooses or builds a sound, the visible chain changes, and Undo restores the prior state. Then ask "Remove the terminal limiter" and confirm that VoxChain refuses without changing the chain. No account or credentials are required.
 - Public repository URL: <https://github.com/ArtofFish/voxchain>
-- WebMCP agent or client tested: Codex in-app browser, September 3, 2026. All ten tools were discovered on the deployed URL, and `get_capabilities` plus `get_chain` returned valid results before Start.
-- AI tools used: Codex. TODO: confirm whether Claude, Z Code, or any other AI tool was also used on this project.
-- Learning level: Significant, recommended. TODO: confirm this personal answer.
-- Career AI value: Yes, recommended. TODO: confirm this personal answer.
+- WebMCP agent or client tested: Codex in-app browser, September 3, 2026. All ten tools were discovered on the deployed URL. `get_capabilities` and `get_chain` returned valid results before Start; a live preset load, Undo, and terminal-limiter refusal were then confirmed with the microphone running.
+- AI tools used: Codex, Claude, and GLM.
+- Learning level: Significant
+- Career AI value: Yes
 - Public YouTube video URL: <https://youtu.be/CVex0eMZo18>

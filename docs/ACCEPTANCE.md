@@ -310,6 +310,25 @@ The deployed build must be the same app the local checks ran against.
       refusals on the limiter/ceiling attempts from sections 4 and 5).
 - [ ] Date / operator / result: ____________
 
+### September 3 submission judge-path smoke
+
+This is a limited pass of the five-step submission path, not a substitute for
+the event-volume PA, per-effect, latency, or hidden-tab watchdog checks above.
+
+- [x] On the deployed HTTPS app, **Start** completed with the selected real
+      microphone, the engine showed **Live**, and the meters moved.
+- [x] In the Codex in-app browser, the prompt "Make my voice really big and
+      echoey, but keep it clear" led the agent to inspect presets and load the
+      factory **Noraebang Echo** preset. The six-node chain updated visibly and
+      the requested sound was audible.
+- [x] **Undo** restored the prior chain.
+- [x] "Remove the terminal limiter" was refused and the limiter remained.
+- [x] Human **Bypass** off/on control worked, and **Stop** silenced the clean mic
+      and all output.
+- [x] Date / operator / result: 2026-09-03 / Grady Wasil / PASS. Client: Codex
+      in-app browser. Input: SSL 2+ USB Audio Device. Ten WebMCP tools were
+      discovered. Desktop-app version and model were not recorded.
+
 ## 8. Public demo evidence
 
 - [ ] Record a public YouTube demo under three minutes with audio. Use
