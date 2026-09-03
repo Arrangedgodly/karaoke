@@ -2193,6 +2193,21 @@
     card.appendChild(rail);
     card.appendChild(main);
 
+    // THE CARD METER (2026-09-03, owner direction): a lamp strip along
+    // the card's foot, painted per frame by src/signal-lamps.js from
+    // StageTaps' own boundary feed. The bar is what LEAVES this card and
+    // the tick is what ARRIVED, so the distance between them is the
+    // effect this card is having — two real measurements, never a
+    // derived "reduction" number. aria-hidden: a redundant picture of a
+    // level, exactly like the meters it borrows its ladder from.
+    var meter = document.createElement('div');
+    meter.className = 'node-meter';
+    meter.setAttribute('aria-hidden', 'true');
+    var meterCanvas = document.createElement('canvas');
+    meterCanvas.className = 'node-meter-canvas';
+    meter.appendChild(meterCanvas);
+    card.appendChild(meter);
+
     // Render this node's controls inline (knobs / pads / trims). The
     // onParamsChanged callback keeps OUR in-memory copy (nodeState.params)
     // current, so a later structural rebuild (add/remove/reorder elsewhere

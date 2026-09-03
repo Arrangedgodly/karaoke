@@ -84,6 +84,17 @@
 //     above (bypass engaged / watchdog tripped). Ballistics live in the
 //     lamps, not here — same division as Meters.
 //
+//   SignalLamps.feedChain(levels)
+//     levels: Array<number|null> — the chain's BOUNDARIES, nodes+1 of
+//     them: levels[0] is the microphone arriving, levels[k+1] is what
+//     leaves card k. So card k's own pair is (levels[k], levels[k+1]) —
+//     what reached it and what left it — and the distance between the
+//     two IS the effect that card is having, read as two real
+//     measurements rather than as a derived claim. Same dBFS convention,
+//     same null-for-silence and honesty gates as feedStages; a bypassed
+//     card reports the level physically crossing it, which is its input
+//     unchanged, because that is the truth.
+//
 //   SignalLamps.feedScope(pairs, columns, peakDb)
 //     pairs: Float32Array of length 2*columns (min,max interleaved,
 //     linear -1..1) — the current 2048-sample window of the FINAL
@@ -138,6 +149,8 @@
   // audible node i's output). Rebuilt whole by rewire().
   var stageOutputs = [];
   var gapToTap = [];
+  // Chain boundary k -> tap index (nodes+1 entries; [0] is the mic).
+  var chainToTap = [];
 
   // Signature of AudioGraph.getModel() the current wiring was built for
   // (ids + types + bypassed flags, joined). Compared every frame.
@@ -320,15 +333,20 @@
     // cards 0..k-1; tap 0 (the mic source) covers "everything upstream
     // is bypassed".
     gapToTap = [];
+    // The boundary list starts at the microphone and gains one entry per
+    // card: after card k it holds the latest audible stage at-or-before
+    // it, which for a bypassed card is its own input unchanged — the
+    // signal physically leaving that seat.
+    chainToTap = [0];
     var audibleSeen = 0;
     for (var k = 0; k < model.length; k++) {
       if (k > 0) {
         gapToTap.push(audibleSeen > 0 ? audibleSeen : 0);
       }
-      if (model[k].bypassed === true) {
-        continue;
+      if (model[k].bypassed !== true) {
+        audibleSeen++;
       }
-      audibleSeen++;
+      chainToTap.push(audibleSeen);
     }
     return signatureOf(model);
   }
@@ -470,6 +488,31 @@
       }
       if (lamps && typeof lamps.feedStages === 'function') {
         lamps.feedStages(levels);
+      }
+
+      // The same taps, read once more as the chain's own boundaries —
+      // the per-card strips need what ARRIVED at a card as well as what
+      // left it, and both are already in the pool. Gated exactly like
+      // the chevrons: a chain the room cannot hear reports nothing.
+      if (lamps && typeof lamps.feedChain === 'function' && chainToTap.length) {
+        var chainLevels = [];
+        for (i = 0; i < chainToTap.length; i++) {
+          if (chainInaudible()) {
+            chainLevels.push(null);
+            continue;
+          }
+          var ctap = tapPool[chainToTap[i]];
+          var cdb = null;
+          if (ctap && ctap.src) {
+            ctap.node.getFloatTimeDomainData(floatBuf);
+            var cpeak = peakDbOfWindow();
+            if (cpeak > -Infinity) {
+              cdb = cpeak;
+            }
+          }
+          chainLevels.push(cdb);
+        }
+        lamps.feedChain(chainLevels);
       }
 
       // The scope window — always the honest final output, never gated

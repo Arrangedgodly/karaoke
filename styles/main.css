@@ -4790,23 +4790,35 @@ input.preset-name-input:focus-visible {
    MIC IN above the scrolling row of cards, OUT below it, same key
    vocabulary the rest of the panel uses (system-deck ground, groove-cut
    seam toward the scrolling face) rather than inventing a new one. */
+/* THE BASE ROW (2026-09-03, owner direction). MIC IN and OUT used to line
+   the board top and bottom, a full-width row each, costing roughly 90px on
+   a console whose whole point is that it never scrolls. The per-card
+   meters are now where an operator reads a level, so these two become
+   what they always really were — the pinned SAFETY ANCHOR — and share one
+   compact row under the board. Still panel children, never inside
+   #chain-canvas: output ground truth still never depends on scroll or
+   collapse, and still never dims. */
+.canvas-base {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 0.3rem 0.9rem;
+  background: var(--pm-system-deck);
+  border-top: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  overflow-x: auto;
+}
+
 .canvas-footer {
   flex: none;
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.5rem 0.9rem;
-  background: var(--pm-system-deck);
-}
-
-.canvas-footer-in {
-  border-bottom: 1px solid var(--pm-groove-cut);
-  box-shadow: inset 0 -1px 0 var(--pm-groove-lip);
-}
-
-.canvas-footer-out {
-  border-top: 1px solid var(--pm-groove-cut);
-  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  /* The row owns the padding and the machined edge now; a strip inside it
+     is just a unit. */
+  padding: 0;
+  background: transparent;
 }
 
 .canvas-footer-legend {
@@ -4866,9 +4878,43 @@ input.preset-name-input:focus-visible {
   min-width: 9rem;
   max-width: 40rem;
   padding: 0.35rem 0.4rem 0.4rem;
-  /* One column: header band over the encoder field. */
+  /* One column: header band over the encoder field, with the card's own
+     meter strip pinned to the foot (2026-09-03). */
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
+}
+
+/* THE CARD METER. The board's detail layer: one lamp strip per card,
+   reading in the VU ladder's own language at the exact seat an operator
+   is already looking at when they ask what a plugin is doing. It costs
+   no vertical space of its own beyond its own 6px — it lives inside a
+   card that was already there, which is what let the panel-level MIC IN
+   and OUT strips collapse into one compact base row.
+
+   Unlit glass behind it, unlike the wordmark's matrix: this IS a lamp bar
+   read by its lit length, so a dark track is exactly right. Fixed height
+   and flex:none — a display that answers every frame may never pump the
+   layout of the board it sits in. */
+.canvas-panel.flow-horizontal .node-meter {
+  flex: none;
+  height: 6px;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  /* The machined cut the strip sits in, same grammar as every other
+     boundary on the chassis: dark cut under a light lip. */
+  box-shadow: inset 0 1px 0 var(--pm-groove-cut);
+}
+
+.canvas-panel.flow-horizontal .node-meter-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A folded card is a 56px identity rail with no field to meter, and a
+   card whose params are hidden is not reporting anything either. */
+.canvas-panel.flow-horizontal .node-card.collapsed .node-meter {
+  display: none;
 }
 
 .canvas-panel.flow-horizontal .node-card.collapsed {

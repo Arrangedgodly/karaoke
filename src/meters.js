@@ -813,15 +813,26 @@
 
     var u = ensureUnit(side);
     var strip = createFooterStrip(side, u.dpr);
-    // A PANEL child, never inside #chain-canvas — IN goes immediately
-    // BEFORE it (a header strip), OUT immediately after (a footer
-    // strip); .canvas-panel is a flex column, so DOM position alone
-    // decides visual position — no scroll or insertion-point impact
-    // either way.
-    if (side === SIDE_IN) {
-      panel.insertBefore(strip.footer, canvasEl);
+    // ONE BASE ROW (2026-09-03, owner direction). The two strips used to
+    // line the board top and bottom, a full-width row each, and between
+    // them they took roughly 90px off a console whose whole point is that
+    // it never scrolls. The board's own cards now carry the per-plugin
+    // detail (see .node-meter), so these two stop being the place an
+    // operator reads a level and become what they always really were: the
+    // pinned SAFETY ANCHOR. Both now sit side by side in a single row
+    // under the board — still panel children, never inside #chain-canvas,
+    // so output ground truth still never depends on scroll or collapse
+    // and still never dims. IN first, OUT second: signal order.
+    var base = panel.querySelector('.canvas-base');
+    if (!base) {
+      base = document.createElement('div');
+      base.className = 'canvas-base';
+      panel.insertBefore(base, canvasEl.nextSibling);
+    }
+    if (side === SIDE_IN && base.firstChild) {
+      base.insertBefore(strip.footer, base.firstChild);
     } else {
-      panel.insertBefore(strip.footer, canvasEl.nextSibling);
+      base.appendChild(strip.footer);
     }
     u.targets.push({ canvas: strip.canvas, ctx: strip.ctx, readoutEl: strip.readoutEl });
     return true;

@@ -1000,6 +1000,28 @@ windowStub.ChainCanvas.renderModel(
 var helpCards = cards();
 check(helpCards.length === 11, 'help-layer render builds a card for every type');
 
+// Every card carries its own meter strip (2026-09-03): the board's detail
+// layer, painted by signal-lamps from StageTaps' boundary feed. It is the
+// reason the panel-level MIC IN / OUT strips could collapse into one
+// compact base row, so it must exist on EVERY card — not just the ones
+// with interesting params.
+(function cardMetersExist() {
+  var metered = 0;
+  var missing = [];
+  helpCards.forEach(function (card) {
+    var strip = rowOfClass(card, 'node-meter');
+    var canvas = strip ? rowOfClass(strip, 'node-meter-canvas') : null;
+    if (strip && canvas && strip.attrs['aria-hidden'] === 'true') {
+      metered += 1;
+    } else {
+      missing.push(card.attrs['data-family']);
+    }
+  });
+  check(metered === helpCards.length && missing.length === 0,
+    'every card carries an aria-hidden meter strip with its own canvas' +
+      (missing.length ? ' — missing on: ' + missing.join(', ') : ''));
+})();
+
 // Auto Gain (PR #74) registers no plain-language help for its two params,
 // so its rows carry no .sr-only help span and write no register help line
 // where every other effect does. Named here rather than quietly skipped:
