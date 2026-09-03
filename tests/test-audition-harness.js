@@ -752,9 +752,10 @@ function main() {
     // fails here loudly.
     var presetsUi = fs.readFileSync(path.join(ROOT, 'src/presets-ui.js'), 'utf8');
     check(presetsUi.indexOf("source: 'preset',") !== -1 &&
+      presetsUi.indexOf('candidate: job.preset.nodes,') !== -1 &&
       presetsUi.indexOf('renderOptions: { freshSeats: true },') !== -1 &&
       presetsUi.indexOf('forceStructural: true,') !== -1 &&
-      presetsUi.indexOf('preset: { name: preset.name, modified: false }') !== -1,
+      presetsUi.indexOf('preset: { name: job.preset.name, modified: false }') !== -1,
       'C2: src/presets-ui.js still carries the pinned applyLoadedPreset request (if this fails, the human path changed — update the harness in the same edit)');
 
     // Rejection surfaces, never swallowed.

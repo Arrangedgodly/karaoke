@@ -338,6 +338,10 @@ mixInput.value = '75';
 mixInput.fire('input');
 var lastModel = onParamsChangedCalls[onParamsChangedCalls.length - 1].params;
 check(
+  mixInput.value === '75' && mixSpan.textContent === '75%',
+  'a continuous gesture keeps its newest value visible while acceptance is pending'
+);
+check(
   lastModel.key === 'E' && lastModel.mix === 75,
   'later human control move keeps the externally-set key (E) and applies mix 75'
 );

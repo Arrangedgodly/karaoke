@@ -757,18 +757,24 @@ check(
   'B6: Escape mid-drag retires the ghost and commits nothing'
 );
 
-// The grab surface is the whole section now, not just the rail grip
-// (2026-09-01: "cards don't want to drag as easily as they should").
+// The encoder field is adjustment-only space. Missing a knob by a few
+// pixels must not turn a parameter gesture into a card reorder; the
+// dedicated rail grip remains the reorder surface covered above.
 resetOpen();
 var bodyCard = cardById('n1');
-bodyCard.__fire('pointerdown', { clientX: 0, clientY: 30, button: 0, target: bodyCard });
+var encoderField = queryAll(bodyCard, '.section-main')[0];
+var encoderFieldTarget = {
+  closest: function (selector) {
+    return selector.indexOf('.section-main') !== -1 ? encoderField : null;
+  }
+};
+bodyCard.__fire('pointerdown', { clientX: 0, clientY: 30, button: 0, target: encoderFieldTarget });
 documentStub.__fire('pointermove', { clientX: 280, clientY: 30 });
 check(
-  JSON.stringify(slotOrder()) === JSON.stringify(['n2', 'n3', 'GHOST']),
-  'B6b: a press on the SECTION BODY (not just the rail grip) arms the same drag'
+  CC.isDragActive() === false && ghostEl() === null &&
+    JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n2', 'n3']),
+  'B6b: parameter-field whitespace never arms a card drag'
 );
-documentStub.__fire('keydown', { key: 'Escape' });
-check(ghostEl() === null, 'B6c: ...and Escape cleans it up the same way');
 
 // The safe-output clamp: with a limiter sitting LAST (the default
 // preset's invariant, and what addNodeType's click add already honors),

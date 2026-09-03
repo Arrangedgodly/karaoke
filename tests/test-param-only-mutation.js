@@ -1199,13 +1199,13 @@ async function main() {
     }
   });
   check(
-    Number(lowInput.value) === 0 && lowSpan && lowSpan.textContent === '0 dB',
-    'D4: a queued human candidate leaves the last accepted control value visible'
+    Number(lowInput.value) === 3 && lowSpan && lowSpan.textContent === '3 dB',
+    'D4: a queued continuous edit stays visually under the human\'s pointer'
   );
   sandbox.ParamControls.updateControl('n3', 'lowGain', 3);
   check(
     Number(lowInput.value) === 3 && lowSpan.textContent === '3 dB',
-    'D4: the control changes only when the accepted-state adapter renders it'
+    'D4: the accepted-state adapter confirms the queued value in place'
   );
 
   // --------------------------------------------------------------------

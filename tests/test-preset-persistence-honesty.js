@@ -1406,6 +1406,78 @@ async function main() {
         env.panel.byId['unsaved-indicator'].style.display !== 'none',
       'L3: rejected preset work preserves the previous canvas and dirty display baseline'
     );
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 0);
+    }); // let the load coordinator release its in-flight slot
+
+    // Rapid Advanced-mode selection is latest-wins while one preset
+    // transaction is settling. Intermediate clicks must not fill the
+    // structural mutation queue; after the current transaction, only the
+    // newest requested sound is applied. Active treatment moves in place,
+    // preserving every row/button under the operator's pointer.
+    factoryStub.payload = [
+      {
+        name: 'Warm Ballad',
+        nodes: [{ id: 'warm-limiter', type: 'limiter', params: { ceiling: -6, release: 150 } }]
+      },
+      {
+        name: 'Big Room',
+        nodes: [{ id: 'room-limiter', type: 'limiter', params: { ceiling: -6, release: 150 } }]
+      },
+      {
+        name: 'Studio Polish',
+        nodes: [{ id: 'studio-limiter', type: 'limiter', params: { ceiling: -6, release: 150 } }]
+      },
+      {
+        name: 'Demon Growl',
+        nodes: [{ id: 'demon-limiter', type: 'limiter', params: { ceiling: -6, release: 150 } }]
+      }
+    ];
+    sandbox.PresetsUI.refreshPresetSelect('factory:Warm Ballad');
+    var warmButtonBefore = findPresetRowLoadBtn(env, 'Warm Ballad');
+    var roomButtonBefore = findPresetRowLoadBtn(env, 'Big Room');
+    var rapidRequests = [];
+    var rapidResolvers = [];
+    sandbox.ChainEditing = {
+      apply: function (request) {
+        rapidRequests.push(request);
+        return new Promise(function (resolve) {
+          rapidResolvers.push(function () {
+            sandbox.PresetsUI.setCurrentPreset(request.preset.name);
+            resolve({ applied: true });
+          });
+        });
+      }
+    };
+    findPresetRowLoadBtn(env, 'Warm Ballad').__fire('click');
+    findPresetRowLoadBtn(env, 'Big Room').__fire('click');
+    findPresetRowLoadBtn(env, 'Studio Polish').__fire('click');
+    findPresetRowLoadBtn(env, 'Demon Growl').__fire('click');
+    check(
+      rapidRequests.length === 1 && rapidRequests[0].preset.name === 'Warm Ballad',
+      'L4: a rapid burst submits one in-flight preset instead of queueing every intermediate click'
+    );
+    rapidResolvers[0]();
+    await new Promise(function (resolve) { setTimeout(resolve, 0); });
+    check(
+      rapidRequests.length === 2 && rapidRequests[1].preset.name === 'Demon Growl',
+      'L4: after the in-flight preset settles, only the newest requested preset runs'
+    );
+    if (rapidResolvers[1]) {
+      rapidResolvers[1]();
+      await new Promise(function (resolve) { setTimeout(resolve, 0); });
+    }
+    var warmButtonAfter = findPresetRowLoadBtn(env, 'Warm Ballad');
+    var roomButtonAfter = findPresetRowLoadBtn(env, 'Big Room');
+    check(
+      warmButtonAfter === warmButtonBefore && roomButtonAfter === roomButtonBefore,
+      'L4: accepted presets preserve Advanced row/button identity for following rapid clicks'
+    );
+    check(
+      String(findPresetRow(env, 'Demon Growl').className).split(/\s+/).indexOf('preset-row-active') !== -1 &&
+        String(findPresetRow(env, 'Warm Ballad').className).split(/\s+/).indexOf('preset-row-active') === -1,
+      'L4: the final accepted preset moves the active treatment in place'
+    );
   }
 
   // ------------------------------------------------------------------

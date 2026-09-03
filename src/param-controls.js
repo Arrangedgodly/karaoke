@@ -471,6 +471,8 @@
       }
 
       var restoreAcceptedVisual = function () {};
+      var pendingContinuousValue = null;
+      var continuousIntentVersion = 0;
 
       // -----------------------------------------------------------------
       // The ONE commit pipeline (unchanged in behavior from the fader
@@ -496,16 +498,39 @@
         // Issue #20: this module translates the gesture only. Canvas
         // forwards this normalized param intent to ChainEditing, which
         // owns the live write, model acceptance, persistence, preset
-        // dirtiness, and one human revision bump. Keep the control on the
-        // accepted value until ChainEditing renders the committed value.
+        // dirtiness, and one human revision bump. Pads wait for accepted
+        // state; continuous controls stay visually under the pointer while
+        // the fast parameter transaction catches up.
         var acceptedValue = Object.prototype.hasOwnProperty.call(modelEntry.params || {}, spec.id)
           ? modelEntry.params[spec.id]
           : initialValue;
-        restoreAcceptedVisual(acceptedValue);
-        workingParams[spec.id] = acceptedValue;
-        feedRegister(formatValue(acceptedValue, spec.unit, spec.displayScale));
+        if (mode === 'pads') {
+          restoreAcceptedVisual(acceptedValue);
+          workingParams[spec.id] = acceptedValue;
+          feedRegister(formatValue(acceptedValue, spec.unit, spec.displayScale));
+        } else {
+          pendingContinuousValue = newValue;
+          continuousIntentVersion += 1;
+          valueDisplay.textContent = formatValue(newValue, spec.unit, spec.displayScale);
+          feedRegister(valueDisplay.textContent);
+        }
         if (typeof onParamsChanged === 'function') {
-          onParamsChanged(updatedParams, { param: spec.id, value: newValue });
+          var thisVersion = continuousIntentVersion;
+          var result = onParamsChanged(updatedParams, { param: spec.id, value: newValue });
+          if (mode !== 'pads' && result && typeof result.then === 'function') {
+            Promise.resolve(result).then(function () {}, function () {
+              if (thisVersion !== continuousIntentVersion) {
+                return;
+              }
+              pendingContinuousValue = null;
+              var restored = Object.prototype.hasOwnProperty.call(modelEntry.params || {}, spec.id)
+                ? modelEntry.params[spec.id]
+                : initialValue;
+              workingParams[spec.id] = restored;
+              restoreAcceptedVisual(restored);
+              feedRegister(formatValue(restored, spec.unit, spec.displayScale));
+            });
+          }
         }
       }
 
@@ -759,10 +784,14 @@
       // from a stale copy and silently REVERT the agent's value.
       renderedControls[modelEntry.id][spec.id] = {
         apply: function (externalValue) {
+          workingParams[spec.id] = externalValue;
+          if (pendingContinuousValue !== null && externalValue !== pendingContinuousValue) {
+            return;
+          }
+          pendingContinuousValue = null;
           input.value = externalValue;
           syncKnobVisual(parseFloat(externalValue));
           valueDisplay.textContent = formatValue(externalValue, spec.unit, spec.displayScale);
-          workingParams[spec.id] = externalValue;
           feedRegister(valueDisplay.textContent);
         }
       };

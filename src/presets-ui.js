@@ -173,6 +173,13 @@
   var armedDeleteName = null;
   var deleteArmTimer = null;
 
+  // Trying sounds is a latest-wins interaction. A full preset change is
+  // structural work, so submitting every click in a fast browse gesture
+  // can leave the operator waiting behind presets they no longer want.
+  // Keep at most one transaction in flight and one newest replacement.
+  var presetLoadInFlight = false;
+  var queuedPresetLoad = null;
+
   // Compact-browsing round: remembers the last preset name/kind passed to
   // refreshPresetSelect(selectName) (in the dropdown/optgroup vocabulary —
   // a plain user name, or 'factory:<name>') so the matching row can be
@@ -579,7 +586,7 @@
       showPresetNote('That preset is no longer available. Choose another preset.');
       return false;
     }
-    applyLoadedPreset(factoryPreset);
+    applyLoadedPreset(factoryPreset, FACTORY_VALUE_PREFIX + factoryPreset.name);
     return true;
   }
 
@@ -626,7 +633,7 @@
       showPresetNote('That preset is no longer available. Choose another preset.');
       return;
     }
-    applyLoadedPreset(result);
+    applyLoadedPreset(result, result.name);
   }
 
   // Per-page counter for row-description ids (see buildPresetRow): the
@@ -1235,6 +1242,38 @@
     renderPresetList(presetSearchInputEl ? presetSearchInputEl.value : '');
   }
 
+  /** Move only the active-row treatment. Preset acceptance must not
+   * rebuild the browse list under a following rapid pointer gesture. */
+  function setActivePresetKey(key) {
+    lastActivePresetKey = key;
+    activePersonalPreset = null;
+    var rows = presetListEl && presetListEl.children
+      ? Array.prototype.slice.call(presetListEl.children)
+      : [];
+    rows.forEach(function (row) {
+      if (!row || typeof row.getAttribute !== 'function') {
+        return;
+      }
+      var name = row.getAttribute('data-preset-name');
+      var kind = row.getAttribute('data-preset-kind');
+      if (!name || !kind) {
+        return;
+      }
+      var rowKey = kind === 'factory' ? FACTORY_VALUE_PREFIX + name : name;
+      var tokens = String(row.className || '').split(/\s+/).filter(function (token) {
+        return token && token !== 'preset-row-active';
+      });
+      if (rowKey === key) {
+        tokens.push('preset-row-active');
+        if (kind === 'user') {
+          activePersonalPreset = name;
+        }
+      }
+      row.className = tokens.join(' ');
+    });
+    updateShareButton();
+  }
+
   function syncCanvasPresetState() {
     if (!window.CanvasRegister ||
         typeof window.CanvasRegister.showPresetState !== 'function') {
@@ -1290,21 +1329,57 @@
     };
   }
 
-  function applyLoadedPreset(preset) {
+  function applyLoadedPreset(preset, activeKey) {
     if (!window.ChainEditing || typeof window.ChainEditing.apply !== 'function') {
       throw new Error('ChainEditing is required for every preset mutation.');
     }
-    window.ChainEditing.apply({
-      source: 'preset',
-      candidate: preset.nodes,
-      layout: null,
-      renderOptions: { freshSeats: true },
-      forceStructural: true,
-      preset: { name: preset.name, modified: false }
-    }).catch(function (err) {
+    var job = { preset: preset, activeKey: activeKey };
+    if (presetLoadInFlight) {
+      queuedPresetLoad = job;
+      return;
+    }
+    runPresetLoad(job);
+  }
+
+  function runPresetLoad(job) {
+    presetLoadInFlight = true;
+    var request;
+    try {
+      request = window.ChainEditing.apply({
+        source: 'preset',
+        candidate: job.preset.nodes,
+        layout: null,
+        renderOptions: { freshSeats: true },
+        forceStructural: true,
+        preset: { name: job.preset.name, modified: false }
+      });
+    } catch (err) {
       console.error('Presets panel: load failed', err);
       showPresetNote('Could not apply that preset. The previous chain was restored when possible.');
+      finishPresetLoad();
+      return;
+    }
+    Promise.resolve(request).then(function () {
+      setActivePresetKey(job.activeKey);
+    }, function (err) {
+      console.error('Presets panel: load failed', err);
+      showPresetNote('Could not apply that preset. The previous chain was restored when possible.');
+    }).then(function () {
+      finishPresetLoad();
+    }, function () {
+      // A display-only failure must never strand the load coordinator.
+      finishPresetLoad();
     });
+  }
+
+  function finishPresetLoad() {
+    presetLoadInFlight = false;
+    if (!queuedPresetLoad) {
+      return;
+    }
+    var next = queuedPresetLoad;
+    queuedPresetLoad = null;
+    runPresetLoad(next);
   }
 
   /**

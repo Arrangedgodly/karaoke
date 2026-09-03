@@ -275,10 +275,10 @@
   var REORDER_DRAG_THRESHOLD = 4;
 
   // Anything matching this owns its own press and can never START a drag.
-  // Everything ELSE on a section is grab surface: the rail, the header
-  // band, the printed labels, the encoder field's whitespace.
+  // The complete encoder field is adjustment-only space, including the
+  // gaps around controls; the rail remains the generous reorder surface.
   var NO_DRAG_SELECTOR = 'button, input, select, textarea, label, a, ' +
-    '.param-row, .node-resize, [role="slider"], [role="radio"], [role="radiogroup"]';
+    '.section-main, .param-row, .node-resize, [role="slider"], [role="radio"], [role="radiogroup"]';
 
   /** All node-card ids in current DOM order (== chain order, PD-4). */
   function domCardIds() {
@@ -2218,7 +2218,7 @@
       // reaches this edit, so two fast edits on different cards cannot
       // overwrite one another with stale whole-model candidates.
       if (change) {
-        requireChainEditing().apply({
+        return requireChainEditing().apply({
           source: 'human',
           change: {
             nodeId: nodeState.id,
@@ -2227,6 +2227,7 @@
           }
         }).catch(function (err) {
           console.error('ChainCanvas: human parameter edit was not accepted', err);
+          throw err;
         });
         return;
       }
@@ -2378,14 +2379,10 @@
       hideRegisterPreview();
     });
 
-    // ...and so is the SECTION ITSELF (2026-09-01 user direction: "cards
-    // don't want to drag as easily as they should"). The rail alone was
-    // a small strip on the card — the advertised grip, but far too
-    // small to be the only one. Pressing anywhere on the section arms the
-    // same gesture, EXCLUDING every control that owns its own press
-    // (NO_DRAG_SELECTOR: knobs, pads, trims, the bypass/fold/eject keys,
-    // the resize corner). The grip icon keeps its own listener for its
-    // affordance; armReorderDrag's own
+    // The section's non-control surface also supports reorder, but the
+    // entire encoder field is excluded so a near-miss around a knob or
+    // trim cannot move the card. The rail remains the advertised,
+    // generous handle. armReorderDrag's own
     // `if (reorderDrag || resizeDrag || paletteDrag) return` guard makes
     // double-arming impossible either way.
     card.addEventListener('pointerdown', function (event) {
