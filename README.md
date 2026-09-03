@@ -4,7 +4,7 @@
 
 A live vocal chain in your browser for karaoke, streaming, games, and voice experiments: mic in → 14 effects → your output. Nothing to install, no account, no cloud — the whole engine runs on your machine, and an AI agent in the browser can build and edit the chain from plain language via [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
 
-![The VOXCHAIN console: the dark instrument panel with the system deck, the ordered effects row carrying the signal left to right, and MIC IN and OUT meters reading real levels](docs/screenshot.png)
+![VOXCHAIN Advanced view showing the live microphone chain, factory preset library, ordered effect modules, safety limiter, and effect palette](docs/screenshot-advanced.png)
 
 ## Features
 
@@ -34,6 +34,8 @@ The only local requirement is Python (free from [python.org/downloads](https://w
 ## Two views
 
 **Simple** (the default) is for choosing a sound, not building one. A stage names the **current sound** with **Previous/Next** buttons stepping through the library; filter chips (**All, Warm, Big echo, Funny, Clean & clear**) and a search box narrow it — the search reads each sound's name, description, and tags, so words the chips don't carry ("robot", "deep") still find their sounds. Every factory and saved preset is a card — click one to try it. What Simple never hides: **Start/Stop**, the mic picker, **Bypass**, and the input/output meters.
+
+![VOXCHAIN Simple view showing the Warm Ballad current sound, plain filters, searchable factory library, effect summary, and persistent safety controls](docs/screenshot-simple.png)
 
 **Advanced** is the hands-on builder:
 

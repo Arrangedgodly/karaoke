@@ -14,8 +14,8 @@ no longer bundled with this project.)
   license banner retained in the file header; sha256
   `e290952fa43d9a7a780182a83c6fccf44d79cb7ae2cba102ef1f2b9d98124e22`)
 - **Upstream:** https://github.com/Tonejs/Tone.js (npm `tone@15.1.22`)
-- **License:** MIT — Copyright (c) Yotam Mann. Full text:
-  https://github.com/Tonejs/Tone.js/blob/dev/LICENSE.md
+- **License:** MIT, Copyright (c) 2014-2020 Yotam Mann. The full text is in
+  [`vendor/Tone.js.LICENSE.txt`](vendor/Tone.js.LICENSE.txt).
 
 Used for the Tone-backed audio effects (pitch shift, tremolo, bitcrusher,
 phaser — see `src/tone-adapter.js`), under the project's no-build-step
