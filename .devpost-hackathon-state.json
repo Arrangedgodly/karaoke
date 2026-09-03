@@ -18,12 +18,13 @@
     "ai_usage": "Codex, Claude, and GLM",
     "codex_usage": "Codex helped shape the product scope and architecture, implement and test the WebMCP tool surface and safety policies, debug the live app, and prepare the judge-facing documentation."
   },
-  "current_stage": "prepare-submission",
+  "current_stage": "submit-project",
   "completed_stages": [
     "start-hackathon",
     "review",
     "resources",
-    "prepare-submission"
+    "prepare-submission",
+    "submit-project"
   ],
   "rules_acknowledged": true,
   "learning": {
@@ -40,7 +41,10 @@
   },
   "submission": {
     "draft_file": "devpost-submission.md",
-    "status": "drafting"
+    "status": "submitted",
+    "project_id": 1414793,
+    "submission_id": 1168509,
+    "project_url": "https://devpost.com/software/voxchain-qh9pma"
   },
-  "next_command": "submit-project"
+  "next_command": "hackathon-map"
 }

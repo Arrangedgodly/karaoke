@@ -101,7 +101,7 @@ The video is one second under the official limit. Do not replace it with a longe
 ## Submission Readiness Notes
 
 - Live Devpost requirements were checked on September 3, 2026. The deadline is September 3 at 1:00 PM Pacific, which is 2:00 PM Mountain time.
-- Devpost sign-in and registration for The WebMCP Challenge were confirmed. No Devpost project has been created yet.
+- Devpost sign-in and registration for The WebMCP Challenge were confirmed. Devpost accepted entry `1168509`, and a live readback showed the project as published at <https://devpost.com/software/voxchain-qh9pma>.
 - The published video is accessible and runs 2:59. Its URL is now in this draft.
 - The public repository and top-level MIT license are visible on GitHub.
 - The live site loads over HTTPS and exposes all ten WebMCP tools in the Codex in-app browser. The two read checks passed without starting the microphone.
