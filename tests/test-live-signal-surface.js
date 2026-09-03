@@ -415,8 +415,29 @@ function sectionC() {
     getContext: function () { return ctx; },
   };
 
+  // A slot the module did NOT build — Advanced's band, adopted from
+  // markup by its canvas class. Off screen until a test mounts it.
+  const advDraws = { rects: [], clears: 0 };
+  const advCtx = {
+    fillStyle: '', globalAlpha: 1, lineWidth: 1,
+    setTransform: function () {},
+    clearRect: function () { advDraws.clears++; },
+    beginPath: function () {}, moveTo: function () {}, lineTo: function () {}, stroke: function () {},
+    fillRect: function (x, y, w, h) { advDraws.rects.push({ x: x, y: y, w: w, h: h, fill: advCtx.fillStyle }); },
+  };
+  const advCanvas = {
+    className: 'adv-scope-canvas', clientWidth: 0, clientHeight: 0, width: 0, height: 0,
+    getContext: function () { return advCtx; },
+  };
+
   s.document = {
     querySelectorAll: function (sel) {
+      // The scope slots are found by class, not held by reference —
+      // the module builds Simple's and adopts every other one. This
+      // query is NOT part of the chevron cache's count.
+      if (sel.indexOf('scope-canvas') !== -1) {
+        return inserted.length ? [canvas, advCanvas] : [advCanvas];
+      }
       queryCount++;
       return sel === '#chain-list .chain-arrow-mark' ? marks.slice() : [];
     },
@@ -519,6 +540,25 @@ function sectionC() {
   Lamps.feedScope(pairs, 136, -1);
   check(draws.clears === clearsBefore,
     'C7: a hidden scope skips the paint entirely');
+
+  // Live round (2026-09-03): the scope is not Simple's alone. A slot the
+  // module never built — Advanced's output band, adopted by its canvas
+  // class — paints from the SAME feed, in its own smaller box. Two views
+  // of one truth; the second is never a second measurement.
+  canvas.clientWidth = 600; // Simple back on screen: both slots visible
+  canvas.clientHeight = 72;
+  advCanvas.clientWidth = 600;
+  advCanvas.clientHeight = 56;
+  const simpleClearsBefore = draws.clears;
+  Lamps.feedScope(pairs, 136, -0.04);
+  check(advDraws.clears === 1 && advDraws.rects.length === 136 + 1,
+    'C10: an adopted slot paints the same window as the built one');
+  check(draws.clears === simpleClearsBefore + 1,
+    'C10: adopting a second slot does not cost the first one a frame');
+  check(advCanvas.height === 56 && canvas.height === 72,
+    'C10: each slot measures its OWN box (no shared geometry)');
+  advCanvas.clientWidth = 0; // back off screen for the checks below
+  advCanvas.clientHeight = 0;
 
   // Polish round (2026-09-02): on a fractional device pixel ratio the
   // columns snap to the device grid — x*2 lands on integers at dpr 2, so

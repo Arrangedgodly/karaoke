@@ -2110,14 +2110,20 @@ select.control {
 /* Persistent chain identity on the register's right edge. The control
    readout remains transient and aria-hidden; this sibling is the one
    accessible status source for saved versus unsaved preset state.
-   Live round 2026-09-03 (accepted variant): the right end is now a
-   dedicated inset PRESET WINDOW — a fixed share of the register as its
-   own sub-display (deeper cut ground behind a machined lip border), the
-   silkscreen PRESET label over the name in the register's amber machine
-   ink. The register stays a FIXED 3rem slot; the window is geometry
-   (2.5rem tall, inset 0.25rem), sized in the same literal units the
-   register's own clipping uses. The opaque cut ground masks the control
-   lines that run under it, exactly as the old flat overlay did. */
+   Live round 2026-09-03: the right end became a dedicated PRESET FIELD,
+   a fixed share of the register as its own sub-display, silkscreen label
+   over the name in the register's amber machine ink. Second live round,
+   same day, accepted variant 'the second display': that field had been
+   drawn as a RECESS — a hole cut deeper than the ground it sat in, right-
+   aligned behind its own border — which is precisely why it read as a tag
+   stuck in the corner rather than as part of the instrument. It is now
+   the register's other half: the same ground, its own 3px accent mark at
+   the same inset as the slot's, content flush-left behind that mark, and
+   the name a full tier up. One slot, two displays, read left to right.
+   The register stays a FIXED 3rem slot; the field is geometry (2.5rem
+   tall, inset 0.25rem), sized in the same literal units the register's
+   own clipping uses, and its ground stays opaque so it still masks the
+   control lines running under it. */
 .register-preset-state {
   position: absolute;
   z-index: 1;
@@ -2130,11 +2136,17 @@ select.control {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-end;
-  gap: 0.1rem;
-  padding: 0.2rem 0.7rem;
-  border: 1px solid var(--pm-groove-lip);
-  background: var(--pm-groove-cut);
+  /* Flush-left behind its own mark: this field READS as a display, not
+     as a tag pinned in a corner (see the block comment above). */
+  align-items: flex-start;
+  gap: 0;
+  padding: 0.2rem 0.7rem 0.2rem 1.4rem;
+  /* The register's own ground, not a darker hole cut into it: the field
+     is level with the instrument it belongs to, and the machined lip down
+     its left edge is the whole division. Still opaque, so it masks the
+     control lines running under it exactly as the recessed window did. */
+  background: var(--pm-register-bg);
+  box-shadow: inset 1px 0 0 var(--pm-groove-lip);
   font-family: var(--font-readout);
   font-size: var(--type-register);
   line-height: 1.2;
@@ -2143,9 +2155,24 @@ select.control {
   pointer-events: none;
 }
 
+/* The field's own register mark, mirroring the slot's at the same 3px
+   and the same inset — a register mark is an enumerated system-state use
+   of signal orange, and this field is now a register. */
+.register-preset-state::before {
+  content: '';
+  position: absolute;
+  left: 0.6rem;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  width: 3px;
+  background: var(--pm-accent);
+}
+
 .register-preset-label {
   flex: none;
-  color: var(--pm-print-dim);
+  /* Lifted off the receding rung: this legend names the field an operator
+     is meant to find from across a room, not a footnote. */
+  color: var(--pm-print);
   font-family: var(--font-print);
   font-size: var(--type-label);
   font-weight: 700;
@@ -2158,6 +2185,11 @@ select.control {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  /* The IDENTITY tier, not a third value size: the chain's name does the
+     job the rail's family code does for a module, so it takes that same
+     print size. Machine READINGS stay on the two-tier value ladder. */
+  font-size: var(--type-code);
+  line-height: 1.15;
   color: var(--pm-display);
   font-weight: 700;
   text-overflow: ellipsis;
@@ -3241,6 +3273,54 @@ body.chain-dragging .node-drag-handle {
 
 .signal-order-safe {
   color: var(--pm-print-hi);
+}
+
+/* ===========================================================================
+   OUTPUT SCOPE BAND (live round, 2026-09-03) — the voice deck's own live
+   display, directly above the strip: a min/max envelope trace of the FINAL
+   OUTPUT (the OUT meter's exact tap point), so the deck shows the shape of
+   what the room is hearing while the meters keep the level. One feed, two
+   views — the same relationship the pinned OUT footer has with the meter it
+   mirrors, and the same relationship this band has with Simple's scope:
+   src/signal-lamps.js paints every slot it finds from ONE window, so the two
+   views can never disagree.
+
+   It PRINTS rather than mounts. Advanced's live-signal idiom is already
+   light ON the faceplate (the chevron lamps between cards), not light
+   inside a display window, so the band takes the signal-order strip's own
+   band vocabulary — machined lip over the top cut, groove-cut below, no
+   ground of its own — and the chassis shows through behind the trace. No
+   accent anywhere: a meter borrows the register's ground and its amber, it
+   never borrows the system-state orange (the One Orange Rule).
+
+   Fixed height, like the register: a display that answers every frame may
+   never pump layout, and on the fixed one-page console the height it takes
+   is height the board gives up. aria-hidden: the OUT meter immediately
+   above it carries the numbers (the machine never speaks twice).
+   =========================================================================== */
+
+.adv-scope {
+  flex: none;
+  height: 3.5rem;
+  padding: 0 0.9rem;
+  background: transparent;
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  border-bottom: 1px solid var(--pm-groove-cut);
+  overflow: hidden;
+}
+
+.adv-scope-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The band has no cold reading — its whole truth is the live output's
+   shape — so it leaves with the pre-Start gate exactly as the Simple scope
+   leaves with the cold face. No fade: functional metering appears with the
+   live face and goes with it. */
+.layout.engine-not-started .adv-scope {
+  display: none;
 }
 
 /* ===========================================================================

@@ -334,6 +334,21 @@
         </div>
       </div>
 
+      <!--
+        THE OUTPUT SCOPE BAND (live round, 2026-09-03) — the Simple
+        stage's scope as a second VIEW on the voice deck, not a second
+        instrument: the same final-output tap, the same 42.7 ms window,
+        printed on the chassis between the board's OUT meter above and
+        the signal-order strip below. src/signal-lamps.js ADOPTS this
+        slot by its canvas class (it BUILDS Simple's) and paints it per
+        frame; styles/main.css owns the geometry and the pre-Start gate.
+        aria-hidden like its twin — the OUT meter directly above keeps
+        the numbers, and the machine never speaks twice.
+      -->
+      <div class="adv-scope" aria-hidden="true">
+        <canvas class="adv-scope-canvas"></canvas>
+      </div>
+
       <!-- JS-built by src/canvas.js (see renderSignalOrderStrip in that
            file) — the full mic-to-safe-out order in one readable line. -->
       <div class="panel signal-order" id="signal-order-panel" aria-label="Complete signal order"></div>

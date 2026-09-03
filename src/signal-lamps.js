@@ -39,6 +39,14 @@
 //   wet path they gate is what it reads. Pre-Start it is display:none —
 //   the cold face owns the stage (CSS below).
 //
+//   The scope is not Simple's alone. This module BUILDS Simple's slot
+//   and ADOPTS every other one from its view's own markup, by canvas
+//   class (SCOPE_SELECTOR) — so Advanced's output band is a second VIEW
+//   of the one feed, the way the pinned OUT footer is a second view of
+//   the OUT meter. One tap, one window, one truth; each slot only ever
+//   differs in how big a box it draws that truth into, and a slot that
+//   is off screen costs a zero-box test and nothing else.
+//
 // MOTION DISCIPLINE: both surfaces are functional metering in the
 // documented meter family — per-frame paint like the VU lamps, live
 // under prefers-reduced-motion by construction (the same clause
@@ -62,6 +70,13 @@
   var SCOPE_HEIGHT = 72; // CSS px — the slot's fixed logical height
   var DPR_MAX = 3; // meters.js's device-pixel clamp
 
+  // Every scope slot in the document, by canvas class. Simple's slot is
+  // BUILT here (ensureScope); any other view's slot is ADOPTED from its
+  // own markup, so a second display can be added to a view without this
+  // module learning about that view.
+  var SCOPE_SELECTOR = '.simple-scope-canvas, .adv-scope-canvas';
+  var SCOPE_RESCAN_FRAMES = 30; // re-read the slot list ~twice a second
+
   // ---------------------------------------------------------------------
   // Module state.
   // ---------------------------------------------------------------------
@@ -78,14 +93,14 @@
   var stageLevels = [];
   var lastT = null;
 
-  // The scope.
+  // The scope. One paint target per slot canvas, each carrying its own
+  // measured box and device ratio, so two slots of different sizes can
+  // never share a stale geometry. `null` means the list needs re-reading.
   var scopeEl = null;
   var scopeCanvas = null;
-  var scopeCtx = null;
-  var scopeW = 0; // current logical size (CSS px); 0 = needs (re)measure
-  var scopeH = 0;
-  var scopeDpr = 1; // retained so column geometry can snap to the device grid
   var scopeMountTried = false;
+  var scopeTargets = null; // [{canvas, ctx, w, h, dpr}]
+  var scopeRescanIn = 0; // frames left before the next DOM re-read
 
   // Resolved paint tokens (the meters.js resolution ladder: --pm-*
   // first, DEFAULTS mirrors only when computed styles are unreadable).
@@ -314,32 +329,68 @@
       scopeCanvas = null;
       return;
     }
-    scopeCtx = scopeCanvas.getContext ? scopeCanvas.getContext('2d') : null;
+    scopeTargets = null; // a slot just appeared — re-read on the next feed
+  }
+
+  /** Re-read the scope slots present in the document. Cheap and rare
+   *  (twice a second, never per frame): a view switch, a newly mounted
+   *  band, or a removed one all land here without the paint path paying
+   *  a query every frame. Existing entries are carried across by canvas
+   *  identity so a re-read never re-sizes (and so never blanks) a slot
+   *  that has not moved. A slot that is off screen keeps its entry and
+   *  is skipped at paint time by its own zero box. */
+  function collectScopes() {
+    var prev = scopeTargets || [];
+    var list = [];
+    if (typeof document.querySelectorAll !== 'function') {
+      scopeTargets = list;
+      return;
+    }
+    var nodes = document.querySelectorAll(SCOPE_SELECTOR);
+    for (var i = 0; i < nodes.length; i++) {
+      var canvas = nodes[i];
+      var kept = null;
+      for (var j = 0; j < prev.length; j++) {
+        if (prev[j].canvas === canvas) {
+          kept = prev[j];
+          break;
+        }
+      }
+      if (kept) {
+        list.push(kept);
+        continue;
+      }
+      var ctx = canvas.getContext ? canvas.getContext('2d') : null;
+      if (ctx) {
+        list.push({ canvas: canvas, ctx: ctx, w: 0, h: 0, dpr: 1 });
+      }
+    }
+    scopeTargets = list;
   }
 
   /** (Re)measure + resize the backing store to the slot's current CSS
    *  box (DPR-aware, meters.js's clamp). Returns false when the slot is
    *  not on screen right now (Simple hidden, or the cold face owning
    *  the stage) — the caller skips painting, nothing resizes. */
-  function prepareScopeCanvas() {
-    var w = scopeCanvas.clientWidth || 0;
-    var h = scopeCanvas.clientHeight || 0;
+  function prepareScopeCanvas(t) {
+    var w = t.canvas.clientWidth || 0;
+    var h = t.canvas.clientHeight || 0;
     if (!(w > 0) || !(h > 0)) {
       return false;
     }
-    if (w !== scopeW || h !== scopeH) {
+    if (w !== t.w || h !== t.h) {
       var dpr = 1;
       try {
         dpr = Math.max(1, Math.min(DPR_MAX, window.devicePixelRatio || 1));
       } catch (err) {
         dpr = 1;
       }
-      scopeCanvas.width = Math.round(w * dpr);
-      scopeCanvas.height = Math.round(h * dpr);
-      scopeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      scopeDpr = dpr;
-      scopeW = w;
-      scopeH = h;
+      t.canvas.width = Math.round(w * dpr);
+      t.canvas.height = Math.round(h * dpr);
+      t.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      t.dpr = dpr;
+      t.w = w;
+      t.h = h;
     }
     return true;
   }
@@ -367,18 +418,32 @@
     safe(function () {
       resolveColors();
       ensureScope();
-      if (!scopeEl || !scopeCtx) {
-        return;
+      if (!scopeTargets || scopeRescanIn <= 0) {
+        collectScopes();
+        scopeRescanIn = SCOPE_RESCAN_FRAMES;
+      } else {
+        scopeRescanIn--;
       }
-      if (!prepareScopeCanvas()) {
-        return; // not on screen — skip the paint, keep the feed honest
+      for (var i = 0; i < scopeTargets.length; i++) {
+        var t = scopeTargets[i];
+        if (prepareScopeCanvas(t)) {
+          paintScope(t, pairs, columns);
+        }
+        // else: not on screen — skip the paint, keep the feed honest
       }
+    });
+  }
 
-      var w = scopeW;
-      var h = scopeH;
+  /** Paint one prepared slot. Every slot reads the SAME window from the
+   *  same tap, so two visible slots are two views of one truth — never
+   *  two measurements. */
+  function paintScope(t, pairs, columns) {
+    {
+      var w = t.w;
+      var h = t.h;
       var cy = h / 2;
       var gain = (h / 2) - 3; // 3px headroom so 0 dBFS never clips the slot
-      var ctx = scopeCtx;
+      var ctx = t.ctx;
 
       ctx.clearRect(0, 0, w, h);
 
@@ -420,9 +485,9 @@
         var amp = Math.max(Math.abs(min), Math.abs(max));
         var x = c * colW + (colW - strokeW) / 2;
         var sw = strokeW;
-        if (scopeDpr > 1) {
-          x = Math.round(x * scopeDpr) / scopeDpr;
-          sw = Math.round(sw * scopeDpr) / scopeDpr;
+        if (t.dpr > 1) {
+          x = Math.round(x * t.dpr) / t.dpr;
+          sw = Math.round(sw * t.dpr) / t.dpr;
         }
         ctx.globalAlpha = columnAlpha(amp);
         ctx.fillStyle = colors.display;
@@ -435,7 +500,7 @@
         }
       }
       ctx.globalAlpha = 1;
-    });
+    }
   }
 
   // ---------------------------------------------------------------------
