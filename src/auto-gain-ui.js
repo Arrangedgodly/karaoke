@@ -10,6 +10,11 @@
   status.setAttribute('role', 'status');
   var select = document.createElement('select'); select.className = 'control input-channel-select';
   select.setAttribute('aria-label', 'Microphone input channel');
+  // Channel routing belongs to the microphone, even when Auto Gain is removed.
+  var advancedSelect = select.cloneNode(false);
+  advancedSelect.classList.add('input-channel-advanced');
+  document.getElementById('input-device-select').insertAdjacentElement('afterend', advancedSelect);
+  var channelSelects = [select, advancedSelect];
   var recheck = document.createElement('button'); recheck.type = 'button'; recheck.className = 'control';
   recheck.textContent = 'Recheck microphone';
   panel.appendChild(status); panel.appendChild(select); panel.appendChild(recheck);
@@ -45,8 +50,10 @@
       .catch(function (e) { put(status, e.message); });
   }
   recheck.addEventListener('click', checkAgain);
-  select.addEventListener('change', function () {
-    window.InputPreparation.setChannel(select.value === 'auto' ? null : Number(select.value));
+  channelSelects.forEach(function (picker) {
+    picker.addEventListener('change', function () {
+      window.InputPreparation.setChannel(picker.value === 'auto' ? null : Number(picker.value));
+    });
   });
   var optionCount = -1;
   function render() {
@@ -62,18 +69,22 @@
     if (!live) message = texts.stopped;
     put(status, message);
     panel.hidden = !live;
-    panel.dataset.attention = inputProblem ? 'true' : 'false';
     recheck.disabled = !live || !entry || entry.bypassed || input.state === 'unavailable';
-    select.hidden = input.channelCount <= 1;
-    select.disabled = !live;
-    if (optionCount !== input.channelCount) {
-      optionCount = input.channelCount; select.textContent = '';
-      var auto = document.createElement('option'); auto.value = 'auto'; auto.textContent = 'Automatic channel'; select.appendChild(auto);
-      for (var i = 0; i < optionCount; i++) {
-        var o = document.createElement('option'); o.value = String(i); o.textContent = 'Input ' + (i + 1); select.appendChild(o);
+    channelSelects.forEach(function (picker) {
+      picker.hidden = !live || input.channelCount <= 1;
+      picker.disabled = !live;
+      picker.setAttribute('aria-invalid', String(input.state === 'needs-channel'));
+      if (optionCount !== input.channelCount) {
+        picker.textContent = '';
+        var auto = document.createElement('option'); auto.value = 'auto'; picker.appendChild(auto);
+        for (var i = 0; i < input.channelCount; i++) {
+          var o = document.createElement('option'); o.value = String(i); o.textContent = 'Input ' + (i + 1); picker.appendChild(o);
+        }
       }
-    }
-    select.value = input.channelMode === 'manual' ? String(input.channel) : 'auto';
+      put(picker.options[0], input.state === 'needs-channel' ? 'Choose input channel' : 'Automatic channel');
+      picker.value = input.channelMode === 'manual' ? String(input.channel) : 'auto';
+    });
+    optionCount = input.channelCount;
     document.querySelectorAll('.node-card[data-family="autogain"]').forEach(function (card) {
       var box = card.querySelector('.auto-gain-readout');
       if (!box) {
@@ -85,7 +96,7 @@
         hint.textContent = 'Auto holds the learned level. Recheck after moving it. Manual uses the gain knob. Peak protection stays on.'; box.appendChild(hint);
         var host = card.querySelector('.node-params-inner'); if (host) host.appendChild(box);
       }
-      put(box.querySelector('.auto-gain-value'), !live ? texts.stopped : entry && entry.bypassed ? 'Bypassed' : describe(level));
+      put(box.querySelector('.auto-gain-value'), message);
       box.querySelector('button').disabled = recheck.disabled;
     });
     // Show the effective threshold beside the preset's baseline control.

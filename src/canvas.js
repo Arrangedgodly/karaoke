@@ -1373,7 +1373,6 @@
     pitchshift: 'pitch',
     // Polish your sound — level, evenness, and space.
     gain: 'polish',
-    autogain: 'polish',
     compressor: 'polish',
     delay: 'polish',
     reverb: 'polish',
@@ -1382,6 +1381,7 @@
     // same aria-label, same enabled-after-Start gating, same human add
     // path); the terminal-limiter policy lives in addNodeType() /
     // mcp-tools.js and is deliberately untouched by this map.
+    autogain: 'safe',
     limiter: 'safe',
     gate: 'safe'
   };
