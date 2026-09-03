@@ -841,7 +841,8 @@ async function main() {
   );
   await settle();
   check(resD2 && resD2.applied === true, 'D2: options without a signal apply as today');
-  check(liveToasts(sandbox).length === 2, 'D2: a second toast for the second mutation');
+  check(liveToasts(sandbox).length === 1,
+    'D2: the second mutation replaces the prior Undo toast with the newly focused one');
   check(ctx.undoPushes === 2, 'D2: a second undo entry');
 
   // --------------------------------------------------------------------
@@ -860,7 +861,7 @@ async function main() {
       : false,
     'E: get_chain with an (aborted) signal option still returns the live chain — reads never abort'
   );
-  check(liveToasts(sandbox).length === 2 && ctx.undoPushes === 2,
+  check(liveToasts(sandbox).length === 1 && ctx.undoPushes === 2,
     'E: the read changed nothing (same toasts, same undo count)');
 
   // --------------------------------------------------------------------

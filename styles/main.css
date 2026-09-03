@@ -4096,8 +4096,9 @@ input.preset-name-input:focus-visible {
    components src/agent-ui.js creates dynamically: #agent-chip (inserted
    into the .topbar immediately before #bypass-toggle-button) and
    #agent-toast-region (appended as <body>'s last child). FEW-1's JS
-   contract — 6 s auto-dismiss with hover-pause, the 3-toast cap, Escape,
-   the undo-button invariant, role/aria — is entirely in src/agent-ui.js
+   contract — transient 6 s dismissal, 20 s Undo cards with Close,
+   the transient-toast cap, Escape, the undo-button invariant, role/aria —
+   is entirely in src/agent-ui.js
    and untouched here; this block is presentation only. Every new
    transition/animation lives inside
    @media (prefers-reduced-motion: no-preference); under reduce the chip
@@ -4197,6 +4198,10 @@ input.preset-name-input:focus-visible {
   flex-direction: column;
   gap: 0.5rem;
   width: min(22rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 /* Toasts answer in the module-card vocabulary: bg-card surface,
@@ -4205,6 +4210,7 @@ input.preset-name-input:focus-visible {
    lifted-depth shadow the sortable-drag cards carry. Comfortable
    padding, ~340px cap (inside the region's 22rem slot). */
 .agent-toast {
+  flex: none;
   max-width: 340px;
   padding: 0.75rem 0.9rem;
   border: 1px solid var(--line-strong);
@@ -4212,6 +4218,39 @@ input.preset-name-input:focus-visible {
   background: var(--bg-card);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
   font-size: var(--type-register);
+  color: var(--text-primary);
+}
+
+/* Undo-bearing notifications get a longer judging window and remain the
+   current evidence until their 20 s deadline, explicit dismissal, or a newer
+   Undo card. Reserve a compact upper-right lane for the secondary Close key
+   without competing with the amber Undo. */
+.agent-toast[data-undo-toast='true'] {
+  position: relative;
+  padding-right: 4.75rem;
+}
+
+.agent-toast .agent-toast-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.2rem 0.45rem;
+  border-color: var(--hairline);
+  background: transparent;
+  font-size: var(--type-label);
+  line-height: var(--leading-prose);
+  color: var(--text-muted);
+}
+
+.agent-toast .agent-toast-close:not(:disabled):hover {
+  border-color: var(--line-strong);
+  background: var(--pm-key);
+  color: var(--text-primary);
+}
+
+.agent-toast .agent-toast-close:not(:disabled):active {
+  border-color: var(--line-strong);
+  background: var(--pm-key);
   color: var(--text-primary);
 }
 
@@ -4308,12 +4347,11 @@ input.preset-name-input:focus-visible {
   outline-offset: -2px;
 }
 
-/* Entrance: 180 ms transform/opacity only — a toast slides up into
-   place without touching layout (the region is fixed). There is NO exit
-   animation BY CONSTRUCTION: FEW-1's dismiss path removes the element
-   synchronously, so under motion preferences and reduce alike the
-   disappearance is instant — the no-animation fallback and the animated
-   path share it. */
+/* Entrance: 180 ms transform/opacity only — a toast slides up into place
+   without touching layout (the region is fixed). Actionable Undo cards stay
+   fully present for 12 s, then recede across their final 8 s before JS removes
+   them. Hover and keyboard focus pause that clock and restore full emphasis.
+   Reduced-motion users keep a fully opaque card until the same 20 s removal. */
 @media (prefers-reduced-motion: no-preference) {
   .agent-toast {
     animation: agent-toast-in 180ms ease-out;
@@ -4323,6 +4361,31 @@ input.preset-name-input:focus-visible {
     from {
       opacity: 0;
       transform: translateY(6px);
+    }
+  }
+
+  .agent-toast[data-undo-toast='true'] {
+    animation:
+      agent-toast-in 180ms ease-out,
+      agent-toast-retire 20s linear forwards;
+  }
+
+  .agent-toast[data-undo-toast='true']:hover,
+  .agent-toast[data-undo-toast='true']:focus-within {
+    animation-play-state: paused;
+    /* CSS animations outrank ordinary author declarations; important is
+       deliberate here so attention always restores full legibility. */
+    opacity: 1 !important;
+  }
+
+  @keyframes agent-toast-retire {
+    0%,
+    60% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0.28;
     }
   }
 
@@ -4457,9 +4520,9 @@ input.preset-name-input:focus-visible {
    text-muted. The amber accent is used SPARINGLY per the MC-6 spec —
    Run :active and the [error] flag only. top: 5.5rem keeps the sticky
    topbar (and the Bypass button in it) fully visible; z-index 15 sits
-   above the app layout and below agent toasts (20), which may
-   transiently overlay the panel foot and self-dismiss in 6 s — fine
-   for a dev surface. Buttons reuse .control plus a mcp-harness-* class
+   above the app layout and below agent toasts (20), which may overlay
+   the panel foot during an Undo card's 20 s window. Buttons reuse
+   .control plus a mcp-harness-* class
    for sizing; the global :focus-visible ring above applies unchanged.
    =========================================================================== */
 

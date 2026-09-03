@@ -58,10 +58,16 @@
 //     non-empty string `summary` is ignored with one console.warn (no
 //     toast, no event).
 //   Toast behavior (all toasts created by reportMutation):
-//     - auto-dismisses after 6 s; the timer pauses while the pointer
-//       hovers the toast and resumes on mouseleave;
-//     - at most 3 toasts stack — when a 4th arrives the OLDEST is
-//       removed;
+//     - transient toasts auto-dismiss after 6 s; the timer pauses while
+//       the pointer hovers the toast and resumes on mouseleave;
+//     - once a toast is associated with an Undo entry it becomes
+//       actionable: its timer is extended to 20 s, it fades gradually
+//       near expiry, and a keyboard-reachable "Close" button is added;
+//       hover or keyboard focus restores full emphasis and pauses expiry;
+//     - a newly actionable Undo toast dismisses the prior one without
+//       consuming that prior entry from the keyboard Undo stack;
+//     - at most 3 TRANSIENT toasts stack — when a 4th arrives the oldest
+//       transient toast is removed;
 //     - Escape dismisses the toast that currently contains focus
 //       (the toast div or anything inside it, e.g. the Undo button).
 //
@@ -77,11 +83,11 @@
 //     returns false.
 //     Visible human entries (refinement round, 2026-09-03, critique P2
 //     #2): a kind:'human' entry may also set announce: true. pushUndo
-//     then renders ONE transient toast carrying the entry's OWN label
+//     then renders ONE actionable toast carrying the entry's OWN label
 //     (the same operator vocabulary the stack derives — there is no
 //     second one), tagged data-human-edit="true". It is the ordinary
-//     .agent-toast card — 6 s auto-dismiss with hover-pause, the 3-toast
-//     cap, Escape — and it hosts the Undo key through the existing
+//     .agent-toast card — a 20 s window with hover/focus pause and Close —
+//     and it hosts the Undo key through the existing
 //     one-button invariant while its entry is the stack's newest. Undo
 //     from it runs the SAME guarded undo() as the shortcut; the restore
 //     stays SILENT (no 'Undone' note — the chain, register, and stage
@@ -106,7 +112,7 @@
 //     'agentui:undo-failed' with detail
 //     { label, remaining, confirmed, errorText }. A successful restore
 //     marks the entry's associated toast undone (or creates a recovery
-//     status if the original expired), then fires event 'agentui:undo'
+//     status if the original was dismissed), then fires event 'agentui:undo'
 //     on document with detail
 //     { label, remaining, confirmed } (remaining = stack depth after
 //     the pop). The toast's Undo button is removed and an
@@ -117,7 +123,7 @@
 //     no longer matches the current state revision — i.e. a HUMAN edited
 //     the chain or presets after the agent mutation — undo() does NOT
 //     apply or pop anything. Instead it re-renders the entry's own toast
-//     (or a new recovery toast if the original expired) as a confirm
+//     (or a new recovery toast if the original was dismissed) as a confirm
 //     step: a .agent-toast-conflict
 //     note ("You changed the chain or presets after this. Undo
 //     anyway?"), the button relabeled "Undo anyway" with
@@ -133,8 +139,8 @@
 //     the button (visibility re-syncs on every push/clear/undo); only the
 //     active entry's toast carries one — and the Ctrl/Cmd+Z
 //     shortcut. Issue #6: the shortcut consults the undo STACK, not the
-//     toasts, so the recovery path stays available beyond the 6 s toast
-//     lifetime; it performs an undo only when the newest entry is NOT
+//     toasts, so the recovery path stays available after explicit toast
+//     dismissal; it performs an undo only when the newest entry is NOT
 //     conflicted (a conflicted entry needs the toast's explicit
 //     "Undo anyway" confirm, so the key recreates that affordance but
 //     keeps its native meaning).
@@ -164,7 +170,8 @@
 //     div.agent-toast with role="status" aria-live="polite", containing
 //     a .agent-toast-summary, optional .agent-toast-clamped /
 //     .agent-toast-error / .agent-toast-conflict / .agent-toast-undone
-//     / .agent-toast-undo-failed notes, and (per the undo rules above) a
+//     / .agent-toast-undo-failed notes, a keyboard-reachable Close
+//     button on actionable Undo toasts, and (per the undo rules above) a
 //     keyboard-reachable <button> labeled 'Undo' (relabeled 'Undo
 //     anyway' while a conflict confirm is pending — issue #6). An
 //     announced human entry's toast additionally carries
@@ -192,6 +199,7 @@
   var UNDO_CONFLICT_EVENT = 'agentui:undo-conflict';
 
   var TOAST_LIFETIME_MS = 6000;
+  var UNDO_TOAST_LIFETIME_MS = 20000;
   var TOAST_MAX = 3;
   var UNDO_CAP = 20;
 
@@ -351,9 +359,11 @@
   /**
    * Build one agent toast from the render-relevant parts of a
    * reportMutation() detail and append it to the region, enforcing the
-   * 3-toast cap (oldest removed). Timer behavior per the contract:
-   * 6 s auto-dismiss, paused while hovered; Escape (handled below)
-   * dismisses immediately when the toast contains focus.
+   * 3-transient-toast cap (oldest transient removed). Timer behavior per
+   * the contract: 6 s auto-dismiss, paused while hovered, unless the
+   * toast is later associated with Undo and receives a 20 s actionable
+   * window. Escape (handled below) dismisses immediately when the toast
+   * contains focus.
    *
    * @param {{summary: string, clamped?: string[], errorText?: string}} detail
    * @returns {HTMLElement} the toast element.
@@ -386,24 +396,109 @@
     // 6 s auto-dismiss with hover-pause. `dismissAt` tracks when the
     // timer would have fired so a mouseenter -> mouseleave cycle can
     // resume with exactly the time that was left, never a fresh 6 s.
+    var isUndoToast = false;
+    var isHovered = false;
+    var hasFocus = false;
+    var isDismissed = false;
     var dismissAt = Date.now() + TOAST_LIFETIME_MS;
     var remainingMs = TOAST_LIFETIME_MS;
     var timeoutId = window.setTimeout(dismiss, TOAST_LIFETIME_MS);
 
     function dismiss() {
+      if (isDismissed) {
+        return;
+      }
+      isDismissed = true;
       window.clearTimeout(timeoutId);
       toastEl.remove();
     }
 
-    toastEl.addEventListener('mouseenter', function () {
+    function scheduleDismiss(delayMs) {
+      if (isDismissed) {
+        return;
+      }
+      window.clearTimeout(timeoutId);
+      remainingMs = delayMs;
+      dismissAt = Date.now() + remainingMs;
+      timeoutId = window.setTimeout(dismiss, remainingMs);
+    }
+
+    function pauseDismiss() {
+      if (isDismissed) {
+        return;
+      }
       window.clearTimeout(timeoutId);
       remainingMs = Math.max(0, dismissAt - Date.now());
+    }
+
+    function resumeDismiss() {
+      if (isDismissed || isHovered || hasFocus) {
+        return;
+      }
+      scheduleDismiss(remainingMs);
+    }
+
+    function makeUndoToast() {
+      if (isUndoToast) {
+        return;
+      }
+
+      // Only the newest actionable card stays on stage. Removing an older
+      // card never touches its stack entry; Ctrl/Cmd+Z still walks the full
+      // history in LIFO order.
+      liveToasts().forEach(function (candidate) {
+        if (
+          candidate !== toastEl &&
+          candidate.getAttribute('data-undo-toast') === 'true'
+        ) {
+          if (typeof candidate.__agentToastDismiss === 'function') {
+            candidate.__agentToastDismiss();
+          } else {
+            candidate.remove();
+          }
+        }
+      });
+
+      isUndoToast = true;
+      toastEl.setAttribute('data-undo-toast', 'true');
+
+      var closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'control agent-toast-close';
+      closeBtn.textContent = 'Close';
+      closeBtn.setAttribute('aria-label', 'Close change notification');
+      closeBtn.addEventListener('click', dismiss);
+      toastEl.appendChild(closeBtn);
+
+      scheduleDismiss(UNDO_TOAST_LIFETIME_MS);
+    }
+
+    // Internal lifecycle hooks let Undo association and transient-stack
+    // cleanup reuse this toast's timer-aware behavior without exposing
+    // either operation on the public AgentUI surface.
+    toastEl.__agentToastDismiss = dismiss;
+    toastEl.__agentToastMakeUndoToast = makeUndoToast;
+
+    toastEl.addEventListener('mouseenter', function () {
+      isHovered = true;
+      pauseDismiss();
     });
 
     toastEl.addEventListener('mouseleave', function () {
-      window.clearTimeout(timeoutId);
-      dismissAt = Date.now() + remainingMs;
-      timeoutId = window.setTimeout(dismiss, remainingMs);
+      isHovered = false;
+      resumeDismiss();
+    });
+
+    // Keyboard users receive the same reading window as pointer users.
+    // focusin/focusout bubble across both Close and Undo.
+    toastEl.addEventListener('focusin', function () {
+      hasFocus = true;
+      pauseDismiss();
+    });
+
+    toastEl.addEventListener('focusout', function () {
+      hasFocus = false;
+      resumeDismiss();
     });
 
     // Escape dismisses the FOCUSED toast — this handler lives on the
@@ -420,10 +515,23 @@
 
     toastRegionEl.appendChild(toastEl);
 
-    // Cap the stack at 3 — the oldest toast is removed to make room.
-    while (toastRegionEl.children.length > TOAST_MAX) {
-      toastRegionEl.removeChild(toastRegionEl.firstChild);
+    // Cap only transient cards. The current Undo card owns its separate
+    // 20-second window and is cleaned when a newer Undo takes focus.
+    var transientToasts = liveToasts().filter(function (candidate) {
+      return candidate.getAttribute('data-undo-toast') !== 'true';
+    });
+    while (transientToasts.length > TOAST_MAX) {
+      var oldestTransient = transientToasts.shift();
+      if (typeof oldestTransient.__agentToastDismiss === 'function') {
+        oldestTransient.__agentToastDismiss();
+      } else {
+        oldestTransient.remove();
+      }
     }
+
+    // A bounded, scrollable region keeps stacked notifications from covering
+    // the app; keep the newest notification in view as the list grows.
+    toastRegionEl.scrollTop = toastRegionEl.scrollHeight;
 
     refreshUndoButtons();
     return toastEl;
@@ -462,11 +570,15 @@
     if (toastEl && detail.rejected !== true) {
       if (
         pendingUndoEntry &&
-        undoStack.indexOf(pendingUndoEntry) !== -1
+        undoStack.indexOf(pendingUndoEntry) !== -1 &&
+        undoStack[undoStack.length - 1] === pendingUndoEntry
       ) {
         associateUndoEntryWithToast(pendingUndoEntry, toastEl);
         pendingUndoEntry = null;
       } else {
+        // A later human entry may have become newest before this report.
+        // Never let that stale handoff bind an unrelated agent summary.
+        pendingUndoEntry = null;
         // Support reportMutation() immediately before pushUndo(). Do not
         // leave an arbitrary toast claimable after the current turn.
         unclaimedMutationToast = toastEl;
@@ -563,7 +675,7 @@
   }
 
   /**
-   * Render the transient toast for an announced human edit: the entry's
+   * Render the actionable toast for an announced human edit: the entry's
    * own label on the ordinary .agent-toast card, tagged
    * data-human-edit="true" and bound to its entry so the one-button
    * invariant puts the Undo key on it while the entry is newest. No
@@ -650,6 +762,9 @@
     }
     entry.toastEl = toastEl;
     entry.hasToastAssociation = true;
+    if (typeof toastEl.__agentToastMakeUndoToast === 'function') {
+      toastEl.__agentToastMakeUndoToast();
+    }
   }
 
   /** @returns {HTMLElement|null} the entry's associated toast when still live. */
@@ -667,7 +782,7 @@
 
   /**
    * Find the entry's own toast, or create a new status toast when its
-   * original notification expired. A never-associated legacy entry may
+   * original notification was dismissed. A never-associated legacy entry may
    * claim the current Undo-button toast; an entry whose known toast died
    * never falls through to an unrelated notification.
    */
@@ -698,7 +813,7 @@
   /**
    * Issue #6: re-render the entry's associated toast as the undo
    * conflict's confirm step — or create a recovery toast when the
-   * original expired. A .agent-toast-conflict note asks the question,
+   * original was dismissed. A .agent-toast-conflict note asks the question,
    * and the toast's Undo button is relabeled "Undo anyway" with
    * data-confirm-undo="true" (the button's click handler reads that
    * attribute, so its SECOND press is the explicit confirmation).
@@ -822,6 +937,7 @@
     undoStack.splice(index, 1);
     markUndoEntryToastUndone(entry);
     refreshUndoButtons();
+    focusNewestAssociatedUndo();
     emit(UNDO_EVENT, {
       label: entry.label,
       remaining: undoStack.length,
@@ -862,7 +978,7 @@
 
   /**
    * Add or update the failure note on the entry's associated toast,
-   * recreating a recovery toast when the original expired. The undo
+   * recreating a recovery toast when the original was dismissed. The undo
    * entry and button remain available for retry.
    *
    * @param {Object} entry
@@ -923,8 +1039,8 @@
   /**
    * Mark the entry's associated toast as undone: remove its Undo button,
    * set data-undone="true" (so a second call cannot double-annotate),
-   * and append an "Undone — <label>" note. If its original toast has
-   * expired, create and mark a new completion toast instead of touching
+   * and append an "Undone — <label>" note. If its original toast was
+   * dismissed, create and mark a new completion toast instead of touching
    * an unrelated notification.
    * The toast's role="status" aria-live="polite" announces the change.
    *
@@ -1035,6 +1151,25 @@
     });
   }
 
+  /**
+   * When one Undo completes, an older associated entry may become current
+   * after its original card was cleaned up by the newer action. Bring that
+   * newly current recovery control back into focus. Silent human parameter
+   * entries remain silent because they were never associated with a toast.
+   */
+  function focusNewestAssociatedUndo() {
+    if (undoStack.length === 0) {
+      return;
+    }
+    var newestEntry = undoStack[undoStack.length - 1];
+    if (
+      newestEntry.hasToastAssociation === true &&
+      !liveToastForEntry(newestEntry)
+    ) {
+      ensureToastForEntry(newestEntry, 'Undo available — ' + newestEntry.label);
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Keyboard.
   // ---------------------------------------------------------------------
@@ -1053,8 +1188,8 @@
    *     an empty stack the key keeps its native meaning.
    *
    * Issue #6: the shortcut consults the undo STACK, not the presence of
-   * a live toast — the recovery path stays available beyond the toast's
-   * 6 s lifetime, with the same conflict rules as the toast button. A
+   * a live toast — the recovery path stays available after explicit toast
+   * dismissal, with the same conflict rules as the toast button. A
    * CONFLICTED newest entry cannot be confirmed from the keyboard (the
    * confirm affordance is the toast's "Undo anyway" button), so the key
    * surfaces or recreates that button but passes through untouched.

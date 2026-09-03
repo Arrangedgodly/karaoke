@@ -1218,7 +1218,7 @@ async function main() {
   }
 
   // --------------------------------------------------------------------
-  console.log('R3. beyond-toast recovery: Cmd/Ctrl+Z after the toasts die');
+  console.log('R3. beyond-toast recovery: Cmd/Ctrl+Z after explicit toast dismissal');
   // --------------------------------------------------------------------
   {
     // Non-conflicted: the keyboard path finds the latest entry.
@@ -1236,7 +1236,7 @@ async function main() {
       prevented === true &&
         paramOf(env, 'n5', 'mix') === 20 &&
         sandbox.AgentUI.canUndo() === false,
-      'R3a: Cmd/Ctrl+Z STILL recovered the undo beyond the toast lifetime (non-conflicted)'
+      'R3a: Cmd/Ctrl+Z STILL recovered the undo after toast dismissal (non-conflicted)'
     );
   }
   {

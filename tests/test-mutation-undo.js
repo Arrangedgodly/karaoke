@@ -262,12 +262,27 @@ var domListeners = {};
 
 function createSandbox() {
   var bodyEl = makeElement('body');
+  var scheduledTimeouts = [];
   var sandbox = {
     console: console,
     setTimeout: function (fn, ms) {
-      return setTimeout(fn, ms);
+      var record = { fn: fn, ms: ms, active: true, id: null };
+      record.id = setTimeout(function () {
+        if (!record.active) {
+          return;
+        }
+        record.active = false;
+        fn();
+      }, ms);
+      scheduledTimeouts.push(record);
+      return record.id;
     },
     clearTimeout: function (id) {
+      scheduledTimeouts.forEach(function (record) {
+        if (record.id === id) {
+          record.active = false;
+        }
+      });
       return clearTimeout(id);
     },
     setInterval: function (fn, ms) {
@@ -310,6 +325,26 @@ function createSandbox() {
   };
   sandbox.window = sandbox;
   sandbox.__body = bodyEl;
+  function fireTimeoutsWhere(predicate) {
+    scheduledTimeouts.slice().forEach(function (record) {
+      if (!record.active || !predicate(record.ms)) {
+        return;
+      }
+      record.active = false;
+      clearTimeout(record.id);
+      record.fn();
+    });
+  }
+  sandbox.__fireTimeouts = function (ms) {
+    fireTimeoutsWhere(function (scheduledMs) {
+      return scheduledMs === ms;
+    });
+  };
+  sandbox.__fireTimeoutsAtLeast = function (ms) {
+    fireTimeoutsWhere(function (scheduledMs) {
+      return scheduledMs >= ms;
+    });
+  };
   sandbox.AudioEngine = {
     isStarted: true,
     audioContext: {
@@ -545,6 +580,18 @@ async function main() {
       undoBtnA.textContent === 'Undo',
     'A5: the toast carries the keyboard-reachable Undo button'
   );
+  var closeBtnA = toastA ? toastA.querySelector('.agent-toast-close') : null;
+  check(
+    !!closeBtnA &&
+      String(closeBtnA.tagName).toUpperCase() === 'BUTTON' &&
+      closeBtnA.textContent === 'Close',
+    'A5: the actionable toast carries an explicit Close button'
+  );
+  sandbox.__fireTimeouts(6000);
+  check(
+    liveToasts(sandbox).indexOf(toastA) !== -1,
+    'A5: the actionable Undo toast remains after the former 6-second expiry'
+  );
 
   // --------------------------------------------------------------------
   console.log('B. Undo — the exact path the toast button runs');
@@ -616,6 +663,14 @@ async function main() {
     !!toastB && toastB.querySelector('.agent-toast-undo') === null,
     'B4: the toast\'s Undo button was removed (nothing left to undo)'
   );
+  var closeBtnB = toastB ? toastB.querySelector('.agent-toast-close') : null;
+  if (closeBtnB) {
+    closeBtnB.__fire('click');
+  }
+  check(
+    liveToasts(sandbox).indexOf(toastB) === -1,
+    'B4: Close explicitly dismisses the retained toast after Undo'
+  );
 
   // A second Undo through the same path is a safe no-op (stack empty).
   var undoResult = sandbox.AgentUI.undo();
@@ -661,6 +716,98 @@ async function main() {
   check(failedResult === null && sandbox.AgentUI.canUndo() === true,
     'C3: a rejected async restore retains the entry for retry');
   sandbox.AgentUI.clearUndo();
+
+  // --------------------------------------------------------------------
+  console.log('D. focused Undo window, attention pause, and transient cleanup');
+  // --------------------------------------------------------------------
+  var retention = createSandbox();
+  loadSrc(retention, 'src/agent-ui.js');
+  for (var i = 0; i < 4; i++) {
+    retention.AgentUI.pushUndo({
+      label: 'retained edit ' + i,
+      restore: function () {}
+    });
+    retention.AgentUI.reportMutation({
+      source: 'agent',
+      summary: 'Retained edit ' + i,
+      nodeIds: ['n' + i]
+    });
+  }
+  var focusedToasts = liveToasts(retention);
+  check(
+    focusedToasts.length === 1 &&
+      focusedToasts[0].getAttribute('data-undo-toast') === 'true' &&
+      focusedToasts[0].querySelector('.agent-toast-summary').textContent === 'Retained edit 3' &&
+      !!focusedToasts[0].querySelector('.agent-toast-close') &&
+      retention.AgentUI.canUndo() === true,
+    'D1: each new Undo cleans up the prior card, focuses the latest, and preserves stack history'
+  );
+  retention.__fireTimeouts(6000);
+  check(
+    liveToasts(retention).length === 1,
+    'D2: the focused Undo card survives the old 6-second expiry'
+  );
+
+  var focusedToast = focusedToasts[0];
+  focusedToast.__fire('mouseenter');
+  retention.__fireTimeoutsAtLeast(20000);
+  check(
+    liveToasts(retention).indexOf(focusedToast) !== -1,
+    'D3: hovering pauses the 20-second dismissal window'
+  );
+  focusedToast.__fire('mouseleave');
+  retention.__fireTimeoutsAtLeast(19000);
+  check(
+    liveToasts(retention).indexOf(focusedToast) === -1 && retention.AgentUI.canUndo() === true,
+    'D3: the resumed 20-second window dismisses the card without consuming keyboard Undo'
+  );
+
+  retention.AgentUI.pushUndo({
+    label: 'keyboard attended edit',
+    restore: function () {}
+  });
+  retention.AgentUI.reportMutation({
+    source: 'agent',
+    summary: 'Keyboard attended edit',
+    nodeIds: ['keyboard-node']
+  });
+  var keyboardToast = liveToasts(retention)[0];
+  keyboardToast.__fire('focusin');
+  retention.__fireTimeoutsAtLeast(20000);
+  check(
+    liveToasts(retention).indexOf(keyboardToast) !== -1,
+    'D4: keyboard focus pauses the same dismissal window'
+  );
+  keyboardToast.__fire('focusout');
+  retention.__fireTimeoutsAtLeast(19000);
+  check(
+    liveToasts(retention).indexOf(keyboardToast) === -1,
+    'D4: dismissal resumes after keyboard focus leaves'
+  );
+
+  for (var j = 0; j < 4; j++) {
+    retention.AgentUI.reportMutation({
+      source: 'agent',
+      summary: 'Refused transient ' + j,
+      rejected: true,
+      errorText: 'No change was applied.'
+    });
+  }
+  var mixedToasts = liveToasts(retention);
+  check(
+    mixedToasts.length === 3 && mixedToasts.every(function (toast) {
+      return toast.getAttribute('data-undo-toast') !== 'true';
+    }),
+    'D5: ordinary transient cleanup remains capped at three'
+  );
+
+  var cssSource = fs.readFileSync(path.join(ROOT, 'styles/main.css'), 'utf8');
+  check(
+    /agent-toast-retire 20s linear forwards/.test(cssSource) &&
+      /data-undo-toast='true'\]:hover/.test(cssSource) &&
+      /data-undo-toast='true'\]:focus-within/.test(cssSource),
+    'D6: the 20-second fade yields to both hover and keyboard focus'
+  );
 
   // --------------------------------------------------------------------
   if (failures.length === 0) {

@@ -495,6 +495,10 @@ async function main() {
   var fBtn = fToasts.length === 1 ? undoBtnOf(fToasts[0]) : null;
   check(!!fBtn && String(fBtn.tagName).toUpperCase() === 'BUTTON' && fBtn.textContent === 'Undo',
     'F1: it carries the keyboard-reachable Undo key');
+  var fCloseBtn = fToasts.length === 1 ? fToasts[0].querySelector('.agent-toast-close') : null;
+  check(fToasts.length === 1 && fToasts[0].getAttribute('data-undo-toast') === 'true' &&
+      !!fCloseBtn && fCloseBtn.textContent === 'Close',
+    'F1: its Undo evidence gets the extended window and an explicit Close');
   check(r.pushes.length === 1 && r.canUndo() === true,
     'F1: exactly one undo entry backs it (the one shared stack)');
   check(r.events('agentui:mutation').length === 0,
@@ -524,11 +528,11 @@ async function main() {
     preset: { name: 'Warm Ballad', modified: false }
   });
   var f4Toasts = r.toasts();
-  check(f4Toasts.length === 2 && isHumanToastCard(f4Toasts[1]) &&
-      toastSummary(f4Toasts[1]) === "Try 'Warm Ballad'",
-    'F4: a preset try-load raises one toast labeled "Try \'Warm Ballad\'"');
-  check(f4Toasts.length === 2 && !!undoBtnOf(f4Toasts[1]) && undoBtnOf(f4Toasts[0]) === null,
-    'F4: the Undo key moved to the newest entry\'s toast (the one-button invariant holds)');
+  check(f4Toasts.length === 1 && isHumanToastCard(f4Toasts[0]) &&
+      toastSummary(f4Toasts[0]) === "Try 'Warm Ballad'",
+    'F4: a preset try-load replaces the prior card with "Try \'Warm Ballad\'"');
+  check(f4Toasts.length === 1 && !!undoBtnOf(f4Toasts[0]),
+    'F4: the newest entry\'s toast is the only focused Undo card');
 
   // F5: the agent path's toast behavior is unchanged.
   r.window.AgentUI.reportMutation({
@@ -538,12 +542,12 @@ async function main() {
   });
   var f5Toasts = r.toasts();
   var f5Mut = r.events('agentui:mutation');
-  check(f5Toasts.length === 3 && !isHumanToastCard(f5Toasts[2]) &&
-      String(toastSummary(f5Toasts[2])).indexOf('Agent set') === 0,
+  check(f5Toasts.length === 2 && !isHumanToastCard(f5Toasts[1]) &&
+      String(toastSummary(f5Toasts[1])).indexOf('Agent set') === 0,
     'F5: reportMutation still raises its own toast — untagged, in its own summary voice');
   check(f5Mut.length === 1 && f5Mut[0].detail.source === 'agent',
     'F5: agentui:mutation fired exactly once, only for the agent report');
-  check(f5Toasts.length === 3 && !!undoBtnOf(f5Toasts[1]) && undoBtnOf(f5Toasts[2]) === null,
+  check(f5Toasts.length === 2 && !!undoBtnOf(f5Toasts[0]) && undoBtnOf(f5Toasts[1]) === null,
     'F5: the agent toast does not take the Undo key — it stays on the newest entry\'s own card');
 
   // F6: undo FROM the human toast routes through the guarded pop path
@@ -613,10 +617,8 @@ async function main() {
   var qConflict = qToasts.filter(function (t) {
     return t.getAttribute('data-conflict') === 'true';
   })[0];
-  check(!!qHuman &&
-      qHuman.getAttribute('data-conflict') !== 'true' &&
-      qHuman.querySelector('.agent-toast-conflict') === null,
-    'F8: the human card carries no conflict question');
+  check(!qHuman,
+    'F8: the prior human card is cleaned when the conflicted agent Undo takes focus');
   check(!!qConflict && !isHumanToastCard(qConflict) &&
       qConflict.children.some(function (c) {
         return c.className === 'agent-toast-conflict';

@@ -259,6 +259,11 @@ is secondary evidence, not a substitute for section 4.
       the preset.
 - [ ] Undo (toast button and Ctrl/Cmd+Z) after each applied mutation:
       chain and preset state return exactly (`get_chain` matches).
+- [ ] Leave an actionable summary toast untouched for at least 10 seconds.
+      It remains visible with Undo, then fades gradually and dismisses at about
+      20 seconds. Hover or keyboard-focus it during the fade: it returns to full
+      emphasis and pauses dismissal. Apply a second mutation and confirm the
+      prior card cleans up while Ctrl/Cmd+Z still retains its history.
 - [ ] Date / operator / result: ____________
 
 ## 6. Latency readout sanity

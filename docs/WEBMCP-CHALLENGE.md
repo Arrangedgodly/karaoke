@@ -84,8 +84,10 @@ These survive every layout experiment:
 2. **Human safety authority.** The agent cannot Start or Stop the engine,
    choose the microphone, engage Bypass, or restore watchdog-muted output.
 3. **Visible results.** Every agent mutation changes the visible interface,
-   produces a plain change summary, and offers Undo. A refusal must be visible
-   and leave the chain unchanged.
+   produces a plain change summary, and offers Undo. The current actionable
+   summary stays fully visible long enough to test, fades near the end of a
+   20-second window, and returns to full emphasis while attended. A refusal must
+   be visible and leave the chain unchanged.
 4. **Pre-Start parity.** Chain mutations are refused before Start while human
    editing is gated. Reads may remain available.
 5. **Audio invariants.** The limiter stays last, the fixed -6 dBFS host
