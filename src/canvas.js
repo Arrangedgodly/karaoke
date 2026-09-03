@@ -651,6 +651,14 @@
     cancelPaletteDrag();
   }
 
+  /** The keyboard-reorder mechanism in words — ONE string, TWO mouths:
+   *  the grip's aria-label announces it and the register's help line
+   *  teaches it to sighted keyboard operators (critique P3 #4,
+   *  2026-09-03: the gesture lived only inside the aria-label, invisible
+   *  to anyone not running a screen reader). Single-sourced so the
+   *  announced name and the visible hint can never drift apart. */
+  var REORDER_KEY_HINT = 'Alt+Left or Alt+Right reorders it in the chain';
+
   /** Keyboard equivalent (2026-09-01, accessibility commitment — see
    *  PRODUCT.md's non-negotiable keyboard-flow gate): with a card's drag
    *  handle focused, Alt+ArrowLeft/Right moves it one slot toward the
@@ -794,6 +802,13 @@
       arrow.appendChild(mark);
       chainListEl.insertBefore(arrow, card);
     });
+
+    // Live-signal surface (2026-09-02): the lamps cache these marks, so
+    // every rebuild (structural edit, drag ghost move) must drop their
+    // cache — one guarded ping, the SimpleView.onChainChanged pattern.
+    if (window.SignalLamps && typeof window.SignalLamps.onArrowsRendered === 'function') {
+      window.SignalLamps.onArrowsRendered();
+    }
   }
 
   renderChainArrows();
@@ -2023,9 +2038,12 @@
     // label states the mechanism directly since there is no simpler
     // standard role for "focus this, then hold a modifier+arrow to move
     // it" — a plain "button" role would promise a single-press activation
-    // this control does not have.
+    // this control does not have. The mechanism words are REORDER_KEY_HINT
+    // (single-sourced): the same sentence the register's help line
+    // teaches on focus below, so the aria and the visible hint are one
+    // voice.
     handle.setAttribute('tabindex', '0');
-    handle.setAttribute('aria-label', 'Move ' + effectLabel(type) + ' — Alt+Left or Alt+Right reorders it in the chain');
+    handle.setAttribute('aria-label', 'Move ' + effectLabel(type) + ' — ' + REORDER_KEY_HINT);
 
     var gripIcon = document.createElement('span');
     gripIcon.className = 'node-drag-icon';
@@ -2289,6 +2307,29 @@
       armReorderDrag(card, id, event);
     });
 
+    // THE FOCUSED GRIP TEACHES ITS KEYBOARD TWIN on the register's help
+    // line (critique P3 #4, 2026-09-03): the Alt+Arrow reorder existed
+    // only inside the aria-label, so a sighted keyboard operator could
+    // not discover the board's one keyboard gesture. ONE micro-hint at
+    // the moment of need — pushed through the SAME preview stack a hover
+    // uses (see the registerPreviewStack comment), so it COMPOSES with
+    // the card/param previews underneath instead of fighting them: the
+    // module's own hover still shows through once this blur pops, a
+    // param-row hover layered on top still wins while the pointer sits
+    // there, and blur restores exactly what the register would otherwise
+    // show. Like every preview, it commits nothing and never blinks.
+    // Repeated Alt+Arrow presses re-push it naturally: each accepted
+    // render unwinds the stack (renderModel's resetRegisterPreviews) and
+    // refocusFor() focuses the rebuilt grip, whose focus event pushes
+    // the hint again — the teaching stays on the line while the operator
+    // walks the card down the row.
+    handle.addEventListener('focus', function () {
+      showRegisterPreview(effectLabel(type), '', '', REORDER_KEY_HINT);
+    });
+    handle.addEventListener('blur', function () {
+      hideRegisterPreview();
+    });
+
     // ...and so is the SECTION ITSELF (2026-09-01 user direction: "cards
     // don't want to drag as easily as they should"). The rail alone was
     // a small strip on the card — the advertised grip, but far too
@@ -2407,9 +2448,10 @@
     // first action ("Press Start to power on") because the palette is
     // pointer-locked and adding is impossible in that state. Flipped HERE,
     // at the exact transition where the palette un-locks, to the working
-    // add verbs — click / keyboard activation. (The retired palette DRAG
-    // had no receiver on the free board, so teaching "drag" here was an
-    // invitation the surface could not honor.) updateEmptyHint() only ever
+    // add verbs — click, keyboard activation, AND drag-to-place (the
+    // palette drag the 2026-09-01 board redesign re-added, with the row
+    // as its receiver; the FREE-BOARD-era drag it replaced was the one
+    // retired for having no receiver). updateEmptyHint() only ever
     // toggles display, so the live copy persists across every later
     // empty/populated state (e.g. removing the last node re-shows it).
     if (emptyHintEl) {

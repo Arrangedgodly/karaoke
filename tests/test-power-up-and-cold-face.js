@@ -342,6 +342,8 @@ function makeSimpleSandbox(opts) {
     'D2: it borrows that preset’s OWN description, never writing one');
   check(textOf(face).indexOf('pick any of the 1 sounds') !== -1,
     'D2: the count is the library the Sounds panel is listing');
+  check(textOf(face).indexOf('on the left') === -1,
+    'D2: the sentence names no direction — the library stacks above the stage below 901px');
 
   const plates = findByClass(face, 'cold-face-plate');
   check(plates.length === CK.length,

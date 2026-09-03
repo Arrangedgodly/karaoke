@@ -209,8 +209,14 @@ async function main() {
     'A3: live graph commits before rendered state, then autosave follows');
   check(h.records.filter(function (x) { return x === 'revision:human'; }).length === 1,
     'A4: one accepted human edit bumps revision exactly once');
-  check(h.records.indexOf('preset:modified') !== -1 && h.undoEntries.length === 0,
-    'A5: a human edit marks the preset modified and never creates agent Undo');
+  check(h.records.indexOf('preset:modified') !== -1 && h.undoEntries.length === 1 &&
+      h.undoEntries[0].kind === 'human' &&
+      /^Add [Ll]imiter$/.test(h.undoEntries[0].label),
+    'A5: a human edit marks the preset modified and pushes ONE human undo entry labeled "Add Limiter"');
+  await h.undoEntries[0].restore();
+  check(JSON.stringify(h.window.ChainEditing.getModel()) === JSON.stringify([node('a', 'gain', { gainDb: 0 })]),
+    'A5: that entry\u2019s restore returns the chain to the pre-edit model through the guarded undo route');
+  h.undoEntries.length = 0;
 
   console.log('B. failed structural work rolls back or reports uncertainty');
   h = makeHarness([node('a', 'gain', { gainDb: 0 })]);

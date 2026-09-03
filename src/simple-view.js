@@ -124,6 +124,12 @@
     document.body.classList.toggle('view-advanced', view === 'advanced');
     simpleBtn.setAttribute('aria-checked', view === 'simple' ? 'true' : 'false');
     advancedBtn.setAttribute('aria-checked', view === 'advanced' ? 'true' : 'false');
+    // Roving tabindex — the keyboard half of the radiogroup contract the
+    // role above declares: Tab reaches the group once, landed on its
+    // checked member; the unchecked member is reached with the arrow
+    // keys below, not another tab stop.
+    simpleBtn.setAttribute('tabindex', view === 'simple' ? '0' : '-1');
+    advancedBtn.setAttribute('tabindex', view === 'advanced' ? '0' : '-1');
   }
 
   function switchTo(view) {
@@ -136,6 +142,31 @@
   });
   advancedBtn.addEventListener('click', function () {
     switchTo('advanced');
+  });
+
+  // Arrow keys, the other keyboard half: ARIA radios are selected with
+  // arrows and selection follows focus, exactly as a native two-radio
+  // group behaves (every arrow moves to the other member, wrapping
+  // included — with two options Up/Left and Down/Right all cross the
+  // same one gap). preventDefault keeps the arrows from scrolling the
+  // page under the operator instead of working the switch.
+  [simpleBtn, advancedBtn].forEach(function (btn) {
+    btn.addEventListener('keydown', function (event) {
+      var key = event && event.key;
+      if (key !== 'ArrowLeft' && key !== 'ArrowRight' &&
+          key !== 'ArrowUp' && key !== 'ArrowDown') {
+        return;
+      }
+      if (typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      var target = btn === simpleBtn ? 'advanced' : 'simple';
+      switchTo(target);
+      var next = target === 'advanced' ? advancedBtn : simpleBtn;
+      if (next && typeof next.focus === 'function') {
+        next.focus();
+      }
+    });
   });
 
   applyView(readStoredView());
@@ -161,6 +192,22 @@
       engine && engine.isStarted && trackLive &&
       audioContext && audioContext.state === 'running'
     );
+  }
+
+  // Emergency-bypass truth, from the same single source the deck key and
+  // the Advanced canvas read (window.AudioBypass.isEngaged) — guarded so
+  // a stripped harness answers "not engaged" rather than throwing on the
+  // stage path.
+  function bypassEngaged() {
+    try {
+      return !!(
+        window.AudioBypass &&
+        typeof window.AudioBypass.isEngaged === 'function' &&
+        window.AudioBypass.isEngaged()
+      );
+    } catch (err) {
+      return false;
+    }
   }
 
   function displayState() {
@@ -562,8 +609,11 @@
   function coldRest(chain, count) {
     var opener = chain.length === 0 ? '' : ' is loaded and waiting.';
     if (count > 0) {
+      // No direction word: the Sounds library sits beside the stage on a
+      // wide deck and stacks ABOVE it below 901px, so "on the left" was
+      // only true at one breakpoint.
       return opener + ' Press Start to hear it, or pick any of the ' +
-        count + ' sounds on the left.';
+        count + ' sounds.';
     }
     return opener + ' Press Start to hear it.';
   }
@@ -821,6 +871,35 @@
     }
   }
 
+  // The stage's emergency-bypass line: the deck sentence's own words on
+  // the surface an operator actually reads mid-show. Built lazily and
+  // managed by hidden-ness (not rebuilt) so re-renders can't churn it.
+  // aria-hidden because the deck's role="status" sentence already
+  // announces the state ONCE — a second live region would announce it
+  // twice; this line is the stage's redundant picture, the same
+  // discipline the cold-face strip's legend carries. Sits OUTSIDE
+  // .simple-stage-inner so the recede never dims it.
+  var bypassLineEl = null;
+
+  function ensureBypassLine() {
+    if (bypassLineEl || !stageEl || typeof document.createElement !== 'function') {
+      return bypassLineEl;
+    }
+    bypassLineEl = document.createElement('p');
+    bypassLineEl.className = 'simple-stage-bypass-line';
+    bypassLineEl.setAttribute('aria-hidden', 'true');
+    bypassLineEl.textContent = 'Bypassed — effects off';
+    bypassLineEl.hidden = true;
+    if (typeof stageEl.insertBefore === 'function' && stageEl.firstChild) {
+      stageEl.insertBefore(bypassLineEl, stageEl.firstChild);
+    } else if (typeof stageEl.appendChild === 'function') {
+      stageEl.appendChild(bypassLineEl);
+    } else {
+      bypassLineEl = null;
+    }
+    return bypassLineEl;
+  }
+
   function renderStage() {
     var chain = currentChain();
     var state = displayState();
@@ -844,6 +923,23 @@
       if (wasGated && engineLive) {
         wakeSurface(stageEl, 'stage-waking');
       }
+    }
+
+    // The emergency-bypass reading (harden round, 2026-09-02 critique
+    // P1): while the engine is live AND bypass is engaged, the stage
+    // must answer "what is the room hearing" — receding its content and
+    // printing the state — instead of silently naming a sound whose
+    // processing is gated off. Only ever true on a LIVE engine: a
+    // stopped engine has no bypass meaning, and the pre-Start gate
+    // above owns the stage then. Derived here, on every render, so the
+    // class can never drift from the same truth the deck key reads.
+    var bypassed = engineLive && bypassEngaged();
+    if (stageEl) {
+      stageEl.classList.toggle('stage-bypassed', bypassed);
+    }
+    var bypassLine = ensureBypassLine();
+    if (bypassLine) {
+      bypassLine.hidden = !bypassed;
     }
 
     // What stands on the stage before Start (see THE COLD FACE above).
@@ -900,14 +996,58 @@
   // taxonomy already carries (factory-library-data.js), defined HERE
   // and stored nowhere on presets (settled #43). A filter or search that
   // matches nothing gets its own plain no-results message below.
+  // The plain filters (2026-09-02 regrouping): the original four were
+  // named against the six-sound seed library — at 33 sounds "Rock"
+  // caught exactly ONE preset and "Speech" four, while the asks a
+  // karaoke operator actually makes ("more echo", "sound deeper", "the
+  // robot voice", "fix my mic") had no chip at all. Each filter below
+  // is still a named query over EXISTING tags (stored nowhere new, the
+  // settled contract): cross-axis queries compose several tags because
+  // one ask legitimately spans them — "Big echo" is long-ambience OR
+  // spacious (whichever axis the audition tagged), "Funny" the whole
+  // gag axis, "Clean & clear" the cleanup use-case CONTEXT.md calls
+  // first-class plus its speech and clean-technique neighbors
+  // (absorbing the old "Speech" chip).
+  // The 2026-09-03 prune (refinement critique P2 #3, distill round):
+  // seven content-plus-reset chips exceeded the <=4-options-per-
+  // decision-point guidance, and the row was pruned by MEASUREMENT, not
+  // taste — each filter's catch over the 33-sound factory library:
+  //   Funny 10 · Big echo 7 · Warm 5 · Clean & clear 5 · Deep voices 4 · Robotic 4
+  // The four broadest survived (no tie-break needed: everything at 5+
+  // stayed, both 4s left, and no survivor's catch is a subset of
+  // another's). "Deep voices" and "Robotic" are REMOVED, not renamed —
+  // their sounds stay findable by search in BOTH views ("robot" hits
+  // Robot Usher's name and gag:robot tag; "deep" hits Deep Narrator's
+  // and Demon Growl's names), and their queries die with the chips.
+  // activeFilter() falls back to 'All' for any id no longer here, so a
+  // mid-session re-render can never reference a removed chip.
   var PLAIN_FILTERS = [
     { id: 'all', label: 'All', test: function () { return true; } },
     { id: 'warm', label: 'Warm', test: function (tags) { return tags.indexOf('vibe:warm') !== -1; } },
-    { id: 'rock', label: 'Rock', test: function (tags) { return tags.indexOf('genre:Rock') !== -1; } },
-    { id: 'funny', label: 'Funny', test: function (tags) {
-      return tags.some(function (t) { return t.indexOf('gag:') === 0; });
-    } },
-    { id: 'speech', label: 'Speech', test: function (tags) { return tags.indexOf('use-case:speech/hosting') !== -1; } }
+    {
+      id: 'echo',
+      label: 'Big echo',
+      test: function (tags) {
+        return tags.indexOf('technique:ambience-long') !== -1 ||
+          tags.indexOf('vibe:spacious') !== -1;
+      }
+    },
+    {
+      id: 'funny',
+      label: 'Funny',
+      test: function (tags) {
+        return tags.some(function (t) { return t.indexOf('gag:') === 0; });
+      }
+    },
+    {
+      id: 'clean',
+      label: 'Clean & clear',
+      test: function (tags) {
+        return tags.indexOf('use-case:cleanup') !== -1 ||
+          tags.indexOf('use-case:speech/hosting') !== -1 ||
+          tags.indexOf('technique:clean') !== -1;
+      }
+    }
   ];
 
   var libraryState = { filter: 'all', query: '' };
@@ -917,9 +1057,37 @@
   // order changes; a deleted preset's own entry is removed explicitly
   // (see the Delete click handler below) rather than lingering forever.
   var openCardMenus = {};
+  // Sharing round: a transient per-row note (Copy feedback) rendered in
+  // place of the open menu's keys for ~1.8s — the same flash pattern
+  // the gate note uses, cleared on a timer and by every rebuild.
+  var menuNotes = {};
+  var menuNoteTimers = {};
   var chipEls = {};
   var cardsListEl = null;
   var chipCountEl = null;
+
+  function flashMenuNote(name, text) {
+    menuNotes[name] = text;
+    if (menuNoteTimers[name] && typeof clearTimeout === 'function') {
+      clearTimeout(menuNoteTimers[name]);
+    }
+    if (typeof setTimeout === 'function') {
+      menuNoteTimers[name] = setTimeout(function () {
+        delete menuNotes[name];
+        renderLibraryList();
+      }, 1800);
+    }
+    renderLibraryList();
+  }
+
+  function copyShareUrl(name, url) {
+    if (!window.PresetLink || typeof window.PresetLink.copyToClipboard !== 'function') {
+      return;
+    }
+    window.PresetLink.copyToClipboard(url).then(function (ok) {
+      flashMenuNote(name, ok ? 'Link copied' : 'Copy failed — try again');
+    });
+  }
 
   function factoryEntries() {
     return (window.FactoryPresets && typeof window.FactoryPresets.listDetailed === 'function')
@@ -1032,6 +1200,12 @@
     libraryGateNoteEl.textContent = DEFAULT_GATE_NOTE;
   }
 
+  // Per-page counter for row-description ids: rows rebuild wholesale on
+  // every renderLibraryList(), so a fresh unique id per build is enough —
+  // no name-derived ids that could collide when a Yours preset shares a
+  // factory name.
+  var rowDescIdCounter = 0;
+
   function buildCard(name, description, kind, isActive) {
     var row = document.createElement('div');
     row.className = 'preset-row';
@@ -1048,11 +1222,20 @@
     var loadBtn = document.createElement('button');
     loadBtn.type = 'button';
     loadBtn.className = 'preset-row-load';
+    // The accessible name is the ACTION, never the whole card: 33 rows
+    // whose names each swallowed a full two-line description was
+    // punishing verbosity for a screen-reader operator walking the
+    // library (audit 2026-09-02, P2). The description stays available
+    // ON DEMAND through aria-describedby below — the same
+    // action-phrase-name pattern the palette chips carry ("Add EQ to
+    // chain" over the visible "EQ").
+    loadBtn.setAttribute('aria-label', 'Try ' + name);
+    var describedBy = [];
     var gated = !engineIsLive();
     if (gated) {
       // Stays focusable and clickable on purpose — see answerGatedTry().
       loadBtn.setAttribute('aria-disabled', 'true');
-      loadBtn.setAttribute('aria-describedby', 'simple-library-gate-note');
+      describedBy.push('simple-library-gate-note');
     }
 
     var nameSpan = document.createElement('span');
@@ -1064,7 +1247,16 @@
       var previewSpan = document.createElement('span');
       previewSpan.className = 'preset-row-preview';
       previewSpan.textContent = description;
+      // The description rides OUT of the accessible name and INTO the
+      // describedby chain (first, before the gate note when both are
+      // present) — visible print unchanged.
+      rowDescIdCounter += 1;
+      previewSpan.id = 'preset-row-desc-' + rowDescIdCounter;
+      describedBy.unshift(previewSpan.id);
       loadBtn.appendChild(previewSpan);
+    }
+    if (describedBy.length > 0) {
+      loadBtn.setAttribute('aria-describedby', describedBy.join(' '));
     }
 
     // "Try a preset" (CONTEXT.md's settled verb): submits through the
@@ -1101,7 +1293,42 @@
     // armed-button state Advanced's own rows use (presets-ui.js's export
     // comment), so there is still exactly one delete path.
     if (kind === 'user') {
-      if (openCardMenus[name]) {
+      if (menuNotes[name]) {
+        // Copy feedback occupies the menu slot for its flash, then the
+        // normal rebuild restores the keys.
+        var noteSpan = document.createElement('span');
+        noteSpan.className = 'simple-card-note';
+        noteSpan.textContent = menuNotes[name];
+        row.appendChild(noteSpan);
+      } else if (openCardMenus[name]) {
+        // Sharing round: the open menu carries BOTH actions — Copy link
+        // (the preset travels as a URL fragment via src/preset-link.js)
+        // and the two-step Delete. Copy answers inline: a transient
+        // "Link copied" label replaces the menu keys for a beat (the
+        // flash pattern the gate note already uses), never a dialog.
+        var copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'simple-card-copy';
+        copyBtn.textContent = 'Copy link';
+        copyBtn.addEventListener('click', function () {
+          if (!window.PresetLink || !window.PresetStore ||
+              typeof window.PresetStore.load !== 'function') {
+            return;
+          }
+          var record = window.PresetStore.load(name);
+          if (!record) {
+            return;
+          }
+          window.PresetLink.buildShareUrl(name, record.nodes).then(function (result) {
+            if (!result.ok) {
+              flashMenuNote(name, result.message);
+              return;
+            }
+            copyShareUrl(name, result.url);
+          });
+        });
+        row.appendChild(copyBtn);
+
         var deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'preset-row-delete';
@@ -1180,6 +1407,17 @@
     var currentName = displayState().name;
 
     cardsListEl.innerHTML = '';
+    // A pending shared sound reads FIRST (sharing round, 2026-09-02) —
+    // it is the event the operator just arrived on. One card builder
+    // for both views: PresetsUI owns it, so the arrival reads the same
+    // in Simple as in the Advanced panel.
+    if (window.PresetsUI && typeof window.PresetsUI.renderShareArrivalInto === 'function') {
+      try {
+        window.PresetsUI.renderShareArrivalInto(cardsListEl);
+      } catch (err) {
+        /* the library stays a library — sharing never takes it down */
+      }
+    }
     cardsListEl.appendChild(buildGroupLabel('Factory'));
     if (factory.length === 0) {
       var emptyFactoryCopy = libraryState.query.trim()
@@ -1358,6 +1596,13 @@
   window.SimpleView = {
     onChainChanged: renderAll,
     onEngineStarted: onEngineStarted,
-    onEngineStopped: renderAll
+    onEngineStopped: renderAll,
+    // The emergency-bypass notification (harden round): main.js's
+    // setBypassButtonLabel() — the one choke point every bypass state
+    // change already passes through — calls this so the stage re-derives
+    // its bypassed reading from live truth. renderStage alone (not
+    // renderAll): the library list has nothing to say about bypass, and
+    // rebuilding it would churn the gate note for nothing.
+    onBypassChanged: renderStage
   };
 })();

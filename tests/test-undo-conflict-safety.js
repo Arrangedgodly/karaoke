@@ -595,6 +595,23 @@ function undoButton(toast) {
   return toast ? toast.querySelector('.agent-toast-undo') : null;
 }
 
+// The live toast currently carrying the one Undo key. Since the
+// 2026-09-03 visible-entry round (critique P2 #2) the key follows the
+// newest ENTRY's own card: a human structural edit raises its own
+// data-human-edit toast which hosts the key only while its entry is
+// the stack's newest — so the key-bearer is not always the NEWEST
+// toast. Exactly one live toast carries the key at any moment (the
+// one-button invariant); this finds it.
+function buttonToast(env) {
+  var toasts = liveToasts(env);
+  for (var i = toasts.length - 1; i >= 0; i--) {
+    if (undoButton(toasts[i])) {
+      return toasts[i];
+    }
+  }
+  return null;
+}
+
 function dismissAllToasts(env) {
   var toasts = liveToasts(env);
   toasts.forEach(function (toast) {
@@ -665,6 +682,112 @@ function seedDefault(env) {
     candidate: env.sandbox.DEFAULT_PRESET.nodes,
     forceStructural: true
   });
+}
+
+// ----------------------------------------------------------------------
+// Chain-edit conflict runner (harden round, 2026-09-02): a HUMAN CHAIN
+// edit (slider / palette-add / removal) now pushes its own undo entry
+// above the agent's, so the Undo sequence is two-step — the first press
+// silently reverts YOUR edit (the feature's whole point: Ctrl+Z simply
+// works), and only then does the agent entry underneath surface its
+// conflict, exactly as before. Store-side bumps that push nothing
+// (preset overwrite/delete) keep the original one-step conflict via
+// conflictCase below.
+// ----------------------------------------------------------------------
+async function chainEditCase(caseLabel, humanEdit, assertHumanState) {
+  // -- Part 1: first press silently undoes the HUMAN edit. -----------
+  var env = createEnv();
+  var sandbox = env.sandbox;
+  await seedDefault(env);
+  await settle();
+  await agentSetParamMix40(env);
+  await settle();
+  humanEdit(env);
+  await settle();
+  assertHumanState(env, caseLabel);
+
+  var toast = newestToast(env);
+  var btn = undoButton(toast);
+  check(!!btn && btn.textContent === 'Undo', caseLabel + ': the toast carries the Undo button');
+  env.domEvents.length = 0;
+  btn.__fire('click'); // FIRST press — reverts the human edit, silently.
+  await settle();
+  check(
+    eventsOfType(env, 'agentui:undo').length === 1 &&
+      eventsOfType(env, 'agentui:undo-conflict').length === 0 &&
+      sandbox.AgentUI.canUndo() === true,
+    caseLabel + ': first Undo press silently consumed the HUMAN entry (agent entry retained)'
+  );
+  check(
+    paramOf(env, 'n5', 'mix') === 40 &&
+      modelOf(env).length === 6 &&
+      modelOf(env).filter(function (n) { return n.id === 'n3'; }).length === 1,
+    caseLabel + ': the human edit is reverted to the agent-applied state (mix 40, 6 nodes)'
+  );
+
+  // -- Part 2: the second press surfaces the agent entry's conflict. --
+  // After the first press consumed the human entry, the key sits on the
+  // AGENT mutation's own card — which may not be the newest toast now
+  // that a human structural edit leaves its own (key-retired) card
+  // above it. buttonToast finds the key-bearer wherever it lives.
+  var secondBtn = undoButton(buttonToast(env));
+  if (secondBtn) {
+    secondBtn.__fire('click'); // second press — the agent entry underneath.
+  }
+  await settle();
+  var conflictEvents = eventsOfType(env, 'agentui:undo-conflict');
+  var undoEvents = eventsOfType(env, 'agentui:undo');
+  var toastAfter = buttonToast(env);
+  var confirmBtn = undoButton(toastAfter);
+  check(
+    undoEvents.length === 1 && conflictEvents.length === 1,
+    caseLabel + ': the agent entry refused without confirmation (one undo, one conflict)'
+  );
+  check(
+    !!toastAfter &&
+      toastAfter.getAttribute('data-conflict') === 'true' &&
+      toastAfter.children.some(function (c) {
+        return classList(c).indexOf('agent-toast-conflict') !== -1 &&
+          c.textContent.indexOf('Undo anyway?') !== -1;
+      }) &&
+      !!confirmBtn && confirmBtn.textContent === 'Undo anyway',
+    caseLabel + ': the conflict note and "Undo anyway" affordance are up'
+  );
+
+  // -- Part 3: explicit confirmation applies the agent restore. -------
+  if (confirmBtn) {
+    confirmBtn.__fire('click');
+    await settle();
+    check(
+      paramOf(env, 'n5', 'mix') === 20 && modelOf(env).length === 6,
+      caseLabel + ': confirmed Undo restored the pre-agent snapshot (mix 20)'
+    );
+    check(sandbox.AgentUI.canUndo() === false, caseLabel + ': the stack is empty after both undos');
+  }
+
+  // -- Part 4: beyond-toast recovery, the two-step way. ---------------
+  var env2 = createEnv();
+  await seedDefault(env2);
+  await settle();
+  await agentSetParamMix40(env2);
+  await settle();
+  humanEdit(env2);
+  await settle();
+  dismissAllToasts(env2);
+  var first = env2.sandbox.AgentUI.undo();
+  await settle();
+  check(
+    !!first && paramOf(env2, 'n5', 'mix') === 40,
+    caseLabel + ': keyboard/toastless path undoes the human edit first'
+  );
+  var direct = env2.sandbox.AgentUI.undo();
+  var prevented = fireKeyboardUndo(env2);
+  await settle();
+  check(
+    direct === null && prevented === false && env2.sandbox.AgentUI.canUndo() === true &&
+      paramOf(env2, 'n5', 'mix') === 40,
+    caseLabel + ': the agent entry underneath still refuses without confirmation'
+  );
 }
 
 // ----------------------------------------------------------------------
@@ -792,19 +915,13 @@ async function main() {
     input.__fire('input'); // the REAL param-controls input handler
     return 'slider n5.mix 80';
   }
-  await conflictCase(
+  await chainEditCase(
     '(a) slider',
     humanSlider,
     function (env, label) {
       check(
         paramOf(env, 'n5', 'mix') === 80,
         label + ': the human slider value 80 is live in the model'
-      );
-    },
-    function (env, label) {
-      check(
-        paramOf(env, 'n5', 'mix') === 20,
-        label + ': confirmed Undo restored the pre-agent snapshot (mix 20)'
       );
     }
   );
@@ -816,7 +933,7 @@ async function main() {
     env.sandbox.ChainCanvas.addNodeType('gain'); // the REAL add verb: card + commit + bump
     return 'palette-add gain';
   }
-  await conflictCase(
+  await chainEditCase(
     '(b) drag',
     humanDragAdd,
     function (env, label) {
@@ -825,12 +942,6 @@ async function main() {
           modelOf(env)[5].type === 'gain' &&
           modelOf(env)[6].type === 'limiter',
         label + ': the human palette-add is live (7 nodes; the terminal limiter STAYS terminal per the add policy)'
-      );
-    },
-    function (env, label) {
-      check(
-        modelOf(env).length === 6,
-        label + ': confirmed Undo restored the 6-node pre-agent chain'
       );
     }
   );
@@ -847,7 +958,7 @@ async function main() {
     btn.__fire('click');
     return 'remove n3';
   }
-  await conflictCase(
+  await chainEditCase(
     '(c) removal',
     humanRemove,
     function (env, label) {
@@ -855,13 +966,6 @@ async function main() {
         modelOf(env).length === 5 &&
           modelOf(env).filter(function (n) { return n.id === 'n3'; }).length === 0,
         label + ': the human removal is live (5 nodes, n3 gone)'
-      );
-    },
-    function (env, label) {
-      check(
-        modelOf(env).length === 6 &&
-          modelOf(env).filter(function (n) { return n.id === 'n3'; }).length === 1,
-        label + ': confirmed Undo restored the 6-node pre-agent chain (n3 back)'
       );
     }
   );
@@ -1136,7 +1240,10 @@ async function main() {
     );
   }
   {
-    // Conflicted: the keyboard path refuses (confirm lives on the toast).
+    // Conflicted: the keyboard path refuses (confirm lives on the toast)
+    // — but only AFTER the human edit's own entry is consumed: the harden
+    // round made chain edits undoable, so the sequence is undo-your-edit
+    // (silent) then refuse-the-agent-entry (conflict).
     var env = createEnv();
     var sandbox = env.sandbox;
     await seedDefault(env);
@@ -1146,19 +1253,25 @@ async function main() {
     humanSliderGlobal(env);
     await settle();
     dismissAllToasts(env);
+    var firstPress = fireKeyboardUndo(env);
+    await settle();
+    check(
+      firstPress === true && paramOf(env, 'n5', 'mix') === 40,
+      'R3b step 1: the first Cmd/Ctrl+Z silently undid the HUMAN slider edit (mix back to 40)'
+    );
     var prevented = fireKeyboardUndo(env);
     await settle();
     var recoveryToast = newestToast(env);
     var recoveryBtn = undoButton(recoveryToast);
     check(
       prevented === false &&
-        paramOf(env, 'n5', 'mix') === 80 &&
+        paramOf(env, 'n5', 'mix') === 40 &&
         sandbox.AgentUI.canUndo() === true &&
         !!recoveryToast &&
         recoveryToast.querySelector('.agent-toast-conflict') !== null &&
         !!recoveryBtn &&
         recoveryBtn.textContent === 'Undo anyway',
-      'R3b: Cmd/Ctrl+Z REFUSED the conflicted entry and recreated its confirm affordance'
+      'R3b: the second Cmd/Ctrl+Z REFUSED the conflicted agent entry and recreated its confirm affordance'
     );
   }
 

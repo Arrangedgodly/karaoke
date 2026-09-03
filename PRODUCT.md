@@ -75,10 +75,12 @@ one chain, one state, two control paths.
   preset and changes to "Unsaved" after the first accepted adjustment or for
   a chain built without a saved preset. Switching views changes presentation
   only; the live chain, engine, and safety floor do not change.
-- **Preset sharing**: after saving a prompted result, the user can download
-  a versioned preset JSON file. Another VoxChain user can import it into the
-  personal preset list without an account or server. Shared files contain
-  chain data only, never audio, microphone identifiers, or local settings.
+- **Preset sharing**: after saving a prompted result, the user can copy a
+  share LINK — the preset itself, compressed into the URL fragment. Opening
+  that link on another machine (or in another browser) offers the sound as a
+  one-click import into the personal preset list, without an account or
+  server. Shared links contain chain data only, never audio, microphone
+  identifiers, or local settings.
 - **Judge/demo mode**: a fresh competition-capable browser follows the short
   README path on the deployed origin. The `?dev` harness is a fallback test
   surface, not the main WebMCP demonstration.
@@ -111,8 +113,11 @@ status readouts. Cycle 3 extended the same tools to discrete string params
 no new tools.
 
 The contest release adds human-controlled personal-preset transfer through
-download and import. It reuses the existing preset schema and safety policy.
-It does not add a WebMCP tool, cloud storage, or public preset directory.
+share links: a personal preset encodes into the page URL itself, and opening
+that link offers a one-click import (with rename/replace on a name
+collision) that never loads the live chain. It reuses the existing preset
+schema and safety policy. It does not add a WebMCP tool, cloud storage, or
+public preset directory.
 
 The factory preset library is coverage-driven data rather than hand-mirrored
 loader code. Every factory preset must pass a human audition before shipping,
