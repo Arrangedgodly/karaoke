@@ -1714,11 +1714,27 @@ select.control {
   flex-direction: column;
   gap: 0;
   min-height: 60vh;
+  position: relative;
   /* The voice deck IS the lower slab of the one chassis — the
      .instrument frame provides the shell; the face carries no border,
      radius, or overflow of its own (the system deck above must stay
      position:sticky, so nothing in the frame may clip). */
   background: var(--pm-chassis);
+}
+
+/* A maker's stamp on each view. The asset stays neutral gray and the low
+   opacity keeps it in the chassis material rather than the control layer. */
+.view-logo-mark {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.65rem;
+  z-index: 2;
+  display: block;
+  width: 3rem;
+  height: auto;
+  opacity: 0.2;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* The grid-blowout guard's WIDTH half, unscoped: .layout is a column

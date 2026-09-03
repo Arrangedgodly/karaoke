@@ -144,8 +144,9 @@ Explicitly undecided product facts (recorded, not invented):
 
 - Product name (chosen by the user 2026-08-29): **"VOXCHAIN"**
   — shown in the top bar and README.
-- No logo, mark, or visual brand assets exist. **Absence is real: do not
-  fabricate brand imagery, testimonials, users, or metrics.**
+- The user-supplied microphone-and-chain mark is the product logo. The app
+  uses its neutral-gray version as a quiet chassis stamp and as the favicon.
+  Do not fabricate additional brand imagery, testimonials, users, or metrics.
 - Approved design direction (cycle-2 town-hall): dark pro-audio console —
   this is the one binding visual-world commitment.
 

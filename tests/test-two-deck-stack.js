@@ -262,12 +262,13 @@ check(
 // own vocabulary, so the panel checks below deliberately skip it.
 var faceZones = zones[1] ? zones[1].children : [];
 check(
-  faceZones.length === 4 &&
+  faceZones.length === 5 &&
     hasClass(faceZones[0], 'canvas-panel') && hasClass(faceZones[0], 'panel') &&
     hasClass(faceZones[1], 'adv-scope') &&
     hasClass(faceZones[2], 'signal-order') && hasClass(faceZones[2], 'panel') &&
-    hasClass(faceZones[3], 'effects-panel') && hasClass(faceZones[3], 'panel'),
-  '.voice-deck-face wraps [.canvas-panel, .adv-scope, .signal-order, .effects-panel] in order — the scope band sits under the board\'s OUT meter, Effects docks beneath'
+    hasClass(faceZones[3], 'effects-panel') && hasClass(faceZones[3], 'panel') &&
+    hasClass(faceZones[4], 'view-logo-mark'),
+  '.voice-deck-face keeps the four workflow zones in order, followed only by the decorative logo mark'
 );
 check(
   /<div class="adv-scope" aria-hidden="true">\s*<canvas class="adv-scope-canvas">/.test(HTML),
