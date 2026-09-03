@@ -862,6 +862,19 @@ console.log('App scaffold loaded');
       console.warn('Meters: power-up lamp test skipped.', err);
     }
 
+    // The deck's wordmark runs the same proof on the same clock, so the
+    // ladders and the name wake as one machine rather than as two
+    // animations (see THE DISPLAY SELF-TEST in src/signal-lamps.js). Its
+    // own try: a missing or older build of either surface must not cost
+    // the other its power-up.
+    try {
+      if (window.SignalLamps && typeof window.SignalLamps.powerUp === 'function') {
+        window.SignalLamps.powerUp();
+      }
+    } catch (err) {
+      console.warn('SignalLamps: nameplate self-test skipped.', err);
+    }
+
     window.AudioEngine.start()
       .then(function (result) {
         requireSession(generation);

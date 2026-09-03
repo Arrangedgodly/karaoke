@@ -60,6 +60,23 @@
 //   the two-register type law (silkscreen sans / mono readout) is
 //   untouched — nothing here is text.
 //
+//   THE DISPLAY SELF-TEST (the power-up's third half). On the Start
+//   commit the word runs the same proof the meters run: a wipe crosses
+//   it left to right lighting every cell, the whole word holds lit, and
+//   the light drains back to print. It is NOT a new exception to the
+//   150-250ms answer law — it is the SAME approved Power-Up sequence
+//   (DESIGN.md), on the same clock as meters.js's lamp test (260ms
+//   exponential rise / 120ms hold / 320ms linear release), so the deck
+//   and the ladders wake as one machine rather than as two animations.
+//   It holds the same three honesty rules: the drawn cell height is
+//   max(real, sweep) so the test can only ADD light and can never
+//   under-report a real signal; it touches the LAMPS alone, and clip
+//   colour still comes from the real signal only, so a sweep can never
+//   claim a clip; and it runs once per engine start, at setup, never
+//   during a show. Under reduced motion there is no wipe — the whole
+//   word lights for a 200ms hold and releases, the same proof as a
+//   state rather than a motion.
+//
 // MOTION DISCIPLINE: both surfaces are functional metering in the
 // documented meter family — per-frame paint like the VU lamps, live
 // under prefers-reduced-motion by construction (the same clause
@@ -558,6 +575,95 @@
   var npFound = false; // the canvas exists in this document
   var npLive = false;  // a first paint succeeded; the CSS fallback is off
 
+  // The self-test, on meters.js's own clock (see THE DISPLAY SELF-TEST).
+  var NP_RISE_MS = 260; // the wipe crosses the word, exponential ease-out
+  var NP_HOLD_MS = 120; // every cell lit
+  var NP_FALL_MS = 320; // linear release, the way a ladder drops
+  var NP_SWEEP_MS = NP_RISE_MS + NP_HOLD_MS + NP_FALL_MS;
+  var NP_STATIC_MS = 200; // reduced motion: one lit hold, no wipe
+  var npSweepStart = 0;
+  var npSweepEnd = 0;
+  var npSweepStatic = false;
+  var npSweepFrame = null;
+
+  function npNow() {
+    try {
+      if (typeof performance !== 'undefined' && performance.now) {
+        return performance.now();
+      }
+    } catch (err) {
+      // fall through
+    }
+    return Date.now();
+  }
+
+  /** True only when the runtime can answer and the operator asked for
+   *  less motion — meters.js's own reading, and the same direction every
+   *  guarded animation in this app takes when the answer is unreadable. */
+  function npPrefersReducedMotion() {
+    try {
+      return !!(
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      );
+    } catch (err) {
+      return false;
+    }
+  }
+
+  /** The self-test's lit height for one column at time t, in rows, or 0
+   *  when no test is running. Pure: nothing is written here, so a
+   *  stalled or replayed frame cannot desynchronize the word from the
+   *  meters running the same clock beside it. */
+  function npSweepRows(x, t) {
+    if (!(npSweepEnd > 0) || t >= npSweepEnd || t < npSweepStart) {
+      return 0;
+    }
+    if (npSweepStatic) {
+      return NP_ROWS;
+    }
+    var e = t - npSweepStart;
+    if (e < NP_RISE_MS) {
+      // The wipe FRONT slams across and settles on the same exponential
+      // ease-out the ladders climb with. Columns behind it are full;
+      // columns ahead of it are still print.
+      var p = e / NP_RISE_MS;
+      var front = (1 - Math.pow(1 - p, 3)) * npCols;
+      return x < front ? NP_ROWS : 0;
+    }
+    if (e < NP_RISE_MS + NP_HOLD_MS) {
+      return NP_ROWS;
+    }
+    // The release is a LEVEL, not an un-wipe: the word drains from the
+    // top down exactly as a ladder drops, which is what makes the two
+    // surfaces read as one power-up instead of two separate effects.
+    var f = (e - NP_RISE_MS - NP_HOLD_MS) / NP_FALL_MS;
+    var rows = Math.round(NP_ROWS * (1 - f));
+    return rows > 0 ? rows : 0;
+  }
+
+  /** Drive the self-test's own frames. StageTaps is not feeding yet at
+   *  the Start commit — that is the whole point of the window this fills
+   *  — so the sweep pumps its own loop and stops itself at the end. */
+  function npSweepTick() {
+    npSweepFrame = null;
+    if (failed) {
+      return;
+    }
+    safe(function () {
+      resolveColors();
+      if (prepareNameplate()) {
+        drawNameplate(null, 0);
+      }
+    });
+    if (npNow() < npSweepEnd &&
+        typeof window !== 'undefined' &&
+        typeof window.requestAnimationFrame === 'function') {
+      npSweepFrame = window.requestAnimationFrame(npSweepTick);
+    }
+  }
+
   /** Expand the glyph table into one column-major cell map. */
   function buildNameplateCells() {
     if (npCells) {
@@ -636,6 +742,7 @@
     var ctx = npCtx;
     var cell = npW / npCols;
     var dot = Math.max(1, Math.round(cell) - 1);
+    var sweepT = npSweepEnd > 0 ? npNow() : 0;
     ctx.clearRect(0, 0, npW, npH);
     for (var x = 0; x < npCols; x++) {
       var lit = 0;
@@ -662,6 +769,16 @@
           clipped = true;
         }
         lit = Math.round(Math.sqrt(amp) * NP_ROWS);
+      }
+      if (sweepT) {
+        // The self-test can only ADD light: the real reading always wins
+        // when it is the brighter of the two, so a live signal is never
+        // hidden by the proof running over it. Clip colour is untouched
+        // and stays the real signal's alone — a sweep never claims one.
+        var swept = npSweepRows(x, sweepT);
+        if (swept > lit) {
+          lit = swept;
+        }
       }
       var litFrom = NP_ROWS - lit;
       var colCells = npCells[x];
@@ -696,12 +813,33 @@
     if (failed) {
       return;
     }
+    // A stop during the power-up ends the proof with it: a sweep still
+    // running over a dead engine would be light with nothing behind it.
+    npSweepEnd = 0;
     safe(function () {
       resolveColors();
       if (prepareNameplate()) {
         drawNameplate(null, 0);
       }
     });
+  }
+
+  /** Run the wordmark's power-up self-test. Display-only and additive:
+   *  it cannot hide a signal, cannot claim a clip, and reports nothing.
+   *  Called by src/main.js at the Start commit beside the meters' lamp
+   *  test; safe before the canvas exists (the paint simply no-ops), and
+   *  safe to call again — a later call restarts the sweep. */
+  function powerUp() {
+    if (failed) {
+      return false;
+    }
+    npSweepStatic = npPrefersReducedMotion();
+    npSweepStart = npNow();
+    npSweepEnd = npSweepStart + (npSweepStatic ? NP_STATIC_MS : NP_SWEEP_MS);
+    if (npSweepFrame === null) {
+      npSweepTick();
+    }
+    return true;
   }
 
   function feedNameplate(pairs, columns) {
@@ -754,7 +892,8 @@
     feedScope: feedScope,
     onArrowsRendered: onArrowsRendered,
     setEngineState: setEngineState,
-    restNameplate: restNameplate
+    restNameplate: restNameplate,
+    powerUp: powerUp
   };
 
   // The wordmark is the one surface here that must render with no engine,

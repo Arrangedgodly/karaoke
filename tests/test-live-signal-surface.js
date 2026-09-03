@@ -595,9 +595,159 @@ function sectionC() {
     'C8: a paint failure is swallowed, logged once, and the module disables (one-strike)');
 }
 
+
+// =====================================================================
+// D. The nameplate matrix + its power-up self-test.
+// =====================================================================
+
+/** A sandbox carrying only the nameplate's canvas: the wordmark must
+ *  render with no stage, no scope slot and no engine at all. */
+function nameplateSandbox(opts) {
+  const s = sandboxBase();
+  const draws = { rects: [], clears: 0 };
+  const ctx = {
+    fillStyle: '', globalAlpha: 1, lineWidth: 1,
+    setTransform: function () {},
+    clearRect: function () { draws.clears++; draws.rects.length = 0; },
+    beginPath: function () {}, moveTo: function () {}, lineTo: function () {},
+    stroke: function () {},
+    fillRect: function (x, y, w, h) {
+      draws.rects.push({ x: x, y: y, w: w, h: h, fill: ctx.fillStyle });
+    },
+  };
+  // 47 x 7 cells at a 4px pitch — the shipped desktop box.
+  const canvas = {
+    className: 'nameplate-matrix-canvas',
+    clientWidth: 188, clientHeight: 28, width: 0, height: 0,
+    getContext: function () { return ctx; },
+    parentNode: { parentNode: { classList: { _n: [], add: function (c) { this._n.push(c); } } } },
+  };
+  s.document = {
+    querySelectorAll: function () { return []; },
+    querySelector: function (sel) {
+      return sel === '.nameplate-matrix-canvas' ? canvas : null;
+    },
+    getElementById: function () { return null; },
+    createElement: function () { return { className: '', appendChild: function () {}, setAttribute: function () {} }; },
+    documentElement: {},
+    readyState: 'complete',
+  };
+  s.getComputedStyle = function () {
+    return {
+      getPropertyValue: function (name) {
+        const map = {
+          '--pm-vu-low': '#4ea96b', '--pm-vu-mid': '#ffd75e', '--pm-vu-clip': '#e4574a',
+          '--pm-vu-tick': '#c9cedc', '--pm-display': '#ffd75e', '--pm-vu-unlit': '#262933',
+          '--pm-print-hi': '#c9cedc',
+        };
+        return map[name] || '';
+      },
+    };
+  };
+  s.matchMedia = function () { return { matches: !!(opts && opts.reducedMotion) }; };
+  s.devicePixelRatio = 1;
+  return { s: s, draws: draws, canvas: canvas };
+}
+
+/** Split the current frame's rects into lit (lamp mid / clip) and print. */
+function nameplateState(draws) {
+  let lit = 0, print = 0, clip = 0, maxLitX = -1;
+  draws.rects.forEach(function (r) {
+    if (r.fill === '#ffd75e') { lit++; if (r.x > maxLitX) maxLitX = r.x; }
+    else if (r.fill === '#e4574a') { clip++; lit++; if (r.x > maxLitX) maxLitX = r.x; }
+    else { print++; }
+  });
+  return { lit: lit, clip: clip, print: print, total: lit + print, front: maxLitX };
+}
+
+const NP_TOTAL_CELLS = 116; // the 8 glyphs' set cells, counted from the table
+
+function sectionD() {
+  console.log('D. nameplate matrix');
+
+  const env = nameplateSandbox();
+  const s = env.s;
+  loadInSandbox(s, lampsSrc, 'signal-lamps.js');
+  const Lamps = s.window.SignalLamps;
+
+  // The resting face: the module self-starts on a complete document.
+  let st = nameplateState(env.draws);
+  check(st.total === NP_TOTAL_CELLS && st.lit === 0,
+    'D1: the wordmark paints every letterform cell at rest, none of them lit');
+  check(env.canvas.width === 188 && env.canvas.height === 28,
+    'D1: the backing store matches the 47x7 cell box');
+  check(env.canvas.parentNode.parentNode.classList._n.indexOf('matrix-live') !== -1,
+    'D1: a successful paint stands the CSS text fallback down (.matrix-live)');
+
+  // The self-test: a wipe crosses, everything holds lit, the light drains.
+  Lamps.powerUp();
+  const seen = [];
+  for (let i = 0; i < 50; i++) {
+    pumpFrame(s, 16);
+    seen.push({ t: s._nowMs, ...nameplateState(env.draws) });
+  }
+  const rise = seen.filter(function (f) { return f.t > 30 && f.t < 240; });
+  // The sweep clock: 260ms rise, then a 120ms hold, then a 320ms release.
+  const hold = seen.filter(function (f) { return f.t >= 270 && f.t <= 370; });
+  const after = seen.filter(function (f) { return f.t > 720; });
+
+  check(rise.length > 2 && rise[0].lit > 0 && rise[0].lit < NP_TOTAL_CELLS,
+    'D2: the wipe starts partway — some cells lit, not the whole word');
+  let advances = true;
+  for (let i = 1; i < rise.length; i++) {
+    if (rise[i].front < rise[i - 1].front) { advances = false; }
+  }
+  check(advances && rise[rise.length - 1].front > rise[0].front,
+    'D2: the wipe front only ever travels forward, left to right');
+  check(hold.length > 0 && hold.every(function (f) { return f.lit === NP_TOTAL_CELLS; }),
+    'D3: the hold proves every cell in the word can light');
+  check(after.length > 0 && after.every(function (f) { return f.lit === 0 && f.print === NP_TOTAL_CELLS; }),
+    'D4: the light drains back to print, and the test runs once — it does not repeat');
+
+  // Additive by construction: a real signal is never hidden by the proof.
+  const pairs = new Float32Array(136 * 2);
+  for (let c = 0; c < 136; c++) { pairs[c * 2] = -0.02; pairs[c * 2 + 1] = 0.02; }
+  Lamps.powerUp();
+  pumpFrame(s, 16);
+  const duringRise = nameplateState(env.draws);
+  Lamps.feedScope(pairs, 136, -40); // a near-silent real window, mid-sweep
+  const fed = nameplateState(env.draws);
+  check(fed.lit >= duringRise.lit && fed.lit > 0,
+    'D5: the sweep can only ADD light — a quiet real window never darkens it');
+
+  // Clip colour belongs to the real signal alone; a sweep never claims one.
+  check(fed.clip === 0 && duringRise.clip === 0,
+    'D5: no sweep frame ever paints the clip colour');
+  const clipPairs = new Float32Array(136 * 2);
+  for (let c = 0; c < 136; c++) { clipPairs[c * 2] = -0.99; clipPairs[c * 2 + 1] = 0.995; }
+  Lamps.feedScope(clipPairs, 136, -0.04);
+  check(nameplateState(env.draws).clip > 0,
+    'D5: a genuinely clipping window does paint the clip colour');
+
+  // An engine stop ends the proof with it.
+  Lamps.powerUp();
+  pumpFrame(s, 16);
+  Lamps.setEngineState(false);
+  check(nameplateState(env.draws).lit === 0,
+    'D6: stopping mid-test rests the word — no light left over a dead engine');
+
+  // Reduced motion: the same proof as a state, with no wipe.
+  const rm = nameplateSandbox({ reducedMotion: true });
+  loadInSandbox(rm.s, lampsSrc, 'signal-lamps.js');
+  rm.s.window.SignalLamps.powerUp();
+  pumpFrame(rm.s, 16);
+  const rmFirst = nameplateState(rm.draws);
+  check(rmFirst.lit === NP_TOTAL_CELLS,
+    'D7: reduced motion lights the whole word at once — a state, not a wipe');
+  for (let i = 0; i < 30; i++) { pumpFrame(rm.s, 16); }
+  check(nameplateState(rm.draws).lit === 0,
+    'D7: and releases to print, so the proof still ends');
+}
+
 (async function main() {
   await sectionB();
   sectionC();
+  sectionD();
   if (failures === 0) {
     console.log('live-signal-surface: all checks passed');
   } else {
