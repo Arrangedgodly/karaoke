@@ -117,9 +117,12 @@ function makeBaseNode(typeName) {
         return;
       }
       var i = this.__connectionsTo.indexOf(dest);
-      if (i !== -1) {
-        this.__connectionsTo.splice(i, 1);
+      if (i === -1) {
+        var err = new Error('the destination is not connected');
+        err.name = 'InvalidAccessError';
+        throw err;
       }
+      this.__connectionsTo.splice(i, 1);
     },
     __connectsTo: function (dest) {
       return this.__connectionsTo.indexOf(dest) !== -1;
@@ -316,6 +319,9 @@ async function nodeLevelTests() {
   check(!!a2 && !!a2.worklet && ok.__createdWorklets.length === 2 &&
     ok.__addModuleUrls.length === 1,
     'second autotune gets a worklet; addModule still called once (per-context cache)');
+  check(a2.input.__connectsTo(a2.worklet) && a2.worklet.__connectsTo(a2.output) &&
+    !a2.input.__connectsTo(a2.output),
+    'warm second autotune replaces its known passthrough edge with the worklet topology');
 
   // A RECREATED AudioContext must re-addModule (registerProcessor state is
   // per-context).

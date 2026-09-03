@@ -194,6 +194,9 @@
       adjustThreshold();
     }
 
+    // Both paths splice the same known edge. A warm factory replaces it
+    // synchronously, before AudioGraph can connect this composite live.
+    inputGain.connect(outputSum);
     if (moduleLoaded && moduleContext === audioContext) {
       // Every gate after the first (on the SAME context — a recreated
       // AudioContext must re-addModule, which the else path handles):
@@ -202,7 +205,6 @@
     } else {
       // The first gate in a session: unity passthrough now, splice in the
       // worklet the moment addModule resolves (reverb's async-fill shape).
-      inputGain.connect(outputSum);
       ensureWorkletModule(audioContext).then(insertWorklet).catch(function (err) {
         console.error(
           'Noise Gate: worklet module failed to load — this gate stays open (unity passthrough).',

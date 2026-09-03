@@ -232,6 +232,9 @@
       composite.worklet = worklet;
     }
 
+    // Both paths splice the same known edge. A warm factory replaces it
+    // synchronously, before AudioGraph can connect this composite live.
+    inputGain.connect(outputSum);
     if (moduleLoaded && moduleContext === audioContext) {
       // Every autotune after the first (on the SAME context): fully
       // synchronous, no passthrough gap.
@@ -239,7 +242,6 @@
     } else {
       // The first autotune in a session: unity passthrough now, splice in
       // the worklet the moment addModule resolves (reverb/gate shape).
-      inputGain.connect(outputSum);
       ensureWorkletModule(audioContext).then(insertWorklet).catch(function (err) {
         console.error(
           'Autotune: worklet module failed to load — this node stays a unity passthrough.',
