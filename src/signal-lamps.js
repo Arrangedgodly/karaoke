@@ -616,6 +616,8 @@
   var npSweepStatic = false;
   var npSweepFrame = null;
   var npRowInk = null; // one zone colour per row, resolved once
+  var npLevels = null; // displayed dB per column (instant attack, 24 dB/s fall)
+  var npLastT = null;
 
   function npNow() {
     try {
@@ -695,22 +697,23 @@
     }
   }
 
-  /** The lit ink for each row, bottom-up: the word is 47 little VU
-   *  ladders standing side by side, and a ladder's colour belongs to the
-   *  SEGMENT, not to the level. Row 0 (the baseline) sits near the -60
-   *  floor and row 6 near 0 dBFS, so the zone edges the meters use
-   *  (-20 green→amber, -6 amber→clip) fall in the same places here. That
-   *  is what makes a loud syllable push red through the tops of the
-   *  letters the way it pushes red up the OUT bar: one lamp language,
-   *  read twice. Rebuilt whenever the tokens are resolved. */
+  /** The BODY ink for each row, bottom-up: the word is 47 little VU
+   *  ladders standing side by side, and a ladder's body colour belongs to
+   *  the SEGMENT. A row takes the zone of its UPPER edge — the level at
+   *  which it is fully lit — so the ladder reads green, amber, red from
+   *  the baseline up, the way the OUT bar does.
+   *
+   *  Seven rows over 60 dB is a coarse ladder, though, and the meters'
+   *  zone edges (-20, -6) land mid-row. Position ink alone therefore
+   *  cannot agree with the bars at the boundaries — which is what the TIP
+   *  rule below exists to fix. */
   function nameplateRowInk() {
     if (npRowInk) {
       return npRowInk;
     }
     var ink = [];
     for (var r = 0; r < NP_ROWS; r++) {
-      // The row's own centre on the meters' dB scale.
-      var db = SCALE_MIN + ((r + 0.5) / NP_ROWS) * -SCALE_MIN;
+      var db = SCALE_MIN + ((r + 1) / NP_ROWS) * -SCALE_MIN;
       ink.push(zoneColor(db));
     }
     npRowInk = ink;
@@ -795,11 +798,38 @@
     var ctx = npCtx;
     var cell = npW / npCols;
     var dot = Math.max(1, Math.round(cell) - 1);
-    var sweepT = npSweepEnd > 0 ? npNow() : 0;
+    var t = npNow();
+    var sweepT = npSweepEnd > 0 ? t : 0;
     var rowInk = nameplateRowInk();
+
+    // Ballistics. Without them a syllable's peak paints amber for one
+    // frame and the eye never catches it, so the word reads green while
+    // the bars beside it sit amber — the meters HOLD their peak and this
+    // did not. Instant attack, then the house activity-light fall
+    // (FALL_DB_PER_S, the same rate the stage lamps use), one state per
+    // column so the word still shows shape rather than one flat level.
+    if (!npLevels || npLevels.length !== npCols) {
+      npLevels = [];
+      for (var q = 0; q < npCols; q++) {
+        npLevels.push(SCALE_MIN);
+      }
+      npLastT = null;
+    }
+    var dt = npLastT === null ? 0 : (t - npLastT) / 1000;
+    if (dt < 0) {
+      dt = 0;
+    }
+    if (dt > DT_MAX_S) {
+      dt = DT_MAX_S;
+    }
+    npLastT = t;
+    var fall = FALL_DB_PER_S * dt;
+
     ctx.clearRect(0, 0, npW, npH);
     for (var x = 0; x < npCols; x++) {
       var lit = 0;
+      var realLit = 0;
+      var levelDb = SCALE_MIN;
       if (pairs && columns) {
         var from = Math.floor((x * columns) / npCols);
         var to = Math.floor(((x + 1) * columns) / npCols);
@@ -818,8 +848,23 @@
         if (amp > 1) {
           amp = 1;
         }
-        lit = Math.round(envelopeUnit(amp) * NP_ROWS);
+        var rawDb = amp > 0 ? 20 * Math.log10(amp) : SCALE_MIN;
+        if (rawDb < SCALE_MIN) {
+          rawDb = SCALE_MIN;
+        }
+        var held = npLevels[x] - fall;
+        npLevels[x] = rawDb > held ? rawDb : held;
+      } else {
+        npLevels[x] -= fall;
       }
+      if (npLevels[x] < SCALE_MIN) {
+        npLevels[x] = SCALE_MIN;
+      }
+      levelDb = npLevels[x];
+      if (levelDb > SCALE_MIN) {
+        realLit = Math.round(envelopeUnit(Math.pow(10, levelDb / 20)) * NP_ROWS);
+      }
+      lit = realLit;
       if (sweepT) {
         // The self-test can only ADD light: the real reading always wins
         // when it is the brighter of the two, so a live signal is never
@@ -840,7 +885,20 @@
         }
         var on = lit > 0 && y >= litFrom;
         // Glyph rows run top-down; the ladder runs bottom-up.
-        ctx.fillStyle = on ? rowInk[NP_ROWS - 1 - y] : colors.print;
+        var fromBottom = NP_ROWS - 1 - y;
+        var ink = rowInk[fromBottom];
+        // THE TIP REPORTS THE LEVEL. Seven rows cannot put the meters'
+        // zone edges on a row boundary, so position ink alone read a
+        // whole zone cold: between -20 and -13 dBFS — where speech
+        // actually sits — the bars were amber and the word was still
+        // green. The top lit row therefore takes the column's MEASURED
+        // zone, exactly as the meters compute it, and the rows under it
+        // keep the ladder. A row raised by the power-up sweep rather
+        // than by signal keeps position ink: a proof reports no level.
+        if (on && fromBottom === lit - 1 && lit === realLit) {
+          ink = zoneColor(levelDb);
+        }
+        ctx.fillStyle = on ? ink : colors.print;
         // Snap every dot to the device grid: at this size a half-pixel
         // edge is the difference between a machined cell and a smudge.
         var px = Math.round((x * cell + (cell - dot) / 2) * npDpr) / npDpr;
@@ -867,8 +925,11 @@
       return;
     }
     // A stop during the power-up ends the proof with it: a sweep still
-    // running over a dead engine would be light with nothing behind it.
+    // running over a dead engine would be light with nothing behind it,
+    // and the held levels go with it for the same reason.
     npSweepEnd = 0;
+    npLevels = null;
+    npLastT = null;
     safe(function () {
       resolveColors();
       if (prepareNameplate()) {

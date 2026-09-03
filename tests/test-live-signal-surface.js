@@ -740,27 +740,79 @@ function sectionD() {
   Lamps.restNameplate(); // end the sweep so this reads the real feed alone
   Lamps.feedScope(full, 136, 0);
   const ladder = nameplateState(env.draws);
-  check(ladder.lit === NP_TOTAL_CELLS && ladder.green > 0 && ladder.amber > 0 && ladder.clip > 0,
-    'D5: a full-scale window lights the whole word across all three zones');
   const inkOf = function (row) {
     const set = ladder.rowInk[row];
     return set && set.size === 1 ? Array.from(set)[0] : 'MIXED';
   };
-  check(inkOf(0) === NP_RED && inkOf(1) === NP_AMBER &&
-    inkOf(2) === NP_GREEN && inkOf(6) === NP_GREEN,
-    'D5: the ladder runs green at the baseline, amber, then red at the top row');
+  check(ladder.lit === NP_TOTAL_CELLS && ladder.green > 0 && ladder.amber > 0 && ladder.clip > 0,
+    'D5: a full-scale window lights the whole word across all three zones');
+  // Glyph rows run top-down, so row 0 is the ladder's TOP.
+  check(inkOf(0) === NP_RED && inkOf(1) === NP_AMBER && inkOf(2) === NP_AMBER &&
+    inkOf(3) === NP_GREEN && inkOf(6) === NP_GREEN,
+    'D5: the body ladder runs green at the baseline, amber, then red at the top');
+
+  // THE TIP AGREES WITH THE METERS. Seven rows cannot land the meters'
+  // zone edges on a row boundary, so the top lit row reports the column's
+  // measured zone. Without this the word read a whole zone cold exactly
+  // where speech sits.
+  // The fall is rate-limited (24 dB/s) and dt is clamped per frame, so a
+  // previous peak clears by running frames, never by jumping the clock.
+  const silence = new Float32Array(136 * 2);
+  const settle = function () {
+    for (let i = 0; i < 40; i++) {
+      s._nowMs += 100;
+      Lamps.feedScope(silence, 136, -120);
+    }
+  };
+  const feedAt = function (db) {
+    settle();
+    const amp = Math.pow(10, db / 20);
+    const w = new Float32Array(136 * 2);
+    for (let c = 0; c < 136; c++) { w[c * 2] = -amp; w[c * 2 + 1] = amp; }
+    s._nowMs += 16;
+    Lamps.feedScope(w, 136, db);
+    return nameplateState(env.draws);
+  };
+  const meterZone = function (db) {
+    return db >= -6 ? NP_RED : (db >= -20 ? NP_AMBER : NP_GREEN);
+  };
+  const tipOf = function (st) {
+    let top = null;
+    Object.keys(st.rowInk).forEach(function (row) {
+      const r = Number(row);
+      if (top === null || r < top) { top = r; } // smallest y = highest row
+    });
+    return top === null ? null : Array.from(st.rowInk[top]).pop();
+  };
+  let agree = true;
+  // The zone edges are probed from BOTH sides rather than exactly on the
+  // boundary: a dB value round-tripped through an amplitude lands a
+  // half-ulp off (-6 comes back as -6.000000000000001), which is a
+  // property of the probe, not of the ladder. What matters is that the
+  // word flips zone on the same side of the edge the meters do.
+  const probes = [-40, -30, -21, -20.05, -19.95, -16.5, -12, -6.05, -5.95, -3, 0];
+  probes.forEach(function (db) {
+    const got = tipOf(feedAt(db));
+    if (got !== meterZone(db)) { agree = false; }
+  });
+  check(agree,
+    'D5: the lit tip reports the meters\' own zone at every level, edges included');
 
   // Quiet is quiet: the dB scale lifts the response, it does not add gain.
-  const quiet = new Float32Array(136 * 2);
-  for (let c = 0; c < 136; c++) { quiet[c * 2] = -0.0316; quiet[c * 2 + 1] = 0.0316; }
-  Lamps.feedScope(quiet, 136, -30); // -30 dBFS, a quiet passage
-  const q = nameplateState(env.draws);
+  const q = feedAt(-30);
   check(q.clip === 0 && q.amber === 0 && q.green > 0 && q.lit < NP_TOTAL_CELLS,
     'D5: a -30 dBFS window stays entirely in the green zone, partly lit');
-  const silent = new Float32Array(136 * 2);
-  Lamps.feedScope(silent, 136, -120);
+
+  // Silence FALLS rather than cuts — the meters hold their peak and so
+  // does the word, or a syllable would paint for one frame and be gone.
+  feedAt(0); // a full-scale peak, then nothing but silence
+  s._nowMs += 16;
+  Lamps.feedScope(silence, 136, -120);
+  check(nameplateState(env.draws).lit > 0,
+    'D5: a peak does not vanish on the next frame — the word falls, like the bars');
+  settle();
   check(nameplateState(env.draws).lit === 0,
-    'D5: silence still lights nothing — the resting face is unchanged');
+    'D5: and sustained silence falls all the way back to the resting face');
 
   // An engine stop ends the proof with it.
   Lamps.powerUp();
