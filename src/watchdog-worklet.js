@@ -17,8 +17,8 @@
 // keeps making the trip decision.
 //
 // Division of labor (documented in src/meter-taps.js's header too):
-//   - THIS FILE: per-render-quantum peak (abs max) and RMS of the
-//     final-output signal, posted to the main thread at a throttled
+//   - THIS FILE: peak across every channel and the strongest channel's
+//     RMS of the final-output signal, posted to the main thread at a throttled
 //     cadence (every POST_EVERY_BLOCKS blocks ≈ 21 ms @ 48 kHz) —
 //     {type:'watchdog-block', peak, rms, blocks, t}. Detection decisions
 //     stay main-thread (they must ramp AudioParams and touch the DOM).
@@ -46,27 +46,36 @@ class WatchdogTapProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this._peak = 0; // max |sample| since the last post
-    this._sumSq = 0; // sum of squares since the last post
-    this._n = 0; // samples accumulated since the last post
+    this._sumSq = []; // per-channel sums of squares since the last post
+    this._n = 0; // elapsed samples per channel since the last post
     this._blocksSincePost = 0;
   }
 
   process(inputs, outputs) {
     const input = inputs[0];
     const output = outputs[0];
+    // Count elapsed frames once, including an absent input or a channel
+    // disappearing during a reporting window (its remaining samples are
+    // silence). Input and output render quanta have the same frame count.
+    const frameChannel = input && input[0] ? input[0] : output && output[0];
+    this._n += frameChannel ? frameChannel.length : 128;
     if (input && input.length > 0) {
-      // Accumulate stats over channel 0 (the app's signal is the forced
-      // mono down-mix the analysers observe too).
-      const ch = input[0];
-      for (let i = 0; i < ch.length; i++) {
-        const v = ch[i];
-        const a = v < 0 ? -v : v;
-        if (a > this._peak) {
-          this._peak = a;
+      // Separate channel energy prevents cancellation and dilution by a
+      // silent interface channel. Keep the sums for the entire reporting
+      // window rather than splicing each block's loudest channel together.
+      for (let c = 0; c < input.length; c++) {
+        const ch = input[c];
+        let sumSq = this._sumSq[c] || 0;
+        for (let i = 0; i < ch.length; i++) {
+          const v = ch[i];
+          const a = v < 0 ? -v : v;
+          if (a > this._peak) {
+            this._peak = a;
+          }
+          sumSq += v * v;
         }
-        this._sumSq += v * v;
+        this._sumSq[c] = sumSq;
       }
-      this._n += ch.length;
 
       // Passthrough: input copied to output UNMODIFIED, channel for
       // channel (up to the output's channel count).
@@ -80,15 +89,19 @@ class WatchdogTapProcessor extends AudioWorkletProcessor {
     }
 
     if (++this._blocksSincePost >= POST_EVERY_BLOCKS) {
+      let strongestSumSq = 0;
+      for (let c = 0; c < this._sumSq.length; c++) {
+        strongestSumSq = Math.max(strongestSumSq, this._sumSq[c]);
+        this._sumSq[c] = 0;
+      }
       this.port.postMessage({
         type: 'watchdog-block',
         peak: this._peak,
-        rms: this._n > 0 ? Math.sqrt(this._sumSq / this._n) : 0,
+        rms: this._n > 0 ? Math.sqrt(strongestSumSq / this._n) : 0,
         blocks: this._blocksSincePost,
         t: currentTime // AudioWorkletGlobalScope clock (seconds)
       });
       this._peak = 0;
-      this._sumSq = 0;
       this._n = 0;
       this._blocksSincePost = 0;
     }

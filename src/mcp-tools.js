@@ -897,6 +897,11 @@
    */
   var CHAIN_RULES = [
     {
+      id: 'autogain-max-one',
+      rule: 'At most one Auto Gain utility. Simple adds it when loading a sound; Advanced can move, bypass or remove it. Auto learns a session level and holds it across presets. Manual gain is -24..+24 dB. Its audio-thread limiter caps every output channel at -12 dBFS, so it is a bounded signal source, not additional unrestricted gain in the effect-chain +12 dB budget. Microphone changes reset learning. Raw microphone metering and emergency Bypass remain unadjusted.',
+      enforcement: 'reject duplicates; audio-thread peak bound'
+    },
+    {
       id: 'limiter-required-terminal',
       rule: 'A limiter node is REQUIRED and must be TERMINAL — the last node in the chain, MIC IN to OUT. The agent may only add nodes upstream of it; removing it, bypassing it, reordering it away from the end, or positioning any node after it is rejected.',
       enforcement: 'hard reject (nothing applied)'
@@ -1996,7 +2001,7 @@
           'EXPERIMENTAL — new DSP still under audio-quality review; operable, verify by ear mid-show risk.';
       }
     });
-    return {
+    var capabilities = {
       app: 'voxchain',
       nodeTypes: nodeTypes,
       chainRules: {
@@ -2014,6 +2019,27 @@
       experimental: experimental,
       humanOnly: ['Start and audio input', 'Bypass', 'watchdog restore']
     };
+    if (registryTypes().indexOf('autogain') !== -1) {
+      capabilities.chainRules['autogain-max-one'] = 'One Auto Gain; Simple adds it on sound load; retained across presets. Manual +/-24 dB; own -12 dBFS sample cap, excluded from the +12 dB effect budget.';
+      capabilities.humanOnly.push('Microphone channel choice and Auto Gain recheck');
+      if (window.InputPreparation && window.AutoGain) {
+        var input = window.InputPreparation.snapshot();
+        var graph = window.AudioGraph;
+        var entry = graph && graph.getModel().find(function (node) { return node.type === 'autogain'; });
+        var record = entry && graph.getNodeInstance(entry.id);
+        var level = window.AutoGain.snapshot(record);
+        var advanced = typeof document !== 'undefined' && document.body && document.body.classList &&
+          document.body.classList.contains('view-advanced');
+        capabilities.microphone = {
+          view: advanced ? 'advanced' : 'simple',
+          state: input.state, channelCount: input.channelCount, channelIndex: input.channel,
+          channelMode: input.channelMode || 'auto',
+          autoGain: entry ? { mode: entry.params.mode || 'auto', bypassed: !!entry.bypassed,
+            state: level.state, adjustmentDb: level.gainDb, locked: level.locked, limiting: level.limiting } : null
+        };
+      }
+    }
+    return capabilities;
   }
 
   // ---------------------------------------------------------------------
@@ -2272,6 +2298,9 @@
     }
 
     // limiter-required-terminal (missing / not terminal / duplicated)
+    if (model.filter(function (entry) { return entry.type === 'autogain'; }).length > 1) {
+      violations.push(ruleViolationResult('autogain-max-one', { suggestion: 'Keep one Auto Gain utility upstream of the terminal limiter.' }));
+    }
     var lastIdx = model.length - 1;
     var terminalIsLimiter = lastIdx >= 0 &&
       model[lastIdx].type === 'limiter' && model[lastIdx].bypassed !== true;
@@ -3495,7 +3524,19 @@
     if (hostOwned) {
       return { error: hostOwned };
     }
-    var applied = applyPolicyToNodes(preset.nodes);
+    var nodes = preset.nodes;
+    if (window.AutoGain) {
+      var advanced = typeof document !== 'undefined' && document.body &&
+        document.body.classList && document.body.classList.contains('view-advanced');
+      try {
+        nodes = window.AutoGain.prepareModel(nodes, model, advanced);
+      } catch (err) {
+        if (err.code !== 'node-count-cap') throw err;
+        return { error: ruleViolationResult('node-count-cap', { count: err.count,
+          limit: CHAIN_LIMITS.MAX_NODES, suggestion: err.message }) };
+      }
+    }
+    var applied = applyPolicyToNodes(nodes);
     if (applied.reject) {
       return { error: applied.reject };
     }

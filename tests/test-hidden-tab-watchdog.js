@@ -526,6 +526,63 @@ function testProcessor() {
     'G1: the posted RMS matches the accumulated samples'
   );
   check(posted.length === 1 && posted[0].t === 7.5, 'G1: the message carries the worklet clock');
+
+  function measureChannels(blocks, outputChannels) {
+    var messages = [];
+    var processor = new registered['watchdog-tap']();
+    processor.port = { postMessage: function (message) { messages.push(message); } };
+    var lastOutput;
+    blocks.forEach(function (channels) {
+      lastOutput = [];
+      for (var channel = 0; channel < outputChannels; channel++) {
+        lastOutput.push(new Float32Array(128));
+      }
+      processor.process([channels], [lastOutput]);
+    });
+    return { messages: messages, output: lastOutput, processor: processor };
+  }
+
+  var silence = new Float32Array(128);
+  var inverse = Float32Array.from(inL, function (sample) { return -sample; });
+  var rightOnly = measureChannels(Array(8).fill([silence, inL]), 1);
+  check(rightOnly.messages.length === 1 && rightOnly.messages[0].peak === 0.75 &&
+    Math.abs(rightOnly.messages[0].rms - wantRms) < 1e-9,
+    'G2: right-only peak and RMS match mono, including when the silent tap has only one output channel');
+  var opposite = measureChannels(Array(8).fill([inL, inverse]), 2);
+  check(opposite.messages.length === 1 && opposite.messages[0].peak === 0.75 &&
+    Math.abs(opposite.messages[0].rms - wantRms) < 1e-9,
+    'G2: opposite-polarity channels retain their peak and RMS without cancellation');
+  check(opposite.output[0].every(function (sample, index) {
+    return sample === inL[index] && opposite.output[1][index] === inverse[index];
+  }), 'G2: stereo polarity and channel alignment survive passthrough unchanged');
+
+  // The channels trade places halfway through the reporting window.
+  // Each contains four loud and four silent blocks; taking the loudest
+  // channel every block would incorrectly report a continuously loud RMS.
+  var alternatingBlocks = Array(4).fill([inL, silence]).concat(Array(4).fill([silence, inL]));
+  var alternating = measureChannels(alternatingBlocks, 2);
+  check(alternating.messages.length === 1 && alternating.messages[0].peak === 0.75 &&
+    Math.abs(alternating.messages[0].rms - wantRms / Math.sqrt(2)) < 1e-9,
+    'G2: RMS is the strongest channel over the whole reporting window, not a per-block channel splice');
+
+  // A missing channel contributes silence for its missing render quanta.
+  var disappearingBlocks = Array(4).fill([silence, inL]).concat(Array(4).fill([silence]));
+  var disappearing = measureChannels(disappearingBlocks, 2);
+  check(disappearing.messages.length === 1 &&
+    Math.abs(disappearing.messages[0].rms - wantRms / Math.sqrt(2)) < 1e-9,
+    'G2: channel-count changes retain elapsed-time weighting in the reported RMS');
+  var noInput = measureChannels(Array(8).fill([]), 1);
+  check(noInput.messages.length === 1 && noInput.messages[0].peak === 0 && noInput.messages[0].rms === 0 &&
+    noInput.messages[0].blocks === 8,
+    'G2: absent input still posts zero peak/RMS at the existing eight-block cadence');
+
+  var resetMessages = [];
+  rightOnly.processor.port = { postMessage: function (message) { resetMessages.push(message); } };
+  for (var resetBlock = 0; resetBlock < 8; resetBlock++) {
+    rightOnly.processor.process([[silence, silence]], [[new Float32Array(128)]]);
+  }
+  check(resetMessages.length === 1 && resetMessages[0].peak === 0 && resetMessages[0].rms === 0,
+    'G2: per-channel peak and RMS history reset after every report');
 }
 
 // ======================================================================

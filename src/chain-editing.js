@@ -196,7 +196,16 @@
 
   function candidateFor(request, previous) {
     if (Array.isArray(request.candidate)) {
-      return canonicalizeModel(request.candidate);
+      var candidate = request.candidate;
+      var advanced = typeof document !== 'undefined' && document.body &&
+        document.body.classList && document.body.classList.contains('view-advanced');
+      // Optional preparation must not turn a full, valid recovery snapshot
+      // into a failed startup. The UI explains how to free a slot instead.
+      var fullStartup = request.source === 'startup' && candidate.length >= 16;
+      if (!fullStartup && window.AutoGain && (request.source === 'preset' || request.source === 'startup')) {
+        candidate = window.AutoGain.prepareModel(candidate, previous, advanced);
+      }
+      return canonicalizeModel(candidate);
     }
     var found = false;
     var candidate = cloneModel(previous);
@@ -504,6 +513,7 @@
     if (window.StageTaps && typeof window.StageTaps.onChainChanged === 'function') {
       window.StageTaps.onChainChanged();
     }
+    if (window.AutoGain) window.AutoGain.onChainChanged();
   }
 
   function persist(model) {

@@ -434,7 +434,7 @@
    *  OUT read rather than touching the analyser twice). */
   function readAndFeed(side, analyser) {
     analyser.getFloatTimeDomainData(floatBuf);
-    var stats = computeStats();
+    var stats = analyser.getStats ? analyser.getStats() : computeStats();
     var Meters = getMeters();
     if (Meters && typeof Meters.feed === 'function') {
       Meters.feed(side, stats);
@@ -998,12 +998,19 @@
     }
     if (currentSourceNode) {
       try {
-        currentSourceNode.disconnect(analyserIn);
+        currentSourceNode.disconnect(analyserIn.input || analyserIn);
       } catch (err) {
         /* old source already gone (switchInputDevice's blanket disconnect) */
       }
     }
-    src.connect(analyserIn);
+    // A replacement interface may expose more channels than the last mic.
+    if (analyserIn && analyserIn.dispose) analyserIn.dispose();
+    var ctx = window.AudioEngine.audioContext;
+    var track = window.AudioEngine.stream && window.AudioEngine.stream.getAudioTracks()[0];
+    var channels = track && track.getSettings ? track.getSettings().channelCount : 2;
+    analyserIn = window.ChannelAnalysis ? window.ChannelAnalysis.create(ctx, Math.max(2, channels || 2)) : ctx.createAnalyser();
+    analyserIn.fftSize = FFT_SIZE;
+    src.connect(analyserIn.input || analyserIn);
     currentSourceNode = src;
   }
 
@@ -1014,10 +1021,10 @@
     if (!ctx) {
       throw new Error('MeterTaps: AudioEngine.audioContext does not exist — start the engine first.');
     }
-    if (!analyserIn || !analyserOut) {
-      analyserIn = ctx.createAnalyser();
-      analyserOut = ctx.createAnalyser();
-      analyserIn.fftSize = FFT_SIZE;
+    if (!analyserOut) {
+      // Allocate the input tap first to retain the meter tap ordering.
+      connectInTap(window.AudioEngine.sourceNode);
+      analyserOut = window.ChannelAnalysis ? window.ChannelAnalysis.create(ctx, 2) : ctx.createAnalyser();
       analyserOut.fftSize = FFT_SIZE;
       // Raw per-frame frequency data for the howl detector (see the
       // header for why this does not affect the meters).
@@ -1040,7 +1047,7 @@
       // an engine already started on an older build: the taps are
       // created lazily here, never carried over from a previous page
       // load, so there is no stale gate-fed analyser to clean up.
-      window.AudioGraph.getOutputAttenuator().connect(analyserOut);
+      window.AudioGraph.getOutputAttenuator().connect(analyserOut.input || analyserOut);
       outConnected = true;
     }
   }

@@ -17,7 +17,7 @@
 //   input ──► [5 ms look-ahead ring delay, one per channel]
 //                 │
 //                 ▼
-//   per-block RMS (channel 0) ──► one-pole envelope (fast rise / slow fall)
+//   strongest channel RMS ──► one-pole envelope (fast rise / slow fall)
 //                 │
 //                 ▼
 //   hysteresis decision: OPEN at envelope >= Threshold,
@@ -156,21 +156,27 @@ class NoiseGateProcessor extends AudioWorkletProcessor {
     }
     const n = output[0].length;
 
-    // -- 1) Detector: block RMS of channel 0 -> dB -> one-pole envelope.
-    // Channel 0 is the decision channel (the watchdog worklet's same
-    // convention — the app's bus is the forced mono down-mix upstream of
-    // any stereo-izing effect); every channel gets the SAME gain below.
-    const in0 = input && input.length > 0 ? input[0] : null;
-    let blockDb = DB_FLOOR;
-    if (in0 && in0.length > 0) {
-      let sumSq = 0;
-      for (let i = 0; i < in0.length; i++) {
-        sumSq += in0[i] * in0[i];
+    // -- 1) Detector: strongest channel RMS -> dB -> one-pole envelope.
+    // Measure channels independently: a right-only interface input must
+    // open the gate, and opposite-polarity channels must not cancel in
+    // the detector. Every channel still gets the SAME gain below.
+    let strongestMeanSquare = 0;
+    if (input) {
+      for (let c = 0; c < input.length; c++) {
+        const channel = input[c];
+        if (!channel || channel.length === 0) {
+          continue;
+        }
+        let sumSq = 0;
+        for (let i = 0; i < channel.length; i++) {
+          sumSq += channel[i] * channel[i];
+        }
+        strongestMeanSquare = Math.max(strongestMeanSquare, sumSq / channel.length);
       }
-      const rms = Math.sqrt(sumSq / in0.length);
-      blockDb = rms > LIN_FLOOR ? 20 * Math.log10(rms) : DB_FLOOR;
     }
-    const blockDur = in0 && in0.length > 0 ? in0.length / sampleRate : 128 / sampleRate;
+    const strongestRms = Math.sqrt(strongestMeanSquare);
+    const blockDb = strongestRms > LIN_FLOOR ? 20 * Math.log10(strongestRms) : DB_FLOOR;
+    const blockDur = n / sampleRate;
     const tc = blockDb > this._envDb ? ENV_RISE_S : ENV_FALL_S;
     this._envDb += (1 - Math.exp(-blockDur / tc)) * (blockDb - this._envDb);
 

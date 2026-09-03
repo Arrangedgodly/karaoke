@@ -607,6 +607,9 @@
     if (!Array.isArray(model)) {
       throw new Error('AudioGraph.buildGraph: model must be an array.');
     }
+    if (model.filter(function (entry) { return entry.type === 'autogain'; }).length > 1) {
+      throw new Error('Use one Auto Gain utility per chain.');
+    }
     var signal = options && options.signal;
     if (signal && signal.aborted) {
       return Promise.resolve({
@@ -618,7 +621,7 @@
     }
 
     var audioContext = window.AudioEngine && window.AudioEngine.audioContext;
-    var sourceNode = window.AudioEngine && window.AudioEngine.sourceNode;
+    var sourceNode = window.AudioEngine && (window.AudioEngine.preparedSourceNode || window.AudioEngine.sourceNode);
     if (!audioContext || !sourceNode) {
       throw new Error(
         'AudioGraph.buildGraph: window.AudioEngine.audioContext and .sourceNode must ' +
