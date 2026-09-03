@@ -2109,20 +2109,32 @@ select.control {
 
 /* Persistent chain identity on the register's right edge. The control
    readout remains transient and aria-hidden; this sibling is the one
-   accessible status source for saved versus unsaved preset state. */
+   accessible status source for saved versus unsaved preset state.
+   Live round 2026-09-03 (accepted variant): the right end is now a
+   dedicated inset PRESET WINDOW — a fixed share of the register as its
+   own sub-display (deeper cut ground behind a machined lip border), the
+   silkscreen PRESET label over the name in the register's amber machine
+   ink. The register stays a FIXED 3rem slot; the window is geometry
+   (2.5rem tall, inset 0.25rem), sized in the same literal units the
+   register's own clipping uses. The opaque cut ground masks the control
+   lines that run under it, exactly as the old flat overlay did. */
 .register-preset-state {
   position: absolute;
   z-index: 1;
-  top: 0.35rem;
+  top: 0.25rem;
   right: 0.9rem;
+  /* 3rem register minus the 0.25rem insets — geometry, not prose. */
+  height: 2.5rem;
+  width: min(34%, 24rem);
+  min-width: 10rem;
   display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  max-width: min(45%, 24rem);
-  min-width: 0;
-  padding-left: 0.75rem;
-  border-left: 1px solid var(--pm-groove-lip);
-  background: var(--pm-register-bg);
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.1rem;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--pm-groove-lip);
+  background: var(--pm-groove-cut);
   font-family: var(--font-readout);
   font-size: var(--type-register);
   line-height: 1.2;
@@ -2134,15 +2146,19 @@ select.control {
 .register-preset-label {
   flex: none;
   color: var(--pm-print-dim);
-  font-size: var(--type-value);
+  font-family: var(--font-print);
+  font-size: var(--type-label);
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.15;
 }
 
 .register-preset-value {
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  color: var(--pm-print-hi);
+  color: var(--pm-display);
   font-weight: 700;
   text-overflow: ellipsis;
 }
