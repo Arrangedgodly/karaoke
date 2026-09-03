@@ -9,12 +9,13 @@
   background: var(--surface, #16181e);
   font-size: .8rem;
 }
-.input-assist[hidden], .input-assist [hidden] { display: none; }
+.input-assist[hidden], .input-channel-select[hidden] { display: none; }
 .input-assist-status { flex: 1 1 18rem; }
 .input-assist .control { font-size: .8rem; min-height: 2rem; }
-body.view-advanced .input-assist:not([data-attention="true"]) .input-assist-status,
-body.view-advanced .input-assist:not([data-attention="true"]) > button { display: none; }
-body.view-advanced .input-assist:not([data-attention="true"]):has(select[hidden]) { display: none; }
+body.view-advanced .input-assist,
+body:not(.view-advanced) .input-channel-advanced { display: none; }
+.input-channel-advanced { max-width: 12rem; }
+.input-channel-advanced[aria-invalid="true"] { border-color: var(--warning, #e4a72b); }
 .node-card[data-family="autogain"] { --pm-family: #a6c8ad; }
 .auto-gain-readout { grid-column: 1 / -1; max-width: 19rem; padding: .6rem; border-top: 1px solid var(--border, #353842); }
 .auto-gain-value { font-size: .85rem; margin: 0 0 .5rem; }
