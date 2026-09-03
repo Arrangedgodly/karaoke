@@ -369,6 +369,20 @@
     };
   }
 
+  /** Preserve known transaction failures; unknown adapter faults stay local. */
+  function chainApplyFaultResult(toolName, err) {
+    if (!err || (err.code !== 'CHAIN_APPLY_FAILED' && err.code !== 'CHAIN_ROLLBACK_FAILED')) {
+      return schemaLayerFaultResult(toolName, err);
+    }
+    return {
+      error: true,
+      code: err.code,
+      tool: toolName,
+      reason: String(err.message || err),
+      hint: 'The chain edit failed while applying. Check the current chain before continuing and report this failure.'
+    };
+  }
+
   // ---------------------------------------------------------------------
   // Effect metadata resolution — window.EffectCatalog is authoritative.
   // ---------------------------------------------------------------------
@@ -4331,7 +4345,7 @@
                 reportAgentRejection(name, stopped);
                 return stopped;
               }
-              var applyFault = schemaLayerFaultResult(name, err);
+              var applyFault = chainApplyFaultResult(name, err);
               if (err && err.rollback) {
                 applyFault.rollback = {
                   attempted: !!err.rollback.attempted,
@@ -4340,11 +4354,11 @@
                 if (applyFault.rollback.succeeded) {
                   applyFault.hint =
                     'The edit failed while applying and the previous chain was restored. ' +
-                    'The failed edit is not live; please report this tool-layer failure.';
+                    'The failed edit is not live; please report this failure.';
                 } else {
                   applyFault.hint =
                     'The edit failed and rollback also failed. The visible board may not match ' +
-                    'the live sound; reload the page to reconcile, then report this tool-layer failure.';
+                    'the live sound; reload the page to reconcile, then report this failure.';
                 }
               }
               reportAgentRejection(name, applyFault);

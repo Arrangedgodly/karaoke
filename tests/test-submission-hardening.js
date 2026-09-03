@@ -340,14 +340,15 @@ async function main() {
       }
     });
     check(
-      resB && resB.error === true && resB.code === 'SCHEMA_LAYER_FAULT' &&
+      resB && resB.error === true && resB.code === 'CHAIN_APPLY_FAILED' &&
         resB.rollback && resB.rollback.attempted === true && resB.rollback.succeeded === true,
-      'B1: the crash resolves SCHEMA_LAYER_FAULT with successful rollback status'
+      'B1: the crash preserves CHAIN_APPLY_FAILED with successful rollback status'
     );
     check(
       typeof resB.hint === 'string' && /restored/i.test(resB.hint) &&
-        !/Nothing in the app was changed/.test(resB.hint),
-      'B2: the hint says the previous chain was RESTORED — the false "nothing changed" claim is gone'
+        !/Nothing in the app was changed/.test(resB.hint) &&
+        !/argument validation|schema layer|tool-layer/i.test(resB.reason + ' ' + resB.hint),
+      'B2: the previous chain was restored and the runtime failure is not mislabeled as validation'
     );
     check(
       sbB.__canvasState.renderCalls === 2 &&
@@ -374,10 +375,10 @@ async function main() {
       }
     });
     check(
-      resB2 && resB2.error === true && resB2.rollback &&
+      resB2 && resB2.error === true && resB2.code === 'CHAIN_ROLLBACK_FAILED' && resB2.rollback &&
         resB2.rollback.attempted === true && resB2.rollback.succeeded === false &&
         /reload the page/i.test(resB2.hint),
-      'B4: when the restore also fails the result says rollback:"failed" and tells the operator to reload'
+      'B4: CHAIN_ROLLBACK_FAILED preserves split-state guidance and tells the operator to reload'
     );
   }
 

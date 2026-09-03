@@ -883,11 +883,20 @@ async function main() {
     { nodeId: 'n5', param: 'mix', value: 35 },
     { signal: splitSignal }
   );
-  check(splitResult && splitResult.code === 'SCHEMA_LAYER_FAULT' &&
+  check(splitResult && splitResult.code === 'CHAIN_ROLLBACK_FAILED' &&
       splitResult.rollback && splitResult.rollback.succeeded === false,
-    'F1: a failed rollback remains a structured fault even when the signal is now aborted');
+    'F1: CHAIN_ROLLBACK_FAILED is preserved even when the signal is now aborted');
   check(!isAbortedResult(splitResult, 'set_param'),
     'F2: split live state is never flattened into the harmless ABORTED result');
+  sandbox.ChainEditing.apply = function () {
+    return Promise.reject(new Error('unexpected adapter failure'));
+  };
+  var unknownFault = await getTool(sandbox, 'set_param').execute({
+    nodeId: 'n5', param: 'mix', value: 35
+  });
+  check(unknownFault && unknownFault.code === 'SCHEMA_LAYER_FAULT' &&
+      /Argument validation failed unexpectedly/.test(unknownFault.reason),
+    'F3: an unknown adapter rejection is not mislabeled as a known chain transaction failure');
 
   // --------------------------------------------------------------------
   console.log('G. production WebMCP mutations fail closed without ChainEditing');

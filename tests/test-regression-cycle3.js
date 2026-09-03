@@ -188,9 +188,12 @@ function makeBaseNode(typeName) {
         return;
       }
       var i = node.__connectionsTo.indexOf(dest);
-      if (i !== -1) {
-        node.__connectionsTo.splice(i, 1);
+      if (i === -1) {
+        var err = new Error('the destination is not connected');
+        err.name = 'InvalidAccessError';
+        throw err;
       }
+      node.__connectionsTo.splice(i, 1);
       if (dest && dest.__connectionsFrom) {
         var j2 = dest.__connectionsFrom.indexOf(node);
         if (j2 !== -1) {
@@ -337,7 +340,9 @@ function makeElement(tag) {
 }
 
 function audioContextStub() {
+  var moduleUrls = [];
   return {
+    __addModuleUrls: moduleUrls,
     currentTime: 0,
     sampleRate: 48000,
     destination: makeBaseNode('AudioDestinationNode'),
@@ -350,7 +355,8 @@ function audioContextStub() {
     createDynamicsCompressor: makeCompressorNode,
     createConvolver: makeConvolverNode,
     audioWorklet: {
-      addModule: function () {
+      addModule: function (url) {
+        moduleUrls.push(url);
         return Promise.resolve();
       }
     }
@@ -837,6 +843,20 @@ async function partD() {
       return false;
     }
   };
+  var saves = [];
+  s.Persistence = {
+    saveCurrentChain: function (model) {
+      saves.push(copyModel(model));
+      return { saved: true };
+    }
+  };
+  var presetState = { name: null, modified: false };
+  s.PresetsUI = {
+    getDisplayState: function () { return Object.assign({}, presetState); },
+    setCurrentPreset: function (name) { presetState.name = name; },
+    markModified: function () { presetState.modified = true; },
+    clearModified: function () { presetState.modified = false; }
+  };
   loadSrc(s, 'src/chain-editing.js');
 
   function getTool(name) {
@@ -1029,6 +1049,61 @@ async function partD() {
     limiter.__connectionsTo.indexOf(AG.getChainGate()) !== -1,
     'D10: the limiter still feeds the chain gate (terminal wiring intact)'
   );
+
+  // The seed warmed both modules. Exercise the reported preset/add sequence
+  // with fresh IDs through the real WebMCP -> ChainEditing -> AudioGraph path.
+  loadSrc(s, 'src/factory-library-data.js');
+  loadSrc(s, 'src/factory-presets.js');
+  var attenuator = AG.getOutputAttenuator();
+  s.AudioBypass = { isEngaged: function () { return true; } };
+  async function acceptedEdit(name, input, label) {
+    var beforeUndo = undoPushes;
+    var beforeSaves = saves.length;
+    var result = await getTool(name).execute(input);
+    check(result && result.applied === true, label + ': edit accepted' +
+      (result && result.applied ? '' : ' (got ' + JSON.stringify(result) + ')'));
+    var accepted = s.ChainEditing.getModel();
+    check(deepEqual(accepted, s.ChainCanvas.getCurrentModel()) &&
+      deepEqual(accepted, AG.getModel()) && deepEqual(accepted, saves[saves.length - 1]),
+      label + ': accepted, rendered, live, and persisted models agree');
+    check(undoPushes === beforeUndo + 1 && saves.length === beforeSaves + 1,
+      label + ': exactly one Undo entry and persistence attempt');
+    var readback = await getTool('get_chain').execute({});
+    check(deepEqual(copyModel(readback.nodes), accepted), label + ': WebMCP readback agrees');
+    var terminal = accepted[accepted.length - 1];
+    check(terminal.type === 'limiter' &&
+      AG.getNodeInstance(terminal.id).__connectionsTo.indexOf(AG.getChainGate()) !== -1 &&
+      AG.getOutputAttenuator() === attenuator && AG.getChainGate().gain.value === 0,
+      label + ': terminal limiter, host attenuator, and engaged Bypass are preserved');
+    return result;
+  }
+  await acceptedEdit('load_preset', { name: 'Classic Karaoke', namespace: 'factory' }, 'D11 Classic');
+  var studio = await acceptedEdit('load_preset', { name: 'Studio Polish', namespace: 'factory' }, 'D12 warm Studio Polish');
+  check(studio.loaded === 'Studio Polish' && presetState.name === 'Studio Polish' && !presetState.modified,
+    'D12: result and preset display identify the accepted Studio Polish sound');
+  await acceptedEdit('load_preset', { name: 'Classic Karaoke', namespace: 'factory' }, 'D13 restore Classic');
+  var reverb = await acceptedEdit('add_node', { type: 'reverb', position: 2, params: { mix: 10 } }, 'D14 reverb add');
+  await acceptedEdit('remove_node', { nodeId: reverb.nodeIds[0] }, 'D15 reverb remove');
+  var gate = await acceptedEdit('add_node', { type: 'gate', position: 2 }, 'D16 warm gate add');
+  var autotune = await acceptedEdit('add_node', { type: 'autotune', position: 3 }, 'D17 warm autotune add');
+  [gate, autotune].forEach(function (result) {
+    var instance = result.nodeIds && AG.getNodeInstance(result.nodeIds[0]);
+    check(instance && instance.worklet &&
+      instance.input.__connectionsTo.length === 1 && instance.input.__connectionsTo[0] === instance.worklet &&
+      instance.worklet.__connectionsTo[0] === instance.output,
+      'D18: each fresh warm effect has only input -> worklet -> output internally');
+  });
+  check(s.AudioEngine.audioContext.__addModuleUrls.length === 2,
+    'D18: Gate and Autotune each load their module only once for the context');
+  var beforeReorder = snapshot();
+  var reordered = AG.getModel();
+  reordered.splice(0, 0, reordered.splice(1, 1)[0]);
+  await acceptedEdit('set_chain', {
+    chain: { schemaVersion: 1, name: 'warm same-id reorder', nodes: reordered }
+  }, 'D19 same-id reorder');
+  check(Object.keys(beforeReorder.instances).every(function (id) {
+    return AG.getNodeInstance(id) === beforeReorder.instances[id];
+  }), 'D19: same-id, same-type reorder reuses every physical instance');
 }
 
 // ======================================================================
