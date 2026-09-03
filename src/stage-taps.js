@@ -87,13 +87,9 @@
 //   SignalLamps.feedChain(levels)
 //     levels: Array<number|null> — the chain's BOUNDARIES, nodes+1 of
 //     them: levels[0] is the microphone arriving, levels[k+1] is what
-//     leaves card k. So card k's own pair is (levels[k], levels[k+1]) —
-//     what reached it and what left it — and the distance between the
-//     two IS the effect that card is having, read as two real
-//     measurements rather than as a derived claim. Same dBFS convention,
-//     same null-for-silence and honesty gates as feedStages; a bypassed
-//     card reports the level physically crossing it, which is its input
-//     unchanged, because that is the truth.
+//     leaves card k. Card k's pair is therefore (levels[k], levels[k+1]).
+//     Each boundary carries peak and RMS readings with the same honesty
+//     gates as feedStages; a bypassed card reports its input unchanged.
 //
 //   SignalLamps.feedScope(pairs, columns, peakDb)
 //     pairs: Float32Array of length 2*columns (min,max interleaved,
@@ -334,8 +330,7 @@
     // is bypassed".
     gapToTap = [];
     // The boundary list starts at the microphone and gains one entry per
-    // card: after card k it holds the latest audible stage at-or-before
-    // it, which for a bypassed card is its own input unchanged — the
+    // card. Bypassed cards retain the latest audible stage, which is the
     // signal physically leaving that seat.
     chainToTap = [0];
     var audibleSeen = 0;
@@ -406,6 +401,21 @@
     return maxAbs > 0
       ? 20 * Math.log10(maxAbs > DB_FLOOR_LINEAR ? maxAbs : DB_FLOOR_LINEAR)
       : -Infinity;
+  }
+
+  /** RMS dBFS of the same analyser window. It gives the compact card
+   *  comparison a stable body reading rather than a transient-only peak. */
+  function rmsDbOfWindow() {
+    var sumSquares = 0;
+    for (var i = 0; i < FFT_SIZE; i++) {
+      var v = floatBuf[i];
+      sumSquares += v * v;
+    }
+    if (!(sumSquares > 0)) {
+      return -Infinity;
+    }
+    var rms = Math.sqrt(sumSquares / FFT_SIZE);
+    return 20 * Math.log10(rms > DB_FLOOR_LINEAR ? rms : DB_FLOOR_LINEAR);
   }
 
   /** Decimate the scope window (floatBuf) into min/max envelope columns.
@@ -490,10 +500,8 @@
         lamps.feedStages(levels);
       }
 
-      // The same taps, read once more as the chain's own boundaries —
-      // the per-card strips need what ARRIVED at a card as well as what
-      // left it, and both are already in the pool. Gated exactly like
-      // the chevrons: a chain the room cannot hear reports nothing.
+      // Read the same taps as the chain's nodes+1 boundaries. Each card
+      // compares the RMS arriving at its seat with the RMS leaving it.
       if (lamps && typeof lamps.feedChain === 'function' && chainToTap.length) {
         var chainLevels = [];
         for (i = 0; i < chainToTap.length; i++) {
@@ -502,15 +510,19 @@
             continue;
           }
           var ctap = tapPool[chainToTap[i]];
-          var cdb = null;
+          var cstats = null;
           if (ctap && ctap.src) {
             ctap.node.getFloatTimeDomainData(floatBuf);
             var cpeak = peakDbOfWindow();
-            if (cpeak > -Infinity) {
-              cdb = cpeak;
+            var crms = rmsDbOfWindow();
+            if (cpeak > -Infinity || crms > -Infinity) {
+              cstats = {
+                peakDb: cpeak > -Infinity ? cpeak : null,
+                rmsDb: crms > -Infinity ? crms : null
+              };
             }
           }
-          chainLevels.push(cdb);
+          chainLevels.push(cstats);
         }
         lamps.feedChain(chainLevels);
       }
@@ -630,6 +642,7 @@
     unwireTaps();
     stageOutputs = [];
     gapToTap = [];
+    chainToTap = [];
     wiredSignature = null;
     sourceRef = null;
     var lamps = getLamps();

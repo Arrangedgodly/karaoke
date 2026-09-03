@@ -2311,13 +2311,17 @@ select.control {
 
 
 /* --- The face (scrolling flow) ----------------------------------------
-   Board redesign (2026-09-01): the fixed Voice In/Out rails are RETIRED
-   along with the free board they flanked — both meters now mount as
-   their own panel-level strips (src/meters.js's buildFooterUnit, styled
-   in the ".canvas-footer" block further down), one above this element,
-   one below, as .canvas-panel's OWN flex children — never inside
-   .canvas, so neither of them scrolls or clips with the board. .canvas
-   is simply the panel's scrolling region now. */
+   The canvas stays the drag and scroll owner. .canvas-flow places it
+   between two fixed safety-meter endcaps, so the complete Advanced signal
+   path reads left to right without letting MIC IN or OUT scroll away. */
+.canvas-flow {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr) 7rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 .canvas {
   display: flex;
   flex-direction: column;
@@ -4785,29 +4789,29 @@ input.preset-name-input:focus-visible {
   color: var(--text-primary);
 }
 
-/* Board redesign (2026-09-01): the panel-level meter strips (src/meters.js
-   buildFooterUnit) replacing the free board's jack-print .anchor units —
-   MIC IN above the scrolling row of cards, OUT below it, same key
-   vocabulary the rest of the panel uses (system-deck ground, groove-cut
-   seam toward the scrolling face) rather than inventing a new one. */
-/* THE BASE ROW (2026-09-03, owner direction). MIC IN and OUT used to line
-   the board top and bottom, a full-width row each, costing roughly 90px on
-   a console whose whole point is that it never scrolls. The per-card
-   meters are now where an operator reads a level, so these two become
-   what they always really were — the pinned SAFETY ANCHOR — and share one
-   compact row under the board. Still panel children, never inside
-   #chain-canvas: output ground truth still never depends on scroll or
-   collapse, and still never dims. */
-.canvas-base {
-  flex: none;
+/* THE HORIZONTAL SAFETY ENDCAPS (2026-09-03 live direction). MIC IN and
+   OUT are now the fixed first and last cells of the same workflow as the
+   scrolling effect chain. The channel stays visually continuous, while the
+   endpoint readings remain present at every scroll position. */
+.flow-endpoint-host {
+  position: relative;
+  z-index: 2;
   display: flex;
-  align-items: center;
-  gap: 1.4rem;
-  padding: 0.3rem 0.9rem;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  padding: 0.75rem 0.5rem;
   background: var(--pm-system-deck);
-  border-top: 1px solid var(--pm-groove-cut);
-  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
-  overflow-x: auto;
+}
+
+.flow-endpoint-host-in {
+  border-right: 1px solid var(--pm-groove-cut);
+  box-shadow: inset -1px 0 0 var(--pm-groove-lip);
+}
+
+.flow-endpoint-host-out {
+  border-left: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 1px 0 0 var(--pm-groove-lip);
 }
 
 .canvas-footer {
@@ -4819,6 +4823,47 @@ input.preset-name-input:focus-visible {
      is just a unit. */
   padding: 0;
   background: transparent;
+}
+
+.canvas-flow-endpoint {
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.canvas-flow-endpoint .canvas-footer-legend {
+  text-align: center;
+}
+
+.canvas-flow-endpoint .meter-unit,
+.canvas-flow-endpoint .meter-canvas {
+  width: 96px;
+  max-width: 100%;
+}
+
+.flow-endpoint-host::after {
+  content: '';
+  position: absolute;
+  top: 3rem;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid var(--pm-print-dim);
+  border-right: 2px solid var(--pm-print-dim);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.flow-endpoint-host-in::after {
+  right: -5px;
+}
+
+.flow-endpoint-host-out::after {
+  left: -6px;
+}
+
+.canvas-panel.flow-horizontal .chain-arrow {
+  align-self: flex-start;
+  margin-top: 2.4rem;
 }
 
 .canvas-footer-legend {
@@ -4862,6 +4907,11 @@ input.preset-name-input:focus-visible {
   align-items: flex-start;
 }
 
+.canvas-panel.flow-horizontal .chain-list:empty {
+  flex: 0 0 0;
+  min-height: 0;
+}
+
 /* CONDENSED SECTION. In the horizontal reading each
    section is a condensed MODULE: the rail collapses into a compact
    header band (grip · code · label · badge · fold/eject right) over the
@@ -4878,31 +4928,29 @@ input.preset-name-input:focus-visible {
   min-width: 9rem;
   max-width: 40rem;
   padding: 0.35rem 0.4rem 0.4rem;
-  /* One column: header band over the encoder field, with the card's own
-     meter strip pinned to the foot (2026-09-03). */
+  /* One column: header band over the encoder field. The signal comparison
+     is position-absolute in the card's bottom groove, so it consumes no
+     control space. */
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
 }
 
-/* THE CARD METER. The board's detail layer: one lamp strip per card,
-   reading in the VU ladder's own language at the exact seat an operator
-   is already looking at when they ask what a plugin is doing. It costs
-   no vertical space of its own beyond its own 6px — it lives inside a
-   card that was already there, which is what let the panel-level MIC IN
-   and OUT strips collapse into one compact base row.
-
-   Unlit glass behind it, unlike the wordmark's matrix: this IS a lamp bar
-   read by its lit length, so a dark track is exactly right. Fixed height
-   and flex:none — a display that answers every frame may never pump the
-   layout of the board it sits in. */
+/* The card meter is part of the machining, not another display. Its upper
+   trace is IN and lower trace is OUT; both sit in a 6px floor groove, inset
+   6px from the card edges and held at half intensity. */
 .canvas-panel.flow-horizontal .node-meter {
-  flex: none;
-  height: 6px;
-  margin-top: 0.35rem;
+  position: absolute;
+  right: 0.375rem;
+  bottom: 0;
+  left: 0.375rem;
+  width: auto;
+  height: 0.375rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0.5;
   overflow: hidden;
-  /* The machined cut the strip sits in, same grammar as every other
-     boundary on the chassis: dark cut under a light lip. */
-  box-shadow: inset 0 1px 0 var(--pm-groove-cut);
+  pointer-events: none;
 }
 
 .canvas-panel.flow-horizontal .node-meter-canvas {
@@ -4911,8 +4959,6 @@ input.preset-name-input:focus-visible {
   height: 100%;
 }
 
-/* A folded card is a 56px identity rail with no field to meter, and a
-   card whose params are hidden is not reporting anything either. */
 .canvas-panel.flow-horizontal .node-card.collapsed .node-meter {
   display: none;
 }

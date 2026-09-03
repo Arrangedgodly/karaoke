@@ -274,16 +274,21 @@ check(
   'the scope band is aria-hidden and carries the adopted canvas — a redundant picture; the OUT meter keeps the numbers'
 );
 
-// Board redesign (2026-09-01): the .board-frame + .io-rail-in/-out +
-// .anchor markup is retired along with the free board it flanked — both
-// meters now mount as their own panel-level strips at runtime
-// (src/meters.js's buildFooterUnit), never static markup, so there is
-// nothing left to pin here structurally.
+// Live direction 2026-09-03: one horizontal workflow wraps the existing
+// scrolling canvas in fixed MIC IN / OUT hosts. The cards keep their exact
+// drag surface; the endpoint meters stay visible at both edges.
+var canvasFlow = byId('canvas-flow');
+var flowChildren = canvasFlow ? canvasFlow.children : [];
+check(
+  flowChildren.length === 3 &&
+    hasClass(flowChildren[0], 'flow-endpoint-host-in') && flowChildren[0].attrs.id === 'advanced-meter-in' &&
+    flowChildren[1].attrs.id === 'chain-canvas' &&
+    hasClass(flowChildren[2], 'flow-endpoint-host-out') && flowChildren[2].attrs.id === 'advanced-meter-out',
+  'canvas flow is MIC IN host | scrolling chain | OUT host'
+);
 
-// The canvas markup itself: just the flow list + the state hint (the
-// chain-arrow connectors are JS-inserted at runtime by renderChainArrows,
-// never static markup, and the meter strips mount as .canvas-panel's own
-// flex siblings of this element — see src/meters.js — not inside it).
+// The canvas itself still contains only the flow list + state hint; meter
+// mounting cannot change the drop-zone or chain DOM order.
 var canvasEl = byId('chain-canvas');
 var flowTags = canvasEl ? descendants(canvasEl, function () { return true; }).map(function (n) {
   return n.tag + (n.attrs.class ? '.' + n.attrs.class.split(/\s+/)[0] : '');
@@ -291,7 +296,7 @@ var flowTags = canvasEl ? descendants(canvasEl, function () { return true; }).ma
 check(
   canvasEl !== null &&
     JSON.stringify(flowTags) === JSON.stringify(['div.chain-list', 'div.empty-hint']),
-  'canvas internals: chain-list → empty-hint only (no static MIC IN / OUT markup, no in-flow anchors)'
+  'scrolling canvas internals remain chain-list → empty-hint only'
 );
 
 // ----------------------------------------------------------------------
@@ -793,6 +798,19 @@ check(
 // classes since, and the board redesign's own drag-to-reorder is a
 // hand-rolled gesture with its own .reorder-chosen class (see
 // styles/main.css's board-redesign block).
+
+console.log('I. per-card meter groove — accepted live treatment');
+var cardMeterRule = cssRule('.canvas-panel.flow-horizontal .node-meter');
+check(
+  cardMeterRule !== null &&
+    cssDecl(cardMeterRule, 'position') === 'absolute' &&
+    cssDecl(cardMeterRule, 'right') === '0.375rem' &&
+    cssDecl(cardMeterRule, 'left') === '0.375rem' &&
+    cssDecl(cardMeterRule, 'bottom') === '0' &&
+    cssDecl(cardMeterRule, 'height') === '0.375rem' &&
+    cssDecl(cardMeterRule, 'opacity') === '0.5',
+  'card IN/OUT traces are machined into a 6px bottom groove, inset 6px and held at 50% intensity'
+);
 
 // ----------------------------------------------------------------------
 console.log('');

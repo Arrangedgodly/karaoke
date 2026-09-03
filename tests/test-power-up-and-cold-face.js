@@ -441,6 +441,11 @@ function makeMetersSandbox() {
   const panel = mk('div');
   const board = mk('div');
   els['chain-canvas'] = board;
+  els['advanced-meter-in'] = mk('div');
+  els['advanced-meter-out'] = mk('div');
+  panel.appendChild(els['advanced-meter-in']);
+  panel.appendChild(board);
+  panel.appendChild(els['advanced-meter-out']);
   els['simple-meter-in'] = mk('div');
   els['simple-meter-out'] = mk('div');
 

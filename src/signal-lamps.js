@@ -77,12 +77,11 @@
 //   word lights for a 200ms hold and releases, the same proof as a
 //   state rather than a motion.
 //
-//   THE CARD METERS (Advanced view) — a lamp strip along the foot of
-//   every chain card, in the VU ladder's own language. The BAR is the
-//   level LEAVING that card; the TICK is the level that ARRIVED at it.
-//   The distance between them is the effect that card is having, shown
-//   as two real measurements rather than as a derived claim: nothing
-//   here computes a "gain reduction" number it cannot defend. A card
+//   THE CARD METERS (Advanced view) — two narrow traces machined into
+//   every card's bottom groove, in the VU ladder's own language. The
+//   upper trace is the signal arriving at the card; the lower trace is
+//   what leaves it. Their distance is the effect that card is having,
+//   shown as two real measurements rather than a derived claim. A card
 //   that is bypassed reads its input unchanged, because that is what is
 //   physically leaving its seat.
 //
@@ -588,13 +587,15 @@
   }
 
   // ---------------------------------------------------------------------
-  // The card meters (the board's own detail layer).
+  // Compact per-card IN / OUT meters.
   // ---------------------------------------------------------------------
 
-  /** Re-read the card strips from the live DOM. canvas.js rebuilds every
-   *  card on a structural change and pings onArrowsRendered in the same
-   *  breath, which drops this cache — the same invalidation the chevrons
-   *  already use, so the two can never disagree about board order. */
+  var cardTargets = null;
+  var cardLevels = [];
+  var cardLastT = null;
+
+  /** canvas.js rebuilds cards and chevrons together. Re-querying after its
+   *  render hook keeps this DOM-order cache aligned with chain order. */
   function collectCardMeters() {
     var list = [];
     if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') {
@@ -612,8 +613,6 @@
     cardTargets = list;
   }
 
-  /** Size one strip's backing store to its CSS box; false when the strip
-   *  is not on screen (Simple showing, a folded card, a zero box). */
   function prepareCardMeter(t) {
     var w = t.canvas.clientWidth || 0;
     var h = t.canvas.clientHeight || 0;
@@ -637,63 +636,64 @@
     return true;
   }
 
-  /** The x of a dB level on a strip of width w. */
   function meterX(db, w) {
     if (db === null || db <= SCALE_MIN) {
       return 0;
     }
     var unit = (db - SCALE_MIN) / -SCALE_MIN;
-    if (unit > 1) {
-      unit = 1;
-    }
-    return unit * w;
+    return (unit > 1 ? 1 : unit) * w;
   }
 
-  /** Paint one strip: the lit bar in the meters' own zone ladder up to
-   *  the level LEAVING the card, and a print tick at the level that
-   *  ARRIVED. Unlit glass behind both — this is a lamp bar read by its
-   *  lit length, so a dark track is exactly right here (unlike the
-   *  wordmark, whose unlit cells must stay legible). */
+  /** Two narrow lanes share the endpoint ladder. The input is deliberately
+   *  quieter, so the processed result leads without hiding the comparison. */
   function paintCardMeter(t, inDb, outDb) {
     var ctx = t.ctx;
     var w = t.w;
     var h = t.h;
+    var laneGap = 2;
+    var laneH = Math.max(1, Math.floor((h - laneGap) / 2));
+    var outY = laneH + laneGap;
     ctx.clearRect(0, 0, w, h);
 
     ctx.fillStyle = colors.unlit;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, w, laneH);
+    ctx.fillRect(0, outY, w, laneH);
 
-    var lit = meterX(outDb, w);
-    if (lit > 0) {
+    function paintLane(db, y, alpha) {
+      var lit = meterX(db, w);
+      if (!(lit > 0)) {
+        return;
+      }
       var midX = meterX(ZONE_MID_DB, w);
       var clipX = meterX(ZONE_CLIP_DB, w);
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = colors.low;
-      ctx.fillRect(0, 0, Math.min(lit, midX), h);
+      ctx.fillRect(0, y, Math.min(lit, midX), laneH);
       if (lit > midX) {
         ctx.fillStyle = colors.mid;
-        ctx.fillRect(midX, 0, Math.min(lit, clipX) - midX, h);
+        ctx.fillRect(midX, y, Math.min(lit, clipX) - midX, laneH);
       }
       if (lit > clipX) {
         ctx.fillStyle = colors.clip;
-        ctx.fillRect(clipX, 0, lit - clipX, h);
+        ctx.fillRect(clipX, y, lit - clipX, laneH);
       }
+      ctx.globalAlpha = 1;
     }
 
-    // What arrived. Drawn even when it sits behind the lit bar, so the
-    // pair always reads as a pair: tick BEHIND the bar's end means this
-    // card added level, tick ahead of it means the card took level away.
-    if (inDb !== null && inDb > SCALE_MIN) {
-      var tx = meterX(inDb, w);
-      if (tx > w - 2) {
-        tx = w - 2;
-      }
-      ctx.fillStyle = colors.tick;
-      ctx.fillRect(Math.round(tx), 0, 2, h);
-    }
+    paintLane(inDb, 0, 0.55);
+    paintLane(outDb, outY, 1);
   }
 
-  /** StageTaps' per-card feed: the chain's boundaries, nodes+1 of them.
-   *  Card k's pair is (levels[k], levels[k+1]). */
+  function cardBoundaryDb(value) {
+    if (value && typeof value.rmsDb === 'number' && isFinite(value.rmsDb)) {
+      return value.rmsDb;
+    }
+    if (value && typeof value.peakDb === 'number' && isFinite(value.peakDb)) {
+      return value.peakDb;
+    }
+    return typeof value === 'number' && isFinite(value) ? value : SCALE_MIN;
+  }
+
   function feedChain(levels) {
     if (failed || !levels) {
       return;
@@ -707,8 +707,6 @@
         return;
       }
 
-      // Ballistics on the boundaries themselves, so a card's bar and the
-      // next card's tick can never disagree about the same measurement.
       var t = npNow();
       if (cardLevels.length !== levels.length) {
         cardLevels = [];
@@ -727,7 +725,7 @@
       cardLastT = t;
       var fall = FALL_DB_PER_S * dt;
       for (var b = 0; b < levels.length; b++) {
-        var raw = typeof levels[b] === 'number' ? levels[b] : SCALE_MIN;
+        var raw = cardBoundaryDb(levels[b]);
         if (raw < SCALE_MIN) {
           raw = SCALE_MIN;
         }
@@ -740,7 +738,7 @@
 
       for (var i = 0; i < cardTargets.length; i++) {
         if (i + 1 >= cardLevels.length) {
-          break; // more strips than boundaries: a rebuild is in flight
+          break;
         }
         var target = cardTargets[i];
         if (prepareCardMeter(target)) {
@@ -796,12 +794,6 @@
   var npRowInk = null; // one zone colour per row, resolved once
   var npLevels = null; // displayed dB per column (instant attack, 24 dB/s fall)
   var npLastT = null;
-
-  // The card meters. One entry per card canvas in board order (DOM order
-  // IS chain order — PD-4), re-read whenever the board rebuilds.
-  var cardTargets = null;
-  var cardLevels = []; // displayed dB per boundary, ballistics as the lamps'
-  var cardLastT = null;
 
   function npNow() {
     try {
@@ -1162,7 +1154,6 @@
     }
     arrowMarks = null;
     stageLevels = [];
-    // The card strips are rebuilt in the same pass as the chevrons.
     cardTargets = null;
     cardLevels = [];
     cardLastT = null;

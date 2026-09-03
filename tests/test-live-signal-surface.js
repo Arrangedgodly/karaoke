@@ -214,9 +214,10 @@ async function sectionB() {
   let watchdogTripped = false;
   s.window.MeterTaps = { isTripped: function () { return watchdogTripped; } };
 
-  const feeds = { stages: [], scopes: [], engineStates: [] };
+  const feeds = { stages: [], chains: [], scopes: [], engineStates: [] };
   s.window.SignalLamps = {
     feedStages: function (levels) { feeds.stages.push(levels.slice()); },
+    feedChain: function (levels) { feeds.chains.push(levels.slice()); },
     feedScope: function (pairs, columns, peakDb) { feeds.scopes.push({ columns: columns, len: pairs.length, peakDb: peakDb }); },
     setEngineState: function (on) { feeds.engineStates.push(on); },
   };
@@ -258,12 +259,22 @@ async function sectionB() {
     'B2: a composite instance taps its real OUTPUT node, never the composite');
   bySrc[1] = nA.output._edges[0];
   bySrc[0] = s.window.AudioEngine.sourceNode._edges[0];
+  bySrc[2] = nC._edges[0];
+  bySrc[0].fill = function (buf) { for (let i = 0; i < buf.length; i++) buf[i] = 0.25; };
   bySrc[1].fill = function (buf) { for (let i = 0; i < buf.length; i++) buf[i] = 0.5; };
+  bySrc[2].fill = function (buf) { for (let i = 0; i < buf.length; i++) buf[i] = 0.125; };
   pumpFrame(s);
   check(feeds.stages.length === 2 &&
     Math.abs(feeds.stages[1][0] - (-6.02)) < 0.1 &&
     Math.abs(feeds.stages[1][1] - (-6.02)) < 0.1,
     'B3: both gaps read the level actually flowing there (0.5 linear ≈ -6 dBFS)');
+  const chainFeed = feeds.chains[feeds.chains.length - 1];
+  check(chainFeed.length === 4 &&
+    Math.abs(chainFeed[0].rmsDb - (-12.04)) < 0.1 &&
+    Math.abs(chainFeed[1].rmsDb - (-6.02)) < 0.1 &&
+    Math.abs(chainFeed[2].rmsDb - (-6.02)) < 0.1 &&
+    Math.abs(chainFeed[3].rmsDb - (-18.06)) < 0.1,
+    'B3: card boundaries carry distinct RMS readings; a bypassed card passes its input through unchanged');
 
   // Honesty gate 1: emergency Bypass engaged — the chain is NOT what the
   // room hears, so the lamps go dark even though the signal keeps
@@ -430,6 +441,23 @@ function sectionC() {
     getContext: function () { return advCtx; },
   };
 
+  function makeCardCanvas() {
+    const cardDraws = { rects: [], clears: 0 };
+    const cardCtx = {
+      fillStyle: '', globalAlpha: 1,
+      setTransform: function () {},
+      clearRect: function () { cardDraws.clears++; },
+      fillRect: function (x, y, w, h) {
+        cardDraws.rects.push({ x: x, y: y, w: w, h: h, fill: cardCtx.fillStyle, alpha: cardCtx.globalAlpha });
+      },
+    };
+    return {
+      canvas: { clientWidth: 120, clientHeight: 22, width: 0, height: 0, getContext: function () { return cardCtx; } },
+      draws: cardDraws,
+    };
+  }
+  const cardMeters = [makeCardCanvas(), makeCardCanvas()];
+
   s.document = {
     querySelectorAll: function (sel) {
       // The scope slots are found by class, not held by reference —
@@ -437,6 +465,9 @@ function sectionC() {
       // query is NOT part of the chevron cache's count.
       if (sel.indexOf('scope-canvas') !== -1) {
         return inserted.length ? [canvas, advCanvas] : [advCanvas];
+      }
+      if (sel === '#chain-list .node-meter-canvas') {
+        return cardMeters.map(function (x) { return x.canvas; });
       }
       queryCount++;
       return sel === '#chain-list .chain-arrow-mark' ? marks.slice() : [];
@@ -505,6 +536,23 @@ function sectionC() {
   Lamps.feedStages([-8, -8]);
   check(marks[0].style.borderColor === '#ffd75e',
     'C4: onArrowsRendered drops the cache so the next feed re-queries');
+
+  // Each card paints two real rows. The first effect raises RMS, so OUT is
+  // longer than IN; the second lowers it, so IN is longer than OUT.
+  Lamps.feedChain([
+    { peakDb: -27, rmsDb: -30 },
+    { peakDb: -9, rmsDb: -12 },
+    { peakDb: -21, rmsDb: -24 },
+  ]);
+  function laneExtent(meter, lowerLane) {
+    const rects = meter.draws.rects.filter(function (r) {
+      return r.fill !== '#262933' && (lowerLane ? r.y > 0 : r.y === 0);
+    });
+    return rects.reduce(function (max, r) { return Math.max(max, r.x + r.w); }, 0);
+  }
+  check(laneExtent(cardMeters[0], true) > laneExtent(cardMeters[0], false) &&
+    laneExtent(cardMeters[1], false) > laneExtent(cardMeters[1], true),
+    'C5: each card paints a distinct IN/OUT comparison from its own two boundaries');
 
   // Engine off rests everything at once.
   Lamps.feedStages([-3, -3]);

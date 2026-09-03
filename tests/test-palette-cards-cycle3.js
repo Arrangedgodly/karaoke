@@ -1000,25 +1000,23 @@ windowStub.ChainCanvas.renderModel(
 var helpCards = cards();
 check(helpCards.length === 11, 'help-layer render builds a card for every type');
 
-// Every card carries its own meter strip (2026-09-03): the board's detail
-// layer, painted by signal-lamps from StageTaps' boundary feed. It is the
-// reason the panel-level MIC IN / OUT strips could collapse into one
-// compact base row, so it must exist on EVERY card — not just the ones
-// with interesting params.
+// Every card carries its own two-trace meter groove, painted by
+// signal-lamps from StageTaps' boundary feed. It is aria-hidden and
+// unlabeled because the endpoint meters own the accessible IN/OUT reading.
 (function cardMetersExist() {
   var metered = 0;
   var missing = [];
   helpCards.forEach(function (card) {
     var strip = rowOfClass(card, 'node-meter');
     var canvas = strip ? rowOfClass(strip, 'node-meter-canvas') : null;
-    if (strip && canvas && strip.attrs['aria-hidden'] === 'true') {
+    if (strip && canvas && strip.children.length === 1 && strip.attrs['aria-hidden'] === 'true') {
       metered += 1;
     } else {
       missing.push(card.attrs['data-family']);
     }
   });
   check(metered === helpCards.length && missing.length === 0,
-    'every card carries an aria-hidden meter strip with its own canvas' +
+    'every card carries an unlabeled aria-hidden IN/OUT groove with its own canvas' +
       (missing.length ? ' — missing on: ' + missing.join(', ') : ''));
 })();
 

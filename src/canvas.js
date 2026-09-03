@@ -2193,13 +2193,11 @@
     card.appendChild(rail);
     card.appendChild(main);
 
-    // THE CARD METER (2026-09-03, owner direction): a lamp strip along
-    // the card's foot, painted per frame by src/signal-lamps.js from
-    // StageTaps' own boundary feed. The bar is what LEAVES this card and
-    // the tick is what ARRIVED, so the distance between them is the
-    // effect this card is having — two real measurements, never a
-    // derived "reduction" number. aria-hidden: a redundant picture of a
-    // level, exactly like the meters it borrows its ladder from.
+    // Two compact readings machined into the card's bottom groove, painted
+    // per frame by signal-lamps from StageTaps' boundary feed. The upper
+    // trace is the level arriving at this effect and the lower trace is the
+    // level leaving it. Endpoint meters keep the accessible numeric reading,
+    // so this redundant comparison stays aria-hidden and unlabeled.
     var meter = document.createElement('div');
     meter.className = 'node-meter';
     meter.setAttribute('aria-hidden', 'true');

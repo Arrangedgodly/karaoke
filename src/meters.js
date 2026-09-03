@@ -21,14 +21,12 @@
 //   exactly ONE console diagnostic and leaves the module a harmless no-op
 //   — meters can never break the host app).
 //
-// Board redesign (2026-09-01, user direction): the free board's jack-print
-// `.anchor` elements are gone (patch cords retired for an ordered,
-// drag-to-reorder chain — see src/canvas.js), so both meters now build as
-// PANEL-level strips instead of nesting inside an anchor: a "MIC IN" strip
-// immediately ABOVE the scrolling #chain-canvas, a mirrored "OUT" strip
-// immediately BELOW it — never inside #chain-canvas itself, so neither the
-// board's own scroll nor a card drag can move or clip either meter. One
-// shared builder (buildFooterUnit(side)) makes both; each strip is:
+// Board redesign (2026-09-03 live direction): the free board's jack-print
+// `.anchor` elements are gone. Advanced view mounts the two safety meters as
+// fixed endcaps around the existing scrolling #chain-canvas: MIC IN at the
+// left, OUT at the right. The three cells form one horizontal workflow while
+// keeping both safety readings visible and leaving the canvas as the drag and
+// scroll owner. One shared builder (buildFooterUnit(side)) makes both:
 //
 //     <div class="canvas-footer canvas-footer-in|out" data-meter-footer="in|out">
 //       <span class="canvas-footer-legend">MIC IN|OUT</span>
@@ -44,9 +42,8 @@
 //       </div>
 //     </div>
 //
-//   Skipped silently when .canvas-panel or #chain-canvas cannot be found
-//   (bare-harness safety) or when this side's strip already exists
-//   (idempotence).
+//   Skipped silently when its #advanced-meter-in|out host cannot be found
+//   (bare-harness safety) or when this side's strip already exists.
 //
 // Meters.feed(side, stats)          <- THE FEW-3 CALL CONTRACT
 //   side:  'in' | 'out'.
@@ -797,43 +794,18 @@
 
   function buildFooterUnit(side) {
     if (typeof document.createElement !== 'function' ||
-        typeof document.querySelector !== 'function') {
+        typeof document.getElementById !== 'function') {
       return false;
     }
-    var panel = document.querySelector('.canvas-panel');
-    var canvasEl = document.getElementById('chain-canvas');
-    // #chain-canvas is .canvas-panel's own direct child (the free
-    // board's .board-frame wrapper that used to sit between them is
-    // retired along with the rest of the free board), so canvasEl is a
-    // valid insertBefore reference node directly.
-    if (!panel || !canvasEl || !panel.insertBefore ||
-        panel.querySelector('.canvas-footer[data-meter-footer="' + side + '"]')) {
+    var host = document.getElementById(side === SIDE_IN ? 'advanced-meter-in' : 'advanced-meter-out');
+    if (!host || !host.appendChild || host.querySelector('.canvas-footer')) {
       return false;
     }
 
     var u = ensureUnit(side);
     var strip = createFooterStrip(side, u.dpr);
-    // ONE BASE ROW (2026-09-03, owner direction). The two strips used to
-    // line the board top and bottom, a full-width row each, and between
-    // them they took roughly 90px off a console whose whole point is that
-    // it never scrolls. The board's own cards now carry the per-plugin
-    // detail (see .node-meter), so these two stop being the place an
-    // operator reads a level and become what they always really were: the
-    // pinned SAFETY ANCHOR. Both now sit side by side in a single row
-    // under the board — still panel children, never inside #chain-canvas,
-    // so output ground truth still never depends on scroll or collapse
-    // and still never dims. IN first, OUT second: signal order.
-    var base = panel.querySelector('.canvas-base');
-    if (!base) {
-      base = document.createElement('div');
-      base.className = 'canvas-base';
-      panel.insertBefore(base, canvasEl.nextSibling);
-    }
-    if (side === SIDE_IN && base.firstChild) {
-      base.insertBefore(strip.footer, base.firstChild);
-    } else {
-      base.appendChild(strip.footer);
-    }
+    strip.footer.className += ' canvas-flow-endpoint';
+    host.appendChild(strip.footer);
     u.targets.push({ canvas: strip.canvas, ctx: strip.ctx, readoutEl: strip.readoutEl });
     return true;
   }
@@ -847,7 +819,7 @@
    *  paint target on the side's existing ballistics unit, so both
    *  strips always show the exact same numbers — one feed, one set of
    *  ballistics, painted twice. Advanced's own mount (buildFooterUnit)
-   *  is completely unaffected: same function, same call, same behavior.
+   *  remains the same live unit and ballistics; only its mount host differs.
    *  Silently skipped when the host element is absent (bare-harness
    *  safety, and pre-#47 index.html) or already has a mounted strip. */
   function mountSimpleUnit(side) {
