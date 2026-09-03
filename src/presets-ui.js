@@ -121,6 +121,15 @@
     return;
   }
 
+  // Sharing round: the panel's Copy link key (absent markup — a bare
+  // harness — degrades to a no-op inside wireShareButton itself).
+  // Declared HERE, above the call, because wireShareButton() assigns
+  // shareBtnEl at module load — a mid-file `var x = null` initializer
+  // below would reset it right after.
+  var activePersonalPreset = null;
+  var shareBtnEl = null;
+  wireShareButton();
+
   // `null` means "no named preset is currently considered loaded" — the
   // initial state, matching #current-preset-name's own markup default of
   // "Unsaved chain" in index.html. Kept as a separate variable (rather than
@@ -620,6 +629,12 @@
     applyLoadedPreset(result);
   }
 
+  // Per-page counter for row-description ids (see buildPresetRow): the
+  // list rebuilds wholesale on every refresh, so fresh unique ids per
+  // build are sufficient — no name-derived ids that could collide when
+  // a user preset shares a factory name.
+  var presetRowDescIdCounter = 0;
+
   /**
    * One preset row: a .preset-row-load button (name, then — FACTORY rows
    * only — a hover/focus-revealed description, then a hidden family-tag
@@ -646,6 +661,11 @@
     var loadBtnEl = document.createElement('button');
     loadBtnEl.type = 'button';
     loadBtnEl.className = 'preset-row-load';
+    // Same accname contract as Simple's Sounds rows (audit 2026-09-02,
+    // P2): the accessible name is the ACTION ("Try <name>"), and the
+    // description rides in aria-describedby, available on demand, rather
+    // than being read out as part of every row's name.
+    loadBtnEl.setAttribute('aria-label', 'Try ' + name);
 
     var nameEl = document.createElement('span');
     nameEl.className = 'preset-row-name';
@@ -654,16 +674,18 @@
 
     if (description) {
       // Reuses .chip-preview's collapse-at-rest/reveal-on-hover-or-focus
-      // CSS transition (styles/main.css) — but deliberately WITHOUT
-      // .chip-preview's aria-hidden: today's factory cards always surface
-      // their description as real button content, and that contract must
-      // not silently regress just because the visual treatment is
-      // borrowed from a place that intentionally hides its own preview
-      // text from assistive tech.
+      // CSS transition (styles/main.css) — visual treatment only. The
+      // description text itself moves OUT of the button's accessible
+      // name and into the aria-describedby chain above (harden round:
+      // 33 verbose row names was the audit's P2); it stays fully
+      // available to assistive tech, just no longer spoken per row.
       var previewEl = document.createElement('span');
       previewEl.className = 'preset-row-preview';
+      presetRowDescIdCounter += 1;
+      previewEl.id = 'preset-row-desc-' + presetRowDescIdCounter;
       previewEl.textContent = description;
       loadBtnEl.appendChild(previewEl);
+      loadBtnEl.setAttribute('aria-describedby', previewEl.id);
     }
 
     var tagsEl = document.createElement('span');
@@ -733,7 +755,11 @@
    * its own nodes' TYPE strings — not nodeFamilyTags()'s 3-letter rail
    * codes, which "reverb" can't substring-match — so "reverb" surfaces
    * every reverb-heavy preset, not just literal name matches — PLUS its
-   * category, so "novelty"/"karaoke" also filter. Renders a .preset-row
+   * category, so "novelty"/"karaoke" also filter, PLUS its public tags
+   * and (factory only) its description, the two fields Simple's Sounds
+   * search already matches (2026-09-03 unification: the same word must
+   * find the same sounds in both views; the internal technique: axis is
+   * stripped on both sides per settled #43). Renders a .preset-row
    * per surviving entry via buildPresetRow().
    *
    * Unconditionally disarms any in-progress two-step Delete first — a
@@ -754,6 +780,10 @@
       return;
     }
     presetListEl.innerHTML = '';
+    activePersonalPreset = null;
+    // A pending shared sound reads FIRST — it is an event the operator
+    // just arrived on, not one more row to browse past.
+    renderShareArrivalInto(presetListEl);
 
     var filterNorm = (filterText || '').trim().toLowerCase();
     var descriptions = {};
@@ -772,11 +802,19 @@
       // "telephone", "cleanup" reach presets tagged with them even when
       // the word is in neither the name nor the category label.
       // listDetailed() never carries nodes, so this read cannot become a
-      // load path.
+      // load path. PUBLIC axes only (2026-09-03 vocabulary unification,
+      // refinement critique P2 #3): the internal technique: axis is
+      // stripped exactly the way Simple's search strips it
+      // (simple-view.js publicTags), per settled #43 — it is coverage/
+      // dedup vocabulary, never user-facing, and the same word must
+      // find the same sounds in both views.
       if (window.FactoryPresets && typeof window.FactoryPresets.listDetailed === 'function') {
         window.FactoryPresets.listDetailed().forEach(function (entry) {
           if (entry && typeof entry.name === 'string' && Array.isArray(entry.tags)) {
-            tagHaystacks[entry.name] = entry.tags.join(' ').toLowerCase();
+            tagHaystacks[entry.name] = entry.tags
+              .filter(function (t) { return t.indexOf('technique:') !== 0; })
+              .join(' ')
+              .toLowerCase();
           }
         });
       }
@@ -787,7 +825,7 @@
     var factory = factoryPresets();
     var userNames = window.PresetStore.listNames();
 
-    function matches(name, nodes, category, tagsHaystack) {
+    function matches(name, nodes, category, tagsHaystack, description) {
       if (!filterNorm) {
         return true;
       }
@@ -797,14 +835,21 @@
       // substring match against an abbreviation can't do that. Wayfinder
       // #28: taxonomy tags join the haystack ('genre:pop', 'gag:robot',
       // …), so a search for "pop" or "cleanup" reaches tagged presets.
+      // 2026-09-03 vocabulary unification: the DESCRIPTION joins too —
+      // Simple's search already matches name + description + public
+      // tags, and a word that finds a sound in Simple ("arena" → Big
+      // Room, a description word) must find it here as well. Node types
+      // and category stay Advanced-only fields (the expert vocabulary
+      // this panel is for); user presets carry no description by the
+      // same v1 scope cut that leaves them uncategorized.
       var typeWords = nodes.map(function (n) { return n.type; }).join(' ');
       var haystack = (name + ' ' + typeWords + ' ' + (category || '') + ' ' +
-        (tagsHaystack || '')).toLowerCase();
+        (tagsHaystack || '') + ' ' + (description || '')).toLowerCase();
       return haystack.indexOf(filterNorm) !== -1;
     }
 
     var visibleFactory = factory.filter(function (preset) {
-      return matches(preset.name, preset.nodes, categories[preset.name], tagHaystacks[preset.name]);
+      return matches(preset.name, preset.nodes, categories[preset.name], tagHaystacks[preset.name], descriptions[preset.name]);
     });
     var visibleUser = [];
     userNames.forEach(function (name) {
@@ -859,10 +904,18 @@
       });
 
       bucketOrder.forEach(function (cat) {
-        var catLabel = document.createElement('h4');
-        catLabel.className = 'preset-category-label';
-        catLabel.textContent = cat;
-        presetListEl.appendChild(catLabel);
+        // A sub-group header earns its line only when it GROUPS. A
+        // category holding a single VISIBLE row is a search result, not
+        // a group — printing "Cleanup" over one row is how 33 presets
+        // fragmented under ~27 one-item headers in a 260px column
+        // (critique 2026-09-02, P2). The row itself is unchanged and
+        // the category stays discoverable through search either way.
+        if (buckets[cat].length >= 2) {
+          var catLabel = document.createElement('h4');
+          catLabel.className = 'preset-category-label';
+          catLabel.textContent = cat;
+          presetListEl.appendChild(catLabel);
+        }
         buckets[cat].forEach(function (preset) {
           var isActive = lastActivePresetKey === FACTORY_VALUE_PREFIX + preset.name;
           presetListEl.appendChild(
@@ -879,11 +932,243 @@
       presetListEl.appendChild(userLabel);
       visibleUser.forEach(function (entry) {
         var isActive = lastActivePresetKey === entry.name;
+        if (isActive) {
+          activePersonalPreset = entry.name;
+        }
         presetListEl.appendChild(
           buildPresetRow(entry.name, entry.nodes, 'user', null, isActive)
         );
       });
     }
+
+    updateShareButton();
+  }
+
+  // ---------------------------------------------------------------------
+  // SHARING (shape round, 2026-09-02): a personal preset travels as a
+  // LINK — the preset itself, deflate-compressed into the URL fragment
+  // by src/preset-link.js. Two surfaces here: the panel's Copy link key
+  // (enabled exactly when the ACTIVE preset is one of Yours) and the
+  // arrival card a #preset= landing renders into whichever panel is
+  // showing. Both are quiet-inline by the panel's own rules: no
+  // browser dialogs, feedback through the .preset-note line.
+  // (activePersonalPreset / shareBtnEl are declared near the module's
+  // element wiring, above wireShareButton's load-time call.)
+  // ---------------------------------------------------------------------
+
+  function updateShareButton() {
+    if (!shareBtnEl) {
+      return;
+    }
+    var ready = !!activePersonalPreset &&
+      !!window.PresetLink &&
+      typeof window.PresetLink.buildShareUrl === 'function';
+    shareBtnEl.disabled = !ready;
+    shareBtnEl.title = ready
+      ? ''
+      : 'Load one of your own sounds to share it';
+  }
+
+  /** Copy via the sharing module's own clipboard helper (async API with
+   *  the plain-http legacy fallback — one implementation, both panels). */
+  function copyTextToClipboard(text, onDone) {
+    if (window.PresetLink && typeof window.PresetLink.copyToClipboard === 'function') {
+      window.PresetLink.copyToClipboard(text).then(function (ok) {
+        if (typeof onDone === 'function') {
+          onDone(ok);
+        }
+      });
+      return;
+    }
+    if (typeof onDone === 'function') {
+      onDone(false);
+    }
+  }
+
+  function wireShareButton() {
+    shareBtnEl = document.getElementById('share-preset-btn');
+    if (!shareBtnEl || typeof shareBtnEl.addEventListener !== 'function') {
+      return;
+    }
+    shareBtnEl.addEventListener('click', function () {
+      if (!activePersonalPreset || !window.PresetLink) {
+        return;
+      }
+      var name = activePersonalPreset;
+      var record = window.PresetStore && typeof window.PresetStore.load === 'function'
+        ? window.PresetStore.load(name)
+        : null;
+      if (!record) {
+        showPresetNote('Could not read "' + name + '" to share it.');
+        return;
+      }
+      window.PresetLink.buildShareUrl(name, record.nodes).then(function (result) {
+        if (!result.ok) {
+          showPresetNote(result.message);
+          return;
+        }
+        copyTextToClipboard(result.url, function (ok) {
+          showPresetNote(ok
+            ? 'Link copied for "' + name + '" — paste it anywhere.'
+            : 'Copy failed. Link: ' + result.url);
+        });
+      });
+    });
+    updateShareButton();
+  }
+
+  // The arrival card's own transient state, held OUTSIDE the rebuilt
+  // DOM so a list re-render mid-collision keeps the operator's place.
+  var shareCollisionMode = false;
+  var shareNote = '';
+
+  function plainSummaryOf(nodes) {
+    var parts = [];
+    (nodes || []).forEach(function (entry) {
+      var label = null;
+      try {
+        if (window.EffectCatalog && typeof window.EffectCatalog.getPlainLabel === 'function') {
+          label = window.EffectCatalog.getPlainLabel(entry.type);
+        }
+      } catch (err) {
+        label = null;
+      }
+      parts.push(label || entry.type);
+    });
+    return parts.join(' \u00B7 ');
+  }
+
+  function refreshAfterShareChange() {
+    try {
+      refreshPresetSelect(lastActivePresetKey);
+    } catch (err) { /* panel absent in stripped harnesses */ }
+    try {
+      if (window.SimpleView && typeof window.SimpleView.onChainChanged === 'function') {
+        window.SimpleView.onChainChanged();
+      }
+    } catch (err) { /* Simple absent */ }
+  }
+
+  /** Build the arrival card for the pending shared sound (or its
+   *  refusal) into `container`. Shared by BOTH panels — Advanced's
+   *  #preset-list and Simple's Sounds library — so the arrival
+   *  experience is one surface, not two. */
+  function renderShareArrivalInto(container) {
+    if (!container || typeof container.appendChild !== 'function' || !window.PresetLink) {
+      return;
+    }
+    var pending = window.PresetLink.getPendingShare();
+    if (!pending) {
+      return;
+    }
+    var card = document.createElement('div');
+    card.className = 'share-arrival-card';
+    card.setAttribute('data-share-arrival', 'true');
+
+    var title = document.createElement('p');
+    title.className = 'share-arrival-title';
+    if (pending.ok) {
+      title.textContent = 'A sound was shared with you: ' + pending.name;
+    } else {
+      title.textContent = 'A sound link arrived';
+    }
+    card.appendChild(title);
+
+    if (pending.ok) {
+      var summary = document.createElement('p');
+      summary.className = 'share-arrival-summary';
+      summary.textContent = plainSummaryOf(pending.nodes);
+      card.appendChild(summary);
+    } else {
+      var why = document.createElement('p');
+      why.className = 'share-arrival-summary';
+      why.textContent = pending.message;
+      card.appendChild(why);
+    }
+
+    if (shareNote) {
+      var note = document.createElement('p');
+      note.className = 'share-arrival-note';
+      note.textContent = shareNote;
+      card.appendChild(note);
+    }
+
+    var actions = document.createElement('div');
+    actions.className = 'share-arrival-actions';
+
+    function key(label, handler, extraClass) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'control' + (extraClass ? ' ' + extraClass : '');
+      btn.textContent = label;
+      btn.addEventListener('click', handler);
+      actions.appendChild(btn);
+      return btn;
+    }
+
+    function handleSaveResult(result) {
+      if (result && result.ok) {
+        shareCollisionMode = false;
+        shareNote = '';
+        window.PresetLink.clearPendingShare();
+        showPresetNote((result.replaced ? 'Replaced "' : 'Added "') + result.name +
+          (result.replaced ? '" with the shared sound.' : '" to your sounds.'));
+        refreshAfterShareChange();
+        return;
+      }
+      if (result && result.code === 'COLLISION') {
+        shareCollisionMode = true;
+        shareNote = result.message.name ? result.message.message : result.message;
+        refreshAfterShareChange();
+        return;
+      }
+      shareNote = (result && result.message) || 'Could not add the shared sound.';
+      refreshAfterShareChange();
+    }
+
+    if (pending.ok && !shareCollisionMode) {
+      key('Add to my sounds', function () {
+        handleSaveResult(window.PresetLink.savePendingShare({ mode: 'add' }));
+      }, 'share-arrival-primary');
+      key('Dismiss', function () {
+        window.PresetLink.clearPendingShare();
+        shareCollisionMode = false;
+        shareNote = '';
+        refreshAfterShareChange();
+      });
+    } else if (pending.ok && shareCollisionMode) {
+      // The collision triad: Rename (inline input + Save), Replace,
+      // Cancel — explicit keys, no browser dialogs (the house rule).
+      var renameInput = document.createElement('input');
+      renameInput.type = 'text';
+      renameInput.className = 'preset-name-input share-arrival-rename';
+      renameInput.value = pending.name + ' (shared)';
+      renameInput.setAttribute('aria-label', 'New name for the shared sound');
+      actions.appendChild(renameInput);
+      key('Save as', function () {
+        handleSaveResult(window.PresetLink.savePendingShare({
+          mode: 'rename',
+          newName: renameInput.value
+        }));
+      }, 'share-arrival-primary');
+      key('Replace', function () {
+        handleSaveResult(window.PresetLink.savePendingShare({ mode: 'replace' }));
+      });
+      key('Cancel', function () {
+        shareCollisionMode = false;
+        shareNote = '';
+        refreshAfterShareChange();
+      });
+    } else {
+      key('Dismiss', function () {
+        window.PresetLink.clearPendingShare();
+        shareNote = '';
+        refreshAfterShareChange();
+      });
+    }
+
+    card.appendChild(actions);
+    container.appendChild(card);
   }
 
   /**
@@ -1127,6 +1412,7 @@
     loadUserPreset: loadUserPreset,
     toggleDeleteArm: toggleDeleteArm,
     disarmDeleteButton: disarmDeleteButton,
-    saveCurrentChainAs: saveCurrentChainAs
+    saveCurrentChainAs: saveCurrentChainAs,
+    renderShareArrivalInto: renderShareArrivalInto
   };
 })();

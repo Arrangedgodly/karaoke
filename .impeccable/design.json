@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-31T01:15:44Z",
+  "generatedAt": "2026-09-03T03:37:16.680Z",
   "title": "Design System: VOXCHAIN",
   "extensions": {
     "colorMeta": {
@@ -460,6 +460,14 @@
       "description": "A status tag, not a control: display-amber silkscreen on transparent, 0.6875rem/700 at the 11px floor; one class, two placements.",
       "html": "<span class=\"ds-badge-exp\">Experimental</span>",
       "css": ".ds-badge-exp { padding: 0.1rem 0.35rem; border: 1px solid var(--pm-display); border-radius: 3px; color: var(--pm-display); background: transparent; font-family: ui-monospace, Menlo, monospace; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; white-space: nowrap; }"
+    },
+    {
+      "name": "Simple Stage Scope",
+      "kind": "custom",
+      "refersTo": "display-register",
+      "description": "Simple view's live output display: the final-output envelope as min/max columns in dot-matrix amber on register ground — a picture, aria-hidden, the OUT meter keeps the numbers.",
+      "html": "<div class=\"ds-scope\" aria-hidden=\"true\"><canvas class=\"ds-scope-canvas\"></canvas></div>",
+      "css": ".ds-scope { height: 72px; background: #0b0c10; box-shadow: inset 0 1px 0 rgba(158,164,184,0.14); border-bottom: 1px solid #05060a; overflow: hidden; } .ds-scope-canvas { display: block; width: 100%; height: 100%; }"
     }
   ],
   "narrative": {
@@ -509,23 +517,38 @@
         "name": "The Rest-Flat Rule",
         "body": "Surfaces are flat at rest. A shadow means physical lift (drag, floating toast); emphasis means brightness on matte. Never glow.",
         "section": "elevation"
+      },
+      {
+        "name": "The Gated Print Rule",
+        "body": "A gated surface may not be touched, but it must still be READ — the gate keeps its recede and the print on it moves to the gated tier (#dde2ee), the only ink permitted under the pre-Start recede, never used anywhere else. Large print is exempt.",
+        "section": "colors"
+      },
+      {
+        "name": "The Drawn-Mark Rule",
+        "body": "Direction and flow marks are drawn geometry, never typed glyphs.",
+        "section": "typography"
+      },
+      {
+        "name": "The Power-Up Exception",
+        "body": "The engine's cold start is the ONE sequence permitted past the 150-250ms answer law: the meters' lamp test and the gated face's wake (420ms), once per engine start, reduced-motion guarded, degrading to a state. Page LOAD choreography stays banned.",
+        "section": "elevation"
       }
     ],
     "dos": [
-      "Do extend the --pm-* register — introduce no raw hex values; new colors enter as tokens in the measured vocabulary.",
-      "Do keep the value ladder exact: every value/state readout mono tabular at 12px, the register main line at 13.6px, silkscreen labels at 11.2px sans — nothing between the tiers.",
-      "Do keep color redundant: family identity is always code + label + arc/legend-square together; every state change is copy + color.",
-      "Do draw boundaries as cut faces (dark cut under light lip) and emphasis as brightness on matte; keep the one disabled grammar (hatch + recede) for exactly the pre-Start gate and the bypassed chain.",
-      "Do keep DOM order equal to chain order — board seats and z-order are paint; the cords layer re-routes from the same positions map on every write.",
-      "Do guard every motion addition with prefers-reduced-motion (150–250ms state answers); meter ballistics stay live by drawing per-frame."
+      "- **Do** extend the `--pm-*` register — introduce no raw hex values; new colors enter as tokens in the measured vocabulary.",
+      "- **Do** keep the value ladder exact: every value/state readout mono tabular at 12px, the register main line at 13.6px, silkscreen labels at 11.2px sans — nothing between the tiers.",
+      "- **Do** keep color redundant: family identity is always code + label + arc/legend-square together; every state change is copy + color.",
+      "- **Do** draw boundaries as cut faces (dark cut under light lip) and emphasis as brightness on matte; reserve the hatch + recede grammar for the pre-Start gate and the emergency-bypassed chain. Use the local IN/BYP state for one effect.",
+      "- **Do** keep DOM order equal to chain order — board seats and z-order are paint; the cords layer re-routes from the same positions map on every write.",
+      "- **Do** guard every motion addition with `prefers-reduced-motion` (150–250ms state answers); meter ballistics stay live by drawing per-frame."
     ],
     "donts": [
-      "Don't render text below 11px (recorded exception: the 9px canvas meter numerals), use webfonts/CDN assets, or add display fonts.",
-      "Don't use signal orange for anything that is not a system state, and never as decoration or large-area fill.",
-      "Don't swap the safety red roles (edge for fill) or put white text on edge red; don't let anything outrank BYPASS on the deck.",
-      "Don't add glow, blur, load choreography, hover shadows, or border-radius card islands — sections are print zones of the one faceplate.",
-      "Don't let the cords gate audio mid-drag — sound changes only on a completed link; drop-nowhere reverts.",
-      "Don't let the machine speak twice — the system etch stays subordinate (neutral print, 12px); the chain face's register is the one amber machine voice."
+      "- **Don't** render text below 11px (recorded exception: the 9px canvas meter numerals), use webfonts/CDN assets, or add display fonts.",
+      "- **Don't** use signal orange for anything that is not a system state, and never as decoration or large-area fill.",
+      "- **Don't** swap the safety red roles (edge ↔ fill) or put white text on edge red; don't let anything outrank BYPASS on the deck.",
+      "- **Don't** add glow, blur, load choreography, hover shadows, or border-radius card islands — sections are print zones of the one faceplate. The one sequence past the answer law is the Power-Up Exception above; nothing else earns it.",
+      "- **Don't** let the cords gate audio mid-drag — sound changes only on a completed link; drop-nowhere reverts.",
+      "- **Don't** let the machine speak twice — the system etch stays subordinate (neutral print, 12px values, the sentence at the register tier for distance reading); the chain face's register is the one amber machine voice."
     ]
   }
 }

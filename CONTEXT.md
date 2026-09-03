@@ -46,8 +46,9 @@ _Avoid_: unsaved preset, draft (a candidate is the thing awaiting audition)
 
 **Plain filter**:
 A named query over existing preset tags, defined in the Simple view and stored
-nowhere on presets ("Funny" resolves to the gag axis, "Speech" to the cleanup
-use-case). A plain filter that returns nothing is a visible coverage gap.
+nowhere on presets ("Funny" resolves to the gag axis, "Clean & clear" to the
+cleanup use-case). A plain filter that returns nothing is a visible coverage
+gap.
 _Avoid_: axis (that names the taxonomy dimension), category, folder
 
 **Safety floor**:

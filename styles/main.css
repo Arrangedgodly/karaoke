@@ -175,7 +175,7 @@
                      geometry, no ambient shadow)
      --pm-print      silkscreen panel print (labels)  7.47 on chassis
      --pm-print-hi   lifted print (values, live labels)  11.78 on chassis
-     --pm-print-dim  receding print (flow marks)  5.26 on chassis
+     --pm-print-dim  receding print (flow marks)  5.06 on chassis
      --pm-accent     SIGNAL ORANGE — the one committed accent; reserved for
                      SYSTEM STATES only (display-register marks, focus
                      rings, the live-control blink, pressed pads, the
@@ -230,7 +230,7 @@
   --pm-groove-lip: rgba(158, 164, 184, 0.14);
   --pm-print: #9ea4b8;
   --pm-print-hi: #c9cedc;
-  --pm-print-dim: #767c90;
+  --pm-print-dim: #7f859b;
   /* THE GATED TIER (2026-09-02). The print ladder above is measured
      against the chassis at full strength; the pre-Start gate then takes
      45% of whatever sits under it (opacity 0.55), which drops even
@@ -613,9 +613,10 @@ body {
    register's inset geometry (register ground + machined lip) but stays
    SUBORDINATE to the chain face's register by design (the locked
    card's second risk): neutral bright print, never the register's
-   amber/orange machine voice, and the value tier one step down
-   (12px vs the register's 13.6px main line) — the machine reports
-   from ONE mouth, and it is the canvas register's. */
+   amber/orange machine voice, and the READOUTS one tier down (12px vs
+   the register's 13.6px main line — the status sentence alone rides the
+   register tier, 2026-09-03, for distance readability) — the machine
+   reports from ONE mouth, and it is the canvas register's. */
 .system-etch {
   display: flex;
   align-items: center;
@@ -632,21 +633,33 @@ body {
      a real etch instead of pumping the deck's width. Entry 3: the
      hard max-width also caps the flex BASE size — with flex-wrap on the
      deck, an uncapped base would wrap the row (wrapping beats
-     shrinking) instead of ellipsizing. 20rem fits every WHAT-HAPPENED
-     sentence in full; the longer device-switch lines (sentence + next
-     action, front-loaded) and footnotes ellipsize by design. */
+     shrinking) instead of ellipsizing. 22.5rem (grown 20rem → 22.5rem
+     with the sentence's register-tier step, 2026-09-03) fits every
+     WHAT-HAPPENED sentence in full at 13.6px; the longer device-switch
+     lines (sentence + next action, front-loaded) and footnotes
+     ellipsize by design. */
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 20rem;
+  max-width: 22.5rem;
 }
 
 /* Engine-state lamp: silkscreen label + dot, one vocabulary with the
-   readout micro-labels. */
+   readout micro-labels.
+
+   The SENTENCE rides the register tier, one type step up from its old
+   12px (critique P3 #5, 2026-09-03): it is the operator's primary
+   VERBAL status, read mid-show from across a dark room, and distance
+   readability is a functional a11y requirement (PRODUCT.md), not a
+   nicety — 12px was the smallest prose on the deck. The RATE/LAT/NODES
+   readouts beside it STAY at the 12px value tier (subordinate by
+   design), and the etch keeps its neutral bright print — never the
+   register's amber/orange machine voice — so the one-mouth rule holds:
+   the sentence grew a step, the etch did not become the register. */
 .status {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: var(--type-value);
+  font-size: var(--type-register);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -720,10 +733,13 @@ body {
    line for device-switch failures, and in the .start-hint after the
    recovery action for failed Starts: muted mono, sentence case,
    untracked — the machine footnote register the agent toasts already
-   use. Same 0.75rem as the host line (12px, above the 11px floor), one
-   rank below the operator copy it follows. */
+   use. PINNED at the 12px value tier (2026-09-03): its host sentence
+   stepped up to the register tier, and the footnote keeps its demoted
+   rank one step below it — the same 12px the .start-hint host rides,
+   so one footnote size serves both hosts. */
 .status-detail {
   font-family: var(--font-readout);
+  font-size: var(--type-value);
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
@@ -937,8 +953,9 @@ select.control {
    1b): the single most safety-critical control in the app, and the
    LOUDEST element on the deck — largest target (3rem / 48px min-height),
    heaviest type on the deck (1.05rem / 700 / tracked; the nameplate is
-   0.75rem silkscreen and etch values 12px mono, so nothing exceeds this
-   weight), and the only red-ringed thing on the page's system surface.
+   0.75rem silkscreen, etch values 12px mono, and the status sentence
+   13.6px, so nothing exceeds this weight), and the only red-ringed
+   thing on the page's system surface.
    Split-role safety red (rq5 tokens, re-used verbatim), applied in its
    verified pairing:
      OFF  — key ground + bright print + 2px red-edge ring (4.53 vs the
@@ -2092,20 +2109,32 @@ select.control {
 
 /* Persistent chain identity on the register's right edge. The control
    readout remains transient and aria-hidden; this sibling is the one
-   accessible status source for saved versus unsaved preset state. */
+   accessible status source for saved versus unsaved preset state.
+   Live round 2026-09-03 (accepted variant): the right end is now a
+   dedicated inset PRESET WINDOW — a fixed share of the register as its
+   own sub-display (deeper cut ground behind a machined lip border), the
+   silkscreen PRESET label over the name in the register's amber machine
+   ink. The register stays a FIXED 3rem slot; the window is geometry
+   (2.5rem tall, inset 0.25rem), sized in the same literal units the
+   register's own clipping uses. The opaque cut ground masks the control
+   lines that run under it, exactly as the old flat overlay did. */
 .register-preset-state {
   position: absolute;
   z-index: 1;
-  top: 0.35rem;
+  top: 0.25rem;
   right: 0.9rem;
+  /* 3rem register minus the 0.25rem insets — geometry, not prose. */
+  height: 2.5rem;
+  width: min(34%, 24rem);
+  min-width: 10rem;
   display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  max-width: min(45%, 24rem);
-  min-width: 0;
-  padding-left: 0.75rem;
-  border-left: 1px solid var(--pm-groove-lip);
-  background: var(--pm-register-bg);
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.1rem;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--pm-groove-lip);
+  background: var(--pm-groove-cut);
   font-family: var(--font-readout);
   font-size: var(--type-register);
   line-height: 1.2;
@@ -2117,15 +2146,19 @@ select.control {
 .register-preset-label {
   flex: none;
   color: var(--pm-print-dim);
-  font-size: var(--type-value);
+  font-family: var(--font-print);
+  font-size: var(--type-label);
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.15;
 }
 
 .register-preset-value {
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  color: var(--pm-print-hi);
+  color: var(--pm-display);
   font-weight: 700;
   text-overflow: ellipsis;
 }
@@ -3111,6 +3144,51 @@ body.chain-dragging .node-drag-handle {
     rgba(11, 12, 16, 0.55) 7px,
     rgba(11, 12, 16, 0.55) 9px
   );
+}
+
+/* EMERGENCY BYPASS ON THE STAGE (harden round, 2026-09-02 — critique
+   P1: Simple's "what am I hearing" face kept naming a sound while the
+   chain was gated to silence, so the default view answered the room's
+   most safety-critical question dishonestly by omission). The SAME
+   grammar Advanced's chain face carries (see .canvas-panel.bypassed
+   above): the CONTENT recedes and the one disabled treatment's hatch
+   paints over it at the bypass variant's 0.45 alpha, while the controls
+   stay interactive — the operator may tune while dry, exactly as the
+   board's sections do. The state line sits OUTSIDE .simple-stage-inner
+   so the recede never dims the one line saying why everything else is
+   dimmed, and speaks the deck sentence's own words in the narrow
+   edge-red role (one short line, never a fill — the split-role rule;
+   nothing outranks the lit key itself). Meters sit outside #simple-stage
+   and never dim: output ground truth survives the reading. The class is
+   only ever true on a live engine — the pre-Start gate above owns the
+   stopped stage, and the two can never meet. */
+.simple-stage.stage-bypassed .simple-stage-inner {
+  opacity: 0.55;
+}
+
+.simple-stage.stage-bypassed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 7px,
+    rgba(11, 12, 16, 0.45) 7px,
+    rgba(11, 12, 16, 0.45) 9px
+  );
+}
+
+.simple-stage-bypass-line {
+  flex: none;
+  margin: 0 0 0.75rem;
+  font-size: var(--type-key);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--red-edge);
 }
 
 /* ===========================================================================
@@ -4139,7 +4217,9 @@ input.preset-name-input:focus-visible {
 .watchdog-alert .watchdog-restore {
   padding: 0.3rem 0.75rem;
   border: 1px solid var(--red-edge);
-  border-radius: 6px;
+  /* Control-key radius (polish round 2026-09-02): the 6px was an
+     undocumented stray from the shapes scale. */
+  border-radius: 4px;
   background: var(--red-fill);
   color: #FFFFFF;
   font-size: var(--type-prose);
@@ -5001,6 +5081,7 @@ body:not(.view-advanced) .readout-group {
 }
 
 .simple-stage {
+  position: relative; /* anchor for the state hatch overlays above */
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -5009,6 +5090,10 @@ body:not(.view-advanced) .readout-group {
   justify-content: center;
   padding: 1.1rem 1.6rem;
   background: var(--pm-chassis);
+}
+
+.simple-stage .simple-stage-inner {
+  transition: opacity 150ms ease;
 }
 
 .simple-stage-inner {
@@ -5052,6 +5137,43 @@ body:not(.view-advanced) .readout-group {
   letter-spacing: var(--track-prose);
   /* The live twin of .cold-face-line, same measure. */
   max-width: 62ch;
+}
+
+/* THE SCOPE — Simple view's live display slot (live-signal surface,
+   2026-09-02): the output envelope in dot-matrix amber, the stage's own
+   answer to "what am I hearing" as a picture before the summary gives
+   it words. The register's own geometry language — inset display
+   ground, machined lip under the top cut, groove-cut bottom edge —
+   minus the accent mark: a meter borrows the register's ground, never
+   its system-state orange (the One Orange Rule). src/signal-lamps.js
+   builds the slot lazily on the first live frame (directly before
+   #simple-summary) and paints it per frame; this rule owns geometry
+   and the state gates only. aria-hidden from birth: a redundant
+   picture — the OUT meter strip keeps the numbers (the machine never
+   speaks twice). Fixed height, like the register: the scope answers
+   every frame without ever pumping layout. */
+.simple-scope {
+  flex: none;
+  height: 4.5rem;
+  background: var(--pm-register-bg);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  border-bottom: 1px solid var(--pm-groove-cut);
+  overflow: hidden;
+}
+
+.simple-scope-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Before Start the cold face owns the stage, and the scope has no cold
+   reading — its whole truth is the live output's shape, and the strip
+   already carries the "what is the machine holding" answer. It appears
+   with the live face and leaves with it; no transition (functional
+   metering, never entrance choreography). */
+.simple-stage.stage-cold .simple-scope {
+  display: none;
 }
 
 /* One row per effect: a family-color legend swatch, the plain phrase,
@@ -5129,21 +5251,55 @@ body:not(.view-advanced) .readout-group {
 }
 
 .simple-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
   margin-bottom: 0.6rem;
 }
 
+/* Live round 2026-09-03 (accepted variant): the plain filters were a
+   wrapping flex row in a ~205px flank — ragged breaks, uneven gaps, the
+   count squeezed between chips. They now print as one filter group: a
+   silkscreen legend over a deterministic 2-column key grid, so wrapping
+   is geometry instead of accident, and a long label spans the full row
+   rather than truncating its cell. Uppercase 12px legends match the
+   palette chip vocabulary — the sibling control doing the same job on
+   the other flank. */
+.simple-chips-legend {
+  grid-column: 1 / -1;
+  color: var(--pm-print);
+  font-family: var(--font-print);
+  font-size: var(--type-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .simple-chip {
-  padding: 0.34rem 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.1rem;
+  padding: 0.3rem 0.4rem;
   border: 1px solid var(--pm-key-edge);
-  border-radius: 999px;
+  /* Shapes rule (polish round 2026-09-02): these are control KEYS —
+     the one 999px pill was the only non-functional radius in a
+     0/2/3/4px + circles system. The key radius reads them as what they
+     are (filter controls in the shared key vocabulary). */
+  border-radius: 4px;
   background: var(--pm-key);
   color: var(--pm-print-hi);
-  font-size: var(--type-prose);
+  font-family: var(--font-print);
+  font-size: var(--type-value);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
   cursor: pointer;
+}
+
+.simple-chip-wide {
+  grid-column: 1 / -1;
 }
 
 .simple-chip:hover {
@@ -5157,15 +5313,28 @@ body:not(.view-advanced) .readout-group {
   font-weight: 700;
 }
 
+.simple-chip.simple-chip-on:hover {
+  border-color: var(--pm-accent-hi);
+  background: var(--pm-accent-hi);
+}
+
+.simple-chip.simple-chip-on:focus-visible {
+  /* Ink ring inside the fill — the Start key's own pattern for orange
+     fills, where an orange ring would vanish against its ground. */
+  outline-color: var(--pm-ink);
+  outline-offset: -2px;
+}
+
 .simple-chip-count {
-  align-self: center;
-  margin-left: 0.3rem;
+  grid-column: 1 / -1;
+  margin-top: 2px;
   color: var(--pm-print-dim);
   font-size: var(--type-label);
   font-family: var(--font-readout);
   white-space: nowrap;
   /* Counts up and down with the filter. */
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .simple-transport {
@@ -5279,7 +5448,11 @@ body:not(.view-advanced) .readout-group {
   max-width: 30rem;
   padding: 1.4rem 1.5rem 1.25rem;
   border: 1px solid var(--pm-face-edge);
-  border-radius: 6px;
+  /* Control-key radius (polish round 2026-09-02): the safety modal is
+     a key-faced surface — its actions are keys and now so is its own
+     corner. The lifted shadow stays: modal lift is the documented
+     off-chassis exception the toasts already carry. */
+  border-radius: 4px;
   background: var(--pm-chassis);
   color: var(--pm-print);
   box-shadow: 0 18px 48px rgba(1, 2, 8, 0.6);
@@ -5614,4 +5787,120 @@ button.control.safety-dialog-confirm:not(:disabled):active:focus-visible {
       clip-path: inset(0 0 0 100%);
     }
   }
+}
+
+/* ===========================================================================
+   SHARED-SOUND ARRIVAL + COPY LINK (sharing round, 2026-09-02)
+   A personal preset travels as a URL fragment (src/preset-link.js);
+   landing on one renders an arrival card at the TOP of whichever
+   panel is showing — Advanced's #preset-list and Simple's Sounds
+   library share one builder (PresetsUI.renderShareArrivalInto), so
+   the arrival reads identically in both views. The card is a quiet
+   panel event, not a row: slab ground with the machined cut-face
+   boundary, the shared sound's name in lifted print, its plain
+   effect summary in receding prose, and the house .control keys for
+   its actions — the collision triad reuses the Save As row's own
+   input vocabulary.
+   =========================================================================== */
+.share-arrival-card {
+  margin: 0 0 0.6rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--pm-groove-cut);
+  box-shadow: inset 0 1px 0 var(--pm-groove-lip);
+  background: var(--pm-slab);
+}
+
+.share-arrival-title {
+  margin: 0;
+  color: var(--pm-print-hi);
+  font-size: var(--type-body);
+  font-weight: 700;
+  line-height: var(--leading-dense);
+}
+
+.share-arrival-summary {
+  margin: 0.25rem 0 0;
+  color: var(--pm-print);
+  font-size: var(--type-prose);
+  line-height: var(--leading-dense);
+  letter-spacing: var(--track-prose);
+}
+
+.share-arrival-note {
+  margin: 0.3rem 0 0;
+  color: var(--pm-print-dim);
+  font-size: var(--type-prose);
+  line-height: var(--leading-dense);
+  letter-spacing: var(--track-prose);
+}
+
+.share-arrival-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.share-arrival-actions .control {
+  padding: 0.35rem 0.7rem;
+  min-height: 2.75rem;
+}
+
+/* The one bright key in the group is the adding action — the same
+   accent-as-brightness economy the pressed pad uses. */
+.share-arrival-actions .share-arrival-primary {
+  background: var(--pm-accent);
+  border-color: var(--pm-accent);
+  color: var(--pm-ink);
+}
+
+.share-arrival-actions .share-arrival-primary:hover {
+  background: var(--pm-accent-hi);
+  border-color: var(--pm-accent-hi);
+}
+
+.share-arrival-actions .share-arrival-primary:active {
+  background: var(--pm-accent-lo);
+  border-color: var(--pm-accent-lo);
+}
+
+.share-arrival-rename {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+/* Simple's Yours-row menu grew a second key: Copy link rides the same
+   slot vocabulary the Delete button uses when the "…" menu is open. */
+.simple-card-copy {
+  flex: none;
+  align-self: stretch;
+  border: none;
+  border-left: 1px solid var(--pm-groove-cut);
+  background: transparent;
+  color: var(--pm-print);
+  font-size: var(--type-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 0.6rem;
+  cursor: pointer;
+}
+
+.simple-card-copy:hover {
+  color: var(--pm-print-hi);
+}
+
+.simple-card-note {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 0.7rem;
+  border-left: 1px solid var(--pm-groove-cut);
+  color: var(--pm-print-hi);
+  font-size: var(--type-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }

@@ -216,6 +216,10 @@ function node(id, type, params) {
     /\.simple-stage\.engine-not-started::before\s*\{[^}]*repeating-linear-gradient\(\s*-45deg/.test(css),
     'A10: .simple-stage.engine-not-started paints the same -45deg hatch as the Advanced gate'
   );
+
+  var csNameNode = byId(tree, 'simple-cs-name');
+  check(!!csNameNode && csNameNode.attrs['aria-live'] === 'polite',
+    'A11: #simple-cs-name announces politely — the stage\u2019s "what am I hearing" answer reaches screen readers the moment the sound changes');
 })();
 
 // ==========================================================================
@@ -284,8 +288,19 @@ function node(id, type, params) {
       h.els['simple-transport'].hidden === true &&
       h.els['simple-transport'].children.length === 0,
     'H2: Try reads unavailable to AT before Start, and Previous/Next stay hidden');
-  check(firstTry.getAttribute('aria-describedby') === 'simple-library-gate-note',
-    'H2: the gated Try points at the note that explains the recovery');
+  check(firstTry.getAttribute('aria-label') === 'Try Warm Ballad',
+    'H2: the accessible name is the ACTION, not the whole card with its two-line description');
+  var gatedDescribedBy = firstTry.getAttribute('aria-describedby') || '';
+  check(gatedDescribedBy.indexOf('preset-row-desc-') === 0 &&
+      gatedDescribedBy.indexOf('simple-library-gate-note') !== -1,
+    'H2: the gated Try points at BOTH its own description and the note that explains the recovery');
+  var firstPreview = cards.children[1].children[0].children[1];
+  check(!!firstPreview && String(firstPreview.id).indexOf('preset-row-desc-') === 0 &&
+      gatedDescribedBy.indexOf(String(firstPreview.id)) === 0,
+    'H2: the description span carries the id the describedby names — on demand, out of the accname');
+  var secondPreview = cards.children[2].children[0].children[1];
+  check(!!secondPreview && secondPreview.id !== firstPreview.id,
+    'H2: each row\u2019s description id is unique (a Yours name may legally equal a factory name)');
   check(h.els['simple-save-btn'].hidden === true && h.els['simple-save-btn'].disabled === true,
     'H2: Save this sound is hidden and disabled before Start');
 
@@ -526,6 +541,36 @@ function makeSimpleViewSandbox(collaborators) {
   })();
   check(reload2.body.classList.contains('view-advanced'), 'B4: a stored "advanced" preference is honored on the next load');
   check(reload2.els['view-switch-advanced'].getAttribute('aria-checked') === 'true', 'B4: aria-checked matches the restored view');
+
+  // B5 (polish round, 2026-09-02): the radiogroup's keyboard contract —
+  // the critique's "declares radio semantics without arrow keys" finding.
+  // Roving tabindex ships with every applyView() (Tab lands on the
+  // checked member only), and each arrow key selects the other member
+  // and moves focus there, exactly as a native two-radio group does.
+  var kb = makeSimpleViewSandbox({});
+  check(kb.els['view-switch-simple'].getAttribute('tabindex') === '0' &&
+      kb.els['view-switch-advanced'].getAttribute('tabindex') === '-1',
+    'B5: the checked Simple key owns the group\u2019s one tab stop');
+  kb.els['view-switch-simple'].fire('keydown', { key: 'ArrowRight' });
+  check(kb.body.classList.contains('view-advanced') &&
+      kb.els['view-switch-advanced'].getAttribute('aria-checked') === 'true',
+    'B5: ArrowRight from Simple selects Advanced');
+  check(kb.els['view-switch-advanced'].getAttribute('tabindex') === '0' &&
+      kb.els['view-switch-simple'].getAttribute('tabindex') === '-1',
+    'B5: the tab stop roves to the newly checked key');
+  kb.els['view-switch-advanced'].fire('keydown', { key: 'ArrowLeft' });
+  check(!kb.body.classList.contains('view-advanced') &&
+      kb.storage.getItem('karaoke-view-v1') === 'simple',
+    'B5: ArrowLeft from Advanced selects Simple again, and the arrow selection persists like a click');
+  kb.els['view-switch-simple'].fire('keydown', { key: 'ArrowUp' });
+  check(kb.body.classList.contains('view-advanced'),
+    'B5: ArrowUp crosses the same gap (two-member group — vertical arrows wrap onto the horizontal pair)');
+  kb.els['view-switch-advanced'].fire('keydown', { key: 'ArrowDown' });
+  check(!kb.body.classList.contains('view-advanced'),
+    'B5: ArrowDown returns to Simple');
+  kb.els['view-switch-simple'].fire('keydown', { key: 'Enter' });
+  check(!kb.body.classList.contains('view-advanced'),
+    'B5: a non-arrow key leaves the selection alone (Enter/Space stay the button\u2019s own click)');
 })();
 
 (function sectionC() {
@@ -631,11 +676,11 @@ function makeSimpleViewSandbox(collaborators) {
   console.log('E. the sounds library: plain filters, search, Factory/Yours, transport');
 
   var FACTORY = [
-    { name: 'Warm Ballad', description: 'Gentle warmth.', tags: ['use-case:performance', 'genre:Pop', 'vibe:warm'] },
+    { name: 'Warm Ballad', description: 'Gentle warmth.', tags: ['use-case:performance', 'genre:Pop', 'vibe:warm', 'technique:ambience-long'] },
     { name: 'Rock Night', description: 'Cuts through.', tags: ['use-case:performance', 'genre:Rock', 'vibe:bright'] },
     { name: 'Phone Call Gag', description: 'Calling from a phone.', tags: ['gag:telephone', 'use-case:performance'] },
-    { name: 'Clean Speech', description: 'Just the voice.', tags: ['use-case:speech/hosting', 'vibe:natural'] },
-    { name: 'Big Room', description: 'Arena-sized space.', tags: ['use-case:performance', 'vibe:epic/big'] }
+    { name: 'Clean Speech', description: 'Just the voice.', tags: ['use-case:speech/hosting', 'vibe:natural', 'technique:clean'] },
+    { name: 'Big Room', description: 'Arena-sized space.', tags: ['use-case:performance', 'vibe:epic/big', 'technique:ambience-long'] }
   ];
 
   function harness(userPresetNames) {
@@ -652,10 +697,18 @@ function makeSimpleViewSandbox(collaborators) {
       PresetStore: { listNames: function () { return (userPresetNames || []).slice(); } }
     };
     var h = makeSimpleViewSandbox(collaborators);
+    // Live round 2026-09-03: the chip row is a printed filter group — a
+    // silkscreen legend over the 2-column key grid — so the row's children
+    // are no longer chip-then-chip. Select by class, not index.
+    function hasClass(el, name) {
+      return String(el.className).split(/\s+/).indexOf(name) !== -1;
+    }
+    var chipsRowChildren = h.els['simple-library-body'].children[0].children;
     return {
       h: h,
       loadCalls: loadCalls,
-      chips: h.els['simple-library-body'].children[0].children,
+      chips: chipsRowChildren.filter(function (c) { return hasClass(c, 'simple-chip'); }),
+      count: chipsRowChildren.filter(function (c) { return hasClass(c, 'simple-chip-count'); })[0],
       search: h.els['simple-library-body'].children[1],
       cardsList: h.els['simple-library-body'].children[2],
       transport: h.els['simple-transport']
@@ -686,9 +739,9 @@ function makeSimpleViewSandbox(collaborators) {
 
   console.log('  E1: default filter lists every factory entry and any existing user presets');
   var f1 = harness(['My Stage Set', 'Sunday Hosting']);
-  check(f1.chips.length === 6, 'E1: five plain filter chips plus the count readout exist (All/Warm/Rock/Funny/Speech + count)');
+  check(f1.chips.length === 5 && !!f1.count, 'E1: five plain filter chips plus the count readout exist (All/Warm/Big echo/Funny/Clean & clear + count)');
   check(f1.chips[0].classList.contains('simple-chip-on'), 'E1: All starts active');
-  check(f1.chips[5].hidden === true && f1.chips[5].textContent === '',
+  check(f1.count.hidden === true && f1.count.textContent === '',
     'E1: the result count stays hidden when All already shows the full library');
   var factoryRows = groupCards(f1.cardsList, 'Factory');
   check(factoryRows.length === 5, 'E1: All lists every factory entry (' + factoryRows.length + ')');
@@ -702,11 +755,16 @@ function makeSimpleViewSandbox(collaborators) {
     'E1: Yours lists the user\'s own saved sounds');
 
   console.log('  E2: each plain filter resolves the settled tag, storing nothing new');
+  // The four content chips the 2026-09-03 prune kept — the broadest
+  // catches over the real 33-sound library (Funny 10, Big echo 7, Warm 5,
+  // Clean & clear 5; Deep voices 4 and Robotic 4 were cut by the same
+  // measurement, and their queries died with the chips — see section K,
+  // which pins the real-library counts).
   var cases = [
     { label: 'Warm', expectNames: ['Warm Ballad'] },
-    { label: 'Rock', expectNames: ['Rock Night'] },
+    { label: 'Big echo', expectNames: ['Warm Ballad', 'Big Room'] },
     { label: 'Funny', expectNames: ['Phone Call Gag'] },
-    { label: 'Speech', expectNames: ['Clean Speech'] }
+    { label: 'Clean & clear', expectNames: ['Clean Speech'] }
   ];
   cases.forEach(function (c) {
     var f = harness([]);
@@ -717,7 +775,7 @@ function makeSimpleViewSandbox(collaborators) {
     check(JSON.stringify(names) === JSON.stringify(c.expectNames),
       'E2: "' + c.label + '" resolves to exactly ' + JSON.stringify(c.expectNames) + ' (got ' + JSON.stringify(names) + ')');
     check(chip.classList.contains('simple-chip-on'), 'E2: "' + c.label + '" shows as the active chip');
-    check(f.chips[5].hidden === false && f.chips[5].textContent === c.expectNames.length + ' of 5',
+    check(f.count.hidden === false && f.count.textContent === c.expectNames.length + ' of 5',
       'E2: "' + c.label + '" reveals the narrowed result count only when it adds information');
   });
 
@@ -1066,9 +1124,11 @@ function makeSimpleViewSandbox(collaborators) {
   console.log('  G6: opening the menu swaps the toggle for the real Delete button in the SAME slot');
   secondSlot.fire('click');
   var reRenderedRow = g5.h.els['simple-library-body'].children[2].children[3];
-  var deleteSlot = reRenderedRow.children[1];
-  check(deleteSlot.className === 'preset-row-delete' && deleteSlot.textContent === 'Delete',
-    'G6: the same row now shows a real Delete button in the second slot');
+  // Sharing round: the open menu carries Copy link first, Delete after.
+  var deleteSlot = reRenderedRow.children[reRenderedRow.children.length - 1];
+  check(reRenderedRow.children[1].className === 'simple-card-copy' &&
+      deleteSlot.className === 'preset-row-delete' && deleteSlot.textContent === 'Delete',
+    'G6: the same row now shows Copy link plus the real Delete button');
 
   console.log('  G7: Delete submits through the shared toggleDeleteArm, and only a confirmed delete refreshes the list');
   g5.queueDeleteReturn(false); // arm step
@@ -1082,7 +1142,9 @@ function makeSimpleViewSandbox(collaborators) {
   var g8 = harness({ name: null, modified: false });
   var g8CardsList = g8.h.els['simple-library-body'].children[2];
   g8CardsList.children[3].children[1].fire('click'); // open the menu
-  var g8DeleteBtn = g8.h.els['simple-library-body'].children[2].children[3].children[1];
+  var g8DeleteBtn = g8.h.els['simple-library-body'].children[2].children[3].children[
+    g8.h.els['simple-library-body'].children[2].children[3].children.length - 1
+  ];
   g8.queueDeleteReturn(true); // confirmed delete
   g8DeleteBtn.fire('click');
   check(g8.deleteCalls.length === 1, 'G8: the confirming click also goes through toggleDeleteArm');
@@ -1125,7 +1187,9 @@ function makeSimpleViewSandbox(collaborators) {
   // Factory empty note takes slot 1 in this fixture too — Yours starts
   // at slot 3, same layout G8 already established.
   g9CardsList.children[3].children[1].fire('click'); // open the menu
-  var g9DeleteBtn = g9.els['simple-library-body'].children[2].children[3].children[1];
+  var g9DeleteBtn = g9.els['simple-library-body'].children[2].children[3].children[
+    g9.els['simple-library-body'].children[2].children[3].children.length - 1
+  ];
   g9DeleteBtn.fire('click'); // confirming click -> toggleDeleteArm returns true above
   check(g9.els['simple-cs-name'].textContent === 'Custom sound',
     'G9: the stage name updates to "Custom sound" in the SAME tick the deletion completes');
@@ -1137,4 +1201,205 @@ function makeSimpleViewSandbox(collaborators) {
   // (queued on the microtask queue) get a chance to run at all. Section
   // F's own async completion — the ONLY async work in this file — stays
   // the one place that reads the shared `failures` array and exits.
+})();
+
+(function sectionI() {
+  console.log('I. emergency bypass on the Simple stage (harden round, 2026-09-02 critique P1)');
+
+  // The default view\'s "what am I hearing" face must answer the
+  // room\'s most safety-critical state: while the engine is live AND
+  // bypass is engaged, the stage recedes its content under the one
+  // disabled grammar\'s bypass variant and prints the deck sentence\'s
+  // own words — it never keeps presenting the gated chain as if heard.
+  // Derived from the same AudioBypass truth the deck key reads, on
+  // every render, and only ever on a live engine.
+  var engaged = false;
+  var h = makeSimpleViewSandbox({
+    AudioBypass: { isEngaged: function () { return engaged; } },
+    AudioGraph: { getModel: function () { return [node('a', 'gain', { gainDb: 0 })]; } },
+    PresetsUI: { getDisplayState: function () { return { name: 'Classic Karaoke', modified: false }; } },
+    EffectCatalog: { getPlainLabel: function (t) { return t; }, getLabel: function (t) { return t; } }
+  });
+  var stage = h.els['simple-stage'];
+
+  check(!stage.classList.contains('stage-bypassed'),
+    'I1: a live engine with bypass off carries no bypassed marking on the stage');
+
+  engaged = true;
+  h.window.SimpleView.onBypassChanged();
+  check(stage.classList.contains('stage-bypassed'),
+    'I1: engaging bypass marks the stage — the notification is the deck key\'s own choke point');
+  var line = stage.children.filter(function (c) {
+    return c.className === 'simple-stage-bypass-line';
+  })[0];
+  check(!!line && line.hidden === false,
+    'I1: the state line is present and visible');
+  check(!!line && line.textContent.indexOf('Bypassed') !== -1 &&
+      line.textContent.indexOf('effects off') !== -1,
+    'I1: the line speaks the deck sentence\'s own words');
+  check(!!line && line.getAttribute('aria-hidden') === 'true',
+    'I1: the line is aria-hidden — the deck\'s role="status" already announces the state once');
+
+  engaged = false;
+  h.window.SimpleView.onBypassChanged();
+  check(!stage.classList.contains('stage-bypassed') && line.hidden === true,
+    'I2: releasing bypass restores the stage and hides the line in the same render');
+
+  // A stopped engine has no bypass meaning: even if AudioBypass were
+  // somehow still flagged engaged, the pre-Start gate owns the stage.
+  engaged = true;
+  h.window.AudioEngine.isStarted = false;
+  h.window.SimpleView.onBypassChanged();
+  check(!stage.classList.contains('stage-bypassed') &&
+      stage.classList.contains('engine-not-started') && line.hidden === true,
+    'I3: bypass never marks a stopped engine\'s stage — the pre-Start gate owns it');
+})();
+
+(function sectionJ() {
+  console.log('J. row accessible names across states (harden round, 2026-09-02 audit P2)');
+
+  // The LIVE-engine twin of H2: ungated, the describedby carries ONLY
+  // the description; a Yours row with no description wires none at all;
+  // every row still names the action.
+  var h = makeSimpleViewSandbox({
+    AudioGraph: { getModel: function () { return []; } },
+    PresetsUI: { getDisplayState: function () { return { name: null, modified: false }; } },
+    FactoryPresets: {
+      listDetailed: function () { return [{ name: 'Warm Ballad', description: 'Warm and close.', tags: [] }]; },
+      list: function () { return []; }
+    },
+    PresetStore: { listNames: function () { return ['My Stage Set']; } }
+  });
+  var cards = h.els['simple-library-body'].children[2];
+  var factoryBtn = cards.children[1].children[0];
+  check(String(factoryBtn.getAttribute('aria-label')) === 'Try Warm Ballad',
+    'J1: live engine — the factory row still names the action');
+  var liveDescribed = factoryBtn.getAttribute('aria-describedby') || '';
+  check(liveDescribed.indexOf('preset-row-desc-') === 0 &&
+      liveDescribed.indexOf('simple-library-gate-note') === -1,
+    'J1: ungated, the describedby carries ONLY the description — the gate note is a gated-state addition');
+  var userBtn = cards.children[3].children[0];
+  check(String(userBtn.getAttribute('aria-label')) === 'Try My Stage Set' &&
+      userBtn.getAttribute('aria-describedby') === null,
+    'J1: a Yours row with no description wires no describedby and still names the action');
+})();
+
+(function sectionK() {
+  console.log('K. the plain filters vs the REAL factory library (2026-09-02 regrouping, 2026-09-03 prune)');
+
+  // The chip row is a promise about the library: every chip must carve a
+  // meaningful slice of the SHIPPED presets, and together they must
+  // cover the asks the regrouping was named for. This section loads the
+  // real factory-library-data.js and pins each filter's real catch, so
+  // the next scale-out batch that leaves a filter empty (or a preset
+  // that fits no filter) fails review here instead of shipping a dead
+  // chip.
+  //
+  // The 2026-09-03 prune (refinement critique P2 #3, distill round):
+  // seven chips exceeded the <=4-options-per-decision-point guidance,
+  // and the cut was decided by MEASUREMENT over this same real library
+  // — Funny 10, Big echo 7, Warm 5, Clean & clear 5, Deep voices 4,
+  // Robotic 4 (no survivor's catch is a strict subset of another's, so
+  // no redundancy tiebreak applied). The four broadest stayed; the two
+  // 4s left. A future batch that grows the library may legitimately
+  // revisit the row — but only by re-measuring here: the K2 count pins
+  // below are the prune's evidence, and the K1 row pin is the contract
+  // that the row never silently regrows past the guidance.
+  var vmReal = require('vm');
+  var dataSandbox = { window: {} };
+  vmReal.createContext(dataSandbox);
+  vmReal.runInContext(
+    fs.readFileSync(path.join(ROOT, 'src', 'factory-library-data.js'), 'utf8'),
+    dataSandbox
+  );
+  var REAL = dataSandbox.window.FACTORY_LIBRARY.PRESETS.map(function (p) {
+    return { name: p.name, description: p.description, tags: p.tags || [] };
+  });
+
+  var loadCalls = [];
+  var h = makeSimpleViewSandbox({
+    AudioGraph: { getModel: function () { return []; } },
+    PresetsUI: {
+      getDisplayState: function () { return { name: null, modified: false }; },
+      loadFactoryPreset: function (name) { loadCalls.push(name); }
+    },
+    EffectCatalog: { getPlainLabel: function (t) { return t; }, getLabel: function (t) { return t; } },
+    FactoryPresets: { listDetailed: function () { return JSON.parse(JSON.stringify(REAL)); } },
+    PresetStore: { listNames: function () { return []; } }
+  });
+  var rowChildren = h.els['simple-library-body'].children[0].children;
+  function rowHasClass(el, name) {
+    return String(el.className).split(/\s+/).indexOf(name) !== -1;
+  }
+  var chips = rowChildren.filter(function (c) { return rowHasClass(c, 'simple-chip'); });
+  var labels = chips.map(function (c) { return c.textContent; });
+  check(JSON.stringify(labels.slice(0, 5)) === JSON.stringify(
+      ['All', 'Warm', 'Big echo', 'Funny', 'Clean & clear']),
+    'K1: the chip row reads All/Warm/Big echo/Funny/Clean & clear');
+  check(labels.length === 5 && labels[0] === 'All' &&
+      rowHasClass(rowChildren[0], 'simple-chips-legend') &&
+      rowChildren.some(function (c) { return rowHasClass(c, 'simple-chip-count'); }),
+    'K1: All (the reset) leads exactly 4 content chips plus the count readout — the pruned row stays inside the <=4-options guidance');
+
+  function catchOf(label) {
+    var chip = chips.filter(function (c) { return c.textContent === label; })[0];
+    chip.fire('click');
+    var rows = h.els['simple-library-body'].children[2].children.filter(function (r) {
+      return String(r.className).split(/\s+/).indexOf('preset-row') !== -1;
+    });
+    return rows.map(function (r) { return r.getAttribute('data-preset'); });
+  }
+
+  // The measured catches behind the prune and after it, recorded so
+  // DRIFT is loud: a new batch that shifts these numbers updates this
+  // pin deliberately (and re-runs the coverage comparison, not just
+  // this list).
+  var expected = {
+    'Warm': ['Warm Ballad', 'Slow Jam Silk', 'Jazz Cellar', 'Close-Up Whisper', 'Hiss Rescue'],
+    'Big echo': ['Big Room', 'Cathedral Drift', 'Noraebang Echo', 'Space Lounge', 'Slow Jam Silk', 'West End Nights', 'Warm Ballad'],
+    'Clean & clear': ['Clean Speech', 'Studio Polish', 'Hiss Rescue', 'Room Announcer', 'Close-Up Whisper']
+  };
+  var sorted = function (a) { return a.slice().sort(); };
+  Object.keys(expected).forEach(function (label) {
+    var got = catchOf(label);
+    check(JSON.stringify(sorted(got)) === JSON.stringify(sorted(expected[label])),
+      'K2: "' + label + '" carves ' + expected[label].length + ' of ' + REAL.length +
+      ' real presets (got ' + got.length + ': ' + got.slice(0, 4).join(', ') + (got.length > 4 ? ', …' : '') + ')');
+    check(got.length >= 3 && got.length <= Math.ceil(REAL.length / 2),
+      'K2: "' + label + '" stays a useful slice (>=3 presets, <= half the library)');
+  });
+  var funnyCount = catchOf('Funny').length;
+  check(funnyCount === 10, 'K2: "Funny" still catches the whole gag axis (' + funnyCount + ' of 10)');
+
+  // The retired dead chip stays retired: genre alone must not come back
+  // as a filter (Rock caught exactly one preset at 33 sounds).
+  check(labels.indexOf('Rock') === -1 && labels.indexOf('Speech') === -1,
+    'K3: the retired near-dead chips (Rock, Speech) stay retired');
+
+  // K4 — the prune's own guard: the cut chips stay cut, and every
+  // survivor's real catch is at least as broad as a cut chip's catch
+  // WOULD be (recomputed here from the same tag predicates the chips
+  // carried — if a future batch makes a cut chip's vocabulary the
+  // broadest slice in the library, that is the recorded moment to
+  // revisit the row, not to let the test rot).
+  check(labels.indexOf('Deep voices') === -1 && labels.indexOf('Robotic') === -1,
+    'K4: the 2026-09-03 pruned chips (Deep voices, Robotic) stay pruned');
+  var wouldCatch = {
+    'Deep voices': function (t) {
+      return t.indexOf('gag:deep-voice') !== -1 || t.indexOf('gag:darth-vader') !== -1 ||
+        t.indexOf('gag:monster/demon') !== -1 || t.indexOf('vibe:dark/moody') !== -1;
+    },
+    'Robotic': function (t) {
+      return t.indexOf('gag:robot') !== -1 || t.indexOf('gag:8-bit') !== -1 ||
+        t.indexOf('technique:hard-tune') !== -1;
+    }
+  };
+  Object.keys(wouldCatch).forEach(function (cut) {
+    var cutCount = REAL.filter(function (p) { return wouldCatch[cut](p.tags); }).length;
+    var survivorCounts = Object.keys(expected).map(function (label) { return expected[label].length; })
+      .concat([funnyCount]);
+    check(survivorCounts.every(function (n) { return n >= cutCount; }),
+      'K4: every survivor catches at least "' + cut + '"\'s would-be ' + cutCount +
+      ' — the prune stays coverage-ranked (survivors: ' + survivorCounts.join('/') + ')');
+  });
 })();

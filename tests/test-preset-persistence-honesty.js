@@ -1335,6 +1335,29 @@ async function main() {
         String(warmBalladRow.className).split(/\s+/).indexOf('preset-row-active') !== -1,
       'L2 setup: "Warm Ballad" rendered as a FACTORY row, marked ACTIVE'
     );
+    // Harden round (2026-09-02 audit P2): Advanced's rows carry the same
+    // accname contract as Simple's Sounds rows — the accessible name is
+    // the action, the description rides in aria-describedby on demand.
+    factoryStub.describeAll = function () {
+      return [{ name: 'Warm Ballad', description: 'Gentle compression and a touch of low-end warmth.' }];
+    };
+    sandbox.PresetsUI.refreshPresetSelect('factory:Warm Ballad');
+    var accBtn = findPresetRowLoadBtn(env, 'Warm Ballad');
+    check(
+      !!accBtn && accBtn.getAttribute('aria-label') === 'Try Warm Ballad',
+      'L2 accname: the Advanced row button names the action, not the whole card'
+    );
+    var accDescribed = accBtn && accBtn.getAttribute('aria-describedby');
+    var accPreview = null;
+    (accBtn ? accBtn.children : []).forEach(function (child) {
+      if (!accPreview && String(child.className).split(/\s+/).indexOf('preset-row-preview') !== -1) {
+        accPreview = child;
+      }
+    });
+    check(
+      !!accDescribed && !!accPreview && accPreview.id === accDescribed,
+      'L2 accname: the description resolves through aria-describedby, out of the accessible name'
+    );
     factoryStub.payload = []; // the library changed mid-session
     findPresetRowLoadBtn(env, 'Warm Ballad').__fire('click');
     note = noteElement(env);

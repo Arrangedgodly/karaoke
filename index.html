@@ -294,6 +294,13 @@
           Changes are not being saved. Keep this page open and try again before reloading.
         </div>
         <button id="save-preset-btn" class="control" type="button">Save preset as…</button>
+        <!-- SHARING (shape round 2026-09-02): a personal preset travels
+             as a LINK — src/preset-link.js compresses the preset into
+             the URL fragment, this key copies the URL to the clipboard.
+             Enabled exactly when the ACTIVE preset is one of Yours
+             (factory sounds already ship with the app); feedback rides
+             the .preset-note line, never a browser dialog. -->
+        <button id="share-preset-btn" class="control" type="button" disabled>Copy link</button>
       </div>
     </div>
 
@@ -311,11 +318,14 @@
             until Start succeeds, so teaching the add verb here would be an
             invitation the gated surface cannot honor (critique P2).
             src/canvas.js's onEngineStarted() flips this element to the
-            working add verbs ("Click an effect to add it to the chain",
-            verbatim — palette drag is retired; click and keyboard are the
-            add paths) at the exact transition where adding becomes
-            possible; styles/main.css retires the dashed drop-target
-            affordance while the engine-not-started gate holds.
+            working add verbs ("Click an effect to add it at the end — or
+            drag one here to place it", verbatim) at the exact transition
+            where adding becomes possible — the palette ships BOTH verbs:
+            click/keyboard activation AND drag-to-place (re-added with the
+            2026-09-01 board redesign, which gave the row a receiver;
+            only the FREE-BOARD-era drag was ever retired).
+            styles/main.css retires the dashed drop-target affordance
+            while the engine-not-started gate holds.
           -->
           <div class="empty-hint" id="empty-hint">Press Start to power on</div>
           <!-- .chain-arrow connectors are inserted here at runtime by
@@ -382,13 +392,15 @@
         class="simple-library-gate-note"
         id="simple-library-gate-note"
         aria-live="polite"
-      >Start to try a sound.</p>
+      >Press Start to try a sound.</p>
       <!-- wayfinder #48 — JS-built by src/simple-view.js, the same
            "the dynamic list lives in JS, the shell just gives it a
            mount point" convention #preset-list/#palette-list already
-           use: plain filter chips (All/Warm/Rock/Funny/Speech — named
+           use: plain filter chips (All/Warm/Big echo/Funny/Clean &
+           clear — named
            queries over the #28 taxonomy's existing tags, stored
-           nowhere on presets), a search box (name/description/tags),
+           nowhere on presets; pruned to the four broadest catches
+           2026-09-03), a search box (name/description/tags),
            then Factory and, when user presets exist, Yours as separate
            card groups. Browse and
            search stay available before Start; Try, Previous/Next, and
@@ -416,7 +428,16 @@
       <div class="simple-stage engine-not-started" id="simple-stage">
         <div class="simple-stage-inner">
           <div class="simple-stage-head">
-            <h2 class="simple-cs-name" id="simple-cs-name">Ready to start</h2>
+            <!-- aria-live: the stage's name line is Simple's "what am I
+                 hearing" answer — a screen-reader operator hears the
+                 sound change (a loaded preset, "Custom sound") the
+                 moment it lands, not only when focus happens to sit on
+                 the stage. Polite, because an agent toast (role=status)
+                 may already be speaking the mutation that caused the
+                 rename. In Advanced this region is display:none, so the
+                 register's own PRESET field stays the single announcer
+                 per view. (Harden round, 2026-09-02 audit P3.) -->
+            <h2 class="simple-cs-name" id="simple-cs-name" aria-live="polite">Ready to start</h2>
             <!-- wayfinder #49 — JS-shown only for an unsaved sound
                  (modified, or no preset loaded at all): "Save this
                  sound" sits beside the name, never in the secondary
@@ -605,6 +626,13 @@
   <script src="src/factory-library-data.js"></script>
   <script src="src/factory-presets.js"></script>
   <script src="src/preset-store.js"></script>
+  <!-- PresetLink (sharing round, 2026-09-02): sounds that travel as
+       links — codec + validation + the once-per-load arrival read of
+       the #preset= fragment. Plain non-module script like its neighbors;
+       loads AFTER the schema (its payloads ARE serialize()'s shape) and
+       BEFORE presets-ui.js/simple-view.js, which read window.PresetLink
+       lazily and degrade to a no-op without it (stripped harnesses). -->
+  <script src="src/preset-link.js"></script>
   <script src="src/canvas.js"></script>
   <script src="src/persistence.js"></script>
   <!--
@@ -707,6 +735,36 @@
     after meters.js (it drives the Meters contract) and before main.js.
   -->
   <script src="src/meter-taps.js"></script>
+  <!--
+    LIVE-SIGNAL SURFACE (overdrive round, 2026-09-02) — the two halves
+    of "the instrument carries your voice", mirroring the
+    meters.js/meter-taps.js split exactly:
+
+    src/signal-lamps.js (window.SignalLamps) — PURE PAINT: the board's
+    drawn chevrons light at real per-stage level in the VU lamps' own
+    zone language (green/amber/clip at the meters' exact edges), and
+    Simple's stage gains a live dot-matrix output scope in register
+    amber. Owns ballistics + paint only; zero Web Audio; can never
+    throw into a caller.
+
+    src/stage-taps.js (window.StageTaps) — the AUDIO half: pass-through
+    AnalyserNode side-taps per audible chain position (zero DSP, the
+    meter-taps.js pattern) plus one final-output tap for the scope,
+    re-wired after every accepted chain edit via ChainEditing's own
+    acceptance choke point, self-healing per frame against AudioGraph's
+    committed model. While emergency Bypass is engaged or the watchdog
+    mute is latched the stage lamps feed DARK (honesty: the chain is not
+    what the room hears); the scope reads the final output and flattens
+    on its own. No agent tool reaches any of it (mcp-tools.js has zero
+    references), nothing persists.
+
+    Load order: after meter-taps.js (StageTaps reads MeterTaps.isTripped
+    for the honesty gate) and before main.js, whose engine lifecycle
+    hooks drive both modules. All cross-references are runtime-guarded,
+    so stripped harnesses load both files as no-ops.
+  -->
+  <script src="src/signal-lamps.js"></script>
+  <script src="src/stage-taps.js"></script>
   <!--
     FEW-2 — status readout wiring (window.StatusReadouts,
     src/status-readouts.js): feeds the VIS-2 readout slots in the topbar

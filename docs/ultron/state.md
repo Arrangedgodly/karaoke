@@ -7,6 +7,28 @@ approved 2026-08-27; its production-log, QA, research, and design references
 remain valid there).
 
 ## Current Phase
+**ULTRON IMPECCABLE (finishing phase) — COMPLETE 2026-09-03, approval mode
+with recorded substitution.** `$impeccable document` quick refresh (DESIGN.md
+confirmed current, sidecar refreshed → later narrative-synced to the
+refinements' amendments: 10 rules, 10 components, 6 dos / 6 donts).
+`$impeccable critique` (degraded dual-pass both times — orchestrator
+subagents had no nested spawn tool; A sealed before B; Playwright fake-mic
+evidence): opening **36/40 P0=0 P1=0**
+(`.impeccable/critique/2026-09-03T02-09-28Z__index-html.md`) → 4-entry
+refinement loop ALL DONE (see [refinement.md](refinement.md)): #1 README
+rewrite + doc-verb lint (substituted approval), #2 human-undo toast
+(substituted approval), #3 coverage-ranked chip prune + search unification
+(substituted approval), #4 Alt+Arrow hint + 13.6px deck sentence (gate probe
+ANSWERED — real user approval, the session's only one). Closing critique
+**38/40 P0=0 P1=0, trend 36→25→35→36→38**
+(`.impeccable/critique/2026-09-03T03-56-57Z__index-html.md`): all four
+refinements verified landed live, zero regressions, no material issues →
+no funding question required. Suite **47/47 files, 5488 checks green**
+throughout. **Remaining backlog (recorded, not funded):** P2 README
+screenshot pixels still cord-era (owner decision: regenerate as build
+artifact); P3s — redo, <900px Advanced sentence squeeze, faint-lamp
+luminance inversion, armed/QUEUED not announced to AT; minors in the
+snapshot. **Phase hands back for user acceptance.** Previously:
 **Redesign FINISH PHASE — COMPLETE 2026-08-30 (ultron-overlord finishing
 worker, auto mode / trimmed).** Closing critique 36/40 (baseline 36/40 —
 level in a harder world; snapshot

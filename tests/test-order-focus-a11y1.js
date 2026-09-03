@@ -28,6 +28,13 @@
 //       whose control RECEIVES focus is raised above a previously
 //       fronted overlapping card (bring-to-front on focus — the ring
 //       can never be occluded by a neighbor's paint).
+//   (e) THE FOCUSED GRIP TEACHES ITS KEYBOARD TWIN (2026-09-03
+//       refinement, critique P3 #4): the Alt+Arrow reorder lived only in
+//       the grip's aria-label — invisible to sighted keyboard operators.
+//       Focus now pushes ONE micro-hint onto the canvas register's help
+//       line through the SAME nested preview stack a hover uses (composes
+//       with card/param previews, pops on blur, no stale snapshot across
+//       the accepted render's card replacement).
 //
 // The keyboard add path's own behavior (chip button semantics, the
 // insert-before-limiter policy's commit/autosave/revision consequences)
@@ -956,6 +963,88 @@ check(
     familyOrder()[3] === 'limiter',
   'D8b: ...and the committed chain keeps the limiter terminal'
 );
+
+// ----------------------------------------------------------------------
+console.log('E. the focused grip teaches its keyboard twin on the register (critique P3 #4)');
+// The Alt+Arrow reorder existed only inside the grip's aria-label — a
+// sighted keyboard operator could not discover the board's one keyboard
+// gesture. Focusing the grip now teaches it ONCE on the canvas register's
+// help line (the established teaching surface), pushed through the SAME
+// preview stack a hover uses — so it composes with the card/param
+// previews underneath instead of fighting them.
+var HINT = 'Alt+Left or Alt+Right reorders it in the chain';
+function regSpan(cls) {
+  return queryAll(canvasPanelEl, '.' + cls)[0] || null;
+}
+resetOpen();
+var teachHandle = handleOf('n2');
+var regHelp = regSpan('register-help');
+var regModule = regSpan('register-module');
+check(
+  !!regHelp && !!regModule &&
+    (teachHandle.getAttribute('aria-label') || '').slice(-HINT.length) === HINT,
+  'E1: the grip aria-label ends with the exact sentence the register teaches (one voice, single source)'
+);
+var preModule = regModule.textContent;
+var preHelp = regHelp.textContent;
+var modelBefore = JSON.stringify(modelIds());
+teachHandle.__fire('focus', {});
+check(
+  regHelp.textContent === HINT && regModule.textContent === 'Gain',
+  'E2: grip focus teaches the Alt+Arrow reorder on the register help line, main line naming the held module'
+);
+teachHandle.__fire('blur', {});
+check(
+  regModule.textContent === preModule && regHelp.textContent === preHelp &&
+    JSON.stringify(modelIds()) === modelBefore,
+  'E3: grip blur restores whatever the register would otherwise show — and the hint commits nothing'
+);
+
+// Composition with the hover previews underneath (the nested preview
+// stack): the card's own general info shows through the moment the
+// focus hint pops.
+var teachCard = cardById('n2');
+teachCard.__fire('mouseenter', {});
+var hoverHelp = regHelp.textContent;
+check(
+  regModule.textContent === 'Gain' && !!hoverHelp && hoverHelp !== HINT,
+  'E4a: card hover pushes its own general-info preview (pre-hint baseline)'
+);
+teachHandle.__fire('focus', {});
+check(regHelp.textContent === HINT, 'E4b: grip focus layers ON TOP of the card hover (stack discipline)');
+teachHandle.__fire('blur', {});
+check(
+  regModule.textContent === 'Gain' && regHelp.textContent === hoverHelp,
+  'E4c: blur pops back to the card\'s hover preview, not past it'
+);
+teachCard.__fire('mouseleave', {});
+check(
+  regModule.textContent === preModule && regHelp.textContent === preHelp,
+  'E4d: leaving the card unwinds to the register\'s base line — the stack is balanced'
+);
+
+// The Alt+Arrow move itself: the accepted render replaces every card
+// (unwinding the preview stack — no stale hint snapshot), focus follows
+// to the rebuilt grip (B9 above), and the follow-focus re-teaches the
+// hint so repeated presses keep it on the line while walking a card.
+resetOpen();
+handleOf('n2').__fire('focus', {});
+check(regHelp.textContent === HINT, 'E5a: the hint is taught before the move');
+documentStub.__fire('keydown', {
+  key: 'ArrowRight', altKey: true, target: handleOf('n2'), preventDefault: function () {}
+});
+check(
+  JSON.stringify(domOrder()) === JSON.stringify(['n1', 'n3', 'n2']),
+  'E5b: Alt+ArrowRight moved the card one slot (the move itself is unchanged)'
+);
+check(
+  regHelp.textContent !== HINT,
+  'E5c: the accepted render unwound the preview stack — no stale hint snapshot survives the card replacement'
+);
+handleOf('n2').__fire('focus', {}); // the browser's follow-focus (B9) re-fires focus on the rebuilt grip
+check(regHelp.textContent === HINT, 'E5d: the rebuilt grip\'s focus re-teaches the hint — repeated Alt+Arrow presses keep it on the line');
+handleOf('n2').__fire('blur', {});
+check(regHelp.textContent !== HINT, 'E5e: and blur still pops it cleanly (no leak across the render)');
 
 if (failures.length === 0) {
   console.log('PASS: order + focus rules (A11Y-1)');

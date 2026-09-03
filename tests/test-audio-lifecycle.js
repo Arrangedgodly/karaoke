@@ -636,6 +636,29 @@ async function main() {
   check(statusText(els) === 'Live' && !statusWrap.classList.contains('bypassed'),
     'A2: and back again');
 
+  // Harden round (2026-09-02 critique P2): the emergency path must also
+  // fire from the encoder field. Every knob on the board is a clipped
+  // input[type=range] and Space has no native meaning on one, so the old
+  // blanket INPUT skip left the shortcut dead exactly where an
+  // operator's focus lives mid-show. Range knobs pass through; a text
+  // input keeps its native space.
+  var knobFocus = makeElement('INPUT');
+  knobFocus.type = 'range';
+  sandbox.document.activeElement = knobFocus;
+  sandbox.document.__fireKeydown({ code: 'Space', key: ' ' });
+  check(statusText(els) === 'Bypassed \u2014 effects off',
+    'A2: spacebar with focus on a range knob still toggles bypass — the encoder field is not a dead zone');
+  sandbox.document.__fireKeydown({ code: 'Space', key: ' ' });
+  check(statusText(els) === 'Live',
+    'A2: and lifts it again from the knob — the emergency path is symmetric');
+  var textFocus = makeElement('INPUT');
+  textFocus.type = 'text';
+  sandbox.document.activeElement = textFocus;
+  sandbox.document.__fireKeydown({ code: 'Space', key: ' ' });
+  check(statusText(els) === 'Live' && AB.isEngaged() === false,
+    'A2: a text input keeps its native Space — typing a space never toggles bypass');
+  sandbox.document.activeElement = undefined;
+
   // A real failure outranks a deliberate safe state: toggling bypass must
   // not quietly erase an error the operator has not dealt with yet.
   statusWrap.classList.add('error');

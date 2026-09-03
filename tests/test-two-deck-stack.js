@@ -25,9 +25,14 @@
 //      ground, the orange Start key, BYPASS's red-edge/red-fill pairing
 //      and its loudness floor, and the global orange focus ring.
 //   E. ETCH SUBORDINATION — the system deck's dot-matrix etch stays
-//      quieter than the chain face's display register: smaller value
-//      tier (12px vs the register's 13.6px main line) and NEUTRAL print
-//      (never the register's amber/orange machine voice).
+//      quieter than the chain face's display register: NEUTRAL print
+//      (never the register's amber/orange machine voice) and readouts at
+//      the smaller value tier (12px vs the register's 13.6px main line).
+//      Since the 2026-09-03 distance-readability step (critique P3 #5):
+//      the status SENTENCE alone rides the 13.6px register tier — it is
+//      the operator's primary verbal status from across a dark room —
+//      while the readouts, the demoted technical footnote, and the
+//      neutral ink stay subordinate.
 //   F. VOICE-DECK ZONES + SHARED DISABLED GRAMMAR — the three zones sit
 //      on one faceplate with groove separators (cut+lip pairs), and the
 //      pre-Start gate hatch covers BOTH flanking zones with the exact
@@ -514,6 +519,42 @@ check(
     cssDecl(readoutValueRule, 'color') !== 'var(--pm-display)' &&
     cssDecl(readoutValueRule, 'color') !== 'var(--pm-accent)',
   'the etch values are NEUTRAL print — never the register\'s amber or the signal orange'
+);
+
+// The status SENTENCE's distance-readability step (2026-09-03, critique
+// P3 #5): one type tier up from the 12px it shared with the readouts,
+// because it is the operator's primary VERBAL status, read mid-show
+// from across a dark room — distance readability is a functional a11y
+// requirement (PRODUCT.md), not a nicety. Everything that makes the etch
+// subordinate stays: readouts one tier down, the technical footnote
+// demoted at 12px, neutral ink, and BYPASS's loudness floor untouched.
+var statusRule = cssRule('.status');
+check(
+  statusRule && cssDecl(statusRule, 'font-size') === '0.85rem',
+  'the deck status sentence rides the register tier (0.85rem, one step up from 12px — distance readability)'
+);
+check(
+  statusRule && registerMainRule &&
+    cssDecl(statusRule, 'font-size') === cssDecl(registerMainRule, 'font-size'),
+  'the sentence matches the chain register main line\'s SIZE ROLE (same ladder step, still not the amber machine voice)'
+);
+check(
+  statusRule && readoutValueRule &&
+    remPx(cssDecl(readoutValueRule, 'font-size')) < remPx(cssDecl(statusRule, 'font-size')),
+  'RATE/LAT/NODES stay one tier BELOW the sentence (readouts subordinate by design)'
+);
+check(
+  cssDecl(cssRule('.status-detail'), 'font-size') === '0.75rem',
+  'the demoted technical footnote is PINNED at the 12px value tier (one rank below the sentence, either host)'
+);
+check(
+  cssDecl(cssRule('.topbar-status'), 'max-width') === '22.5rem',
+  'the sentence cap grew with the tier (22.5rem) — every WHAT-HAPPENED mic error sentence still reads in full'
+);
+check(
+  statusRule && bypassRule &&
+    remPx(cssDecl(statusRule, 'font-size')) < remPx(cssDecl(bypassRule, 'font-size')),
+  'BYPASS still out-sizes the sentence (the deck\'s loudness floor holds)'
 );
 
 // ----------------------------------------------------------------------

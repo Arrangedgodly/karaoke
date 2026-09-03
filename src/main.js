@@ -107,6 +107,14 @@ console.log('App scaffold loaded');
     if (canvasPanel) {
       canvasPanel.classList.toggle('bypassed', isEngaged);
     }
+    // The Simple stage carries the same state (harden round, 2026-09-02
+    // critique P1): its "what am I hearing" face must not keep naming a
+    // sound while the chain is gated to silence. Same seam pattern as
+    // renderSimpleEngineState below — an absent SimpleView (a stripped
+    // node-side harness) is a no-op, never a throw.
+    if (window.SimpleView && typeof window.SimpleView.onBypassChanged === 'function') {
+      window.SimpleView.onBypassChanged();
+    }
   }
 
   function toggleBypass() {
@@ -144,8 +152,8 @@ console.log('App scaffold loaded');
       //    add-to-chain click, not toggle bypass; the Bypass button itself
       //    is exempted below so its focused-space still toggles exactly
       //    once, via this handler's own preventDefault+toggle). Only body,
-      //    the bypass button itself, or other non-form-control elements
-      //    pass through.
+      //    the bypass button itself, other non-form-control elements, and
+      //    RANGE KNOBS (see the isRangeKnob note below) pass through.
       //  - Skip while the button is disabled — mirrors the button's own
       //    disabled state (bypass is meaningless before AudioEngine.start()
       //    succeeds; there's no live source node to bypass yet).
@@ -156,8 +164,19 @@ console.log('App scaffold loaded');
 
         var active = document.activeElement;
         var activeTag = active && active.tagName;
-        var isFormControl = activeTag === 'SELECT' || activeTag === 'INPUT' ||
-          activeTag === 'TEXTAREA' || activeTag === 'BUTTON';
+        // Harden round (2026-09-02 critique P2): every knob on the board
+        // is a clipped input[type=range], and Space has NO native meaning
+        // on a range input (arrows move it; Space does nothing) — so the
+        // blanket INPUT skip left the emergency shortcut dead across the
+        // entire encoder field, exactly where an operator's focus lives
+        // mid-show. Range knobs pass through; every other input flavor
+        // keeps the skip (there Space types, opens, or activates).
+        var activeType = active && active.type !== undefined ? String(active.type) : '';
+        var isRangeKnob = activeTag === 'INPUT' &&
+          activeType.toLowerCase() === 'range';
+        var isFormControl = !isRangeKnob && (
+          activeTag === 'SELECT' || activeTag === 'INPUT' ||
+          activeTag === 'TEXTAREA' || activeTag === 'BUTTON');
         if (isFormControl && active !== bypassButton) {
           return;
         }
@@ -534,6 +553,7 @@ console.log('App scaffold loaded');
     });
     pendingEngineTransitions = [];
     if (window.MeterTaps) { window.MeterTaps.onEngineStopped(); }
+    if (window.StageTaps) { window.StageTaps.onEngineStopped(); }
     if (window.StatusReadouts) { window.StatusReadouts.stop(); }
     renderSimpleEngineState(false);
     var panel = getCanvasPanel();
@@ -641,6 +661,9 @@ console.log('App scaffold loaded');
     if (window.MeterTaps) {
       window.MeterTaps.onEngineStopped(); // stops the loop; KEEPS the #3 latch
     }
+    if (window.StageTaps) {
+      window.StageTaps.onEngineStopped(); // lamps rest; no latch to keep
+    }
   }
 
   function recoverFromLoss() {
@@ -664,6 +687,9 @@ console.log('App scaffold loaded');
     if (window.MeterTaps) {
       window.MeterTaps.onEngineStarted();
       startupMetersPending = false;
+    }
+    if (window.StageTaps) {
+      window.StageTaps.onEngineStarted();
     }
     setStatus(isEngineLive() ? liveStatusText() : 'Stopped', isEngineLive());
   }
@@ -717,6 +743,9 @@ console.log('App scaffold loaded');
         if (startupMetersPending && window.MeterTaps) {
           window.MeterTaps.onEngineStarted();
           startupMetersPending = false;
+        }
+        if (window.StageTaps) {
+          window.StageTaps.onEngineStarted();
         }
         setStatus(liveStatusText(), true);
       }
@@ -924,6 +953,9 @@ console.log('App scaffold loaded');
           if (window.MeterTaps && engineLive) {
             window.MeterTaps.onEngineStarted();
             startupMetersPending = false;
+          }
+          if (window.StageTaps && engineLive) {
+            window.StageTaps.onEngineStarted();
           }
 
           // FEW-2: fill the VIS-2 status-LCD readouts with real engine
@@ -1178,6 +1210,11 @@ console.log('App scaffold loaded');
           // for the new input. See src/meter-taps.js.
           if (window.MeterTaps) {
             window.MeterTaps.onDeviceSwitched(window.AudioEngine.sourceNode);
+          }
+          // The stage lamps' mic tap follows the same re-tap moment (the
+          // old source node is blanket-disconnected by the switch).
+          if (window.StageTaps) {
+            window.StageTaps.onDeviceSwitched(window.AudioEngine.sourceNode);
           }
 
           // A newer request may still be pending (and can still fail while

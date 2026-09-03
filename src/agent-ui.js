@@ -75,6 +75,20 @@
 //     pushed; a malformed entry (label must be a non-empty string,
 //     restore must be a function) is ignored with one console.warn and
 //     returns false.
+//     Visible human entries (refinement round, 2026-09-03, critique P2
+//     #2): a kind:'human' entry may also set announce: true. pushUndo
+//     then renders ONE transient toast carrying the entry's OWN label
+//     (the same operator vocabulary the stack derives — there is no
+//     second one), tagged data-human-edit="true". It is the ordinary
+//     .agent-toast card — 6 s auto-dismiss with hover-pause, the 3-toast
+//     cap, Escape — and it hosts the Undo key through the existing
+//     one-button invariant while its entry is the stack's newest. Undo
+//     from it runs the SAME guarded undo() as the shortcut; the restore
+//     stays SILENT (no 'Undone' note — the chain, register, and stage
+//     are the feedback). reportMutation is NOT involved: no
+//     'agentui:mutation' event fires for a human edit, and a
+//     data-human-edit toast never hosts ANOTHER entry's Undo key or
+//     recovery/conflict note (the legacy claim paths skip it).
 //   AgentUI.noteHumanEdit()
 //     Issue #6: bumps the module's state revision counter. Called at
 //     each HUMAN mutation entry point (the param-slider input handler in
@@ -143,13 +157,18 @@
 //     defines) for assistive tech. If no .topbar exists the chip is
 //     skipped; toasts and events remain fully functional.
 //   #agent-toast-region.agent-toast-region
-//     Appended as the LAST child of <body>. Each toast inside is a
+//     Appended as the LAST child of <body>, labeled as the region of
+//     record for transient change cards (agent mutations, watchdog
+//     refusals, and — since the 2026-09-03 refinement round — announced
+//     human structural edits). Each toast inside is a
 //     div.agent-toast with role="status" aria-live="polite", containing
 //     a .agent-toast-summary, optional .agent-toast-clamped /
 //     .agent-toast-error / .agent-toast-conflict / .agent-toast-undone
 //     / .agent-toast-undo-failed notes, and (per the undo rules above) a
 //     keyboard-reachable <button> labeled 'Undo' (relabeled 'Undo
-//     anyway' while a conflict confirm is pending — issue #6).
+//     anyway' while a conflict confirm is pending — issue #6). An
+//     announced human entry's toast additionally carries
+//     data-human-edit="true".
 //
 // Initialization
 //   AgentUI.init() — idempotent; builds the components and attaches the
@@ -320,7 +339,11 @@
     toastRegionEl.id = 'agent-toast-region';
     toastRegionEl.className = 'agent-toast-region';
     toastRegionEl.setAttribute('role', 'region');
-    toastRegionEl.setAttribute('aria-label', 'Agent activity notifications');
+    // 'Change notifications' (was 'Agent activity notifications',
+    // 2026-09-03): the region now hosts announced HUMAN structural edits
+    // alongside agent mutations and watchdog refusals — an operator's own
+    // "Add Reverb" must not be announced as agent activity.
+    toastRegionEl.setAttribute('aria-label', 'Change notifications');
     document.body.appendChild(toastRegionEl);
     return toastRegionEl;
   }
@@ -492,9 +515,21 @@
     // the revision the mutation produced). A later human edit bumps the
     // counter past this value, which is exactly the conflict undo()
     // checks for.
+    //
+    // kind:'human' (harden round, 2026-09-02): entries pushed by HUMAN
+    // edits — which bump the revision themselves inside
+    // ChainEditing.markAcceptedEdit BEFORE pushing, so they are
+    // self-consistent at push time — and any later bump necessarily
+    // comes from an edit that pushed its own entry ABOVE this one. Undo
+    // pops from the top (LIFO), so by the time a human entry surfaces,
+    // every bump past its recorded revision came from entries already
+    // popped. undo() therefore skips the conflict gate for them — that
+    // gate exists to stop an AGENT restore from clobbering human work
+    // the stack never knew about, and human work is never off-stack.
     var storedEntry = {
       label: entry.label,
       restore: entry.restore,
+      kind: entry.kind === 'human' ? 'human' : null,
       revision: typeof entry.revision === 'number' ? entry.revision : stateRevision,
       toastEl: null,
       hasToastAssociation: false
@@ -504,7 +539,14 @@
       undoStack.shift();
     }
 
-    if (isLiveToast(unclaimedMutationToast)) {
+    if (storedEntry.kind === 'human' && entry.announce === true) {
+      // The visible entry point (critique P2 #2): the human edit's own
+      // toast, in the one operator vocabulary (the entry's label). This
+      // path never touches the reportMutation handoff slots below —
+      // those pair AGENT mutations with their summaries; a human entry
+      // brings its toast with it.
+      announceHumanEdit(storedEntry);
+    } else if (isLiveToast(unclaimedMutationToast)) {
       associateUndoEntryWithToast(storedEntry, unclaimedMutationToast);
       unclaimedMutationToast = null;
     } else {
@@ -518,6 +560,43 @@
 
     refreshUndoButtons();
     return true;
+  }
+
+  /**
+   * Render the transient toast for an announced human edit: the entry's
+   * own label on the ordinary .agent-toast card, tagged
+   * data-human-edit="true" and bound to its entry so the one-button
+   * invariant puts the Undo key on it while the entry is newest. No
+   * event fires (reportMutation is the agent mouth; this is the human
+   * one) and no styling vocabulary beyond .agent-toast exists. Guarded
+   * exactly like reportMutation: no toast region host means the push
+   * still succeeded, just silently.
+   *
+   * @param {Object} entry - the just-pushed kind:'human' entry.
+   */
+  function announceHumanEdit(entry) {
+    ensureToastRegion();
+    if (!toastRegionEl) {
+      return;
+    }
+    var toastEl = createToast({ summary: entry.label });
+    toastEl.setAttribute('data-human-edit', 'true');
+    associateUndoEntryWithToast(entry, toastEl);
+  }
+
+  /**
+   * True when the toast was raised by an announced HUMAN edit. Such a
+   * toast speaks for exactly one edit — its own entry's — so the legacy
+   * claim paths (a never-associated entry adopting the newest
+   * Undo-button toast, or a recovery/conflict note stenciling onto it)
+   * must skip it: an agent entry's key or confirm question never lands
+   * on a card that names a human's edit.
+   *
+   * @param {HTMLElement} toastEl
+   * @returns {boolean}
+   */
+  function isHumanToast(toastEl) {
+    return !!toastEl && toastEl.getAttribute('data-human-edit') === 'true';
   }
 
   /**
@@ -546,11 +625,13 @@
     return typeof entry.revision === 'number' && entry.revision !== stateRevision;
   }
 
-  /** @returns {HTMLElement|null} the newest toast that has not been undone. */
+  /** @returns {HTMLElement|null} the newest toast that has not been
+   *  undone and is not an announced human edit's own card (see
+   *  isHumanToast — the legacy claim below must never adopt it). */
   function newestActiveToast() {
     var toasts = liveToasts();
     for (var i = toasts.length - 1; i >= 0; i--) {
-      if (toasts[i].getAttribute('data-undone') !== 'true') {
+      if (toasts[i].getAttribute('data-undone') !== 'true' && !isHumanToast(toasts[i])) {
         return toasts[i];
       }
     }
@@ -688,7 +769,15 @@
     }
 
     var entry = undoStack[undoStack.length - 1];
-    var conflicted =
+    // The conflict gate is the agent path's protection: an agent entry's
+    // restore must confirm when a human edit bumped the revision after
+    // it. A kind:'human' entry skips the gate (see pushUndo's own
+    // comment): its post-bump revision is self-consistent at push, and
+    // any later bump sits ABOVE it in the stack, already popped by the
+    // time it surfaces. Without this, undoing two of your own edits in a
+    // row would demand a confirm for the second — the exact "Ctrl+Z
+    // simply works" behavior this round is here to ship.
+    var conflicted = entry.kind !== 'human' &&
       typeof entry.revision === 'number' && entry.revision !== stateRevision;
     if (conflicted && confirm !== true) {
       showUndoConflict(entry);
@@ -842,6 +931,15 @@
    * @param {Object} entry - the successfully restored undo entry.
    */
   function markUndoEntryToastUndone(entry) {
+    // Harden round (kind:'human'): a human edit's undo is SILENT by
+    // design — it pushed no toast, so it must not annotate, mark undone,
+    // or strip the button from whatever agent toast happens to be live
+    // (ensureToastForEntry would otherwise stencil "Undo completed" onto
+    // the newest toast and mislabel the agent mutation as undone). The
+    // chain, register, and stage are its feedback.
+    if (entry && entry.kind === 'human') {
+      return;
+    }
     var toastEl = ensureToastForEntry(
       entry,
       'Undo completed — ' + entry.label
@@ -916,7 +1014,9 @@
         targetIndex = toasts.indexOf(associatedToast);
       } else if (newestEntry.hasToastAssociation !== true) {
         for (var i = toasts.length - 1; i >= 0; i--) {
-          if (toasts[i].getAttribute('data-undone') !== 'true') {
+          // A human edit's own card never hosts a foreign entry's key
+          // (isHumanToast) — only the entry it announces.
+          if (toasts[i].getAttribute('data-undone') !== 'true' && !isHumanToast(toasts[i])) {
             targetIndex = i;
             break;
           }

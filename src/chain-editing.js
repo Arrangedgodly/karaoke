@@ -496,6 +496,14 @@
     if (window.SimpleView && typeof window.SimpleView.onChainChanged === 'function') {
       window.SimpleView.onChainChanged();
     }
+    // Live-signal surface (2026-09-02): the per-stage taps re-plan after
+    // every accepted edit (a structural edit re-plumbs the chain; the
+    // deferred buildGraph commit lands within the taps' debounce). Same
+    // guarded-ping pattern as the SimpleView call above; StageTaps is
+    // internally one-strike-safe and no agent tool can reach it.
+    if (window.StageTaps && typeof window.StageTaps.onChainChanged === 'function') {
+      window.StageTaps.onChainChanged();
+    }
   }
 
   function persist(model) {
@@ -544,6 +552,184 @@
     }
     window.AgentUI.pushUndo({
       label: request.undoLabel,
+      restore: function () {
+        return apply({
+          source: 'undo',
+          candidate: snapshot.model,
+          layout: snapshot.layout,
+          forceStructural: true,
+          preset: snapshot.preset
+        });
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // HUMAN UNDO (harden round, 2026-09-02 — the critique's remaining P1:
+  // "one chain, one state, two control paths" was untrue while only the
+  // agent's edits were reversible). Every accepted edit arriving as
+  // source 'human' (structural gestures, param fast path) or 'preset'
+  // (human Try / Previous / Next loads) pushes an entry onto the SAME
+  // stack, with the same snapshot shape and the same source:'undo'
+  // restore route, the agent path already uses. The agent's own preset
+  // loads apply as source 'agent' through mcp-tools, so a push here can
+  // never double-stack an agent action.
+  //
+  // Refinement round, 2026-09-03 (critique P2 #2): human undo was
+  // INVISIBLE at the point of need — restores were silent, the entry
+  // point was Ctrl/Cmd+Z alone. A STRUCTURAL human edit (add / remove /
+  // reorder / same-seat replacement, or a preset try-load) now also
+  // announces itself: the pushed entry carries announce:true and
+  // AgentUI renders one transient toast with the entry's OWN operator
+  // label plus the shared Undo key (src/agent-ui.js announceHumanEdit).
+  // Param fast-path commits, the IN/BYP key, and no-op candidates stay
+  // silent (humanEditAnnounces); restores stay silent and guarded
+  // exactly as before.
+  // ---------------------------------------------------------------------
+
+  /** The catalog's own display label for a type, or the type key. */
+  function effectLabelOf(type) {
+    try {
+      if (window.EffectCatalog && typeof window.EffectCatalog.getLabel === 'function') {
+        return window.EffectCatalog.getLabel(type) || type;
+      }
+    } catch (err) {
+      /* stripped harness — the type key is the fallback */
+    }
+    return type;
+  }
+
+  /** A param's own display label from its spec, or the param key. */
+  function paramSpecLabel(type, param) {
+    try {
+      if (window.EffectCatalog && typeof window.EffectCatalog.getParamSpec === 'function') {
+        var specs = window.EffectCatalog.getParamSpec(type) || [];
+        for (var i = 0; i < specs.length; i++) {
+          if (specs[i] && specs[i].id === param) {
+            return specs[i].label || param;
+          }
+        }
+      }
+    } catch (err) {
+      /* stripped harness */
+    }
+    return param;
+  }
+
+  /** One operator-language label for a human edit, derived from the
+   *  edit itself: the param fast path names the knob and both values;
+   *  a preset load names the sound; a structural edit names the verb
+   *  (Add/Remove/Move) and the module(s) it touched. Never throws — a
+   *  label failure degrades to the generic verb, not a lost entry. */
+  function humanUndoLabel(request, previous, candidate, change) {
+    try {
+      if (change) {
+        return effectLabelOf(change.type) + ' ' + paramSpecLabel(change.type, change.param) +
+          ' ' + change.previousValue + ' → ' + change.value;
+      }
+      if (request.source === 'preset' && request.preset && typeof request.preset.name === 'string') {
+        return "Try '" + request.preset.name + "'";
+      }
+      var prevIds = {};
+      var candIds = {};
+      var i;
+      for (i = 0; i < previous.length; i++) {
+        prevIds[previous[i].id] = previous[i];
+      }
+      for (i = 0; i < candidate.length; i++) {
+        candIds[candidate[i].id] = candidate[i];
+      }
+      if (candidate.length > previous.length) {
+        for (i = 0; i < candidate.length; i++) {
+          if (!prevIds[candidate[i].id]) {
+            return 'Add ' + effectLabelOf(candidate[i].type);
+          }
+        }
+      }
+      if (candidate.length < previous.length) {
+        for (i = 0; i < previous.length; i++) {
+          if (!candIds[previous[i].id]) {
+            return 'Remove ' + effectLabelOf(previous[i].type);
+          }
+        }
+      }
+      // Same size: a same-ID type change reads as a replacement; an
+      // order change names the first displaced module and where it went.
+      for (i = 0; i < previous.length; i++) {
+        if (previous[i].id === candidate[i].id && previous[i].type !== candidate[i].type) {
+          return 'Replace ' + effectLabelOf(previous[i].type) + ' with ' + effectLabelOf(candidate[i].type);
+        }
+      }
+      for (i = 0; i < previous.length; i++) {
+        if (previous[i].id !== candidate[i].id) {
+          var moved = candidate[i];
+          return i === 0
+            ? 'Move ' + effectLabelOf(moved.type) + ' to the start'
+            : 'Move ' + effectLabelOf(moved.type) + ' after ' + effectLabelOf(candidate[i - 1].type);
+        }
+      }
+      return 'Edit chain';
+    } catch (err) {
+      return 'Edit chain';
+    }
+  }
+
+  /** True when the candidate differs from the previous accepted model in
+   *  more than per-effect bypass flags — i.e. the chain's COMPOSITION
+   *  (which modules, in which order, with which settings) changed. A
+   *  bypass-flag-only candidate and a no-op candidate both read false. */
+  function chainCompositionChanged(previous, candidate) {
+    if (!Array.isArray(previous) || !Array.isArray(candidate)) {
+      return true;
+    }
+    if (previous.length !== candidate.length) {
+      return true;
+    }
+    for (var i = 0; i < previous.length; i++) {
+      var before = previous[i];
+      var after = candidate[i];
+      if (!before || !after || before.id !== after.id || before.type !== after.type) {
+        return true;
+      }
+      if (JSON.stringify(before.params || {}) !== JSON.stringify(after.params || {})) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** True when a human edit is STRUCTURAL for announcement purposes and
+   *  so earns the visible entry point (critique P2 #2, 2026-09-03): it
+   *  changes what the chain IS — an add, remove, reorder, or same-seat
+   *  replacement — or swaps the whole chain (a preset try-load). False
+   *  for the param fast path (every knob/pad/trim commit: a toast per
+   *  tweak is noise, and the operator can re-turn a knob) and for a
+   *  bypass-flag-only or no-op candidate (the IN/BYP key keeps the
+   *  module and its settings in the chain; its own struck-code state is
+   *  its feedback). The decision is derived from the edit itself, next
+   *  to the ONE label derivation above — never a second vocabulary. */
+  function humanEditAnnounces(request, previous, candidate, change) {
+    if (change) {
+      return false;
+    }
+    if (request.source === 'preset') {
+      return true;
+    }
+    return chainCompositionChanged(previous, candidate);
+  }
+
+  function pushHumanUndo(request, snapshot, candidate, change) {
+    if (
+      (request.source !== 'human' && request.source !== 'preset') ||
+      !window.AgentUI ||
+      typeof window.AgentUI.pushUndo !== 'function'
+    ) {
+      return;
+    }
+    window.AgentUI.pushUndo({
+      kind: 'human',
+      label: humanUndoLabel(request, snapshot.model, candidate, change),
+      announce: humanEditAnnounces(request, snapshot.model, candidate, change),
       restore: function () {
         return apply({
           source: 'undo',
@@ -668,6 +854,11 @@
       markAcceptedEdit(request);
       var saved = persist(candidate);
       pushAgentUndo(request, snapshot);
+      // AFTER markAcceptedEdit, so the entry's captured revision is the
+      // one this edit produced (noteHumanEdit already bumped inside
+      // markAcceptedEdit for human/preset sources) — a human entry is
+      // self-consistent at push time by construction.
+      pushHumanUndo(request, snapshot, candidate, change);
       hasAcceptedState = true;
       var result = {
         applied: true,
