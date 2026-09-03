@@ -898,7 +898,7 @@
   var CHAIN_RULES = [
     {
       id: 'autogain-max-one',
-      rule: 'At most one Auto Gain utility. Simple adds it when loading a sound; Advanced can move, bypass or remove it. Auto learns a session level and holds it across presets. Manual gain is -24..+24 dB. Its audio-thread limiter caps every output channel at -12 dBFS, so it is a bounded signal source, not additional unrestricted gain in the effect-chain +12 dB budget. Microphone changes reset learning. Raw microphone metering and emergency Bypass remain unadjusted.',
+      rule: 'At most one Auto Gain utility. Simple adds it when loading a sound and carries its session adjustment between sounds. Advanced keeps it opt-in: preset loads never carry it from the previous chain, but a preset may contain it and a person or agent may add, move, bypass, or remove it. Manual gain is -24..+24 dB. Its audio-thread limiter caps every output channel at -12 dBFS, so it is a bounded signal source, not additional unrestricted gain in the effect-chain +12 dB budget. Microphone changes reset learning. Raw microphone metering and emergency Bypass remain unadjusted.',
       enforcement: 'reject duplicates; audio-thread peak bound'
     },
     {
@@ -2020,7 +2020,7 @@
       humanOnly: ['Start and audio input', 'Bypass', 'watchdog restore']
     };
     if (registryTypes().indexOf('autogain') !== -1) {
-      capabilities.chainRules['autogain-max-one'] = 'One Auto Gain; Simple adds it on sound load; retained across presets. Manual +/-24 dB; own -12 dBFS sample cap, excluded from the +12 dB effect budget.';
+      capabilities.chainRules['autogain-max-one'] = 'One Auto Gain. Simple adds and retains it across sounds; Advanced preset loads keep it opt-in. Manual +/-24 dB; own -12 dBFS sample cap, excluded from the +12 dB effect budget.';
       capabilities.humanOnly.push('Microphone channel choice and Auto Gain recheck');
       if (window.InputPreparation && window.AutoGain) {
         var input = window.InputPreparation.snapshot();

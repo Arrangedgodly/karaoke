@@ -80,8 +80,12 @@
     },
     prepareModel: function (model, previous, advanced) {
       if (!model.length || model.some(function (e) { return e.type === 'autogain'; })) return model;
+      // Simple treats Auto Gain as microphone preparation and carries the
+      // session adjustment between sounds. Advanced treats it as an
+      // ordinary optional effect: a preset load must use the preset's own
+      // chain unless that preset explicitly contains Auto Gain.
+      if (advanced) return model;
       var previousIndex = (previous || []).findIndex(function (e) { return e.type === 'autogain'; });
-      if (advanced && previousIndex < 0) return model;
       if (model.length >= 16) {
         var error = new Error('Auto Gain needs one free effect slot. Remove an effect in Advanced, then load this sound again.');
         error.code = 'node-count-cap'; error.count = model.length + 1; throw error;
@@ -92,7 +96,7 @@
       var entry = previousIndex >= 0 ? Object.assign({}, previous[previousIndex], { id: id })
         : { id: id, type: 'autogain', params: { mode: 'auto', gainDb: 0 } };
       var prepared = model.slice();
-      prepared.splice(advanced ? Math.min(previousIndex, model.length - 1) : 0, 0, entry);
+      prepared.splice(0, 0, entry);
       return prepared;
     },
     onChainChanged: emit

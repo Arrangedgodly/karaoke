@@ -42,14 +42,16 @@ async function run() {
     assert.equal(gain.snapshot(second).gainDb, 5); assert.equal(gain.gateThreshold(-20, gate), -20);
     def.applyParam(second, 'mode', 'auto'); assert.equal(second.worklet.port.messages.at(-1).gainDb, held);
   });
-  check('Simple inserts once and Advanced preserves explicit position and controls', () => {
+  check('Simple inserts once and Advanced keeps Auto Gain strictly opt-in', () => {
     const preset = [{ id: 'eq', type: 'eq' }, { id: 'lim', type: 'limiter' }];
     const simple = gain.prepareModel(preset); assert.equal(simple[0].type, 'autogain'); assert.equal(preset.length, 2);
     assert.equal(gain.prepareModel(simple).length, 3);
     assert.equal(gain.prepareModel(preset, [], true), preset);
     const previous = [preset[0], { id: 'custom', type: 'autogain', params: { mode: 'manual', gainDb: 4 }, bypassed: true }, preset[1]];
     const advanced = gain.prepareModel(preset, previous, true);
-    assert.equal(advanced[1].id, 'custom'); assert.equal(advanced[1].params.gainDb, 4); assert(advanced[1].bypassed);
+    assert.deepEqual(advanced, preset);
+    const explicit = [preset[0], previous[1], preset[1]];
+    assert.equal(gain.prepareModel(explicit, previous, true), explicit);
     assert.equal(advanced.at(-1).type, 'limiter');
     assert.throws(() => gain.prepareModel(Array.from({ length: 16 }, (_, i) => ({ id: String(i), type: 'gain' }))));
   });

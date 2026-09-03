@@ -752,9 +752,12 @@ async function main() {
     var advancedCaps = await getTool(autoBox, 'get_capabilities').execute({ focus: 'policy' });
     check(advancedCaps.microphone.view === 'advanced', 'Auto Gain: agents can read the view that determines preset preparation');
     var autoNext = await getTool(autoBox, 'load_preset').execute({ name: 'Warm Ballad', namespace: 'factory' });
-    var retained = autoBox.ChainEditing.getModel()[0];
-    check(autoNext.applied && retained.id === autoId && retained.params.mode === 'manual' && retained.params.gainDb === 24,
-      'Auto Gain: Advanced agent preset loads preserve the utility and manual setting');
+    var advancedModel = autoBox.ChainEditing.getModel();
+    check(autoNext.applied && !advancedModel.some(function (entry) { return entry.type === 'autogain'; }),
+      'Auto Gain: Advanced agent preset loads do not carry the Simple utility into the selected chain');
+    var optionalAdd = await getTool(autoBox, 'add_node').execute({ type: 'autogain', position: 0 });
+    check(optionalAdd.applied && autoBox.ChainEditing.getModel()[0].type === 'autogain',
+      'Auto Gain: Advanced keeps the utility available as an explicit add-on');
     var beforeDuplicate = JSON.stringify(autoBox.ChainEditing.getModel());
     var duplicate = autoBox.ChainEditing.getModel();
     duplicate.unshift({ id: 'duplicate', type: 'autogain', params: { mode: 'auto', gainDb: 0 } });
