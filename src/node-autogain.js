@@ -99,6 +99,14 @@
   };
   window.EffectCatalog.register('autogain', {
     label: 'Auto Gain', plainLabel: 'Prepares your microphone level', experimental: false,
+    // 'Auto Gain' and 'Autotune' both derive AUT; this family takes ATG so
+    // the rail never prints one code for two families.
+    code: 'ATG',
+    // Opens wide enough for the mode pads, the gain knob, and the setup
+    // and warning lines to read without a resize (2026-09-03, owner
+    // direction): this unit is prose as much as controls, and at the
+    // board's shared floor its guidance wrapped to a column.
+    defaultWidthPx: 336,
     paramSpec: [
       { id: 'mode', label: 'Mode', values: ['auto', 'manual'], default: 'auto' },
       { id: 'gainDb', label: 'Manual gain', min: -24, max: 24, default: 0, step: 0.5, unit: 'dB' }

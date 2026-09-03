@@ -269,6 +269,11 @@
   // crossfade of two snap grids is inaudible next to the retune glide).
   window.EffectCatalog.register('autotune', {
     label: 'Autotune',
+    // Opens wide enough for the twelve KEY pads to lay out as two rows of
+    // six, with Scale on one line and Retune Speed beside Mix (2026-09-03,
+    // owner direction). Narrower and the key grid stacks into a column
+    // that pushes the board into a scrollbar on the fixed one-page deck.
+    defaultWidthPx: 320,
     // wayfinder #46 — see docs/ultron/research/plain-effect-labels.md
     plainLabel: 'Keeps you on pitch',
     // MCP-1 (cycle 3): the experimental status declared at the type's own

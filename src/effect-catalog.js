@@ -41,6 +41,8 @@
       label: definition.label,
       plainLabel: definition.plainLabel,
       paramSpec: definition.paramSpec.map(cloneParam),
+      code: definition.code,
+      defaultWidthPx: definition.defaultWidthPx,
       experimental: definition.experimental,
       latencySeconds: isFiniteNumber(definition.latencySeconds) ? definition.latencySeconds : 0,
       create: definition.create,
@@ -143,6 +145,24 @@
         (!isFiniteNumber(definition.latencySeconds) || definition.latencySeconds < 0)) {
       throw new Error('EffectCatalog.register: definition.latencySeconds must be a non-negative finite number when supplied.');
     }
+    // The silkscreen code is DERIVED from the label (canvas.js's
+    // familyInitials — a future type codes itself, no hardcoded map). This
+    // optional override exists for the one case derivation cannot settle:
+    // two labels whose first three letters collide, where the rail would
+    // print the same code on two different families and break the
+    // redundant encoding colour depends on. It stays here, beside the
+    // label it overrides, rather than in a lookup table in the renderer.
+    if (hasOwn(definition, 'code') && definition.code !== undefined &&
+        !/^[A-Z]{2,4}$/.test(String(definition.code))) {
+      throw new Error('EffectCatalog.register: definition.code must be 2-4 uppercase letters when supplied.');
+    }
+    // The board width this type opens at. Absent means the shared
+    // smallest-safe default; a type declares its own only when its
+    // control field genuinely needs the room to lay out as designed.
+    if (hasOwn(definition, 'defaultWidthPx') && definition.defaultWidthPx !== undefined &&
+        (!isFiniteNumber(definition.defaultWidthPx) || definition.defaultWidthPx <= 0)) {
+      throw new Error('EffectCatalog.register: definition.defaultWidthPx must be a positive finite number when supplied.');
+    }
 
     var seenIds = Object.create(null);
     definition.paramSpec.forEach(function (param) {
@@ -175,6 +195,26 @@
 
   function getLabel(type) {
     return hasOwn(definitions, type) ? definitions[type].label : null;
+  }
+
+  /** The registered silkscreen code override, or null to let the renderer
+   *  derive one from the label. */
+  function getCode(type) {
+    if (!hasOwn(definitions, type)) {
+      return null;
+    }
+    var code = definitions[type].code;
+    return typeof code === 'string' && code ? code : null;
+  }
+
+  /** The registered board width this type opens at, or null for the
+   *  board's shared default. */
+  function getDefaultWidthPx(type) {
+    if (!hasOwn(definitions, type)) {
+      return null;
+    }
+    var w = definitions[type].defaultWidthPx;
+    return isFiniteNumber(w) && w > 0 ? w : null;
   }
 
   // The plain-language half of the effect summary row (wayfinder #46) —
@@ -323,6 +363,8 @@
     hasType: hasType,
     getDefinition: getDefinition,
     getLabel: getLabel,
+    getCode: getCode,
+    getDefaultWidthPx: getDefaultWidthPx,
     getPlainLabel: getPlainLabel,
     getParamSpec: getParamSpec,
     getParam: getParam,

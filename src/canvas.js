@@ -132,13 +132,36 @@
     return w;
   }
 
+  /** The width a type OPENS at, before anyone touches the grip: its
+   *  registered default when it declares one, otherwise the board's
+   *  shared smallest-safe width. A type declares its own only when its
+   *  control field needs the room to lay out as designed — opening
+   *  narrower than that costs the operator a resize on every insert, and
+   *  on a fixed one-page console it can push the board into a scrollbar.
+   *  Single-sourced in the type registration beside the label; the
+   *  resize floor and ceiling still clamp it. */
+  function defaultCardW(type) {
+    var registered = type && window.EffectCatalog &&
+      typeof window.EffectCatalog.getDefaultWidthPx === 'function'
+      ? window.EffectCatalog.getDefaultWidthPx(type)
+      : null;
+    return clampCardW(typeof registered === 'number' ? registered : undefined);
+  }
+
   /** A card's expanded width in px: its manually-resized width clamped
-   *  into the condensed range, otherwise the uniform default. */
-  function cardWidth(id) {
+   *  into the condensed range, otherwise its type's opening width. */
+  function cardWidth(id, type) {
     if (typeof cardWidths[id] === 'number') {
       return clampCardW(cardWidths[id]);
     }
-    return clampCardW(undefined);
+    return defaultCardW(type);
+  }
+
+  /** A card element's effect type, for the width lookup above. */
+  function cardType(card) {
+    return card && typeof card.getAttribute === 'function'
+      ? card.getAttribute('data-family')
+      : null;
   }
 
   /** Paint one card's own width (the only per-id layout fact left — see
@@ -150,7 +173,7 @@
     }
     card.style.width = (card.classList && card.classList.contains('collapsed')
       ? CARD_W_COLLAPSED_PX
-      : cardWidth(id)) + 'px';
+      : cardWidth(id, cardType(card))) + 'px';
   }
 
   /** Repaint every card's width from the current stored/default state. */
@@ -1253,6 +1276,16 @@
    * @returns {string} 3-letter silkscreen code (GAIN, COM, DEL, NOI...)
    */
   function familyInitials(type) {
+    // A registered override wins (2026-09-03): "Auto Gain" and "Autotune"
+    // both derive AUT, which printed the same code on two families and
+    // broke the redundant encoding that keeps colour from being the only
+    // signal. Auto Gain registers ATG. Everything else still codes itself.
+    var registered = window.EffectCatalog && typeof window.EffectCatalog.getCode === 'function'
+      ? window.EffectCatalog.getCode(type)
+      : null;
+    if (registered) {
+      return registered;
+    }
     var label = effectLabel(type);
     return String(label).replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || String(type).slice(0, 3).toUpperCase();
   }
@@ -2375,7 +2408,7 @@
         card: card,
         id: id,
         startX: event && typeof event.clientX === 'number' ? event.clientX : 0,
-        originW: cardWidth(id),
+        originW: cardWidth(id, cardType(card)),
         hadStoredWidth: Object.prototype.hasOwnProperty.call(cardWidths, id),
         originStoredW: cardWidths[id],
         moved: false
@@ -2485,7 +2518,8 @@
       } else {
         delete cardWidths[resizeDrag.id];
       }
-      resizeDrag.card.style.width = cardWidth(resizeDrag.id) + 'px';
+      resizeDrag.card.style.width =
+        cardWidth(resizeDrag.id, cardType(resizeDrag.card)) + 'px';
       resizeDrag = null;
     }
     dragActive = false;

@@ -351,6 +351,10 @@ loadSrc('node-reverb.js');
 loadSrc('node-limiter.js');
 loadSrc('node-distortion.js');
 loadSrc('node-chorus.js');
+// index.html loads Auto Gain before the gate (its own script order is what
+// registration order means here), and it needs InputCalibration at load.
+loadSrc('input-calibration.js');
+loadSrc('node-autogain.js');
 loadSrc('node-gate.js');
 loadSrc('node-autotune.js');
 loadSrc('canvas.js');
@@ -383,6 +387,66 @@ var NEW_TYPES = [
   // suffix (cycle-3 scope: autotune only).
   { type: 'autotune', label: 'Autotune', initials: 'AUT', params: 4, experimental: true }
 ];
+
+// ---------------------------------------------------------------------
+// SILKSCREEN CODES ARE UNIQUE (2026-09-03).
+//
+// The code is DERIVED from the label's first three letters — a future type
+// codes itself, no hardcoded map. 'Auto Gain' and 'Autotune' both derive
+// AUT, so the rail printed one code for two families and the redundant
+// encoding that keeps colour from ever being the only signal quietly broke.
+// Auto Gain now registers an explicit code; every other type still derives.
+// This guards the property that actually matters: whatever the source, no
+// two registered families may share a code.
+// ---------------------------------------------------------------------
+function silkscreenCode(type) {
+  var registered = windowStub.EffectCatalog.getCode(type);
+  if (registered) {
+    return registered;
+  }
+  var label = windowStub.EffectCatalog.getLabel(type) || type;
+  return String(label).replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+}
+
+(function codesAreUnique() {
+  var seen = Object.create(null);
+  var collisions = [];
+  windowStub.EffectCatalog.getAllTypes().forEach(function (type) {
+    var code = silkscreenCode(type);
+    if (seen[code]) {
+      collisions.push(code + ' (' + seen[code] + ' + ' + type + ')');
+    }
+    seen[code] = type;
+  });
+  check(collisions.length === 0,
+    'every registered family prints its own silkscreen code' +
+      (collisions.length ? ' — collisions: ' + collisions.join(', ') : ''));
+  check(windowStub.EffectCatalog.getCode('autogain') === 'ATG',
+    'Auto Gain registers ATG rather than deriving AUT');
+  check(windowStub.EffectCatalog.getCode('autotune') === null &&
+    silkscreenCode('autotune') === 'AUT',
+    'Autotune still DERIVES its code — the override is the exception, not the rule');
+})();
+
+// The width a type opens at, for the types that declare one. A card that
+// opens narrower than its control field needs costs a resize on every
+// insert, and on the fixed one-page console it can push the board into a
+// scrollbar (2026-09-03, owner direction).
+(function openingWidths() {
+  check(windowStub.EffectCatalog.getDefaultWidthPx('autogain') === 336,
+    'Auto Gain opens at 336px — room for its mode pads, gain knob and guidance');
+  check(windowStub.EffectCatalog.getDefaultWidthPx('autotune') === 320,
+    'Autotune opens at 320px — room for twelve key pads as two rows of six');
+  check(windowStub.EffectCatalog.getDefaultWidthPx('gain') === null,
+    'a type that declares no width keeps the shared board default');
+  windowStub.EffectCatalog.getAllTypes().forEach(function (type) {
+    var w = windowStub.EffectCatalog.getDefaultWidthPx(type);
+    if (w !== null) {
+      check(w >= 144 && w <= 640,
+        type + ' opens inside the resize range the board itself enforces (144-640px)');
+    }
+  });
+})();
 
 function chipFor(type) {
   var found = null;
@@ -458,7 +522,10 @@ function rowOfClass(row, cls) {
 console.log('A. registry + palette');
 
 var allTypes = windowStub.EffectCatalog.getAllTypes();
-check(allTypes.length === 10, 'ten node types registered (6 existing + 4 new)');
+// The census had never loaded Auto Gain, so it counted ten while the app
+// shipped eleven; loading it here is what lets the code-uniqueness guard
+// above see the real catalog.
+check(allTypes.length === 11, 'eleven node types registered');
 NEW_TYPES.forEach(function (t) {
   check(allTypes.indexOf(t.type) !== -1, t.type + ' is registered');
   check(
@@ -468,16 +535,16 @@ NEW_TYPES.forEach(function (t) {
 });
 check(
   allTypes.join(',') ===
-    'gain,compressor,eq,delay,reverb,limiter,distortion,chorus,gate,autotune',
+    'gain,compressor,eq,delay,reverb,limiter,distortion,chorus,autogain,gate,autotune',
   'registration order matches index.html script order (within-group chip order)'
 );
 check(
-  paletteListEl.querySelectorAll('.node-chip').length === 10,
-  'palette renders one chip per registered type (10)'
+  paletteListEl.querySelectorAll('.node-chip').length === 11,
+  'palette renders one chip per registered type (11)'
 );
 check(
-  paletteListEl.children.length === 15,
-  'flat palette list carries 10 chips + 5 group headers as direct children'
+  paletteListEl.children.length === 16,
+  'flat palette list carries 11 chips + 5 group headers as direct children'
 );
 check(
   windowStub.Sortable.instances.length === 0,
@@ -931,10 +998,21 @@ windowStub.ChainCanvas.renderModel(
   })
 );
 var helpCards = cards();
-check(helpCards.length === 10, 'help-layer render builds all ten cards');
+check(helpCards.length === 11, 'help-layer render builds a card for every type');
+
+// Auto Gain (PR #74) registers no plain-language help for its two params,
+// so its rows carry no .sr-only help span and write no register help line
+// where every other effect does. Named here rather than quietly skipped:
+// it is a gap in that module, not a property of the help layer, and the
+// assertion below fails the moment a SECOND type joins the exemption.
+var HELP_EXEMPT = ['autogain'];
+check(HELP_EXEMPT.length === 1 && HELP_EXEMPT[0] === 'autogain',
+  'exactly one type is exempt from the plain-language help layer (autogain)');
 
 var helpRowCount = 0;
-helpCards.forEach(function (card) {
+helpCards.filter(function (card) {
+  return HELP_EXEMPT.indexOf(card.attrs['data-family']) === -1;
+}).forEach(function (card) {
   var type = card.attrs['data-family'];
   var nodeId = card.attrs['data-node-id'];
   var rows = paramRows(card);
@@ -1222,7 +1300,9 @@ var GROUP_HEADERS = [
   { id: 'movement', label: 'Add movement', members: ['chorus'] },
   { id: 'pitch', label: 'Change your pitch', members: ['autotune'] },
   { id: 'polish', label: 'Polish your sound', members: ['gain', 'compressor', 'delay', 'reverb'] },
-  { id: 'safe', label: 'Keep it safe', members: ['limiter', 'gate'] }
+  // PR #75 moved Auto Gain out of 'Polish your sound' into 'Keep it safe';
+  // within a group, chips follow registration order.
+  { id: 'safe', label: 'Keep it safe', members: ['limiter', 'autogain', 'gate'] }
 ];
 
 var headerEls = paletteListEl.querySelectorAll('.palette-group-label');
@@ -1274,8 +1354,8 @@ check(
 check(
   paletteListEl.children
     .filter(function (c) { return c.tagName === 'BUTTON'; })
-    .length === 10,
-  'the only interactive palette elements are the ten chip buttons (no new layer)'
+    .length === 11,
+  'the only interactive palette elements are the chip buttons (no new layer)'
 );
 
 // Within-group order is registration order (section A's registry check):
