@@ -649,15 +649,32 @@ function nameplateSandbox(opts) {
   return { s: s, draws: draws, canvas: canvas };
 }
 
-/** Split the current frame's rects into lit (lamp mid / clip) and print. */
+// The lit ladder's inks, in the sandbox's own token values.
+const NP_GREEN = '#4ea96b';
+const NP_AMBER = '#ffd75e';
+const NP_RED = '#e4574a';
+const NP_PRINT = '#c9cedc';
+
+/** Split the current frame's rects into the ladder's zones and print. A
+ *  cell's glyph row is recoverable from its y: the paint lays cells on a
+ *  4px pitch with a 3px dot, so y = 4*row + 1. */
 function nameplateState(draws) {
-  let lit = 0, print = 0, clip = 0, maxLitX = -1;
+  let green = 0, amber = 0, red = 0, print = 0, maxLitX = -1;
+  const rowInk = {};
   draws.rects.forEach(function (r) {
-    if (r.fill === '#ffd75e') { lit++; if (r.x > maxLitX) maxLitX = r.x; }
-    else if (r.fill === '#e4574a') { clip++; lit++; if (r.x > maxLitX) maxLitX = r.x; }
-    else { print++; }
+    const row = Math.round((r.y - 1) / 4);
+    if (r.fill === NP_PRINT) { print++; return; }
+    if (r.fill === NP_GREEN) { green++; }
+    else if (r.fill === NP_AMBER) { amber++; }
+    else if (r.fill === NP_RED) { red++; }
+    if (r.x > maxLitX) { maxLitX = r.x; }
+    (rowInk[row] = rowInk[row] || new Set()).add(r.fill);
   });
-  return { lit: lit, clip: clip, print: print, total: lit + print, front: maxLitX };
+  const lit = green + amber + red;
+  return {
+    lit: lit, green: green, amber: amber, clip: red, print: print,
+    total: lit + print, front: maxLitX, rowInk: rowInk,
+  };
 }
 
 const NP_TOTAL_CELLS = 116; // the 8 glyphs' set cells, counted from the table
@@ -715,14 +732,35 @@ function sectionD() {
   check(fed.lit >= duringRise.lit && fed.lit > 0,
     'D5: the sweep can only ADD light — a quiet real window never darkens it');
 
-  // Clip colour belongs to the real signal alone; a sweep never claims one.
-  check(fed.clip === 0 && duringRise.clip === 0,
-    'D5: no sweep frame ever paints the clip colour');
-  const clipPairs = new Float32Array(136 * 2);
-  for (let c = 0; c < 136; c++) { clipPairs[c * 2] = -0.99; clipPairs[c * 2 + 1] = 0.995; }
-  Lamps.feedScope(clipPairs, 136, -0.04);
-  check(nameplateState(env.draws).clip > 0,
-    'D5: a genuinely clipping window does paint the clip colour');
+  // THE LADDER. Colour belongs to the ROW, not to the level — the word is
+  // 47 little VU ladders, so a loud syllable pushes red through the tops
+  // of the letters exactly as it pushes red up the OUT bar.
+  const full = new Float32Array(136 * 2);
+  for (let c = 0; c < 136; c++) { full[c * 2] = -1; full[c * 2 + 1] = 1; }
+  Lamps.restNameplate(); // end the sweep so this reads the real feed alone
+  Lamps.feedScope(full, 136, 0);
+  const ladder = nameplateState(env.draws);
+  check(ladder.lit === NP_TOTAL_CELLS && ladder.green > 0 && ladder.amber > 0 && ladder.clip > 0,
+    'D5: a full-scale window lights the whole word across all three zones');
+  const inkOf = function (row) {
+    const set = ladder.rowInk[row];
+    return set && set.size === 1 ? Array.from(set)[0] : 'MIXED';
+  };
+  check(inkOf(0) === NP_RED && inkOf(1) === NP_AMBER &&
+    inkOf(2) === NP_GREEN && inkOf(6) === NP_GREEN,
+    'D5: the ladder runs green at the baseline, amber, then red at the top row');
+
+  // Quiet is quiet: the dB scale lifts the response, it does not add gain.
+  const quiet = new Float32Array(136 * 2);
+  for (let c = 0; c < 136; c++) { quiet[c * 2] = -0.0316; quiet[c * 2 + 1] = 0.0316; }
+  Lamps.feedScope(quiet, 136, -30); // -30 dBFS, a quiet passage
+  const q = nameplateState(env.draws);
+  check(q.clip === 0 && q.amber === 0 && q.green > 0 && q.lit < NP_TOTAL_CELLS,
+    'D5: a -30 dBFS window stays entirely in the green zone, partly lit');
+  const silent = new Float32Array(136 * 2);
+  Lamps.feedScope(silent, 136, -120);
+  check(nameplateState(env.draws).lit === 0,
+    'D5: silence still lights nothing — the resting face is unchanged');
 
   // An engine stop ends the proof with it.
   Lamps.powerUp();

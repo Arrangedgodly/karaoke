@@ -204,6 +204,7 @@
     if (colors) {
       return;
     }
+    npRowInk = null; // the ladder is built from these tokens
     colors = {
       low: token('--pm-vu-low', DEFAULTS.low),
       mid: token('--pm-vu-mid', DEFAULTS.mid),
@@ -431,15 +432,44 @@
     return true;
   }
 
-  /** Alpha for a column by its local amplitude (linear): a sqrt lift so
-   *  conversational level (-30..-15 dB) already carries visible ink
-   *  while loud passages push to full — luminance as level, honestly. */
-  function columnAlpha(amp) {
+  /** A window's local amplitude as a unit position on the meters' own
+   *  dB scale (SCALE_MIN..0 dBFS).
+   *
+   *  The envelope carries LINEAR peak amplitude, and every lamp on this
+   *  machine reads dB — which is also how hearing works, and why a sqrt
+   *  lift on the linear value was never the right curve: it crowded the
+   *  quiet two thirds of real speech into the bottom of every scale. A
+   *  voice at -30 dBFS sits a third of the way up a meter and was
+   *  reading as a twentieth of full amplitude. Mapping through dB puts
+   *  these surfaces on the same scale as the VU ladders beside them, so
+   *  the word, the scopes and the meters agree about what a level looks
+   *  like.
+   *
+   *  Silence and anything under the floor return 0, so the resting face
+   *  is unchanged: this redistributes the range, it never adds gain. */
+  function envelopeUnit(amp) {
     var a = amp < 0 ? -amp : amp;
-    if (a > 1) {
-      a = 1;
+    if (a >= 1) {
+      return 1;
     }
-    return 0.3 + 0.7 * Math.sqrt(a);
+    if (!(a > 0)) {
+      return 0;
+    }
+    var db = 20 * Math.log10(a);
+    if (db <= SCALE_MIN) {
+      return 0;
+    }
+    return (db - SCALE_MIN) / -SCALE_MIN;
+  }
+
+  /** Alpha for a scope column by its local amplitude: the ink follows the
+   *  same dB scale, so a quiet passage reads instead of fading to almost
+   *  nothing. The column's HEIGHT stays linear — that geometry is a
+   *  literal picture of the waveform, and stretching it would be a lie
+   *  about the shape. Brightness carries the sensitivity; the silhouette
+   *  keeps the truth. */
+  function columnAlpha(amp) {
+    return 0.3 + 0.7 * envelopeUnit(amp);
   }
 
   /** Draw one frame of the output envelope: min/max columns in display
@@ -585,6 +615,7 @@
   var npSweepEnd = 0;
   var npSweepStatic = false;
   var npSweepFrame = null;
+  var npRowInk = null; // one zone colour per row, resolved once
 
   function npNow() {
     try {
@@ -664,6 +695,28 @@
     }
   }
 
+  /** The lit ink for each row, bottom-up: the word is 47 little VU
+   *  ladders standing side by side, and a ladder's colour belongs to the
+   *  SEGMENT, not to the level. Row 0 (the baseline) sits near the -60
+   *  floor and row 6 near 0 dBFS, so the zone edges the meters use
+   *  (-20 green→amber, -6 amber→clip) fall in the same places here. That
+   *  is what makes a loud syllable push red through the tops of the
+   *  letters the way it pushes red up the OUT bar: one lamp language,
+   *  read twice. Rebuilt whenever the tokens are resolved. */
+  function nameplateRowInk() {
+    if (npRowInk) {
+      return npRowInk;
+    }
+    var ink = [];
+    for (var r = 0; r < NP_ROWS; r++) {
+      // The row's own centre on the meters' dB scale.
+      var db = SCALE_MIN + ((r + 0.5) / NP_ROWS) * -SCALE_MIN;
+      ink.push(zoneColor(db));
+    }
+    npRowInk = ink;
+    return ink;
+  }
+
   /** Expand the glyph table into one column-major cell map. */
   function buildNameplateCells() {
     if (npCells) {
@@ -734,19 +787,19 @@
 
   /** Paint the word. `pairs`/`columns` absent (or all silence) paints the
    *  resting face: every letterform cell in print, nothing lit. The lit
-   *  height of a column is sqrt-lifted like the scope's ink, so
-   *  conversational level already climbs a row or two instead of sitting
-   *  dark until someone shouts. */
+   *  height of a column is read off the meters' dB scale, and each ROW
+   *  carries that scale's own zone colour, so the word climbs green to
+   *  amber to red exactly as the MIC IN and OUT ladders beside it. */
   function drawNameplate(pairs, columns) {
     buildNameplateCells();
     var ctx = npCtx;
     var cell = npW / npCols;
     var dot = Math.max(1, Math.round(cell) - 1);
     var sweepT = npSweepEnd > 0 ? npNow() : 0;
+    var rowInk = nameplateRowInk();
     ctx.clearRect(0, 0, npW, npH);
     for (var x = 0; x < npCols; x++) {
       var lit = 0;
-      var clipped = false;
       if (pairs && columns) {
         var from = Math.floor((x * columns) / npCols);
         var to = Math.floor(((x + 1) * columns) / npCols);
@@ -765,16 +818,15 @@
         if (amp > 1) {
           amp = 1;
         }
-        if (amp >= 0.985) {
-          clipped = true;
-        }
-        lit = Math.round(Math.sqrt(amp) * NP_ROWS);
+        lit = Math.round(envelopeUnit(amp) * NP_ROWS);
       }
       if (sweepT) {
         // The self-test can only ADD light: the real reading always wins
         // when it is the brighter of the two, so a live signal is never
-        // hidden by the proof running over it. Clip colour is untouched
-        // and stays the real signal's alone — a sweep never claims one.
+        // hidden by the proof running over it. The sweep lights the same
+        // ladder a full-scale signal would, red row included — that is
+        // what a lamp test IS, and it is exactly what the meters' own
+        // sweep does. It still reports nothing and latches nothing.
         var swept = npSweepRows(x, sweepT);
         if (swept > lit) {
           lit = swept;
@@ -787,7 +839,8 @@
           continue;
         }
         var on = lit > 0 && y >= litFrom;
-        ctx.fillStyle = on ? (clipped ? colors.clip : colors.mid) : colors.print;
+        // Glyph rows run top-down; the ladder runs bottom-up.
+        ctx.fillStyle = on ? rowInk[NP_ROWS - 1 - y] : colors.print;
         // Snap every dot to the device grid: at this size a half-pixel
         // edge is the difference between a machined cell and a smudge.
         var px = Math.round((x * cell + (cell - dot) / 2) * npDpr) / npDpr;
