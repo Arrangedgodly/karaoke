@@ -825,12 +825,46 @@
         // Vertical drag: 150 px = full sweep; Shift = fine (x0.2). Each
         // tick writes input.value and dispatches a REAL 'input' event —
         // the commit pipeline above cannot tell drag from keyboard.
+        //
+        // Pointer capture is useful, but not load-bearing: it can be
+        // unavailable or lost when its element leaves the document.
+        // Temporary document listeners keep the gesture continuous after
+        // the pointer leaves the 40px knob, then retire on every end path.
         var dragging = false;
         var lastY = 0;
+        var activePointerId = null;
+
+        function ownsDragPointer(event) {
+          return activePointerId === null || !event || event.pointerId == null ||
+            event.pointerId === activePointerId;
+        }
+
+        function addDocumentDragListeners() {
+          if (typeof document.addEventListener !== 'function') {
+            return;
+          }
+          document.addEventListener('pointermove', moveDrag);
+          document.addEventListener('pointerup', endDrag);
+          document.addEventListener('pointercancel', endDrag);
+        }
+
+        function removeDocumentDragListeners() {
+          if (typeof document.removeEventListener !== 'function') {
+            return;
+          }
+          document.removeEventListener('pointermove', moveDrag);
+          document.removeEventListener('pointerup', endDrag);
+          document.removeEventListener('pointercancel', endDrag);
+        }
 
         knobEl.addEventListener('pointerdown', function (event) {
+          if (dragging || (event && typeof event.button === 'number' && event.button !== 0)) {
+            return;
+          }
           dragging = true;
-          lastY = event.clientY;
+          lastY = event && typeof event.clientY === 'number' ? event.clientY : 0;
+          activePointerId = event && event.pointerId != null ? event.pointerId : null;
+          addDocumentDragListeners();
           try {
             if (typeof knobEl.setPointerCapture === 'function' && event.pointerId != null) {
               knobEl.setPointerCapture(event.pointerId);
@@ -840,6 +874,14 @@
           }
           try {
             event.preventDefault();
+          } catch (err) {
+            /* stub event */
+          }
+          // The card has its own reorder gesture. The parameter owns this
+          // press outright even if future markup changes weaken the card's
+          // current .section-main exclusion guard.
+          try {
+            event.stopPropagation();
           } catch (err) {
             /* stub event */
           }
@@ -855,11 +897,15 @@
           knobEl.setAttribute('data-live', 'true');
         });
 
-        knobEl.addEventListener('pointermove', function (event) {
-          if (!dragging) {
+        function moveDrag(event) {
+          if (!dragging || !ownsDragPointer(event) ||
+              !event || typeof event.clientY !== 'number') {
             return;
           }
           var dy = lastY - event.clientY;
+          if (dy === 0) {
+            return; // the same captured event also bubbles to document
+          }
           lastY = event.clientY;
           var fine = event.shiftKey ? KNOB_FINE_FACTOR : 1;
           var current = parseFloat(input.value);
@@ -867,12 +913,34 @@
           var next = current + (dy / KNOB_DRAG_RANGE_PX) * range * fine;
           input.value = String(clampQuantize(next));
           fireInput(input);
-        });
+          try {
+            event.preventDefault();
+          } catch (err) {
+            /* stub event */
+          }
+        }
 
-        function endDrag() {
+        function endDrag(event) {
+          if (!dragging || !ownsDragPointer(event)) {
+            return;
+          }
+          var pointerId = activePointerId;
           dragging = false;
+          activePointerId = null;
+          removeDocumentDragListeners();
+          try {
+            if (typeof knobEl.releasePointerCapture === 'function' && pointerId != null) {
+              knobEl.releasePointerCapture(pointerId);
+            }
+          } catch (err) {
+            /* already released with the pointer */
+          }
           knobEl.setAttribute('data-live', 'false');
         }
+        // Keep the local listeners as a stripped-harness fallback. In a
+        // browser, a captured event runs here first and then bubbles to
+        // document; the zero-delta/end cleanup guards make that one tick.
+        knobEl.addEventListener('pointermove', moveDrag);
         knobEl.addEventListener('pointerup', endDrag);
         knobEl.addEventListener('pointercancel', endDrag);
 

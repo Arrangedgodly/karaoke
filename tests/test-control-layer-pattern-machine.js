@@ -238,6 +238,7 @@ var layoutEl = new FakeElement('div');
 var canvasEl = new FakeElement('div');
 var panelEl = new FakeElement('div');
 panelEl.className = 'canvas-panel';
+var documentListeners = {};
 
 var documentStub = {
   createElement: function (tag) { return new FakeElement(tag); },
@@ -254,6 +255,19 @@ var documentStub = {
   querySelector: function (sel) {
     if (sel === '.canvas-panel') { return panelEl; }
     return null;
+  },
+  addEventListener: function (evt, fn) {
+    (documentListeners[evt] = documentListeners[evt] || []).push(fn);
+  },
+  removeEventListener: function (evt, fn) {
+    documentListeners[evt] = (documentListeners[evt] || []).filter(function (listener) {
+      return listener !== fn;
+    });
+  },
+  fire: function (evt, ev) {
+    (documentListeners[evt] || []).slice().forEach(function (fn) {
+      fn(ev || STUB_EVENT);
+    });
   }
 };
 
@@ -1117,6 +1131,45 @@ dragKnob([{ dy: 60 }]);
 check(
   Number(gInput2.value) === 19,
   'the built ENCODER linear drag is untouched (60px -> 19 dB)'
+);
+
+// G1b. A parameter gesture must keep adjusting after the pointer leaves
+// the knob's 40px hit target. Browser pointer capture can be interrupted
+// (or lost when a card layer reacts), so document movement is the stable
+// continuation seam; releasing there must end the gesture cleanly.
+setGain(0);
+gKnob2.fire('pointerdown', {
+  clientY: 200, pointerId: 17, button: 0, shiftKey: false,
+  preventDefault: function () {}, stopPropagation: function () {}
+});
+documentStub.fire('pointermove', {
+  clientY: 100, pointerId: 99, shiftKey: false,
+  preventDefault: function () {}
+});
+var valueAfterForeignMove = Number(gInput2.value);
+documentStub.fire('pointermove', {
+  clientY: 140, pointerId: 17, shiftKey: false,
+  preventDefault: function () {}
+});
+var documentDragValue = Number(gInput2.value);
+documentStub.fire('pointerup', { pointerId: 99 });
+documentStub.fire('pointermove', {
+  clientY: 130, pointerId: 17, shiftKey: false,
+  preventDefault: function () {}
+});
+var valueAfterForeignEnd = Number(gInput2.value);
+documentStub.fire('pointerup', { pointerId: 17 });
+documentStub.fire('pointermove', {
+  clientY: 100, pointerId: 17, shiftKey: false,
+  preventDefault: function () {}
+});
+var valueAfterOwnEnd = Number(gInput2.value);
+check(
+  valueAfterForeignMove === 0 && documentDragValue === 19 &&
+    valueAfterForeignEnd === 22 && valueAfterOwnEnd === 22 &&
+    gKnob2.getAttribute('data-live') === 'false' &&
+    windowStub.ChainCanvas.isDragActive() === false,
+  'encoder drag owns one pointer, survives leaving the knob, and ends cleanly without card reorder'
 );
 setGain(0);
 wheelKnob(-100, false);
