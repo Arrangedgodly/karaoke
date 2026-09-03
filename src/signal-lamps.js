@@ -47,6 +47,19 @@
 //   differs in how big a box it draws that truth into, and a slot that
 //   is off screen costs a zero-box test and nothing else.
 //
+//   THE NAMEPLATE MATRIX (the system deck) — the product name itself,
+//   DRAWN as 5x7 display cells rather than set in a typeface, and lit
+//   from the baseline up by the same final-output window the scope
+//   reads. It is the one place the machine says its OWN name, so it says
+//   it in its own display register: unlit cells print bright (the word is
+//   always readable, engine or no engine, JS or no JS — see the CSS
+//   fallback), and the signal only ADDS light, turning cells from print
+//   to lamp amber as the voice fills the word. Clip turns a column's lit
+//   cells red, the same red the meters use, at the same threshold.
+//   No typeface is involved: this is authored letterform geometry, so
+//   the two-register type law (silkscreen sans / mono readout) is
+//   untouched — nothing here is text.
+//
 // MOTION DISCIPLINE: both surfaces are functional metering in the
 // documented meter family — per-frame paint like the VU lamps, live
 // under prefers-reduced-motion by construction (the same clause
@@ -74,8 +87,7 @@
   // BUILT here (ensureScope); any other view's slot is ADOPTED from its
   // own markup, so a second display can be added to a view without this
   // module learning about that view.
-  var SCOPE_SELECTOR =
-    '.simple-scope-canvas, .adv-scope-canvas, .nameplate-scope-canvas';
+  var SCOPE_SELECTOR = '.simple-scope-canvas, .adv-scope-canvas';
   var SCOPE_RESCAN_FRAMES = 30; // re-read the slot list ~twice a second
 
   // ---------------------------------------------------------------------
@@ -167,7 +179,8 @@
     clip: '#E4574A',
     tick: '#C9CEDC',
     display: '#FFD75E',
-    unlit: '#262933'
+    unlit: '#262933',
+    print: '#c9cedc'
   };
 
   function resolveColors() {
@@ -180,7 +193,12 @@
       clip: token('--pm-vu-clip', DEFAULTS.clip),
       tick: token('--pm-vu-tick', DEFAULTS.tick),
       display: token('--pm-display', DEFAULTS.display),
-      unlit: token('--pm-vu-unlit', DEFAULTS.unlit)
+      unlit: token('--pm-vu-unlit', DEFAULTS.unlit),
+      // The nameplate's UNLIT cell ink. Deliberately not the meters'
+      // unlit glass: a dark cell is right for a lamp bar the operator
+      // reads by its lit length, and wrong for the product's name, which
+      // must be legible on a dead engine in a dark room.
+      print: token('--pm-print-hi', DEFAULTS.print)
     };
   }
 
@@ -363,21 +381,7 @@
       }
       var ctx = canvas.getContext ? canvas.getContext('2d') : null;
       if (ctx) {
-        // A COMPACT slot is a few pixels tall (the nameplate's baseline
-        // rule). It carries the same window as the full-size slots and
-        // paints from the same feed, but drops the scale it has no room
-        // to render honestly: at 10px the ±6 dB guides would be noise
-        // pretending to be a reading. What is left is the envelope
-        // silhouette alone — the shape, with no claim to a scale.
-        list.push({
-          canvas: canvas,
-          ctx: ctx,
-          w: 0,
-          h: 0,
-          dpr: 1,
-          compact: !!(canvas.className &&
-            canvas.className.indexOf('nameplate-scope-canvas') !== -1)
-        });
+        list.push({ canvas: canvas, ctx: ctx, w: 0, h: 0, dpr: 1 });
       }
     }
     scopeTargets = list;
@@ -446,6 +450,9 @@
         }
         // else: not on screen — skip the paint, keep the feed honest
       }
+      // The deck's wordmark reads the same window, from the same call —
+      // one feed, every live surface, no second measurement anywhere.
+      feedNameplate(pairs, columns);
     });
   }
 
@@ -457,95 +464,55 @@
       var w = t.w;
       var h = t.h;
       var cy = h / 2;
-      // Headroom so 0 dBFS never clips the slot: 3px where there is room,
-      // 1px in a compact slot whose whole height is a rule.
-      var gain = (h / 2) - (t.compact ? 1 : 3);
+      var gain = (h / 2) - 3; // 3px headroom so 0 dBFS never clips the slot
       var ctx = t.ctx;
 
       ctx.clearRect(0, 0, w, h);
 
-      if (!t.compact) {
-        // Guides: the center line plus ±6 dB (±0.5 linear) hairlines —
-        // the scope's own scale, as quiet as the meter scale it mirrors.
-        ctx.strokeStyle = colors.unlit;
-        ctx.globalAlpha = 0.55;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, Math.round(cy) + 0.5);
-        ctx.lineTo(w, Math.round(cy) + 0.5);
-        ctx.stroke();
-        ctx.globalAlpha = 0.3;
-        ctx.beginPath();
-        ctx.moveTo(0, Math.round(cy - 0.5 * gain) + 0.5);
-        ctx.lineTo(w, Math.round(cy - 0.5 * gain) + 0.5);
-        ctx.moveTo(0, Math.round(cy + 0.5 * gain) + 0.5);
-        ctx.lineTo(w, Math.round(cy + 0.5 * gain) + 0.5);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
+      // Guides: the center line plus ±6 dB (±0.5 linear) hairlines —
+      // the scope's own scale, as quiet as the meter scale it mirrors.
+      ctx.strokeStyle = colors.unlit;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy) + 0.5);
+      ctx.lineTo(w, Math.round(cy) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy - 0.5 * gain) + 0.5);
+      ctx.lineTo(w, Math.round(cy - 0.5 * gain) + 0.5);
+      ctx.moveTo(0, Math.round(cy + 0.5 * gain) + 0.5);
+      ctx.lineTo(w, Math.round(cy + 0.5 * gain) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
 
       // The envelope columns. On a fractional device pixel ratio a
       // logical-px stroke lands between device pixels and paints soft —
       // the one place this display would betray its canvas. Snap each
       // column's x and width to the device grid (exact on integer dpr,
       // half-pixel on 1.5, quarter-proof on 2+ where it matters most).
-      // A compact slot is ~130px wide and still fed 136 columns, so its
-      // pitch lands under one device pixel: every column paints soft, and
-      // the clip tip — the one mark on this surface an operator must not
-      // miss — dilutes to nothing. Fold the window down to a pitch of two
-      // device pixels instead, by AGGREGATING (peak min and max over each
-      // group), never by sampling: a subsampled clip is a clip the
-      // display silently drops.
-      var srcPer = 1;
-      var outCols = columns;
-      if (t.compact) {
-        var maxCols = Math.max(8, Math.floor((w * t.dpr) / 2));
-        srcPer = Math.max(1, Math.ceil(columns / maxCols));
-        outCols = Math.ceil(columns / srcPer);
-      }
-      var colW = w / outCols;
-      var strokeW = t.compact ? Math.max(1, colW * 0.75) : Math.max(1.5, colW * 0.66);
+      var colW = w / columns;
+      var strokeW = Math.max(1.5, colW * 0.66);
       var clipZone = 0.985;
-      for (var o = 0; o < outCols; o++) {
-        var c = o * srcPer;
+      for (var c = 0; c < columns; c++) {
         var min = pairs[c * 2];
         var max = pairs[c * 2 + 1];
-        for (var k = 1; k < srcPer && c + k < columns; k++) {
-          var lo = pairs[(c + k) * 2];
-          var hi = pairs[(c + k) * 2 + 1];
-          if (lo < min) {
-            min = lo;
-          }
-          if (hi > max) {
-            max = hi;
-          }
-        }
         var yMin = cy - max * gain;
         var yMax = cy - min * gain;
-        var floorPx = t.compact ? 1 : 2;
-        if (yMax - yMin < floorPx) {
-          // A silent column still draws its flat trace — the honest
-          // reading of silence, never an absent one.
-          yMin = cy - floorPx / 2;
-          yMax = cy + floorPx / 2;
+        if (yMax - yMin < 2) {
+          yMin = cy - 1; // a silent column still draws its flat 2px trace
+          yMax = cy + 1;
         }
         var amp = Math.max(Math.abs(min), Math.abs(max));
-        var x = o * colW + (colW - strokeW) / 2;
+        var x = c * colW + (colW - strokeW) / 2;
         var sw = strokeW;
-        // Snap to the device grid. Compact slots snap at every ratio,
-        // including 1: their whole point is a crisp mark at small size.
-        if (t.dpr > 1 || t.compact) {
+        if (t.dpr > 1) {
           x = Math.round(x * t.dpr) / t.dpr;
-          sw = Math.max(1 / t.dpr, Math.round(sw * t.dpr) / t.dpr);
+          sw = Math.round(sw * t.dpr) / t.dpr;
         }
         ctx.globalAlpha = columnAlpha(amp);
-        // The register's slots speak the register's amber INK; a compact
-        // slot on the system deck is a LAMP, so it takes the VU ladder's
-        // own mid paint. Same value, and deliberately so — one lamp
-        // language across the machine — but the token names which of the
-        // two vocabularies this surface belongs to, and the deck's rule
-        // that its etch never borrows the register's ink still holds.
-        ctx.fillStyle = t.compact ? colors.mid : colors.display;
+        ctx.fillStyle = colors.display;
         ctx.fillRect(x, yMin, sw, yMax - yMin);
         if (Math.abs(min) >= clipZone || Math.abs(max) >= clipZone) {
           ctx.globalAlpha = 1;
@@ -556,6 +523,192 @@
       }
       ctx.globalAlpha = 1;
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // The nameplate matrix (the system deck's identity).
+  // ---------------------------------------------------------------------
+
+  // The wordmark, drawn. Each glyph is a 5x7 cell block; '1' is a cell
+  // that exists in the letterform, and a cell that exists is either
+  // PRINTED (unlit) or LIT. One column of gap between glyphs, so the
+  // word is 8*5 + 7 = 47 cells wide and 7 tall — the grid the CSS box is
+  // sized to in whole pixels, which is why the dots stay square and the
+  // word never lands on a half pixel.
+  var NP_ROWS = 7;
+  var NP_GLYPHS = {
+    V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
+    O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+    X: ['10001', '10001', '01010', '00100', '01010', '10001', '10001'],
+    C: ['01110', '10001', '10000', '10000', '10000', '10001', '01110'],
+    H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
+    A: ['00100', '01010', '10001', '10001', '11111', '10001', '10001'],
+    I: ['01110', '00100', '00100', '00100', '00100', '00100', '01110'],
+    N: ['10001', '11001', '10101', '10011', '10001', '10001', '10001']
+  };
+  var NP_WORD = 'VOXCHAIN';
+
+  var npCells = null; // [col][row] booleans, built once
+  var npCols = 0;
+  var npCanvas = null;
+  var npCtx = null;
+  var npW = 0;
+  var npH = 0;
+  var npDpr = 1;
+  var npFound = false; // the canvas exists in this document
+  var npLive = false;  // a first paint succeeded; the CSS fallback is off
+
+  /** Expand the glyph table into one column-major cell map. */
+  function buildNameplateCells() {
+    if (npCells) {
+      return;
+    }
+    var cols = [];
+    for (var g = 0; g < NP_WORD.length; g++) {
+      var rows = NP_GLYPHS[NP_WORD.charAt(g)];
+      if (!rows) {
+        continue;
+      }
+      for (var x = 0; x < rows[0].length; x++) {
+        var col = [];
+        for (var y = 0; y < NP_ROWS; y++) {
+          col.push(rows[y].charAt(x) === '1');
+        }
+        cols.push(col);
+      }
+      if (g < NP_WORD.length - 1) {
+        cols.push([false, false, false, false, false, false, false]);
+      }
+    }
+    npCells = cols;
+    npCols = cols.length;
+  }
+
+  /** Find the canvas and size its backing store. Returns false when the
+   *  matrix is not on screen (no canvas, or a zero box) — the caller
+   *  paints nothing and the CSS fallback keeps the word visible. */
+  function prepareNameplate() {
+    if (!npCanvas) {
+      if (npFound || typeof document === 'undefined' ||
+          typeof document.querySelector !== 'function') {
+        return false;
+      }
+      npCanvas = document.querySelector('.nameplate-matrix-canvas');
+      npFound = true;
+      if (!npCanvas) {
+        return false;
+      }
+      npCtx = npCanvas.getContext ? npCanvas.getContext('2d') : null;
+      if (!npCtx) {
+        npCanvas = null;
+        return false;
+      }
+    }
+    var w = npCanvas.clientWidth || 0;
+    var h = npCanvas.clientHeight || 0;
+    if (!(w > 0) || !(h > 0)) {
+      return false;
+    }
+    if (w !== npW || h !== npH) {
+      var dpr = 1;
+      try {
+        dpr = Math.max(1, Math.min(DPR_MAX, window.devicePixelRatio || 1));
+      } catch (err) {
+        dpr = 1;
+      }
+      npCanvas.width = Math.round(w * dpr);
+      npCanvas.height = Math.round(h * dpr);
+      npCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      npDpr = dpr;
+      npW = w;
+      npH = h;
+    }
+    return true;
+  }
+
+  /** Paint the word. `pairs`/`columns` absent (or all silence) paints the
+   *  resting face: every letterform cell in print, nothing lit. The lit
+   *  height of a column is sqrt-lifted like the scope's ink, so
+   *  conversational level already climbs a row or two instead of sitting
+   *  dark until someone shouts. */
+  function drawNameplate(pairs, columns) {
+    buildNameplateCells();
+    var ctx = npCtx;
+    var cell = npW / npCols;
+    var dot = Math.max(1, Math.round(cell) - 1);
+    ctx.clearRect(0, 0, npW, npH);
+    for (var x = 0; x < npCols; x++) {
+      var lit = 0;
+      var clipped = false;
+      if (pairs && columns) {
+        var from = Math.floor((x * columns) / npCols);
+        var to = Math.floor(((x + 1) * columns) / npCols);
+        if (to <= from) {
+          to = from + 1;
+        }
+        var amp = 0;
+        for (var i = from; i < to && i < columns; i++) {
+          var lo = pairs[i * 2];
+          var hi = pairs[i * 2 + 1];
+          var a = Math.max(lo < 0 ? -lo : lo, hi < 0 ? -hi : hi);
+          if (a > amp) {
+            amp = a;
+          }
+        }
+        if (amp > 1) {
+          amp = 1;
+        }
+        if (amp >= 0.985) {
+          clipped = true;
+        }
+        lit = Math.round(Math.sqrt(amp) * NP_ROWS);
+      }
+      var litFrom = NP_ROWS - lit;
+      var colCells = npCells[x];
+      for (var y = 0; y < NP_ROWS; y++) {
+        if (!colCells[y]) {
+          continue;
+        }
+        var on = lit > 0 && y >= litFrom;
+        ctx.fillStyle = on ? (clipped ? colors.clip : colors.mid) : colors.print;
+        // Snap every dot to the device grid: at this size a half-pixel
+        // edge is the difference between a machined cell and a smudge.
+        var px = Math.round((x * cell + (cell - dot) / 2) * npDpr) / npDpr;
+        var py = Math.round((y * cell + (cell - dot) / 2) * npDpr) / npDpr;
+        ctx.fillRect(px, py, dot, dot);
+      }
+    }
+    if (!npLive && npCanvas.parentNode && npCanvas.parentNode.parentNode &&
+        npCanvas.parentNode.parentNode.classList) {
+      // The word was drawn at least once, so the text fallback can stand
+      // down. Until this moment the CSS nameplate is what the operator
+      // sees, which is why a dead paint path can never cost the product
+      // its name.
+      npCanvas.parentNode.parentNode.classList.add('matrix-live');
+      npLive = true;
+    }
+  }
+
+  /** Paint the resting face — called at load, on resize, and whenever the
+   *  engine stops (a frozen last frame would claim a signal that is no
+   *  longer there). */
+  function restNameplate() {
+    if (failed) {
+      return;
+    }
+    safe(function () {
+      resolveColors();
+      if (prepareNameplate()) {
+        drawNameplate(null, 0);
+      }
+    });
+  }
+
+  function feedNameplate(pairs, columns) {
+    if (!prepareNameplate()) {
+      return;
+    }
+    drawNameplate(pairs, columns);
   }
 
   // ---------------------------------------------------------------------
@@ -592,6 +745,7 @@
         stageLevels = [];
         lastT = null;
       });
+      restNameplate();
     }
   }
 
@@ -599,6 +753,31 @@
     feedStages: feedStages,
     feedScope: feedScope,
     onArrowsRendered: onArrowsRendered,
-    setEngineState: setEngineState
+    setEngineState: setEngineState,
+    restNameplate: restNameplate
   };
+
+  // The wordmark is the one surface here that must render with no engine,
+  // no feed, and no producer at all, so it starts itself. Everything is
+  // guarded: a document without readyState or addEventListener (the test
+  // harness) simply paints once and never re-measures, and a document
+  // with no matrix canvas does nothing at all.
+  try {
+    if (typeof document !== 'undefined') {
+      if (document.readyState === 'loading' &&
+          typeof document.addEventListener === 'function') {
+        document.addEventListener('DOMContentLoaded', restNameplate);
+      } else {
+        restNameplate();
+      }
+      if (typeof window !== 'undefined' &&
+          typeof window.addEventListener === 'function') {
+        // The cell grid is sized in whole pixels off the CSS box, and the
+        // box changes at the 900px breakpoint.
+        window.addEventListener('resize', restNameplate);
+      }
+    }
+  } catch (err) {
+    // A nameplate that cannot start is a nameplate that stays text.
+  }
 })();

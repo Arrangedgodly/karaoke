@@ -109,23 +109,28 @@
   <div class="instrument">
   <header class="topbar system-deck">
     <!--
-      THE SIGNAL NAMEPLATE (overdrive round, 2026-09-03). The identity is
-      still a nameplate, never a headline — nothing here may out-shout the
-      BYPASS key, and nothing here lights up. What it gained is a BASELINE
-      that is wired to the machine: the rule under the wordmark is a
-      machined hairline before Start and a live envelope of the FINAL
-      OUTPUT while the engine runs, painted by src/signal-lamps.js from
-      the same tap and the same 42.7ms window the OUT meter reads (the
-      slot is adopted by its canvas class — see that file's scope header).
-      A picture, not a mouth: aria-hidden, no numerals, no scale. It
-      flattens by itself when the chain is bypassed or the engine stops,
-      because the output it reads is what those states gate.
+      THE NAMEPLATE MATRIX (overdrive round, 2026-09-03). The product name
+      is DRAWN, not set: src/signal-lamps.js paints it as 5x7 display
+      cells on the canvas below, and the FINAL OUTPUT lights those cells
+      from the baseline up — the same tap and the same 42.7ms window the
+      OUT meter reads, so the word fills with the voice going through the
+      machine. Unlit cells print bright, so the name is legible on a dead
+      engine in a dark room; the signal only ADDS light. No typeface is
+      involved, which is why the two-register type law is untouched.
+
+      PROGRESSIVE ENHANCEMENT, and the reason the <h1> below is real text
+      rather than a decoration: the text nameplate is what renders until
+      the matrix has painted at least once (styles/main.css swaps them on
+      .matrix-live, set by the first successful paint). No JS, a stripped
+      harness, a disabled paint path after a one-strike failure — every
+      one of those still shows the product's name. The canvas is
+      aria-hidden and the <h1> keeps the accessible name in all states.
     -->
     <div class="topbar-section topbar-identity">
       <div class="nameplate">
         <h1 class="app-title">VOXCHAIN</h1>
-        <div class="nameplate-rule" aria-hidden="true">
-          <canvas class="nameplate-scope-canvas"></canvas>
+        <div class="nameplate-matrix" aria-hidden="true">
+          <canvas class="nameplate-matrix-canvas"></canvas>
         </div>
       </div>
     </div>

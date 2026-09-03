@@ -591,35 +591,39 @@ body {
   flex: 1 1 0;
 }
 
-/* THE SIGNAL NAMEPLATE (overdrive round, 2026-09-03). The app title was
-   a 12px silkscreen legend — correct about rank and wrong about presence:
-   it is the one thing on this deck that says what the instrument IS, and
-   it read as the quietest print on the panel.
+/* THE NAMEPLATE MATRIX (overdrive round, 2026-09-03). The app title was a
+   12px silkscreen legend, and then a bigger one — correct about rank both
+   times, and still the platform sans, which is the one thing an own-world
+   page can never use as its display voice. This project bans webfonts and
+   display faces outright (offline, no build step), so the answer is not a
+   different font: the word stops being TYPE and becomes DRAWN geometry —
+   5x7 display cells, painted by src/signal-lamps.js.
 
-   The Nameplate Discipline is unchanged and is the reason this works the
-   way it does. Prominence here is bought with SCALE and a BASELINE, never
-   with brightness: the wordmark rises to the code tier and opens its
-   tracking to wordmark spacing, but it keeps neutral print, takes no
-   fill, no ring, and no lamp of its own. BYPASS keeps every loud thing on
-   the deck — the red, the ring, the 3rem key mass — so the ranking the
-   safety rule protects is exactly as it was.
+   It is the machine's own display register, used for the one thing the
+   machine has to say about itself. The two-register type law is untouched
+   because nothing here is text: no third face enters the system.
 
-   What makes it live is the rule beneath it, which is the machine's own
-   line: a hairline in receding print before Start, and the FINAL OUTPUT's
-   envelope while the engine runs. That amber is LAMP paint (the VU
-   ladder's own --pm-vu-mid, one lamp language across the machine), not
-   the register's machine INK — the deck's etch still prints neutral and
-   the chain register is still the one amber voice that speaks in words.
-   This one has no words at all. */
+   ALIVE: the final output lights the cells from the baseline up, column by
+   column across the word, so the name fills with the voice going through
+   the chain. Unlit cells print bright (--pm-print-hi) — the name is
+   legible on a dead engine in a dark venue, and the signal can only ADD
+   light, never change the resting face. Clip turns a column's lit cells
+   the meters' own red, at the meters' own threshold.
+
+   The Nameplate Discipline still holds and still decides the ceiling.
+   Nothing here takes a fill, a ring, or a plate; the lit area is bounded
+   to the letterforms themselves, and the deck's red, its ring, and its
+   3rem key mass all still belong to BYPASS alone.
+
+   FALLBACK: .app-title is real text, styled as the nameplate, and it is
+   what renders until the matrix paints once. No JS, a stripped harness, a
+   paint path disabled by the module's one-strike rule — the product still
+   has its name. .matrix-live is set by the first successful paint. */
 .nameplate {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.25rem;
+  align-items: center;
   min-width: 0;
-  /* Shrink to the wordmark so the rule is exactly as wide as the name,
-     while .topbar-identity keeps its declared yield: the block still
-     ellipsizes first when the deck runs out of room. */
   max-width: max-content;
 }
 
@@ -632,45 +636,55 @@ body {
   line-height: 1.05;
   font-weight: 700;
   text-transform: uppercase;
-  /* Wordmark spacing, one step past the 0.08em silkscreen legends: at
-     this size the letters need the air to read as a name rather than a
-     label, and the extra track is what separates the two registers. */
   letter-spacing: 0.16em;
   color: var(--pm-print-hi);
 }
 
-/* The machined baseline. Its own hairline is drawn in CSS and always
-   present, so the nameplate never sits on nothing: pre-Start, stopped,
-   and in a harness with no engine at all, the rule reads as milled metal.
-   The canvas above it is transparent and adds ONLY light, so the metal
-   stays visible under the trace — the signal rides the rule, it does not
-   replace it. Fixed height: a display that answers every frame may never
-   pump layout, and this one sits in a sticky deck. */
-.nameplate-rule {
-  position: relative;
-  flex: none;
-  height: 10px;
-  /* The name ellipsizes before the rule does; -1px of tracking trails the
-     last letter, so the rule stops where the wordmark visually stops. */
-  margin-right: 0.16em;
-}
-
-.nameplate-rule::before {
-  content: '';
+/* The cell grid: 8 glyphs of 5 cells with a 1-cell gap = 47 x 7. Sized in
+   WHOLE pixels off one cell token so every dot lands square on the device
+   grid and the word never renders on a half pixel. The cell steps down
+   with the deck's own 900px breakpoint, where horizontal room runs out
+   before vertical room does. */
+.nameplate-matrix {
+  --np-cell: 4px;
+  /* Out of flow and hidden BEFORE the first paint, never display:none —
+     the paint measures this box to size its cell grid, so a box with no
+     dimensions would deadlock the swap it is waiting on. Absolute keeps
+     it from reserving width while the text nameplate is the one showing,
+     which is the state a JS-less page stays in forever. */
   position: absolute;
   left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: var(--pm-print-dim);
+  top: 0;
+  visibility: hidden;
+  flex: none;
+  width: calc(47 * var(--np-cell));
+  height: calc(7 * var(--np-cell));
 }
 
-.nameplate-scope-canvas {
-  position: absolute;
-  inset: 0;
+.nameplate-matrix-canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* The swap. Until the first paint lands, the text nameplate IS the
+   nameplate; after it, the matrix is, and the text keeps the accessible
+   name for assistive technology. */
+.nameplate.matrix-live > .app-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nameplate.matrix-live > .nameplate-matrix {
+  position: static;
+  visibility: visible;
 }
 
 /* THE DOT-MATRIX ETCH (item 1b): one etched slot on the system deck
@@ -1125,6 +1139,13 @@ select.control {
   .topbar-identity {
     grid-area: identity;
     min-width: 0;
+  }
+
+  /* The wordmark's cell steps down with the deck: below this width the
+     row runs out of horizontal room before it runs out of vertical, and
+     the grid stays whole-pixel at 3px exactly as it is at 4. */
+  .nameplate-matrix {
+    --np-cell: 3px;
   }
 
   .topbar-viewswitch {
