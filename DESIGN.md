@@ -264,8 +264,12 @@ measured in the build records (redesign.md item 1/1b tables).
 panel print — small, bold, uppercase, tracked 0.08em, mid-print ink — the
 printing on a faceplate. Machine values live in the mono dot-matrix
 register with tabular numerals so a value changing never changes
-geometry. The nameplate (app title) is deliberately NOT a headline: it
-is the same micro-style as the zone legends, in lifted print.
+geometry. The nameplate (app title) is still deliberately NOT a
+headline, but it is no longer a legend either (2026-09-03 overdrive
+round): it sits at the CODE tier in lifted print with wordmark
+tracking, one step past the silkscreen 0.08em, over a machined rule
+that is wired to the output. It had been the quietest print on the
+panel while being the one thing that says what the instrument IS.
 
 ### Hierarchy
 - **Family code** (mono, 700, 1.25rem, 0.06em): the rail's large silkscreen identity print, in the family's desaturated ink.
@@ -273,7 +277,7 @@ is the same micro-style as the zone legends, in lifted print.
 - **Register line** (mono, tabular, 0.85rem / 13.6px, 400 + 700 segments): the panel instrument's etched tier — module · param · value on one line, segments differentiated by color/weight, never size. The system deck's status SENTENCE rides this size since 2026-09-03 (critique P3 #5; sans, not mono): it is the operator's primary verbal status, read mid-show from across a dark room, and distance readability is a functional a11y requirement — the etch's readouts stay one tier down and the sentence keeps neutral print, so the etch remains subordinate to the chain register.
 - **Value tier** (mono, tabular, 0.75rem / 12px): EVERY per-control value and state readout — knob/trim values (min-width 6ch), pad legends, meter dB, flow-state print, register help line, preset name, system-etch values, the demoted `.status-detail` footnote. One size for everything that displays a value. (The deck's status sentence is the one prose exception — a sans state word at the register tier; see Register line.)
 - **Silkscreen labels** (sans, 700, 0.7rem / 11.2px, 0.08em uppercase): param labels, zone legends, group legends, readout labels.
-- **Nameplate** (sans, 700, 0.75rem, 0.08em): the identity legend on the system deck.
+- **Nameplate** (sans, 700, 1.25rem, 0.16em): the instrument's identity on the system deck, at the code tier — the IDENTITY tier, the one the rail's family code and the register's preset name already speak (see the Register Rule). Its tracking opens past every other label on the machine: at this size the letters need the air to read as a name rather than a legend, and that extra track is what keeps the two registers apart. Neutral print, no fill, no ring, no lamp.
 
 ### The type register (2026-09-02)
 
@@ -307,7 +311,7 @@ signal-order strip's arrow and Simple's transport keys were the last three
 Unicode stand-ins; the strip's rendered at 9.8px, under this system's own
 floor, three feet from a board drawing the same mark properly.
 
-**The Nameplate Discipline.** The app title is a nameplate, not a headline — it must never out-shout the BYPASS key.
+**The Nameplate Discipline.** The app title is a nameplate, not a headline — it must never out-shout the BYPASS key. It is not a rule against PRESENCE, and the 2026-09-03 overdrive round is what that distinction now looks like: prominence is bought with SCALE, TRACKING, and a live baseline, never with brightness. The wordmark takes no fill, no ring, and no lamp of its own, so every loud thing on the deck — the red, the ring, the 3rem key mass — still belongs to BYPASS alone, and the ranking the safety rule protects is untouched. On a single-row deck the nameplate costs no height at all: the BYPASS key still sets the row.
 
 ## Layout
 
@@ -455,6 +459,7 @@ never shadow or glow.
 ### Navigation
 - **BYPASSED on the deck (2026-09-02, user direction):** while bypass is engaged the chain is gated to silence and the room hears the dry tap, so the deck's sentence stops saying LIVE and reads `BYPASSED — EFFECTS OFF`. The lamp keeps reporting the ENGINE (still live); the WORD reports the CHAIN, which is what an operator is asking the header about. Both go safety red, matching the BYPASS key lit red at the same moment — a third, deliberately narrow role for edge red (a 10px lamp and one short line, never a fill, never a large area), so the split-role rule holds and nothing outranks the key itself. A standing error still outranks it: `.status.error` is declared after `.status.bypassed`. Measured 4.99 on the etch ground.
 - **BYPASSED on the Simple stage (2026-09-02 harden round, critique P1):** the default view's "what am I hearing" face answers the same moment instead of silently naming a gated-off sound. `SimpleView.onBypassChanged()` — called from `setBypassButtonLabel()`, the deck key's own choke point — recedes the stage's content under the one disabled grammar's bypass hatch variant (0.45 alpha, same as the board's chain region) while the controls STAY interactive (tune while dry, like the board's sections), and prints the deck sentence's own words as one short uppercase line in edge red, placed OUTSIDE the receded content so it never dims (measured 4.74 on the stage's chassis ground). The line is `aria-hidden` — the deck's `role="status"` sentence announces the state once; the line is the stage's redundant picture. The state is only ever true on a LIVE engine (`engineIsLive() && AudioBypass.isEngaged()`, derived on every render): the pre-Start gate owns the stopped stage, and the two readings can never meet. Meters sit outside `#simple-stage` and never dim, exactly as in Advanced.
+- **The signal nameplate (2026-09-03 overdrive round):** the deck's identity block is the wordmark over a machined rule, and the rule is the machine's own line. Before Start, stopped, and in any harness with no engine it is a 1px hairline in receding print — milled metal, never nothing. While the engine runs it carries a live envelope of the FINAL OUTPUT, the same tap and the same 42.7 ms window the OUT meter reads, adopted by `src/signal-lamps.js` as a COMPACT scope slot: no guides, no scale, columns aggregated (peak min/max, never sampled — a subsampled clip is a clip the display drops) down to a two-device-pixel pitch so the mark stays crisp at 10px. The canvas is transparent and adds only light, so the metal stays visible under the trace: the signal rides the rule, it never replaces it. Its amber is LAMP paint (`--pm-vu-mid`, the VU ladder's own), NOT the register's machine ink — the deck's etch still prints neutral, the chain register is still the one amber voice that speaks in words, and this surface has no words at all. `aria-hidden`, no numerals; it flattens by itself when the chain is bypassed or the engine stops, because the output it reads is what those states gate.
 - **System deck + dot-matrix etch:** the signature surface — one persistent row reading as an instrument's status display. The etch borrows the register's inset geometry but stays SUBORDINATE to the chain face's register: neutral bright print (never amber/orange), values one tier down at 12px. The status SENTENCE alone rides the 13.6px register tier (2026-09-03): distance readability is a functional a11y requirement, and the sentence keeps neutral print with its technical footnote demoted at 12px, so the subordination and the one-mouth rule hold. The machine reports from one mouth, and it is the canvas register's.
 
 ### Meters

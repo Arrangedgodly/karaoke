@@ -74,7 +74,8 @@
   // BUILT here (ensureScope); any other view's slot is ADOPTED from its
   // own markup, so a second display can be added to a view without this
   // module learning about that view.
-  var SCOPE_SELECTOR = '.simple-scope-canvas, .adv-scope-canvas';
+  var SCOPE_SELECTOR =
+    '.simple-scope-canvas, .adv-scope-canvas, .nameplate-scope-canvas';
   var SCOPE_RESCAN_FRAMES = 30; // re-read the slot list ~twice a second
 
   // ---------------------------------------------------------------------
@@ -362,7 +363,21 @@
       }
       var ctx = canvas.getContext ? canvas.getContext('2d') : null;
       if (ctx) {
-        list.push({ canvas: canvas, ctx: ctx, w: 0, h: 0, dpr: 1 });
+        // A COMPACT slot is a few pixels tall (the nameplate's baseline
+        // rule). It carries the same window as the full-size slots and
+        // paints from the same feed, but drops the scale it has no room
+        // to render honestly: at 10px the ±6 dB guides would be noise
+        // pretending to be a reading. What is left is the envelope
+        // silhouette alone — the shape, with no claim to a scale.
+        list.push({
+          canvas: canvas,
+          ctx: ctx,
+          w: 0,
+          h: 0,
+          dpr: 1,
+          compact: !!(canvas.className &&
+            canvas.className.indexOf('nameplate-scope-canvas') !== -1)
+        });
       }
     }
     scopeTargets = list;
@@ -442,55 +457,95 @@
       var w = t.w;
       var h = t.h;
       var cy = h / 2;
-      var gain = (h / 2) - 3; // 3px headroom so 0 dBFS never clips the slot
+      // Headroom so 0 dBFS never clips the slot: 3px where there is room,
+      // 1px in a compact slot whose whole height is a rule.
+      var gain = (h / 2) - (t.compact ? 1 : 3);
       var ctx = t.ctx;
 
       ctx.clearRect(0, 0, w, h);
 
-      // Guides: the center line plus ±6 dB (±0.5 linear) hairlines —
-      // the scope's own scale, as quiet as the meter scale it mirrors.
-      ctx.strokeStyle = colors.unlit;
-      ctx.globalAlpha = 0.55;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, Math.round(cy) + 0.5);
-      ctx.lineTo(w, Math.round(cy) + 0.5);
-      ctx.stroke();
-      ctx.globalAlpha = 0.3;
-      ctx.beginPath();
-      ctx.moveTo(0, Math.round(cy - 0.5 * gain) + 0.5);
-      ctx.lineTo(w, Math.round(cy - 0.5 * gain) + 0.5);
-      ctx.moveTo(0, Math.round(cy + 0.5 * gain) + 0.5);
-      ctx.lineTo(w, Math.round(cy + 0.5 * gain) + 0.5);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      if (!t.compact) {
+        // Guides: the center line plus ±6 dB (±0.5 linear) hairlines —
+        // the scope's own scale, as quiet as the meter scale it mirrors.
+        ctx.strokeStyle = colors.unlit;
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, Math.round(cy) + 0.5);
+        ctx.lineTo(w, Math.round(cy) + 0.5);
+        ctx.stroke();
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.moveTo(0, Math.round(cy - 0.5 * gain) + 0.5);
+        ctx.lineTo(w, Math.round(cy - 0.5 * gain) + 0.5);
+        ctx.moveTo(0, Math.round(cy + 0.5 * gain) + 0.5);
+        ctx.lineTo(w, Math.round(cy + 0.5 * gain) + 0.5);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
 
       // The envelope columns. On a fractional device pixel ratio a
       // logical-px stroke lands between device pixels and paints soft —
       // the one place this display would betray its canvas. Snap each
       // column's x and width to the device grid (exact on integer dpr,
       // half-pixel on 1.5, quarter-proof on 2+ where it matters most).
-      var colW = w / columns;
-      var strokeW = Math.max(1.5, colW * 0.66);
+      // A compact slot is ~130px wide and still fed 136 columns, so its
+      // pitch lands under one device pixel: every column paints soft, and
+      // the clip tip — the one mark on this surface an operator must not
+      // miss — dilutes to nothing. Fold the window down to a pitch of two
+      // device pixels instead, by AGGREGATING (peak min and max over each
+      // group), never by sampling: a subsampled clip is a clip the
+      // display silently drops.
+      var srcPer = 1;
+      var outCols = columns;
+      if (t.compact) {
+        var maxCols = Math.max(8, Math.floor((w * t.dpr) / 2));
+        srcPer = Math.max(1, Math.ceil(columns / maxCols));
+        outCols = Math.ceil(columns / srcPer);
+      }
+      var colW = w / outCols;
+      var strokeW = t.compact ? Math.max(1, colW * 0.75) : Math.max(1.5, colW * 0.66);
       var clipZone = 0.985;
-      for (var c = 0; c < columns; c++) {
+      for (var o = 0; o < outCols; o++) {
+        var c = o * srcPer;
         var min = pairs[c * 2];
         var max = pairs[c * 2 + 1];
+        for (var k = 1; k < srcPer && c + k < columns; k++) {
+          var lo = pairs[(c + k) * 2];
+          var hi = pairs[(c + k) * 2 + 1];
+          if (lo < min) {
+            min = lo;
+          }
+          if (hi > max) {
+            max = hi;
+          }
+        }
         var yMin = cy - max * gain;
         var yMax = cy - min * gain;
-        if (yMax - yMin < 2) {
-          yMin = cy - 1; // a silent column still draws its flat 2px trace
-          yMax = cy + 1;
+        var floorPx = t.compact ? 1 : 2;
+        if (yMax - yMin < floorPx) {
+          // A silent column still draws its flat trace — the honest
+          // reading of silence, never an absent one.
+          yMin = cy - floorPx / 2;
+          yMax = cy + floorPx / 2;
         }
         var amp = Math.max(Math.abs(min), Math.abs(max));
-        var x = c * colW + (colW - strokeW) / 2;
+        var x = o * colW + (colW - strokeW) / 2;
         var sw = strokeW;
-        if (t.dpr > 1) {
+        // Snap to the device grid. Compact slots snap at every ratio,
+        // including 1: their whole point is a crisp mark at small size.
+        if (t.dpr > 1 || t.compact) {
           x = Math.round(x * t.dpr) / t.dpr;
-          sw = Math.round(sw * t.dpr) / t.dpr;
+          sw = Math.max(1 / t.dpr, Math.round(sw * t.dpr) / t.dpr);
         }
         ctx.globalAlpha = columnAlpha(amp);
-        ctx.fillStyle = colors.display;
+        // The register's slots speak the register's amber INK; a compact
+        // slot on the system deck is a LAMP, so it takes the VU ladder's
+        // own mid paint. Same value, and deliberately so — one lamp
+        // language across the machine — but the token names which of the
+        // two vocabularies this surface belongs to, and the deck's rule
+        // that its etch never borrows the register's ink still holds.
+        ctx.fillStyle = t.compact ? colors.mid : colors.display;
         ctx.fillRect(x, yMin, sw, yMax - yMin);
         if (Math.abs(min) >= clipZone || Math.abs(max) >= clipZone) {
           ctx.globalAlpha = 1;

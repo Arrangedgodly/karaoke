@@ -108,8 +108,26 @@
   -->
   <div class="instrument">
   <header class="topbar system-deck">
+    <!--
+      THE SIGNAL NAMEPLATE (overdrive round, 2026-09-03). The identity is
+      still a nameplate, never a headline — nothing here may out-shout the
+      BYPASS key, and nothing here lights up. What it gained is a BASELINE
+      that is wired to the machine: the rule under the wordmark is a
+      machined hairline before Start and a live envelope of the FINAL
+      OUTPUT while the engine runs, painted by src/signal-lamps.js from
+      the same tap and the same 42.7ms window the OUT meter reads (the
+      slot is adopted by its canvas class — see that file's scope header).
+      A picture, not a mouth: aria-hidden, no numerals, no scale. It
+      flattens by itself when the chain is bypassed or the engine stops,
+      because the output it reads is what those states gate.
+    -->
     <div class="topbar-section topbar-identity">
-      <h1 class="app-title">VOXCHAIN</h1>
+      <div class="nameplate">
+        <h1 class="app-title">VOXCHAIN</h1>
+        <div class="nameplate-rule" aria-hidden="true">
+          <canvas class="nameplate-scope-canvas"></canvas>
+        </div>
+      </div>
     </div>
 
     <!--
