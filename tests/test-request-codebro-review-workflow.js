@@ -128,7 +128,9 @@ check(
   'workflow token has only pull-requests:write'
 );
 
-var jobGuardMatch = /^\s{4}if:\s*>-\s*\n((?:\s{6}.*(?:\n|$))+)/m.exec(workflow);
+// Horizontal indentation only: \s also consumes newlines, which let this
+// capture spill into later four-space job keys such as runs-on.
+var jobGuardMatch = /^[ \t]{4}if:[ \t]*>-[ \t]*\r?\n((?:[ \t]{6}[^\r\n]*(?:\r?\n|$))+)/m.exec(workflow);
 var jobGuard = jobGuardMatch ? jobGuardMatch[1].replace(/\s+/g, ' ').trim() : '';
 var expectedJobGuard =
   "!github.event.pull_request.draft && " +
