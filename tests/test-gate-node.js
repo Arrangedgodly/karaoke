@@ -28,7 +28,7 @@
 //        - 6 dB hysteresis: a band-level signal holds the gate OPEN when
 //          open and CLOSED when closed (no chatter), and re-triggers
 //        - Floor = 0 dB is bit-exact passthrough (x * 1.0)
-//        - multi-channel: one gain, detector on channel 0
+//        - multi-channel: one gain, strongest-channel RMS detector
 //        - k-rate Threshold changes respected mid-stream
 //        - empty/absent input handled without dying
 //
@@ -801,7 +801,7 @@ async function processorTests() {
   check(headZero, 'the first 5 ms of output is the (zero) delay-line warm-up, unity gain throughout');
 
   // ------------------------------------------------------------------
-  console.log('M. MULTI-CHANNEL + DETECTOR ON CHANNEL 0');
+  console.log('M. MULTI-CHANNEL + STRONGEST-CHANNEL DETECTOR');
   // ------------------------------------------------------------------
   var inst10 = new registered['noise-gate']();
   var stereoBlocks = [];
@@ -827,8 +827,38 @@ async function processorTests() {
     detBlocks.push([constDbBlock(-70), constDbBlock(-12.0412)]); // ch0 silent-ish, ch1 loud
   }
   var detOut = drive(inst11, detBlocks, mkParams());
-  check(approx(gainDbAt(detOut, 29 * BLOCK + 60, 0.25, 1), -40, 0.1),
-    'detector follows channel 0: a loud channel 1 alone does NOT open the gate');
+  check(approx(gainDbAt(detOut, 29 * BLOCK + 60, 0.25, 1), 0, 0.1),
+    'a loud right channel opens the gate even when the left channel is quiet');
+
+  var rightOnlyBlocks = [];
+  var monoReferenceBlocks = [];
+  var oppositeBlocks = [];
+  for (var channelBlock = 0; channelBlock < 30; channelBlock++) {
+    var voice = constDbBlock(channelBlock === 0 ? -Infinity : -18);
+    var inverseVoice = Float32Array.from(voice, function (sample) { return -sample; });
+    monoReferenceBlocks.push(voice);
+    rightOnlyBlocks.push([constDbBlock(-Infinity), voice]);
+    oppositeBlocks.push([voice, inverseVoice]);
+  }
+  var channelParams = mkParams({ threshold: -20 });
+  var monoReference = drive(new registered['noise-gate'](), monoReferenceBlocks, channelParams);
+  var rightOnly = drive(new registered['noise-gate'](), rightOnlyBlocks, channelParams);
+  var opposite = drive(new registered['noise-gate'](), oppositeBlocks, channelParams);
+  var rightMatchesMono = true;
+  var oppositeMatchesMono = true;
+  var silentLeft = true;
+  for (var channelSample = 0; channelSample < 30 * BLOCK; channelSample++) {
+    var monoSample = outAt(monoReference, channelSample);
+    rightMatchesMono = rightMatchesMono && outAt(rightOnly, channelSample, 1) === monoSample;
+    silentLeft = silentLeft && outAt(rightOnly, channelSample, 0) === 0;
+    oppositeMatchesMono = oppositeMatchesMono && outAt(opposite, channelSample, 0) === monoSample &&
+      outAt(opposite, channelSample, 1) === -monoSample;
+  }
+  check(rightMatchesMono && gainDbAt(rightOnly, 29 * BLOCK + 60, dbAmp(-18), 1) > -0.05,
+    'right-only input near threshold has the same onset, look-ahead, and gain as mono (no 6 dB dilution)');
+  check(silentLeft, 'right-only input leaves the silent left channel silent');
+  check(oppositeMatchesMono && gainDbAt(opposite, 29 * BLOCK + 60, dbAmp(-18), 0) > -0.05,
+    'opposite-polarity channels open without cancellation and retain one identical gain');
 
   // ------------------------------------------------------------------
   console.log('N. K-RATE PARAM CHANGES + EMPTY INPUT');

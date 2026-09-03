@@ -1373,6 +1373,7 @@
     pitchshift: 'pitch',
     // Polish your sound — level, evenness, and space.
     gain: 'polish',
+    autogain: 'polish',
     compressor: 'polish',
     delay: 'polish',
     reverb: 'polish',
@@ -1396,6 +1397,7 @@
   // ---------------------------------------------------------------------
   var PALETTE_TYPE_PREVIEW = {
     gain: 'A clean level trim for the whole chain.',
+    autogain: 'Learns a suitable input level, then holds it steady.',
     compressor: 'Keeps the vocal at a steady, even level.',
     eq: 'Shapes tone — warmer, brighter, or more telephonic.',
     delay: 'Short echo repeats for depth without mush.',

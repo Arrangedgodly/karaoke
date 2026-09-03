@@ -21,6 +21,7 @@
   var audioContext = null;
   var mediaStream = null;
   var sourceNode = null;
+  var preparedSourceNode = null;
   var currentDeviceId = null;
   var started = false;
 
@@ -104,6 +105,8 @@
     // the session has ended. Its continuation observes the newer generation,
     // stops the late stream, and rejects as stale before reconnecting audio.
     invalidatePendingSwitches();
+    if (window.InputPreparation) window.InputPreparation.stop();
+    preparedSourceNode = null;
     detachTrackListeners();
     stopStream(mediaStream);
     if (sourceNode) {
@@ -305,8 +308,13 @@
     // exception to "create once" (see its comment for why).
     try {
       sourceNode = audioContext.createMediaStreamSource(mediaStream);
+      if (window.InputPreparation) {
+        var prepared = await window.InputPreparation.start(audioContext, sourceNode);
+        if (gen !== switchGeneration) throw staleSwitchError();
+        preparedSourceNode = prepared;
+      }
     } catch (err) {
-      teardownSession();
+      if (gen === switchGeneration) teardownSession();
       throw err;
     }
 
@@ -403,10 +411,22 @@
     if (sourceNode) {
       sourceNode.disconnect();
     }
+    if (window.InputPreparation) window.InputPreparation.stop();
+    preparedSourceNode = null;
 
     mediaStream = newStream;
     watchStream(newStream);
-    sourceNode = audioContext.createMediaStreamSource(mediaStream);
+    try {
+      sourceNode = audioContext.createMediaStreamSource(mediaStream);
+      if (window.InputPreparation) {
+        var prepared = await window.InputPreparation.start(audioContext, sourceNode);
+        if (gen !== switchGeneration) throw staleSwitchError();
+        preparedSourceNode = prepared;
+      }
+    } catch (err) {
+      if (gen === switchGeneration) teardownSession();
+      throw err;
+    }
     currentDeviceId = getDeviceIdFromStream(mediaStream) || deviceId;
 
     return sourceNode;
@@ -477,6 +497,7 @@
 
     get audioContext() { return audioContext; },
     get sourceNode() { return sourceNode; },
+    get preparedSourceNode() { return preparedSourceNode || sourceNode; },
     get stream() { return mediaStream; },
     get currentDeviceId() { return currentDeviceId; },
     get isStarted() { return started; },
