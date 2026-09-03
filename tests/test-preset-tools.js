@@ -727,6 +727,51 @@ async function main() {
     );
   }
 
+  // Auto Gain follows the same preset preparation and policy path for
+  // agent loads as it does for the human sound picker.
+  {
+    var autoEnv = createEnv(), autoBox = autoEnv.sandbox;
+    ['input-calibration', 'input-preparation', 'node-autogain'].forEach(function (name) {
+      vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/' + name + '.js'), 'utf8'), autoBox);
+    });
+    var autoCaps = await getTool(autoBox, 'get_capabilities').execute({ focus: 'policy' });
+    var autoRule = autoCaps.chainRules['autogain-max-one'];
+    check(autoRule && autoRule.indexOf('One Auto Gain') >= 0 && autoRule.indexOf('-12 dBFS') >= 0 &&
+      autoCaps.nodeTypes.autogain.gainDb.range[1] === 24,
+      'Auto Gain: capabilities publish the one-instance rule, gain range and independent peak cap');
+    check(autoCaps.microphone.view === 'simple' && autoCaps.microphone.state === 'stopped' && autoCaps.microphone.autoGain === null,
+      'Auto Gain: capabilities expose the current view and microphone diagnostic state without starting capture');
+    var autoLoad = await getTool(autoBox, 'load_preset').execute({ name: 'Classic Karaoke', namespace: 'factory' });
+    var autoModel = autoBox.ChainEditing.getModel();
+    check(autoLoad.applied && autoModel[0].type === 'autogain', 'Auto Gain: Simple agent preset loads insert the utility');
+    var autoId = autoModel[0].id;
+    var autoManual = await getTool(autoBox, 'set_param').execute({ nodeId: autoId, param: 'mode', value: 'manual' });
+    var autoGain = await getTool(autoBox, 'set_param').execute({ nodeId: autoId, param: 'gainDb', value: 24 });
+    check(autoManual.applied && autoGain.applied, 'Auto Gain: bounded manual gain passes the published effect-chain budget');
+    autoBox.document.body = { classList: { contains: function () { return true; } } };
+    var advancedCaps = await getTool(autoBox, 'get_capabilities').execute({ focus: 'policy' });
+    check(advancedCaps.microphone.view === 'advanced', 'Auto Gain: agents can read the view that determines preset preparation');
+    var autoNext = await getTool(autoBox, 'load_preset').execute({ name: 'Warm Ballad', namespace: 'factory' });
+    var retained = autoBox.ChainEditing.getModel()[0];
+    check(autoNext.applied && retained.id === autoId && retained.params.mode === 'manual' && retained.params.gainDb === 24,
+      'Auto Gain: Advanced agent preset loads preserve the utility and manual setting');
+    var beforeDuplicate = JSON.stringify(autoBox.ChainEditing.getModel());
+    var duplicate = autoBox.ChainEditing.getModel();
+    duplicate.unshift({ id: 'duplicate', type: 'autogain', params: { mode: 'auto', gainDb: 0 } });
+    var refused = await getTool(autoBox, 'set_chain').execute({ chain: { schemaVersion: 1, name: 'Duplicate test', nodes: duplicate } });
+    check(refused.code === 'autogain-max-one' && JSON.stringify(autoBox.ChainEditing.getModel()) === beforeDuplicate,
+      'Auto Gain: duplicate utility refuses without changing the chain');
+    autoBox.document.body.classList.contains = function () { return false; };
+    var fullSaved = Array.from({ length: 15 }, function (_, i) { return { id: 'delay-' + i, type: 'delay', params: { mix: 0, feedback: 0, timeMs: 100 } }; });
+    fullSaved.push({ id: 'saved-limiter', type: 'limiter', params: { ceiling: -3, release: 50 } });
+    autoBox.AudioEngine.audioContext = { state: 'running' };
+    autoBox.AudioEngine.sourceNode = {};
+    var restored = await autoBox.ChainEditing.apply({ source: 'startup', candidate: fullSaved });
+    var liveRestore = autoEnv.builds[autoEnv.builds.length - 1];
+    check(restored.applied && deepEqual(autoBox.ChainEditing.getModel(), fullSaved) && deepEqual(liveRestore, fullSaved),
+      'Auto Gain: full 16-node startup restores the saved chain and limiter without optional insertion');
+  }
+
   // ------------------------------------------------------------------
   if (failures.length === 0) {
     console.log('PASS: get_preset retrieves and load_preset applies presets through the real paths (issue #12)');

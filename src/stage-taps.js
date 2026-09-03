@@ -541,12 +541,12 @@
       scopePairs = new Float32Array(SCOPE_COLUMNS * 2);
     }
     if (!scopeAnalyser) {
-      scopeAnalyser = ctx.createAnalyser();
+      scopeAnalyser = window.ChannelAnalysis ? window.ChannelAnalysis.create(ctx, 2) : ctx.createAnalyser();
       scopeAnalyser.fftSize = FFT_SIZE;
     }
     if (!scopeConnected) {
       var attenuator = window.AudioGraph.getOutputAttenuator();
-      attenuator.connect(scopeAnalyser);
+      attenuator.connect(scopeAnalyser.input || scopeAnalyser);
       scopeConnected = true;
       scopeSourceRef = attenuator;
     }

@@ -155,6 +155,17 @@
       worklet: null, // the AudioWorkletNode, once inserted
       pendingParams: {} // applyParam writes that predate insertion
     };
+    composite.baseThreshold = threshold;
+    composite.disposed = false;
+    function adjustThreshold() {
+      var effective = window.AutoGain ? window.AutoGain.gateThreshold(composite.baseThreshold, composite) : composite.baseThreshold;
+      if (composite.worklet && effective !== composite.effectiveThreshold) {
+        window.AudioParamRamp.schedule(composite.worklet.parameters.get('threshold'), effective);
+        composite.effectiveThreshold = effective;
+      }
+    }
+    composite.adjustThreshold = adjustThreshold;
+    if (window.AutoGain) composite.unsubscribe = window.AutoGain.subscribe(adjustThreshold);
 
     /**
      * Create the worklet node, give it its initial param values (direct
@@ -163,6 +174,7 @@
      * between the two stable connect points.
      */
     function insertWorklet() {
+      if (composite.disposed) return;
       var worklet = newWorkletNode(audioContext);
       worklet.parameters.get('threshold').value = threshold;
       worklet.parameters.get('attack').value = attack;
@@ -179,6 +191,7 @@
       inputGain.connect(worklet);
       worklet.connect(outputSum);
       composite.worklet = worklet;
+      adjustThreshold();
     }
 
     if (moduleLoaded && moduleContext === audioContext) {
@@ -230,12 +243,23 @@
       { id: 'floor', label: 'Floor', min: -60, max: 0, default: -40, step: 1, unit: 'dB' }
     ],
     create: createEffect,
+    dispose: function (node) {
+      node.disposed = true;
+      if (node.unsubscribe) node.unsubscribe();
+      if (node.worklet) node.worklet.disconnect();
+      node.input.disconnect(); node.output.disconnect();
+    },
     applyParam: function (nodeInstance, paramId, value) {
       if (paramId === 'threshold' || paramId === 'attack' ||
           paramId === 'release' || paramId === 'floor') {
         // Recorded always: if the worklet is not inserted yet (the first
         // gate's addModule window), the value is applied at insertion.
         nodeInstance.pendingParams[paramId] = value;
+        if (paramId === 'threshold') {
+          nodeInstance.baseThreshold = value;
+          nodeInstance.adjustThreshold();
+          return;
+        }
         if (nodeInstance.worklet) {
           // Real AudioParam — the compressor's exact live-write shape.
           window.AudioParamRamp.schedule(
