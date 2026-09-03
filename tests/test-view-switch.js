@@ -697,10 +697,18 @@ function makeSimpleViewSandbox(collaborators) {
       PresetStore: { listNames: function () { return (userPresetNames || []).slice(); } }
     };
     var h = makeSimpleViewSandbox(collaborators);
+    // Live round 2026-09-03: the chip row is a printed filter group — a
+    // silkscreen legend over the 2-column key grid — so the row's children
+    // are no longer chip-then-chip. Select by class, not index.
+    function hasClass(el, name) {
+      return String(el.className).split(/\s+/).indexOf(name) !== -1;
+    }
+    var chipsRowChildren = h.els['simple-library-body'].children[0].children;
     return {
       h: h,
       loadCalls: loadCalls,
-      chips: h.els['simple-library-body'].children[0].children,
+      chips: chipsRowChildren.filter(function (c) { return hasClass(c, 'simple-chip'); }),
+      count: chipsRowChildren.filter(function (c) { return hasClass(c, 'simple-chip-count'); })[0],
       search: h.els['simple-library-body'].children[1],
       cardsList: h.els['simple-library-body'].children[2],
       transport: h.els['simple-transport']
@@ -731,9 +739,9 @@ function makeSimpleViewSandbox(collaborators) {
 
   console.log('  E1: default filter lists every factory entry and any existing user presets');
   var f1 = harness(['My Stage Set', 'Sunday Hosting']);
-  check(f1.chips.length === 6, 'E1: five plain filter chips plus the count readout exist (All/Warm/Big echo/Funny/Clean & clear + count)');
+  check(f1.chips.length === 5 && !!f1.count, 'E1: five plain filter chips plus the count readout exist (All/Warm/Big echo/Funny/Clean & clear + count)');
   check(f1.chips[0].classList.contains('simple-chip-on'), 'E1: All starts active');
-  check(f1.chips[5].hidden === true && f1.chips[5].textContent === '',
+  check(f1.count.hidden === true && f1.count.textContent === '',
     'E1: the result count stays hidden when All already shows the full library');
   var factoryRows = groupCards(f1.cardsList, 'Factory');
   check(factoryRows.length === 5, 'E1: All lists every factory entry (' + factoryRows.length + ')');
@@ -767,7 +775,7 @@ function makeSimpleViewSandbox(collaborators) {
     check(JSON.stringify(names) === JSON.stringify(c.expectNames),
       'E2: "' + c.label + '" resolves to exactly ' + JSON.stringify(c.expectNames) + ' (got ' + JSON.stringify(names) + ')');
     check(chip.classList.contains('simple-chip-on'), 'E2: "' + c.label + '" shows as the active chip');
-    check(f.chips[5].hidden === false && f.chips[5].textContent === c.expectNames.length + ' of 5',
+    check(f.count.hidden === false && f.count.textContent === c.expectNames.length + ' of 5',
       'E2: "' + c.label + '" reveals the narrowed result count only when it adds information');
   });
 
@@ -1319,12 +1327,18 @@ function makeSimpleViewSandbox(collaborators) {
     FactoryPresets: { listDetailed: function () { return JSON.parse(JSON.stringify(REAL)); } },
     PresetStore: { listNames: function () { return []; } }
   });
-  var chips = h.els['simple-library-body'].children[0].children;
+  var rowChildren = h.els['simple-library-body'].children[0].children;
+  function rowHasClass(el, name) {
+    return String(el.className).split(/\s+/).indexOf(name) !== -1;
+  }
+  var chips = rowChildren.filter(function (c) { return rowHasClass(c, 'simple-chip'); });
   var labels = chips.map(function (c) { return c.textContent; });
   check(JSON.stringify(labels.slice(0, 5)) === JSON.stringify(
       ['All', 'Warm', 'Big echo', 'Funny', 'Clean & clear']),
     'K1: the chip row reads All/Warm/Big echo/Funny/Clean & clear');
-  check(labels.length === 6 && labels[0] === 'All',
+  check(labels.length === 5 && labels[0] === 'All' &&
+      rowHasClass(rowChildren[0], 'simple-chips-legend') &&
+      rowChildren.some(function (c) { return rowHasClass(c, 'simple-chip-count'); }),
     'K1: All (the reset) leads exactly 4 content chips plus the count readout — the pruned row stays inside the <=4-options guidance');
 
   function catchOf(label) {

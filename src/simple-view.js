@@ -1539,10 +1539,20 @@
     chipsRow.setAttribute('role', 'group');
     chipsRow.setAttribute('aria-label', 'Plain filters');
 
+    // Live round 2026-09-03: the filters print as one group — a
+    // silkscreen legend over the 2-column key grid (.simple-chips in
+    // main.css owns the geometry).
+    var legend = document.createElement('span');
+    legend.className = 'simple-chips-legend';
+    legend.textContent = 'Filter';
+    chipsRow.appendChild(legend);
+
     PLAIN_FILTERS.forEach(function (f) {
       var chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'simple-chip';
+      // A label too long for a half-width cell spans the full row
+      // instead of truncating ("Clean & clear").
+      chip.className = 'simple-chip' + (f.label.length > 10 ? ' simple-chip-wide' : '');
       chip.textContent = f.label;
       chip.setAttribute('aria-pressed', f.id === libraryState.filter ? 'true' : 'false');
       chip.addEventListener('click', function () {

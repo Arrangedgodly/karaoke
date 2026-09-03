@@ -5235,15 +5235,36 @@ body:not(.view-advanced) .readout-group {
 }
 
 .simple-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
   margin-bottom: 0.6rem;
 }
 
+/* Live round 2026-09-03 (accepted variant): the plain filters were a
+   wrapping flex row in a ~205px flank — ragged breaks, uneven gaps, the
+   count squeezed between chips. They now print as one filter group: a
+   silkscreen legend over a deterministic 2-column key grid, so wrapping
+   is geometry instead of accident, and a long label spans the full row
+   rather than truncating its cell. Uppercase 12px legends match the
+   palette chip vocabulary — the sibling control doing the same job on
+   the other flank. */
+.simple-chips-legend {
+  grid-column: 1 / -1;
+  color: var(--pm-print);
+  font-family: var(--font-print);
+  font-size: var(--type-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .simple-chip {
-  padding: 0.34rem 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.1rem;
+  padding: 0.3rem 0.4rem;
   border: 1px solid var(--pm-key-edge);
   /* Shapes rule (polish round 2026-09-02): these are control KEYS —
      the one 999px pill was the only non-functional radius in a
@@ -5252,8 +5273,17 @@ body:not(.view-advanced) .readout-group {
   border-radius: 4px;
   background: var(--pm-key);
   color: var(--pm-print-hi);
-  font-size: var(--type-prose);
+  font-family: var(--font-print);
+  font-size: var(--type-value);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
   cursor: pointer;
+}
+
+.simple-chip-wide {
+  grid-column: 1 / -1;
 }
 
 .simple-chip:hover {
@@ -5267,15 +5297,28 @@ body:not(.view-advanced) .readout-group {
   font-weight: 700;
 }
 
+.simple-chip.simple-chip-on:hover {
+  border-color: var(--pm-accent-hi);
+  background: var(--pm-accent-hi);
+}
+
+.simple-chip.simple-chip-on:focus-visible {
+  /* Ink ring inside the fill — the Start key's own pattern for orange
+     fills, where an orange ring would vanish against its ground. */
+  outline-color: var(--pm-ink);
+  outline-offset: -2px;
+}
+
 .simple-chip-count {
-  align-self: center;
-  margin-left: 0.3rem;
+  grid-column: 1 / -1;
+  margin-top: 2px;
   color: var(--pm-print-dim);
   font-size: var(--type-label);
   font-family: var(--font-readout);
   white-space: nowrap;
   /* Counts up and down with the filter. */
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .simple-transport {
