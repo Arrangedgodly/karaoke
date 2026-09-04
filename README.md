@@ -92,7 +92,7 @@ The fastest way to see it:
 3. Use **Undo**, then ask: *"Remove the terminal limiter."* The app refuses, shows what was asked versus what's allowed, and the limiter stays.
 4. Toggle **Bypass** off and on, then press **Stop**. These immediate audio controls remain human-only.
 
-Watch the public 2:59 demo: **https://youtu.be/CVex0eMZo18**
+Watch the public 2:56 demo: **https://youtu.be/chm-IvQGqzQ**
 
 **No agent handy?** Open the site with **`?dev`** — an **Agent Harness** panel appears where you can run all ten tools directly with example inputs. Start with `get_capabilities`, then `set_chain` (prefilled with a valid example), then hit Undo.
 

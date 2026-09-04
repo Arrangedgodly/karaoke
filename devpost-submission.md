@@ -69,26 +69,29 @@ Verified public on September 3. GitHub displays the repository's MIT license in 
 
 ## Demo Video
 
-<https://youtu.be/CVex0eMZo18>
+<https://youtu.be/chm-IvQGqzQ>
 
 - Published title: `VOXCHAIN Web App / WebMCP Demo`
-- Verified runtime: 2:59
+- Verified runtime: 2:56.482
 - Verified accessible on September 3, 2026
 - Audio: spoken narration with an auto-generated English transcript
 
 ### Published video outline
 
-- `0:01` introduces VoxChain and its home-karaoke origin.
-- `0:32` shows Simple view for browsing sounds without exposing unnecessary parameters.
-- `0:54` shows Advanced view for parameter editing, effect order, and adding devices.
-- `1:08` explains the plain-language WebMCP interaction.
-- `1:31` asks for a voice that is "really big and echoey" while staying clear.
-- `1:44` explains how the ten tools search presets first and build a chain only when needed.
-- `2:05` shows the Undo path.
-- `2:21` asks to remove the terminal limiter and shows the policy refusal.
-- `2:51` closes on what was built for the competition.
+- `0:00` introduces VoxChain and its live vocal-chain workflow.
+- `0:33` shows the first plain-language ChatGPT request.
+- `0:42` applies the `Big Room` factory preset to the live chain.
+- `1:05` introduces the built-in safety rules.
+- `1:13` asks to remove the terminal limiter.
+- `1:19` shows the refusal and confirms that the limiter stays last.
+- `1:29` shows the preset-led Simple view.
+- `1:45` shows Advanced view for direct parameter and chain-order control.
+- `2:11` gives ChatGPT an exact request to build a chain from scratch.
+- `2:27` shows the six-node `Low-End Grind` result.
+- `2:36` shows Undo restoring the prior chain.
+- `2:37` closes with all 15 included audio modules.
 
-The video is one second under the official limit. Do not replace it with a longer cut.
+The video is 3.518 seconds under the official limit. Do not replace it with a longer cut.
 
 ## Screenshot Shot List
 
@@ -102,7 +105,7 @@ The video is one second under the official limit. Do not replace it with a longe
 
 - Live Devpost requirements were checked on September 3, 2026. The deadline is September 3 at 1:00 PM Pacific, which is 2:00 PM Mountain time.
 - Devpost sign-in and registration for The WebMCP Challenge were confirmed. Devpost accepted entry `1168509`, and a live readback showed the project as published at <https://devpost.com/software/voxchain-qh9pma>.
-- The published video is accessible and runs 2:59. Its URL is now in this draft.
+- The published video is accessible and runs 2:56.482. Its URL is now in this draft.
 - The public repository and top-level MIT license are visible on GitHub.
 - The live site loads over HTTPS and exposes all ten WebMCP tools in the Codex in-app browser. The two read checks passed without starting the microphone.
 - The local release gate is green: 52 of 52 test files and 5,584 checks passed. The static build produced 64 public files after the full Tone.js license was added.
@@ -118,7 +121,7 @@ The video is one second under the official limit. Do not replace it with a longe
 - The app needs microphone permission and a real input device for the live demo.
 - Autotune remains experimental.
 - No third-party adoption or usage metrics are claimed.
-- The published video is 2:59, leaving one second under the limit.
+- The published video is 2:56.482, leaving 3.518 seconds under the limit.
 - The short judge path has a recorded physical-audio pass. The comprehensive event-volume PA, every-effect listening, latency, and hidden-tab watchdog checks remain open in `docs/ACCEPTANCE.md`.
 
 ## Official Form Fields
@@ -134,4 +137,4 @@ The video is one second under the official limit. Do not replace it with a longe
 - AI tools used: Codex, Claude, and GLM.
 - Learning level: Significant
 - Career AI value: Yes
-- Public YouTube video URL: <https://youtu.be/CVex0eMZo18>
+- Public YouTube video URL: <https://youtu.be/chm-IvQGqzQ>
